@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Search, Download, FileText } from 'lucide-react';
+import { Search, Download, FileText, Clock } from 'lucide-react';
 
 export default function ReportHistory() {
   const { isAdmin } = useAuth();
@@ -131,6 +131,12 @@ export default function ReportHistory() {
                   <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">{r.reportDate}</span>
                   <span className="font-medium text-slate-800">{r.user.name}</span>
                   <span className="text-xs text-slate-500">{r.user.department}</span>
+                  {r.totalHours > 0 && (
+                    <span className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                      <Clock className="w-3 h-3" />
+                      {r.totalHours}h
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-slate-500">
                   {new Date(r.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
@@ -138,10 +144,32 @@ export default function ReportHistory() {
               </button>
               {expanded === r.id && (
                 <div className="px-5 pb-4 border-t border-slate-100 pt-4 space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-600 mb-1">Activities</p>
-                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{r.activities}</p>
-                  </div>
+                  {/* Task breakdown with hours */}
+                  {r.tasks && r.tasks.length > 0 ? (
+                    <div>
+                      <p className="text-sm font-medium text-slate-600 mb-2">Tasks & Hours</p>
+                      <div className="space-y-1.5">
+                        {r.tasks.map((task, idx) => (
+                          <div key={task.id || idx} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                            <span className="text-sm text-slate-800">{task.description}</span>
+                            {task.hours > 0 && (
+                              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full ml-2 shrink-0">
+                                {task.hours}h
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {r.totalHours > 0 && (
+                        <p className="text-xs text-right text-slate-500 mt-1.5">Total: {r.totalHours}h</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium text-slate-600 mb-1">Activities</p>
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap">{r.activities}</p>
+                    </div>
+                  )}
                   {r.challenges && (
                     <div>
                       <p className="text-sm font-medium text-slate-600 mb-1">Challenges</p>

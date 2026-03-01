@@ -11,7 +11,7 @@ const COMPANY_DOMAIN = 'colorpapers.in';
  * Called by frontend after Clerk sign-in.
  * Syncs the Clerk user with our Prisma DB:
  * - Internal @colorpapers.in users: auto-register if new
- * - External users: must be pre-added by admin
+ * - External users: self-register after phone verification
  */
 router.post('/clerk-sync', authenticate, async (req, res) => {
   try {
@@ -42,9 +42,18 @@ router.post('/clerk-sync', authenticate, async (req, res) => {
           },
         });
       } else {
-        // External user — must be pre-added by admin
-        return res.status(403).json({
-          error: 'Access denied. Your email is not registered. Ask the admin to add you as an external employee.',
+        // External user — auto-register (freelancers, contractors, etc.)
+        user = await req.prisma.user.create({
+          data: {
+            name: name || email.split('@')[0],
+            email,
+            password: '',
+            role: 'member',
+            department: 'External',
+            googleId: clerkId,
+            importedFromGoogle: false,
+            isActive: true,
+          },
         });
       }
     }

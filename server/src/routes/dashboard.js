@@ -7,6 +7,11 @@ const router = express.Router();
 // GET /api/dashboard?date=YYYY-MM-DD
 router.get('/', authenticate, async (req, res) => {
   try {
+    // Only admin/team_lead can access full dashboard
+    if (req.user.role === 'member') {
+      return res.status(403).json({ error: 'Access denied. Members use /reports/my endpoint.' });
+    }
+
     const date = req.query.date || getTodayDate();
 
     // Get all active members

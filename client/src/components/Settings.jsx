@@ -7,7 +7,7 @@ export default function Settings() {
     reminder_time: '21:00',
     escalation_time: '11:00',
     team_lead_email: '',
-    company_name: 'CPIPL',
+    company_name: 'Color Papers',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');

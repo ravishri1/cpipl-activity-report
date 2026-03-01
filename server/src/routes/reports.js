@@ -38,12 +38,17 @@ router.get('/recent-activities', authenticate, async (req, res) => {
 // POST /api/reports - Submit daily report
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { activities, challenges, planTomorrow, reportDate } = req.body;
+    const { activities, challenges, planTomorrow, reportDate, tasks } = req.body;
     if (!activities || !activities.trim()) {
       return res.status(400).json({ error: 'Activities field is required.' });
     }
 
     const date = reportDate || getTodayDate();
+
+    // Calculate total hours from tasks
+    const totalHours = Array.isArray(tasks)
+      ? tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0)
+      : 0;
 
     // Check if report already exists for this date
     const existing = await req.prisma.dailyReport.findUnique({
@@ -51,14 +56,21 @@ router.post('/', authenticate, async (req, res) => {
     });
 
     if (existing) {
-      // Update existing report
+      // Delete old tasks, then update report with new tasks
+      await req.prisma.reportTask.deleteMany({ where: { reportId: existing.id } });
+
       const updated = await req.prisma.dailyReport.update({
         where: { id: existing.id },
         data: {
           activities: activities.trim(),
           challenges: (challenges || '').trim(),
           planTomorrow: (planTomorrow || '').trim(),
+          totalHours,
+          tasks: Array.isArray(tasks) && tasks.length > 0
+            ? { create: tasks.filter(t => t.description?.trim()).map(t => ({ description: t.description.trim(), hours: parseFloat(t.hours) || 0 })) }
+            : undefined,
         },
+        include: { tasks: true },
       });
       return res.json({ message: 'Report updated.', report: updated });
     }
@@ -71,7 +83,12 @@ router.post('/', authenticate, async (req, res) => {
         activities: activities.trim(),
         challenges: (challenges || '').trim(),
         planTomorrow: (planTomorrow || '').trim(),
+        totalHours,
+        tasks: Array.isArray(tasks) && tasks.length > 0
+          ? { create: tasks.filter(t => t.description?.trim()).map(t => ({ description: t.description.trim(), hours: parseFloat(t.hours) || 0 })) }
+          : undefined,
       },
+      include: { tasks: true },
     });
 
     res.status(201).json({ message: 'Report submitted.', report });
@@ -87,6 +104,7 @@ router.get('/my', authenticate, async (req, res) => {
     const date = req.query.date || getTodayDate();
     const report = await req.prisma.dailyReport.findUnique({
       where: { userId_reportDate: { userId: req.user.id, reportDate: date } },
+      include: { tasks: true },
     });
     res.json(report);
   } catch (err) {
@@ -100,7 +118,7 @@ router.get('/', authenticate, async (req, res) => {
     const date = req.query.date || getTodayDate();
     const reports = await req.prisma.dailyReport.findMany({
       where: { reportDate: date },
-      include: { user: { select: { id: true, name: true, email: true, department: true } } },
+      include: { user: { select: { id: true, name: true, email: true, department: true } }, tasks: true },
       orderBy: { submittedAt: 'desc' },
     });
     res.json(reports);
@@ -126,7 +144,7 @@ router.get('/history', authenticate, async (req, res) => {
 
     const reports = await req.prisma.dailyReport.findMany({
       where,
-      include: { user: { select: { id: true, name: true, email: true, department: true } } },
+      include: { user: { select: { id: true, name: true, email: true, department: true } }, tasks: true },
       orderBy: [{ reportDate: 'desc' }, { submittedAt: 'desc' }],
       take: 100,
     });

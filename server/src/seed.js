@@ -66,7 +66,7 @@ async function main() {
     { key: 'reminder_time', value: '21:00' },
     { key: 'escalation_time', value: '11:00' },
     { key: 'team_lead_email', value: 'teamlead@cpipl.com' },
-    { key: 'company_name', value: 'CPIPL' },
+    { key: 'company_name', value: 'Color Papers' },
   ];
 
   for (const setting of settings) {

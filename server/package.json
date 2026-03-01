@@ -1,7 +1,7 @@
 {
-  "name": "cpipl-activity-report-server",
+  "name": "eod-cpipl-server",
   "version": "1.0.0",
-  "description": "CPIPL Daily Activity Report Tracking System - Backend",
+  "description": "EOD CPIPL - End of Day Report System - Backend",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",

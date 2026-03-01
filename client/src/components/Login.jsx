@@ -21,10 +21,10 @@ export default function Login() {
             <FileText className="w-9 h-9 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800">Color Papers</h1>
-          <p className="text-slate-500 mt-1">Daily Activity Report System</p>
+          <p className="text-slate-500 mt-1">EOD Report System</p>
         </div>
 
-        {/* Access Denied for External Users */}
+        {/* Access Denied */}
         {accessDenied && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2">
             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -77,9 +77,9 @@ export default function Login() {
           <div className="flex items-start gap-3 bg-amber-50 rounded-lg p-3">
             <Globe className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-900">External Employees</p>
+              <p className="text-sm font-medium text-amber-900">External / Freelance</p>
               <p className="text-xs text-amber-700 mt-0.5">
-                Sign in with your Google email. Admin must add you first.
+                Sign in with any Google email. You can submit EOD reports directly.
               </p>
             </div>
           </div>

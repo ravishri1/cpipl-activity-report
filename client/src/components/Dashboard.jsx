@@ -75,7 +75,28 @@ export default function Dashboard() {
                 ✓ Report submitted at {new Date(myReport.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
               </p>
               <div className="text-sm text-slate-700 space-y-2 mb-3">
-                <p><strong>Activities:</strong> {myReport.activities}</p>
+                {myReport.tasks && myReport.tasks.length > 0 ? (
+                  <div>
+                    <p className="font-medium mb-1.5">Tasks:</p>
+                    <div className="space-y-1">
+                      {myReport.tasks.map((task, idx) => (
+                        <div key={task.id || idx} className="flex items-center justify-between bg-slate-50 rounded px-3 py-1.5">
+                          <span>{task.description}</span>
+                          {task.hours > 0 && (
+                            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full ml-2">
+                              {task.hours}h
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {myReport.totalHours > 0 && (
+                      <p className="text-xs text-right text-slate-500 mt-1">Total: {myReport.totalHours}h</p>
+                    )}
+                  </div>
+                ) : (
+                  <p><strong>Activities:</strong> {myReport.activities}</p>
+                )}
                 {myReport.challenges && <p><strong>Challenges:</strong> {myReport.challenges}</p>}
                 {myReport.planTomorrow && <p><strong>Plan for Tomorrow:</strong> {myReport.planTomorrow}</p>}
               </div>

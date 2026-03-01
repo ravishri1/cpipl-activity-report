@@ -19,7 +19,7 @@ async function sendEmail(to, subject, html) {
   try {
     const transport = getTransporter();
     await transport.sendMail({
-      from: `"CPIPL Report System" <${process.env.GMAIL_USER}>`,
+      from: `"Color Papers EOD System" <${process.env.GMAIL_USER}>`,
       to,
       subject,
       html,
@@ -33,18 +33,18 @@ async function sendEmail(to, subject, html) {
 }
 
 async function sendReminderEmail(memberName, memberEmail) {
-  const subject = 'Reminder: Daily Activity Report Pending';
+  const subject = 'Reminder: EOD Report Pending';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #dc3545; color: white; padding: 20px; text-align: center;">
-        <h2>Daily Report Reminder</h2>
+        <h2>EOD Report Reminder</h2>
       </div>
       <div style="padding: 20px; background: #f8f9fa;">
         <p>Dear <strong>${memberName}</strong>,</p>
-        <p>This is a reminder that you have <strong>not yet submitted</strong> your daily activity report for today.</p>
+        <p>This is a reminder that you have <strong>not yet submitted</strong> your EOD report for today.</p>
         <p>Please submit your report as soon as possible.</p>
         <br/>
-        <p style="color: #666;">— CPIPL Activity Report System</p>
+        <p style="color: #666;">— Color Papers EOD System</p>
       </div>
     </div>
   `;
@@ -52,18 +52,18 @@ async function sendReminderEmail(memberName, memberEmail) {
 }
 
 async function sendEscalationEmail(memberName, memberEmail) {
-  const subject = 'URGENT: Daily Activity Report Still Pending After Reminder';
+  const subject = 'URGENT: EOD Report Still Pending After Reminder';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #ff6600; color: white; padding: 20px; text-align: center;">
-        <h2>Report Escalation Notice</h2>
+        <h2>EOD Report Escalation Notice</h2>
       </div>
       <div style="padding: 20px; background: #fff3cd;">
         <p>Dear <strong>${memberName}</strong>,</p>
-        <p>You were sent a reminder yesterday but have <strong>still not submitted</strong> your daily activity report.</p>
+        <p>You were sent a reminder yesterday but have <strong>still not submitted</strong> your EOD report.</p>
         <p>This has been escalated to the team lead. Please submit your report immediately.</p>
         <br/>
-        <p style="color: #666;">— CPIPL Activity Report System</p>
+        <p style="color: #666;">— Color Papers EOD System</p>
       </div>
     </div>
   `;
@@ -72,7 +72,7 @@ async function sendEscalationEmail(memberName, memberEmail) {
 
 async function sendSummaryToLead(leadEmail, date, summary) {
   const { reported, notReported, ignoredReminder } = summary;
-  const subject = `Daily Report Summary — ${date}`;
+  const subject = `EOD Report Summary — ${date}`;
 
   const reportedList = reported.length
     ? reported.map((m) => `<li style="color:green;">✅ ${m.name} (${new Date(m.submittedAt).toLocaleTimeString('en-IN')})</li>`).join('')
@@ -89,7 +89,7 @@ async function sendSummaryToLead(leadEmail, date, summary) {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #0d6efd; color: white; padding: 20px; text-align: center;">
-        <h2>Daily Report Summary</h2>
+        <h2>EOD Report Summary</h2>
         <p>${date}</p>
       </div>
       <div style="padding: 20px;">
@@ -119,7 +119,7 @@ async function sendSummaryToLead(leadEmail, date, summary) {
         <ul>${ignoredList}</ul>
       </div>
       <div style="padding: 10px; background: #e9ecef; text-align: center; color: #666;">
-        CPIPL Activity Report System
+        Color Papers EOD System
       </div>
     </div>
   `;

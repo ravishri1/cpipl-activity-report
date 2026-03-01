@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
-import { Send, CheckCircle, Edit3, Zap, FileText, X, Clock } from 'lucide-react';
+import { Send, CheckCircle, Edit3, Zap, FileText, X, Clock, Plus, Trash2 } from 'lucide-react';
 import GoogleSuggestions from './GoogleSuggestions';
 
 export default function ReportForm() {
@@ -12,6 +12,9 @@ export default function ReportForm() {
   const [error, setError] = useState('');
   const [existingReport, setExistingReport] = useState(null);
 
+  // Task-based hours tracking
+  const [tasks, setTasks] = useState([{ description: '', hours: '' }]);
+
   // Pre-fill & compact mode state
   const [mode, setMode] = useState('full'); // 'full' or 'quick'
   const [showPrefillBanner, setShowPrefillBanner] = useState(false);
@@ -19,6 +22,8 @@ export default function ReportForm() {
   const [quickText, setQuickText] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
+
+  const totalHours = tasks.reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,12 +35,24 @@ export default function ReportForm() {
           setActivities(res.data.activities);
           setChallenges(res.data.challenges);
           setPlanTomorrow(res.data.planTomorrow);
+          // Load existing tasks
+          if (res.data.tasks && res.data.tasks.length > 0) {
+            setTasks(res.data.tasks.map(t => ({ description: t.description, hours: t.hours.toString() })));
+          } else if (res.data.activities) {
+            // Backward compat: convert activities text to a single task
+            setTasks([{ description: res.data.activities, hours: '' }]);
+          }
         } else {
           // 2. No report today -> try pre-fill from yesterday's plan
           try {
             const planRes = await api.get('/reports/yesterday-plan');
             if (planRes.data.planTomorrow) {
               setActivities(planRes.data.planTomorrow);
+              // Split yesterday's plan into tasks by newline
+              const lines = planRes.data.planTomorrow.split('\n').filter(l => l.trim());
+              if (lines.length > 0) {
+                setTasks(lines.map(l => ({ description: l.trim(), hours: '' })));
+              }
               setShowPrefillBanner(true);
             }
           } catch (e) {
@@ -59,7 +76,19 @@ export default function ReportForm() {
 
   const dismissPrefill = () => {
     setActivities('');
+    setTasks([{ description: '', hours: '' }]);
     setShowPrefillBanner(false);
+  };
+
+  // Build activities text from tasks
+  const buildActivitiesFromTasks = () => {
+    return tasks
+      .filter(t => t.description.trim())
+      .map(t => {
+        const hrs = parseFloat(t.hours);
+        return hrs ? `${t.description.trim()} (${hrs}h)` : t.description.trim();
+      })
+      .join('\n');
   };
 
   const handleSubmit = async (e) => {
@@ -68,7 +97,25 @@ export default function ReportForm() {
     setSuccess('');
     setLoading(true);
 
-    const submitActivities = mode === 'quick' ? quickText : activities;
+    let submitActivities;
+    let submitTasks = [];
+
+    if (mode === 'quick') {
+      submitActivities = quickText;
+    } else {
+      // Build activities from tasks
+      const validTasks = tasks.filter(t => t.description.trim());
+      if (validTasks.length === 0) {
+        setError('Please add at least one task.');
+        setLoading(false);
+        return;
+      }
+      submitActivities = buildActivitiesFromTasks();
+      submitTasks = validTasks.map(t => ({
+        description: t.description.trim(),
+        hours: parseFloat(t.hours) || 0,
+      }));
+    }
 
     if (!submitActivities.trim()) {
       setError('Activities field is required.');
@@ -82,6 +129,7 @@ export default function ReportForm() {
         challenges: mode === 'quick' ? '' : challenges,
         planTomorrow: mode === 'quick' ? '' : planTomorrow,
         reportDate: today,
+        tasks: submitTasks,
       });
       setSuccess(res.data.message);
       setExistingReport(res.data.report);
@@ -100,13 +148,35 @@ export default function ReportForm() {
       setQuickText(text);
     } else {
       setActivities(text);
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length > 0) {
+        setTasks(lines.map(l => ({ description: l.trim(), hours: '' })));
+      }
     }
+  };
+
+  // Task management
+  const addTask = () => setTasks([...tasks, { description: '', hours: '' }]);
+
+  const removeTask = (index) => {
+    if (tasks.length === 1) return;
+    setTasks(tasks.filter((_, i) => i !== index));
+  };
+
+  const updateTask = (index, field, value) => {
+    const updated = [...tasks];
+    updated[index] = { ...updated[index], [field]: value };
+    setTasks(updated);
   };
 
   const switchMode = (newMode) => {
     if (newMode === 'quick' && mode === 'full') {
-      setQuickText(activities);
+      setQuickText(buildActivitiesFromTasks() || activities);
     } else if (newMode === 'full' && mode === 'quick') {
+      if (quickText && tasks.every(t => !t.description.trim())) {
+        const lines = quickText.split('\n').filter(l => l.trim());
+        setTasks(lines.length > 0 ? lines.map(l => ({ description: l.trim(), hours: '' })) : [{ description: quickText, hours: '' }]);
+      }
       setActivities(quickText || activities);
     }
     setMode(newMode);
@@ -118,17 +188,25 @@ export default function ReportForm() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Daily Activity Report</h1>
+            <h1 className="text-2xl font-bold text-slate-800">EOD Report</h1>
             <p className="text-slate-500 mt-1">
               {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
-          {existingReport && (
-            <span className="flex items-center gap-1.5 text-sm bg-green-50 text-green-700 px-3 py-1.5 rounded-full">
-              <CheckCircle className="w-4 h-4" />
-              Submitted
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {totalHours > 0 && mode === 'full' && (
+              <span className="flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full">
+                <Clock className="w-4 h-4" />
+                {totalHours}h total
+              </span>
+            )}
+            {existingReport && (
+              <span className="flex items-center gap-1.5 text-sm bg-green-50 text-green-700 px-3 py-1.5 rounded-full">
+                <CheckCircle className="w-4 h-4" />
+                Submitted
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Mode Toggle */}
@@ -192,7 +270,13 @@ export default function ReportForm() {
               if (mode === 'quick') {
                 setQuickText((prev) => (prev ? prev + '\n' + text : text));
               } else {
-                setActivities((prev) => (prev ? prev + '\n' + text : text));
+                // Add as a new task
+                const emptyIndex = tasks.findIndex(t => !t.description.trim());
+                if (emptyIndex >= 0) {
+                  updateTask(emptyIndex, 'description', text);
+                } else {
+                  setTasks([...tasks, { description: text, hours: '' }]);
+                }
               }
             }}
           />
@@ -244,18 +328,69 @@ export default function ReportForm() {
           ) : (
             /* Full Mode */
             <div className="space-y-5">
+              {/* Task-based Activities with Hours */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Today's Activities <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={activities}
-                  onChange={(e) => { setActivities(e.target.value); setShowPrefillBanner(false); }}
-                  rows={5}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                  placeholder="Describe what you worked on today..."
-                  required
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Today's Tasks & Hours <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addTask}
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Task
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {tasks.map((task, index) => (
+                    <div key={index} className="flex gap-2 items-start">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={task.description}
+                          onChange={(e) => { updateTask(index, 'description', e.target.value); setShowPrefillBanner(false); }}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                          placeholder={`Task ${index + 1} — e.g., Client meeting, Code review...`}
+                        />
+                      </div>
+                      <div className="w-20">
+                        <input
+                          type="number"
+                          value={task.hours}
+                          onChange={(e) => updateTask(index, 'hours', e.target.value)}
+                          className="w-full px-2 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-center"
+                          placeholder="Hrs"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeTask(index)}
+                        disabled={tasks.length === 1}
+                        className="p-2.5 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:hover:text-slate-400"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Total hours bar */}
+                {totalHours > 0 && (
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-slate-500">
+                      {tasks.filter(t => t.description.trim()).length} task(s) logged
+                    </span>
+                    <span className={`font-semibold ${totalHours > 10 ? 'text-amber-600' : 'text-blue-600'}`}>
+                      Total: {totalHours}h
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Recent Activities Chips (Full Mode) */}
@@ -306,7 +441,7 @@ export default function ReportForm() {
 
               <button
                 type="submit"
-                disabled={loading || !activities.trim()}
+                disabled={loading || tasks.every(t => !t.description.trim())}
                 className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {existingReport ? <Edit3 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
