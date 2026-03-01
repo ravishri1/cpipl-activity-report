@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd client && npm install && npx vite build",
+  "buildCommand": "cd client && npm install --include=dev && npx vite build",
   "outputDirectory": "client/dist",
   "installCommand": "cd server && npm install && npx prisma generate",
   "rewrites": [

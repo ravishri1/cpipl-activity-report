@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd client && npm install && npx vite build",
-    "vercel-build": "cd server && npx prisma generate && cd ../client && npm install && npx vite build",
+    "build": "cd client && npm install --include=dev && npx vite build",
+    "vercel-build": "cd server && npx prisma generate && cd ../client && npm install --include=dev && npx vite build",
     "postinstall": "cd server && npm install && npx prisma generate"
   }
 }
