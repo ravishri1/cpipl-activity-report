@@ -21,7 +21,7 @@ export default function Login() {
             <FileText className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800">EOD Report System</h1>
-          <p className="text-blue-600 font-semibold text-sm mt-1">Color Papers India Pvt. Ltd.</p>
+          <p className="text-blue-600 font-semibold text-sm mt-1">Color Papers India Private Limited</p>
         </div>
 
         {/* Access Denied */}
