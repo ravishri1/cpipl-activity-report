@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
-import { UserPlus, Edit3, UserX, UserCheck, X, Download } from 'lucide-react';
+import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe } from 'lucide-react';
 import GoogleImportModal from './GoogleImportModal';
 
 export default function TeamManagement() {
@@ -8,7 +8,7 @@ export default function TeamManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'member', department: 'General' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,11 +24,13 @@ export default function TeamManagement() {
   useEffect(() => { fetchUsers(); }, []);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', password: '', role: 'member', department: 'General' });
+    setForm({ name: '', email: '', role: 'member', department: 'General' });
     setEditUser(null);
     setShowForm(false);
     setError('');
   };
+
+  const isInternal = (email) => email?.endsWith('@colorpapers.in');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,11 +38,10 @@ export default function TeamManagement() {
     setLoading(true);
     try {
       if (editUser) {
-        const data = { ...form };
-        if (!data.password) delete data.password;
-        await api.put(`/users/${editUser.id}`, data);
+        await api.put(`/users/${editUser.id}`, form);
       } else {
-        await api.post('/users', form);
+        // No password needed — Google login only
+        await api.post('/users', { ...form, password: 'google-auth-only' });
       }
       fetchUsers();
       resetForm();
@@ -53,7 +54,7 @@ export default function TeamManagement() {
 
   const handleEdit = (user) => {
     setEditUser(user);
-    setForm({ name: user.name, email: user.email, password: '', role: user.role, department: user.department });
+    setForm({ name: user.name, email: user.email, role: user.role, department: user.department });
     setShowForm(true);
   };
 
@@ -83,7 +84,7 @@ export default function TeamManagement() {
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
           >
             <UserPlus className="w-4 h-4" />
-            Add Member
+            Add External Employee
           </button>
         </div>
       </div>
@@ -92,9 +93,20 @@ export default function TeamManagement() {
       {showForm && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-lg">{editUser ? 'Edit Member' : 'Add New Member'}</h2>
+            <h2 className="font-semibold text-lg">
+              {editUser ? 'Edit Employee' : 'Add External Employee'}
+            </h2>
             <button onClick={resetForm} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
           </div>
+          {!editUser && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+              <Globe className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800">
+                Add external employees (non-@colorpapers.in) who need access. They'll sign in with their Google account.
+                Internal @colorpapers.in employees are auto-registered on first Google login.
+              </p>
+            </div>
+          )}
           {error && <div className="bg-red-50 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">{error}</div>}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -103,17 +115,10 @@ export default function TeamManagement() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Google Email</label>
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Password {editUser && <span className="text-slate-400">(leave blank to keep current)</span>}
-              </label>
-              <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                {...(!editUser && { required: true })} />
+                placeholder="user@gmail.com" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
@@ -132,7 +137,7 @@ export default function TeamManagement() {
             <div className="flex items-end">
               <button type="submit" disabled={loading}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50">
-                {loading ? 'Saving...' : editUser ? 'Update' : 'Add Member'}
+                {loading ? 'Saving...' : editUser ? 'Update' : 'Add Employee'}
               </button>
             </div>
           </form>
@@ -146,6 +151,7 @@ export default function TeamManagement() {
             <tr>
               <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Name</th>
               <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Email</th>
+              <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Type</th>
               <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Role</th>
               <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Department</th>
               <th className="text-left px-5 py-3 text-sm font-medium text-slate-600">Status</th>
@@ -157,6 +163,17 @@ export default function TeamManagement() {
               <tr key={user.id} className={!user.isActive ? 'opacity-50' : ''}>
                 <td className="px-5 py-3 font-medium text-slate-800">{user.name}</td>
                 <td className="px-5 py-3 text-sm text-slate-600">{user.email}</td>
+                <td className="px-5 py-3">
+                  {isInternal(user.email) ? (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      <Building2 className="w-3 h-3" /> Internal
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      <Globe className="w-3 h-3" /> External
+                    </span>
+                  )}
+                </td>
                 <td className="px-5 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     user.role === 'admin' ? 'bg-purple-100 text-purple-700' :

@@ -16,8 +16,9 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
+  // Google login — sends Google credential to backend
+  const googleLogin = async (credential) => {
+    const res = await api.post('/auth/google-login', { credential });
     localStorage.setItem('token', res.data.token);
     localStorage.setItem('user', JSON.stringify(res.data.user));
     setUser(res.data.user);
@@ -33,7 +34,7 @@ export function AuthProvider({ children }) {
   const isAdmin = user?.role === 'admin' || user?.role === 'team_lead';
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, googleLogin, logout, loading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
