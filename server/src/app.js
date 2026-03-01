@@ -63,6 +63,25 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Debug auth — temporary endpoint to diagnose 401 issues
+app.post('/api/debug-auth', (req, res) => {
+  const { getAuth } = require('@clerk/express');
+  try {
+    const auth = getAuth(req);
+    const authHeader = req.headers.authorization;
+    res.json({
+      hasAuthHeader: !!authHeader,
+      authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : null,
+      authUserId: auth?.userId || null,
+      authSessionId: auth?.sessionId || null,
+      clerkKeySet: !!process.env.CLERK_SECRET_KEY,
+      clerkKeyPrefix: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.substring(0, 10) + '...' : null,
+    });
+  } catch (err) {
+    res.json({ error: err.message, stack: err.stack?.substring(0, 300) });
+  }
+});
+
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
