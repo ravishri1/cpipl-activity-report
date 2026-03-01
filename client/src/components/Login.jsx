@@ -14,38 +14,38 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        {/* Header with Branding */}
-        <div className="text-center mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <FileText className="w-10 h-10 text-white" />
+      <div className="bg-white rounded-2xl shadow-2xl px-6 py-5 w-full max-w-sm">
+        {/* Header — compact */}
+        <div className="text-center mb-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-md">
+            <FileText className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">EOD Report System</h1>
-          <p className="text-blue-600 font-semibold text-sm mt-1">Color Papers India Private Limited</p>
+          <h1 className="text-lg font-bold text-slate-800 leading-tight">EOD Report System</h1>
+          <p className="text-blue-600 font-semibold text-xs mt-0.5">Color Papers India Private Limited</p>
         </div>
 
         {/* Access Denied */}
         {accessDenied && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-xs flex items-start gap-2">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">Access Denied</p>
-              <p className="mt-1">{accessDenied}</p>
+              <p className="mt-0.5">{accessDenied}</p>
             </div>
           </div>
         )}
 
         {/* Loading state */}
         {loading && isSignedIn && (
-          <div className="text-center py-4 mb-4">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
-            <p className="text-sm text-slate-500">Verifying access...</p>
+          <div className="text-center py-3 mb-3">
+            <div className="w-6 h-6 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-1.5"></div>
+            <p className="text-xs text-slate-500">Verifying access...</p>
           </div>
         )}
 
         {/* Clerk Sign-In Component */}
         {!isSignedIn && (
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4">
             <SignIn
               appearance={{
                 elements: {
@@ -63,44 +63,43 @@ export default function Login() {
           </div>
         )}
 
-        {/* Info Cards */}
-        <div className="space-y-3 mt-4">
-          <div className="flex items-start gap-3 bg-blue-50 rounded-lg p-3">
-            <Building2 className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+        {/* Info Cards — compact */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2.5 bg-blue-50 rounded-lg px-3 py-2">
+            <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-blue-900">Internal Employees</p>
-              <p className="text-xs text-blue-700 mt-0.5">
-                Sign in with your <strong>@colorpapers.in</strong> Google Workspace account. Auto-verified.
+              <p className="text-xs font-medium text-blue-900">Internal Employees</p>
+              <p className="text-[10px] text-blue-700 mt-0.5">
+                Sign in with <strong>@colorpapers.in</strong> Google account
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-3 bg-amber-50 rounded-lg p-3">
-            <Globe className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex items-center gap-2.5 bg-amber-50 rounded-lg px-3 py-2">
+            <Globe className="w-4 h-4 text-amber-600 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-900">External / Freelance</p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Sign in with any Google email. You can submit EOD reports directly.
+              <p className="text-xs font-medium text-amber-900">External / Freelance</p>
+              <p className="text-[10px] text-amber-700 mt-0.5">
+                Sign in with any Google email to submit reports
               </p>
             </div>
           </div>
         </div>
 
-        {/* Confidential Notice */}
-        <div className="mt-6 pt-4 border-t border-slate-200">
-          <div className="flex items-center justify-center gap-1.5 text-slate-400 mb-2">
-            <Shield className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider">Proprietary & Confidential</span>
+        {/* Confidential Notice — compact */}
+        <div className="mt-4 pt-3 border-t border-slate-200">
+          <div className="flex items-center justify-center gap-1 text-slate-400 mb-1">
+            <Shield className="w-3 h-3" />
+            <span className="text-[9px] font-semibold uppercase tracking-wider">Proprietary & Confidential</span>
           </div>
-          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+          <p className="text-[9px] text-slate-400 text-center leading-relaxed">
             This system is the exclusive property of Color Papers India Private Limited.
-            Unauthorized access, use, reproduction, or distribution is strictly prohibited
-            and may result in legal action.
+            Unauthorized access or distribution is strictly prohibited.
           </p>
         </div>
       </div>
 
       {/* Copyright Footer */}
-      <p className="text-blue-200/60 text-[10px] mt-6 text-center">
+      <p className="text-blue-200/60 text-[9px] mt-4 text-center">
         &copy; {new Date().getFullYear()} Color Papers India Private Limited. All rights reserved.
       </p>
     </div>
