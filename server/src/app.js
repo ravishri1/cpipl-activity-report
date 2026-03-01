@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
+const { clerkMiddleware } = require('@clerk/express');
 
 const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
@@ -23,6 +24,10 @@ prisma = global.__prisma;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Clerk middleware — parses session JWT from Authorization header
+// Makes auth state available via getAuth(req) in route handlers
+app.use(clerkMiddleware());
 
 // ═══ Security: Block indexing, scraping, and caching ═══
 app.use((req, res, next) => {
