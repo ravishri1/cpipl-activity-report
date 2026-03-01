@@ -5,9 +5,11 @@ const clerk = createClerkClient({
 });
 
 // Authorized frontend origins for token validation
+// Includes Clerk accounts URL (set as azp in dev mode tokens)
 const authorizedParties = [
   'https://eod.colorpapers.in',
   'https://cpipl-activity-report.vercel.app',
+  'https://cool-polecat-60.clerk.accounts.dev',
   'http://localhost:3000',
   'http://localhost:5173',
 ].filter(Boolean);
