@@ -5,3 +5,24 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   background-color: #f1f5f9;
 }
+
+/* ═══ Hide Clerk "Secured by" branding ═══ */
+.cl-internal-b3fm6y,
+.cl-footerAction,
+.cl-footer,
+.cl-badge,
+[data-localization-key="footerPageLink__help"],
+[data-localization-key="footerPageLink__privacy"],
+[data-localization-key="footerPageLink__terms"],
+a[href*="clerk.com"],
+div[class*="cl-internal"] > a[href*="clerk"],
+.cl-footerPages,
+.cl-footerPagesLink,
+.cl-powered-by-clerk,
+div[class*="Powered"],
+div[class*="secured"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}

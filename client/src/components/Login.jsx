@@ -55,6 +55,11 @@ export default function Login() {
                   headerSubtitle: 'hidden',
                   socialButtonsBlockButton: 'w-full',
                   footer: 'hidden',
+                  footerAction: 'hidden',
+                  footerActionLink: 'hidden',
+                  badge: 'hidden',
+                  dividerRow: 'hidden',
+                  internal: 'hidden',
                 },
               }}
               routing="hash"
