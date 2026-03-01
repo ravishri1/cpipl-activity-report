@@ -1,4 +1,5 @@
 const { sendReminderEmail, sendEscalationEmail, sendSummaryToLead } = require('./emailService');
+const { sendChatReminder, sendChatEscalation, sendChatSummary } = require('./googleChatNotifier');
 const { getTodayDate, getYesterdayDate } = require('../utils/helpers');
 
 async function runFirstReminder(prisma) {
@@ -30,25 +31,33 @@ async function runFirstReminder(prisma) {
     });
   }
 
+  // Send Google Chat reminder to the team space
+  await sendChatReminder(nonReporters, today);
+
   // Send summary to team lead
   const leadEmail = process.env.TEAM_LEAD_EMAIL;
-  if (leadEmail) {
-    const reported = allMembers
-      .filter((m) => reportedIds.has(m.id))
-      .map((m) => {
-        const report = reports.find((r) => r.userId === m.id);
-        return { name: m.name, submittedAt: report.submittedAt };
-      });
-
-    await sendSummaryToLead(leadEmail, today, {
-      reported,
-      notReported: nonReporters.map((m) => ({ name: m.name, reminded: true })),
-      ignoredReminder: [],
-      totalReported: reported.length,
-      totalNotReported: nonReporters.length,
-      totalIgnored: 0,
+  const reported = allMembers
+    .filter((m) => reportedIds.has(m.id))
+    .map((m) => {
+      const report = reports.find((r) => r.userId === m.id);
+      return { name: m.name, submittedAt: report.submittedAt };
     });
+
+  const summaryData = {
+    reported,
+    notReported: nonReporters.map((m) => ({ name: m.name, reminded: true })),
+    ignoredReminder: [],
+    totalReported: reported.length,
+    totalNotReported: nonReporters.length,
+    totalIgnored: 0,
+  };
+
+  if (leadEmail) {
+    await sendSummaryToLead(leadEmail, today, summaryData);
   }
+
+  // Also post summary to Google Chat
+  await sendChatSummary(today, summaryData);
 
   console.log(`[REMINDER] First reminder complete. Reminded ${nonReporters.length} members.`);
 }
@@ -83,6 +92,9 @@ async function runEscalation(prisma) {
       },
     });
   }
+
+  // Send Google Chat escalation to the team space
+  await sendChatEscalation(stillPending, yesterday);
 
   // Send escalation summary to team lead
   const leadEmail = process.env.TEAM_LEAD_EMAIL;

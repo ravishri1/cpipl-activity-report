@@ -17,6 +17,7 @@ model User {
   isActive           Boolean  @default(true)
   googleId           String?  @unique
   importedFromGoogle Boolean  @default(false)
+  totalPoints        Int      @default(0) // cached leaderboard score
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -24,6 +25,10 @@ model User {
   reminders        Reminder[]
   googleToken      GoogleToken?
   emailActivities  EmailActivity[]
+  chatActivities   ChatActivity[]
+  pointLogs        PointLog[]
+  thumbsUpsGiven   ThumbsUp[]    @relation("ThumbsUpGiver")
+  thumbsUpsReceived ThumbsUp[]   @relation("ThumbsUpReceiver")
 }
 
 model DailyReport {
@@ -37,8 +42,9 @@ model DailyReport {
   submittedAt   DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user  User         @relation(fields: [userId], references: [id])
-  tasks ReportTask[]
+  user      User         @relation(fields: [userId], references: [id])
+  tasks     ReportTask[]
+  thumbsUps ThumbsUp[]
 
   @@unique([userId, reportDate])
 }
@@ -98,4 +104,49 @@ model EmailActivity {
 
   @@unique([userId, activityDate])
   @@index([activityDate])
+}
+
+model ChatActivity {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  activityDate String   // YYYY-MM-DD
+  messagesSent Int      @default(0)
+  fetchedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, activityDate])
+  @@index([activityDate])
+}
+
+model PointLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  date        String   // YYYY-MM-DD
+  source      String   // report, calendar, task, email, chat, thumbsup
+  points      Int
+  description String   @default("")
+  givenBy     Int?     // userId of team lead (for thumbsup only)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
+  @@index([date])
+  @@index([source])
+}
+
+model ThumbsUp {
+  id             Int      @id @default(autoincrement())
+  reportId       Int
+  givenByUserId  Int
+  receiverUserId Int
+  createdAt      DateTime @default(now())
+
+  report   DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  givenBy  User        @relation("ThumbsUpGiver", fields: [givenByUserId], references: [id])
+  receiver User        @relation("ThumbsUpReceiver", fields: [receiverUserId], references: [id])
+
+  @@unique([reportId, givenByUserId])
+  @@index([receiverUserId])
 }

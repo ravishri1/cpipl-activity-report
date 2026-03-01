@@ -176,4 +176,70 @@ router.get('/tasks', authenticate, async (req, res) => {
   }
 });
 
+// ─── Combined Auto-Tasks (All 4 sources) ───
+
+// GET /api/google/auto-tasks?date=YYYY-MM-DD
+// Returns combined items from Calendar, Tasks, Email, Chat for report auto-population
+router.get('/auto-tasks', authenticate, async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const result = { calendar: [], tasks: [], email: null, chat: null };
+
+    // 1. Calendar events (per-user OAuth)
+    try {
+      const events = await fetchTodayCalendarEvents(req.user.id, req.prisma);
+      result.calendar = events;
+    } catch (err) {
+      result.calendarError = err.message;
+    }
+
+    // 2. Google Tasks (per-user OAuth)
+    try {
+      const taskItems = await fetchTodayTasks(req.user.id, req.prisma);
+      result.tasks = taskItems;
+    } catch (err) {
+      result.tasksError = err.message;
+    }
+
+    // 3. Email activity (from DB - 2-day delay)
+    const emailDate = new Date(date);
+    emailDate.setDate(emailDate.getDate() - 2);
+    const emailDateStr = emailDate.toISOString().split('T')[0];
+    try {
+      const emailActivity = await req.prisma.emailActivity.findUnique({
+        where: { userId_activityDate: { userId: req.user.id, activityDate: emailDateStr } },
+      });
+      if (emailActivity) {
+        result.email = {
+          sent: emailActivity.emailsSent,
+          received: emailActivity.emailsReceived,
+          date: emailDateStr,
+        };
+      }
+    } catch (err) {
+      // Ignore
+    }
+
+    // 4. Chat activity (from DB - 2-day delay)
+    try {
+      const chatActivity = await req.prisma.chatActivity.findUnique({
+        where: { userId_activityDate: { userId: req.user.id, activityDate: emailDateStr } },
+      });
+      if (chatActivity) {
+        result.chat = {
+          messagesSent: chatActivity.messagesSent,
+          date: emailDateStr,
+        };
+      }
+    } catch (err) {
+      // Ignore
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Auto-tasks error:', err);
+    res.status(500).json({ error: 'Failed to fetch auto-tasks.' });
+  }
+});
+
 module.exports = router;

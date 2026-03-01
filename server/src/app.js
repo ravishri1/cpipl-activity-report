@@ -10,6 +10,7 @@ const userRoutes = require('./routes/users');
 const dashboardRoutes = require('./routes/dashboard');
 const settingsRoutes = require('./routes/settings');
 const googleRoutes = require('./routes/google');
+const pointsRoutes = require('./routes/points');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/google', googleRoutes);
+app.use('/api/points', pointsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

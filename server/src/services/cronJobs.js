@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { runFirstReminder, runEscalation } = require('./reminderService');
 const { fetchAndStoreEmailActivity } = require('./googleWorkspace');
+const { fetchAndStoreChatActivity } = require('./googleChat');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -46,6 +47,21 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Email activity fetch scheduled: 0 6 * * 1-6 (06:00 Mon-Sat)');
+
+  // Chat activity fetch: 6:05 AM daily (Mon-Sat)
+  // Reports API has 2-day delay, same as email
+  cron.schedule('5 6 * * 1-6', async () => {
+    console.log(`[CRON] Chat activity fetch triggered at ${new Date().toLocaleString()}`);
+    try {
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      const date = twoDaysAgo.toISOString().split('T')[0];
+      await fetchAndStoreChatActivity(prisma, date);
+    } catch (err) {
+      console.error('[CRON] Chat activity fetch failed:', err);
+    }
+  });
+  console.log('  -> Chat activity fetch scheduled: 5 6 * * 1-6 (06:05 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

@@ -263,20 +263,25 @@ export default function ReportForm() {
           </div>
         )}
 
-        {/* Google Calendar & Tasks Suggestions */}
+        {/* Google Workspace Suggestions (Calendar, Tasks, Email, Chat) */}
         {!existingReport && (
           <GoogleSuggestions
-            onAddToReport={(text) => {
+            onAddTasks={(items) => {
               if (mode === 'quick') {
+                const text = items.map((i) => i.description).join('\n');
                 setQuickText((prev) => (prev ? prev + '\n' + text : text));
               } else {
-                // Add as a new task
-                const emptyIndex = tasks.findIndex(t => !t.description.trim());
-                if (emptyIndex >= 0) {
-                  updateTask(emptyIndex, 'description', text);
-                } else {
-                  setTasks([...tasks, { description: text, hours: '' }]);
+                // Add each item as a separate task row
+                const newTasks = items.map((i) => ({ description: i.description, hours: '' }));
+                // Fill empty task slots first, then append
+                const updated = [...tasks];
+                let remaining = [...newTasks];
+                for (let i = 0; i < updated.length && remaining.length > 0; i++) {
+                  if (!updated[i].description.trim()) {
+                    updated[i] = remaining.shift();
+                  }
                 }
+                setTasks([...updated, ...remaining]);
               }
             }}
           />

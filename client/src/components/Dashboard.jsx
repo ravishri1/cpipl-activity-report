@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail, ClipboardEdit, FileText } from 'lucide-react';
+import { Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail, ClipboardEdit, FileText, ThumbsUp } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -125,6 +125,26 @@ export default function Dashboard() {
 
   const { summary, reported, notReported, ignoredReminder, emailDataDate } = data;
 
+  const handleThumbsUp = async (reportId) => {
+    // Check if current user already gave a thumbs up
+    const member = reported.find((m) => m.reportId === reportId);
+    if (!member) return;
+
+    const alreadyGiven = member.thumbsUps.some((t) => t.givenBy.id === user.id);
+
+    try {
+      if (alreadyGiven) {
+        await api.delete('/points/thumbsup', { data: { reportId } });
+      } else {
+        await api.post('/points/thumbsup', { reportId });
+      }
+      // Refresh dashboard to get updated data
+      fetchDashboard();
+    } catch (err) {
+      console.error('Thumbs up error:', err);
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -176,21 +196,46 @@ export default function Dashboard() {
             {reported.length === 0 ? (
               <div className="px-5 py-8 text-center text-slate-400">No reports yet</div>
             ) : (
-              reported.map((m) => (
-                <div key={m.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-slate-800">{m.name}</p>
-                    <p className="text-xs text-slate-500">{m.department}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <EmailBadge sent={m.emailsSent} received={m.emailsReceived} />
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                      <Clock className="w-3 h-3" />
-                      {new Date(m.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              reported.map((m) => {
+                const myThumbsUp = m.thumbsUps?.some((t) => t.givenBy.id === user.id);
+                return (
+                  <div key={m.id} className="px-5 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-slate-800">{m.name}</p>
+                      <p className="text-xs text-slate-500">{m.department}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <EmailBadge sent={m.emailsSent} received={m.emailsReceived} />
+                      {/* Thumbs up button - only for admin/team_lead, not for own report */}
+                      {isAdmin && m.id !== user.id && (
+                        <button
+                          onClick={() => handleThumbsUp(m.reportId)}
+                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                            myThumbsUp
+                              ? 'bg-pink-100 text-pink-700 hover:bg-pink-200'
+                              : 'bg-slate-100 text-slate-500 hover:bg-pink-50 hover:text-pink-600'
+                          }`}
+                          title={myThumbsUp ? 'Remove thumbs up (-10 pts)' : 'Give thumbs up (+10 pts)'}
+                        >
+                          <ThumbsUp className={`w-3.5 h-3.5 ${myThumbsUp ? 'fill-current' : ''}`} />
+                          {m.thumbsUpCount > 0 && <span>{m.thumbsUpCount}</span>}
+                        </button>
+                      )}
+                      {/* Show thumbsup count for self or non-admin */}
+                      {(!isAdmin || m.id === user.id) && m.thumbsUpCount > 0 && (
+                        <span className="flex items-center gap-1 text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full">
+                          <ThumbsUp className="w-3 h-3 fill-current" />
+                          {m.thumbsUpCount}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1 text-xs text-green-600">
+                        <Clock className="w-3 h-3" />
+                        {new Date(m.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -8,3 +8,6 @@ client/dist/
 .vite/
 .claude/
 server/prisma/migrations/
+
+.vercel
+PLAN.md

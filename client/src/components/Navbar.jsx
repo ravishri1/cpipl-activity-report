@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserButton } from '@clerk/clerk-react';
-import { LayoutDashboard, FileText, Users, Settings, ClipboardEdit } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Settings, ClipboardEdit, Trophy } from 'lucide-react';
 
 export default function Navbar() {
   const { user, isAdmin } = useAuth();
@@ -11,6 +11,7 @@ export default function Navbar() {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/submit-report', label: 'Submit Report', icon: ClipboardEdit },
     { to: '/reports', label: 'History', icon: FileText },
+    { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   ];
 
   if (isAdmin) {

@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { getTodayDate, getYesterdayDate } = require('../utils/helpers');
+const { calculateAndAwardPoints } = require('../services/pointsEngine');
 
 const router = express.Router();
 
@@ -72,6 +73,11 @@ router.post('/', authenticate, async (req, res) => {
         },
         include: { tasks: true },
       });
+      // Calculate and award points
+      calculateAndAwardPoints(req.user.id, date, req.prisma).catch((err) =>
+        console.error('Points calc error (update):', err.message)
+      );
+
       return res.json({ message: 'Report updated.', report: updated });
     }
 
@@ -90,6 +96,11 @@ router.post('/', authenticate, async (req, res) => {
       },
       include: { tasks: true },
     });
+
+    // Calculate and award points
+    calculateAndAwardPoints(req.user.id, date, req.prisma).catch((err) =>
+      console.error('Points calc error (create):', err.message)
+    );
 
     res.status(201).json({ message: 'Report submitted.', report });
   } catch (err) {
@@ -118,7 +129,11 @@ router.get('/', authenticate, async (req, res) => {
     const date = req.query.date || getTodayDate();
     const reports = await req.prisma.dailyReport.findMany({
       where: { reportDate: date },
-      include: { user: { select: { id: true, name: true, email: true, department: true } }, tasks: true },
+      include: {
+        user: { select: { id: true, name: true, email: true, department: true } },
+        tasks: true,
+        thumbsUps: { include: { givenBy: { select: { id: true, name: true } } } },
+      },
       orderBy: { submittedAt: 'desc' },
     });
     res.json(reports);
@@ -144,7 +159,11 @@ router.get('/history', authenticate, async (req, res) => {
 
     const reports = await req.prisma.dailyReport.findMany({
       where,
-      include: { user: { select: { id: true, name: true, email: true, department: true } }, tasks: true },
+      include: {
+        user: { select: { id: true, name: true, email: true, department: true } },
+        tasks: true,
+        thumbsUps: { include: { givenBy: { select: { id: true, name: true } } } },
+      },
       orderBy: [{ reportDate: 'desc' }, { submittedAt: 'desc' }],
       take: 100,
     });

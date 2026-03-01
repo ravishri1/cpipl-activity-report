@@ -7,6 +7,7 @@ import ReportForm from './components/ReportForm';
 import TeamManagement from './components/TeamManagement';
 import ReportHistory from './components/ReportHistory';
 import Settings from './components/Settings';
+import Leaderboard from './components/Leaderboard';
 import { Shield } from 'lucide-react';
 
 function PrivateRoute({ children }) {
@@ -53,6 +54,7 @@ function AppRoutes() {
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/submit-report" element={<PrivateRoute><ReportForm /></PrivateRoute>} />
           <Route path="/reports" element={<PrivateRoute><ReportHistory /></PrivateRoute>} />
+          <Route path="/leaderboard" element={<PrivateRoute><Leaderboard /></PrivateRoute>} />
           <Route path="/admin/team" element={<AdminRoute><TeamManagement /></AdminRoute>} />
           <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
           <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
