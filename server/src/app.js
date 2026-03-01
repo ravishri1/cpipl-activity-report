@@ -24,6 +24,16 @@ prisma = global.__prisma;
 app.use(cors());
 app.use(express.json());
 
+// ═══ Security: Block indexing, scraping, and caching ═══
+app.use((req, res, next) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet, noimageindex');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // Make prisma available to routes
 app.use((req, res, next) => {
   req.prisma = prisma;

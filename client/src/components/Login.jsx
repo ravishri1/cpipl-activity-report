@@ -1,7 +1,7 @@
 import { SignIn, useUser } from '@clerk/clerk-react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Building2, Globe, AlertCircle } from 'lucide-react';
+import { FileText, Building2, Globe, AlertCircle, Shield } from 'lucide-react';
 
 export default function Login() {
   const { isSignedIn } = useUser();
@@ -13,15 +13,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        {/* Header */}
+        {/* Header with Branding */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-9 h-9 text-white" />
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <FileText className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">Color Papers</h1>
-          <p className="text-slate-500 mt-1">EOD Report System</p>
+          <h1 className="text-2xl font-bold text-slate-800">EOD Report System</h1>
+          <p className="text-blue-600 font-semibold text-sm mt-1">Color Papers India Pvt. Ltd.</p>
         </div>
 
         {/* Access Denied */}
@@ -84,7 +84,25 @@ export default function Login() {
             </div>
           </div>
         </div>
+
+        {/* Confidential Notice */}
+        <div className="mt-6 pt-4 border-t border-slate-200">
+          <div className="flex items-center justify-center gap-1.5 text-slate-400 mb-2">
+            <Shield className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Proprietary & Confidential</span>
+          </div>
+          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+            This system is the exclusive property of Color Papers India Private Limited.
+            Unauthorized access, use, reproduction, or distribution is strictly prohibited
+            and may result in legal action.
+          </p>
+        </div>
       </div>
+
+      {/* Copyright Footer */}
+      <p className="text-blue-200/60 text-[10px] mt-6 text-center">
+        &copy; {new Date().getFullYear()} Color Papers India Private Limited. All rights reserved.
+      </p>
     </div>
   );
 }
