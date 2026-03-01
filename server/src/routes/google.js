@@ -1,9 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { generateAuthUrl, exchangeCodeForTokens, storeTokens } = require('../services/googleAuth');
-const { fetchGoogleWorkspaceUsers } = require('../services/googleWorkspace');
-const { fetchTodayCalendarEvents, fetchTodayTasks } = require('../services/googleCalendar');
+const { generateAuthUrl, exchangeCodeForTokens, storeTokens } = require('../services/google/googleAuth');
+const { fetchGoogleWorkspaceUsers } = require('../services/google/googleWorkspace');
+const { fetchTodayCalendarEvents, fetchTodayTasks } = require('../services/google/googleCalendar');
 
 const router = express.Router();
 

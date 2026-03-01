@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { UserButton } from '@clerk/clerk-react';
 import { LayoutDashboard, FileText, Users, Settings, ClipboardEdit, Trophy } from 'lucide-react';
 

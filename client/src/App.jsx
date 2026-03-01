@@ -1,13 +1,13 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Navbar from './components/Navbar';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import ReportForm from './components/ReportForm';
-import TeamManagement from './components/TeamManagement';
-import ReportHistory from './components/ReportHistory';
-import Settings from './components/Settings';
-import Leaderboard from './components/Leaderboard';
+import Navbar from './components/layout/Navbar';
+import Login from './components/auth/Login';
+import Dashboard from './components/dashboard/Dashboard';
+import ReportForm from './components/reports/ReportForm';
+import TeamManagement from './components/admin/TeamManagement';
+import ReportHistory from './components/reports/ReportHistory';
+import Settings from './components/admin/Settings';
+import Leaderboard from './components/leaderboard/Leaderboard';
 import { Shield } from 'lucide-react';
 
 function PrivateRoute({ children }) {

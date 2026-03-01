@@ -1,6 +1,6 @@
 import { SignIn, useUser } from '@clerk/clerk-react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { FileText, Building2, Globe, AlertCircle, Shield, RefreshCw, LogOut } from 'lucide-react';
 
 export default function Login() {

@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { getTodayDate, getYesterdayDate } = require('../utils/helpers');
-const { calculateAndAwardPoints } = require('../services/pointsEngine');
+const { calculateAndAwardPoints } = require('../services/points/pointsEngine');
 
 const router = express.Router();
 

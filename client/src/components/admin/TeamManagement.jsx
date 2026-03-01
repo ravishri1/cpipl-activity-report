@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe } from 'lucide-react';
-import GoogleImportModal from './GoogleImportModal';
+import GoogleImportModal from '../google/GoogleImportModal';
 
 export default function TeamManagement() {
   const [users, setUsers] = useState([]);

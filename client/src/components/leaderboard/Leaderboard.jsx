@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import api from '../utils/api';
-import { Trophy, Medal, Star, TrendingUp, Award, Mail, MessageSquare, Calendar, CheckSquare, FileText, ThumbsUp, RefreshCw } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../utils/api';
+import { Trophy, Medal, Star, TrendingUp, Award, Mail, MessageSquare, Calendar, CheckSquare, FileText, ThumbsUp, RefreshCw, Heart } from 'lucide-react';
+import AppreciationModal from './AppreciationModal';
+import BudgetIndicator from './BudgetIndicator';
+import AppreciationFeed from './AppreciationFeed';
 
 const SOURCE_ICONS = {
   report: { icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Reports' },
@@ -10,6 +13,7 @@ const SOURCE_ICONS = {
   email: { icon: Mail, color: 'text-orange-600', bg: 'bg-orange-50', label: 'Emails' },
   chat: { icon: MessageSquare, color: 'text-indigo-600', bg: 'bg-indigo-50', label: 'Chat' },
   thumbsup: { icon: ThumbsUp, color: 'text-pink-600', bg: 'bg-pink-50', label: 'Thumbs Up' },
+  appreciation: { icon: Heart, color: 'text-rose-600', bg: 'bg-rose-50', label: 'Appreciation' },
 };
 
 export default function Leaderboard() {
@@ -18,6 +22,8 @@ export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [myPoints, setMyPoints] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [appreciateUser, setAppreciateUser] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchData = async () => {
     setLoading(true);
@@ -147,15 +153,53 @@ export default function Leaderboard() {
                   </p>
                   <p className="text-xs text-slate-400">{entry.user?.department}</p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-amber-500" />
-                  <span className="text-lg font-bold text-slate-800">{entry.points}</span>
-                  <span className="text-xs text-slate-400">pts</span>
+                <div className="flex items-center gap-2">
+                  {entry.user?.id !== user?.id && (
+                    <button
+                      onClick={() => setAppreciateUser(entry.user)}
+                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 transition-colors"
+                      title={`Appreciate ${entry.user?.name?.split(' ')[0]}`}
+                    >
+                      <Heart className="w-3 h-3" />
+                    </button>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-amber-500" />
+                    <span className="text-lg font-bold text-slate-800">{entry.points}</span>
+                    <span className="text-xs text-slate-400">pts</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Appreciation Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <Heart className="w-4 h-4 text-pink-500" />
+            Recent Appreciations
+          </h3>
+          <AppreciationFeed refreshKey={refreshKey} />
+        </div>
+        <div>
+          <BudgetIndicator refreshKey={refreshKey} />
+        </div>
+      </div>
+
+      {/* Appreciation Modal */}
+      {appreciateUser && (
+        <AppreciationModal
+          receiver={appreciateUser}
+          onClose={() => setAppreciateUser(null)}
+          onSuccess={() => {
+            setAppreciateUser(null);
+            setRefreshKey((k) => k + 1);
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

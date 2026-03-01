@@ -1,7 +1,7 @@
 const cron = require('node-cron');
-const { runFirstReminder, runEscalation } = require('./reminderService');
-const { fetchAndStoreEmailActivity } = require('./googleWorkspace');
-const { fetchAndStoreChatActivity } = require('./googleChat');
+const { runFirstReminder, runEscalation } = require('./notifications/reminderService');
+const { fetchAndStoreEmailActivity } = require('./google/googleWorkspace');
+const { fetchAndStoreChatActivity } = require('./google/googleChat');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;

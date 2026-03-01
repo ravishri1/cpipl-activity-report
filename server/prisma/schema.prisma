@@ -29,6 +29,9 @@ model User {
   pointLogs        PointLog[]
   thumbsUpsGiven   ThumbsUp[]    @relation("ThumbsUpGiver")
   thumbsUpsReceived ThumbsUp[]   @relation("ThumbsUpReceiver")
+  appreciationsGiven    Appreciation[]      @relation("AppreciationsGiven")
+  appreciationsReceived Appreciation[]      @relation("AppreciationsReceived")
+  appreciationBudgets   AppreciationBudget[]
 }
 
 model DailyReport {
@@ -149,4 +152,35 @@ model ThumbsUp {
 
   @@unique([reportId, givenByUserId])
   @@index([receiverUserId])
+}
+
+model Appreciation {
+  id          Int      @id @default(autoincrement())
+  giverId     Int
+  receiverId  Int
+  points      Int      @default(5)
+  reason      String
+  status      String   @default("normal") // normal, warned, penalized
+  flagReason  String?
+  createdAt   DateTime @default(now())
+
+  giver    User @relation("AppreciationsGiven", fields: [giverId], references: [id])
+  receiver User @relation("AppreciationsReceived", fields: [receiverId], references: [id])
+
+  @@index([giverId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
+model AppreciationBudget {
+  id           Int    @id @default(autoincrement())
+  userId       Int
+  weekStart    String // YYYY-MM-DD (Monday)
+  totalGiven   Int    @default(0)
+  warningCount Int    @default(0)
+  penaltyCount Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, weekStart])
 }

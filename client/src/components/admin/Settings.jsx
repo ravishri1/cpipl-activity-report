@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { Save, CheckCircle, ExternalLink, Unlink, Loader2 } from 'lucide-react';
 
 export default function Settings() {

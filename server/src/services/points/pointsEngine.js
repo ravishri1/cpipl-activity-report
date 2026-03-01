@@ -4,13 +4,16 @@
  */
 
 // Default point values (can be overridden via Settings table)
+// Regular activities = minimal points (just for compliance)
+// Major points come from peer appreciation for out-of-box work
 const DEFAULT_POINTS = {
-  report: 10,
-  calendar: 5,
-  task: 3,
-  email: 1,
-  chat: 1,
-  thumbsup: 10,
+  report: 2,       // minimal - just for submitting EOD
+  calendar: 1,     // minimal - attending meetings
+  task: 1,         // minimal - listing tasks
+  email: 1,        // minimal - emails
+  chat: 1,         // minimal - chat messages
+  thumbsup: 15,    // significant - team lead recognizes quality
+  plan_tomorrow: 3, // bonus for setting future plans
 };
 
 async function getPointValues(prisma) {
@@ -42,7 +45,7 @@ async function calculateAndAwardPoints(userId, date, prisma) {
   if (report) {
     logs.push({ source: 'report', points: pts.report, description: 'Daily report submitted' });
 
-    // 2. Tasks in the report → +3 per task
+    // 2. Tasks in the report → +1 per task (minimal)
     if (report.tasks?.length > 0) {
       for (const task of report.tasks) {
         logs.push({
@@ -52,15 +55,24 @@ async function calculateAndAwardPoints(userId, date, prisma) {
         });
       }
     }
+
+    // 3. Bonus for future planning (planTomorrow filled with substance)
+    if (report.planTomorrow && report.planTomorrow.trim().length >= 20) {
+      logs.push({
+        source: 'report',
+        points: pts.plan_tomorrow || 3,
+        description: 'Future planning bonus',
+      });
+    }
   }
 
-  // 3. Calendar events for that day → +5 per event
+  // 4. Calendar events for that day → +1 per event (minimal)
   const calendarEvents = await getCalendarEventsCount(userId, date, prisma);
   for (let i = 0; i < calendarEvents; i++) {
     logs.push({ source: 'calendar', points: pts.calendar, description: 'Calendar event attended' });
   }
 
-  // 4. Email activity → +1 per email sent
+  // 5. Email activity → +1 per email sent (minimal)
   const emailActivity = await prisma.emailActivity.findUnique({
     where: { userId_activityDate: { userId, activityDate: date } },
   });
@@ -72,7 +84,7 @@ async function calculateAndAwardPoints(userId, date, prisma) {
     });
   }
 
-  // 5. Chat activity → +1 per message sent
+  // 6. Chat activity → +1 per message sent (minimal)
   const chatActivity = await prisma.chatActivity.findUnique({
     where: { userId_activityDate: { userId, activityDate: date } },
   });
@@ -84,9 +96,10 @@ async function calculateAndAwardPoints(userId, date, prisma) {
     });
   }
 
-  // Idempotent: delete old points for non-thumbsup sources on this date
+  // Idempotent: delete old points for auto-calculated sources on this date
+  // Keep: thumbsup, appreciation, appreciation_penalty (manually managed)
   await prisma.pointLog.deleteMany({
-    where: { userId, date, source: { not: 'thumbsup' } },
+    where: { userId, date, source: { notIn: ['thumbsup', 'appreciation', 'appreciation_penalty'] } },
   });
 
   // Insert new point logs
@@ -108,7 +121,7 @@ async function calculateAndAwardPoints(userId, date, prisma) {
  */
 async function getCalendarEventsCount(userId, date, prisma) {
   try {
-    const { fetchTodayCalendarEvents } = require('./googleCalendar');
+    const { fetchTodayCalendarEvents } = require('../google/googleCalendar');
     const events = await fetchTodayCalendarEvents(userId, prisma, date);
     return Array.isArray(events) ? events.length : 0;
   } catch {

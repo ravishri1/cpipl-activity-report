@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 import { Search, Download, FileText, Clock } from 'lucide-react';
 
 export default function ReportHistory() {

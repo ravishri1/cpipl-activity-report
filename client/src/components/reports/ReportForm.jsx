@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { Send, CheckCircle, Edit3, Zap, FileText, X, Clock, Plus, Trash2 } from 'lucide-react';
-import GoogleSuggestions from './GoogleSuggestions';
+import GoogleSuggestions from '../google/GoogleSuggestions';
 
 export default function ReportForm() {
   const [activities, setActivities] = useState('');

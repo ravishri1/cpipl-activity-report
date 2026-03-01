@@ -1,6 +1,6 @@
 const { sendReminderEmail, sendEscalationEmail, sendSummaryToLead } = require('./emailService');
 const { sendChatReminder, sendChatEscalation, sendChatSummary } = require('./googleChatNotifier');
-const { getTodayDate, getYesterdayDate } = require('../utils/helpers');
+const { getTodayDate, getYesterdayDate } = require('../../utils/helpers');
 
 async function runFirstReminder(prisma) {
   const today = getTodayDate();

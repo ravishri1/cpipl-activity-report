@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { Calendar, CheckSquare, Loader2, Plus, ExternalLink, RefreshCw, Mail, MessageSquare } from 'lucide-react';
 
 export default function GoogleSuggestions({ onAddTasks }) {

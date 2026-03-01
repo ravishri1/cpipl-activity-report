@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../utils/api';
+import api from '../../utils/api';
 import { X, Download, Check, Loader2, Users, AlertCircle } from 'lucide-react';
 
 export default function GoogleImportModal({ onClose, onImported }) {

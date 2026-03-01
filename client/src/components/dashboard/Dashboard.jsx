@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import api from '../utils/api';
-import { Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail, ClipboardEdit, FileText, ThumbsUp } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../utils/api';
+import { Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail, ClipboardEdit, FileText, ThumbsUp, Heart } from 'lucide-react';
+import AppreciationModal from '../leaderboard/AppreciationModal';
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -13,6 +14,7 @@ export default function Dashboard() {
   // Member-specific state
   const [myReport, setMyReport] = useState(null);
   const [myReportLoading, setMyReportLoading] = useState(true);
+  const [appreciateUser, setAppreciateUser] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -206,6 +208,16 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       <EmailBadge sent={m.emailsSent} received={m.emailsReceived} />
+                      {/* Appreciate button - for ALL users, not for self */}
+                      {m.id !== user.id && (
+                        <button
+                          onClick={() => setAppreciateUser({ id: m.id, name: m.name })}
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 transition-colors"
+                          title={`Appreciate ${m.name}`}
+                        >
+                          <Heart className="w-3 h-3" />
+                        </button>
+                      )}
                       {/* Thumbs up button - only for admin/team_lead, not for own report */}
                       {isAdmin && m.id !== user.id && (
                         <button
@@ -297,6 +309,18 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Appreciation Modal */}
+      {appreciateUser && (
+        <AppreciationModal
+          receiver={appreciateUser}
+          onClose={() => setAppreciateUser(null)}
+          onSuccess={() => {
+            setAppreciateUser(null);
+            fetchDashboard();
+          }}
+        />
+      )}
     </div>
   );
 }
