@@ -72,13 +72,22 @@ async function getAuthedClientForUser(userId, prisma) {
 
 // Service account client for admin-level operations (Admin SDK, Reports API)
 async function getServiceAccountClient(subjectEmail) {
-  const keyPath = path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || './google-service-account.json');
-
   let keyFile;
-  try {
-    keyFile = require(keyPath);
-  } catch (err) {
-    throw new Error('Google service account key file not found. Please configure GOOGLE_SERVICE_ACCOUNT_KEY_PATH in .env');
+
+  // Support env var JSON string (for Vercel) or file path (for local dev)
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    try {
+      keyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    } catch (err) {
+      throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY JSON in environment variable');
+    }
+  } else {
+    const keyPath = path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || './google-service-account.json');
+    try {
+      keyFile = require(keyPath);
+    } catch (err) {
+      throw new Error('Google service account key not found. Set GOOGLE_SERVICE_ACCOUNT_KEY env var or GOOGLE_SERVICE_ACCOUNT_KEY_PATH in .env');
+    }
   }
 
   const auth = new google.auth.JWT({
