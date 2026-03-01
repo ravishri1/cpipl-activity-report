@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd client && npm install && npx vite build",
+  "outputDirectory": "client/dist",
+  "installCommand": "cd server && npm install && npx prisma generate",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
+  ]
+}

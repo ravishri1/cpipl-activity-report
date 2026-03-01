@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  email              String   @unique
+  password           String
+  role               String   @default("member") // admin, team_lead, member
+  department         String   @default("General")
+  isActive           Boolean  @default(true)
+  googleId           String?  @unique
+  importedFromGoogle Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  reports          DailyReport[]
+  reminders        Reminder[]
+  googleToken      GoogleToken?
+  emailActivities  EmailActivity[]
+}
+
+model DailyReport {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  reportDate    String   // YYYY-MM-DD format for easy querying
+  activities    String
+  challenges    String   @default("")
+  planTomorrow  String   @default("")
+  submittedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, reportDate])
+}
+
+model Reminder {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  reportDate   String   // YYYY-MM-DD
+  reminderType String   // "first" or "escalation"
+  sentAt       DateTime @default(now())
+  status       String   @default("sent") // sent, acknowledged
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, reportDate])
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
+
+model GoogleToken {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  scopes       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model EmailActivity {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  activityDate   String   // YYYY-MM-DD
+  emailsSent     Int      @default(0)
+  emailsReceived Int      @default(0)
+  fetchedAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, activityDate])
+  @@index([activityDate])
+}
