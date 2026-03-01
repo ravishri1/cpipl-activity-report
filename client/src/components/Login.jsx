@@ -1,11 +1,11 @@
 import { SignIn, useUser } from '@clerk/clerk-react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Building2, Globe, AlertCircle, Shield } from 'lucide-react';
+import { FileText, Building2, Globe, AlertCircle, Shield, RefreshCw, LogOut } from 'lucide-react';
 
 export default function Login() {
   const { isSignedIn } = useUser();
-  const { user, loading, accessDenied } = useAuth();
+  const { user, loading, accessDenied, syncError, logout, retrySync } = useAuth();
 
   // If signed in with Clerk AND synced to DB, redirect
   if (isSignedIn && user && !loading) {
@@ -31,6 +31,33 @@ export default function Login() {
             <div>
               <p className="font-medium">Access Denied</p>
               <p className="mt-0.5">{accessDenied}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Sync Error — shows when server connection fails */}
+        {syncError && !loading && (
+          <div className="bg-orange-50 border border-orange-200 text-orange-800 px-3 py-3 rounded-lg mb-4 text-xs">
+            <div className="flex items-start gap-2 mb-2">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-orange-500" />
+              <div>
+                <p className="font-medium">Connection Error</p>
+                <p className="mt-0.5 text-orange-700">{syncError}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={retrySync}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-orange-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-orange-700 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" /> Retry
+              </button>
+              <button
+                onClick={logout}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-slate-300 transition-colors"
+              >
+                <LogOut className="w-3 h-3" /> Sign Out
+              </button>
             </div>
           </div>
         )}

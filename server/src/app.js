@@ -50,7 +50,12 @@ app.use('/api/google', googleRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    clerkConfigured: !!process.env.CLERK_SECRET_KEY,
+    dbConfigured: !!process.env.DATABASE_URL,
+  });
 });
 
 // Serve static frontend in production

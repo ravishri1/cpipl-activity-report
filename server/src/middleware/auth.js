@@ -1,5 +1,9 @@
 const { createClerkClient } = require('@clerk/express');
 
+if (!process.env.CLERK_SECRET_KEY) {
+  console.error('WARNING: CLERK_SECRET_KEY is not set! Authentication will fail.');
+}
+
 const clerk = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY
 });
@@ -13,6 +17,11 @@ async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+
+  if (!process.env.CLERK_SECRET_KEY) {
+    console.error('CLERK_SECRET_KEY missing — cannot verify tokens');
+    return res.status(500).json({ error: 'Server configuration error. Contact admin.' });
   }
 
   try {
