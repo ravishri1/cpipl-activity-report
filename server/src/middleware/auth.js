@@ -1,4 +1,4 @@
-const { createClerkClient } = require('@clerk/express');
+const { createClerkClient, verifyToken } = require('@clerk/express');
 
 const clerk = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY
@@ -35,6 +35,7 @@ async function authenticate(req, res, next) {
 
     // Build verification options — networkless if jwtKey is available
     const verifyOptions = {
+      secretKey: process.env.CLERK_SECRET_KEY,
       authorizedParties,
       clockSkewInMs: 10000, // 10s tolerance for serverless clock drift
     };
@@ -44,7 +45,7 @@ async function authenticate(req, res, next) {
       verifyOptions.jwtKey = process.env.CLERK_JWT_KEY;
     }
 
-    const verifiedToken = await clerk.verifyToken(token, verifyOptions);
+    const verifiedToken = await verifyToken(token, verifyOptions);
     const clerkUserId = verifiedToken.sub;
 
     if (!clerkUserId) {

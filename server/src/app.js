@@ -72,12 +72,12 @@ app.post('/api/debug-auth', async (req, res) => {
 
   if (hasToken && process.env.CLERK_SECRET_KEY) {
     try {
-      const { createClerkClient } = require('@clerk/express');
-      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+      const { verifyToken } = require('@clerk/express');
       const token = authHeader.split(' ')[1];
 
       // Build verify options — same as auth middleware
       const verifyOptions = {
+        secretKey: process.env.CLERK_SECRET_KEY,
         authorizedParties: [
           'https://eod.colorpapers.in',
           'https://cpipl-activity-report.vercel.app',
@@ -91,7 +91,7 @@ app.post('/api/debug-auth', async (req, res) => {
         verifyOptions.jwtKey = process.env.CLERK_JWT_KEY;
       }
 
-      const verified = await clerk.verifyToken(token, verifyOptions);
+      const verified = await verifyToken(token, verifyOptions);
       result.verifySuccess = true;
       result.userId = verified.sub;
       result.sessionId = verified.sid;
