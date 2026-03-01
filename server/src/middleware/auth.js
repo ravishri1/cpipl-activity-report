@@ -4,10 +4,18 @@ const clerk = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY
 });
 
+// Authorized frontend origins for token validation
+const authorizedParties = [
+  'https://eod.colorpapers.in',
+  'https://cpipl-activity-report.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+].filter(Boolean);
+
 /**
  * Clerk-based authentication middleware.
- * Verifies Clerk session token from Authorization header,
- * then looks up the user in our Prisma DB by email.
+ * Uses networkless JWT verification with jwtKey (no JWKS fetch needed).
+ * Falls back to network-based verification if jwtKey not set.
  */
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -23,8 +31,18 @@ async function authenticate(req, res, next) {
   try {
     const token = authHeader.split(' ')[1];
 
-    // Verify Clerk session token
-    const verifiedToken = await clerk.verifyToken(token);
+    // Build verification options — networkless if jwtKey is available
+    const verifyOptions = {
+      authorizedParties,
+      clockSkewInMs: 10000, // 10s tolerance for serverless clock drift
+    };
+
+    // Use CLERK_JWT_KEY for networkless verification (critical for Vercel serverless)
+    if (process.env.CLERK_JWT_KEY) {
+      verifyOptions.jwtKey = process.env.CLERK_JWT_KEY;
+    }
+
+    const verifiedToken = await clerk.verifyToken(token, verifyOptions);
     const clerkUserId = verifiedToken.sub;
 
     if (!clerkUserId) {

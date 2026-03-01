@@ -54,6 +54,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     clerkConfigured: !!process.env.CLERK_SECRET_KEY,
+    jwtKeyConfigured: !!process.env.CLERK_JWT_KEY,
     dbConfigured: !!process.env.DATABASE_URL,
   });
 });
@@ -66,6 +67,7 @@ app.post('/api/debug-auth', async (req, res) => {
     hasAuthHeader: hasToken,
     tokenLength: hasToken ? authHeader.split(' ')[1].length : 0,
     clerkKeySet: !!process.env.CLERK_SECRET_KEY,
+    jwtKeySet: !!process.env.CLERK_JWT_KEY,
   };
 
   if (hasToken && process.env.CLERK_SECRET_KEY) {
@@ -73,10 +75,26 @@ app.post('/api/debug-auth', async (req, res) => {
       const { createClerkClient } = require('@clerk/express');
       const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
       const token = authHeader.split(' ')[1];
-      const verified = await clerk.verifyToken(token);
+
+      // Build verify options — same as auth middleware
+      const verifyOptions = {
+        authorizedParties: [
+          'https://eod.colorpapers.in',
+          'https://cpipl-activity-report.vercel.app',
+          'http://localhost:3000',
+          'http://localhost:5173',
+        ],
+        clockSkewInMs: 10000,
+      };
+      if (process.env.CLERK_JWT_KEY) {
+        verifyOptions.jwtKey = process.env.CLERK_JWT_KEY;
+      }
+
+      const verified = await clerk.verifyToken(token, verifyOptions);
       result.verifySuccess = true;
       result.userId = verified.sub;
       result.sessionId = verified.sid;
+      result.networkless = !!process.env.CLERK_JWT_KEY;
     } catch (err) {
       result.verifySuccess = false;
       result.verifyError = err.message;
