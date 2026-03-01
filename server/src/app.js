@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
-const { clerkMiddleware } = require('@clerk/express');
 
 const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
@@ -24,10 +23,6 @@ prisma = global.__prisma;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// Clerk middleware — parses session JWT from Authorization header
-// Makes auth state available via getAuth(req) in route handlers
-app.use(clerkMiddleware());
 
 // ═══ Security: Block indexing, scraping, and caching ═══
 app.use((req, res, next) => {
@@ -63,23 +58,33 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Debug auth — temporary endpoint to diagnose 401 issues
-app.post('/api/debug-auth', (req, res) => {
-  const { getAuth } = require('@clerk/express');
-  try {
-    const auth = getAuth(req);
-    const authHeader = req.headers.authorization;
-    res.json({
-      hasAuthHeader: !!authHeader,
-      authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : null,
-      authUserId: auth?.userId || null,
-      authSessionId: auth?.sessionId || null,
-      clerkKeySet: !!process.env.CLERK_SECRET_KEY,
-      clerkKeyPrefix: process.env.CLERK_SECRET_KEY ? process.env.CLERK_SECRET_KEY.substring(0, 10) + '...' : null,
-    });
-  } catch (err) {
-    res.json({ error: err.message, stack: err.stack?.substring(0, 300) });
+// Debug auth — temporary endpoint to diagnose token issues
+app.post('/api/debug-auth', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const hasToken = !!(authHeader && authHeader.startsWith('Bearer '));
+  const result = {
+    hasAuthHeader: hasToken,
+    tokenLength: hasToken ? authHeader.split(' ')[1].length : 0,
+    clerkKeySet: !!process.env.CLERK_SECRET_KEY,
+  };
+
+  if (hasToken && process.env.CLERK_SECRET_KEY) {
+    try {
+      const { createClerkClient } = require('@clerk/express');
+      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+      const token = authHeader.split(' ')[1];
+      const verified = await clerk.verifyToken(token);
+      result.verifySuccess = true;
+      result.userId = verified.sub;
+      result.sessionId = verified.sid;
+    } catch (err) {
+      result.verifySuccess = false;
+      result.verifyError = err.message;
+      result.errorCode = err.code || err.status || 'unknown';
+    }
   }
+
+  res.json(result);
 });
 
 // Serve static frontend in production
