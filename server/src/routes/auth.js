@@ -1,44 +1,34 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
-const { OAuth2Client } = require('google-auth-library');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Google OAuth2 client
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 // Company domain for internal employees
 const COMPANY_DOMAIN = 'colorpapers.in';
 
-// POST /api/auth/google-login — Sign in with Google (primary login)
-router.post('/google-login', async (req, res) => {
+/**
+ * POST /api/auth/clerk-sync
+ * Called by frontend after Clerk sign-in.
+ * Syncs the Clerk user with our Prisma DB:
+ * - Internal @colorpapers.in users: auto-register if new
+ * - External users: must be pre-added by admin
+ */
+router.post('/clerk-sync', authenticate, async (req, res) => {
   try {
-    const { credential } = req.body;
-    if (!credential) {
-      return res.status(400).json({ error: 'Google credential is required.' });
-    }
-
-    // Verify Google ID token
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const { email, name, sub: googleId, picture } = payload;
+    const { clerkId, email, name, picture } = req.body;
 
     if (!email) {
-      return res.status(400).json({ error: 'Could not get email from Google account.' });
+      return res.status(400).json({ error: 'Email is required.' });
     }
 
     const isInternal = email.endsWith(`@${COMPANY_DOMAIN}`);
 
-    // Find user by email
+    // Check if user exists in our DB
     let user = await req.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       if (isInternal) {
-        // Internal @colorpapers.in employee — auto-register (verified by Google Workspace)
+        // Internal employee — auto-register on first Clerk sign-in
         user = await req.prisma.user.create({
           data: {
             name: name || email.split('@')[0],
@@ -46,7 +36,7 @@ router.post('/google-login', async (req, res) => {
             password: '',
             role: 'member',
             department: 'General',
-            googleId,
+            googleId: clerkId,
             importedFromGoogle: true,
             isActive: true,
           },
@@ -63,23 +53,15 @@ router.post('/google-login', async (req, res) => {
       return res.status(403).json({ error: 'Account is deactivated. Contact admin.' });
     }
 
-    // Update googleId if not set yet
-    if (!user.googleId) {
+    // Update googleId (Clerk ID) if not set
+    if (!user.googleId || user.googleId !== clerkId) {
       await req.prisma.user.update({
         where: { id: user.id },
-        data: { googleId },
+        data: { googleId: clerkId },
       });
     }
 
-    // Issue JWT
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, name: user.name },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
     res.json({
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -90,21 +72,24 @@ router.post('/google-login', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Google login error:', err);
-    if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
-      return res.status(401).json({ error: 'Google sign-in expired. Please try again.' });
-    }
-    res.status(500).json({ error: 'Google authentication failed. Please try again.' });
+    console.error('Clerk sync error:', err);
+    res.status(500).json({ error: 'Failed to sync user. Please try again.' });
   }
 });
 
-// GET /api/auth/me
+// GET /api/auth/me — Get current user info
 router.get('/me', authenticate, async (req, res) => {
   try {
+    if (!req.user.id) {
+      return res.status(401).json({ error: 'User not found in system.' });
+    }
     const user = await req.prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, name: true, email: true, role: true, department: true },
     });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });

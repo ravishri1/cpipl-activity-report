@@ -1,9 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileText, Users, Settings, LogOut, ClipboardEdit } from 'lucide-react';
+import { UserButton } from '@clerk/clerk-react';
+import { LayoutDashboard, FileText, Users, Settings, ClipboardEdit } from 'lucide-react';
 
 export default function Navbar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const location = useLocation();
 
   const links = [
@@ -27,7 +28,7 @@ export default function Navbar() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-slate-800">CPIPL Reports</span>
+            <span className="font-bold text-lg text-slate-800">Color Papers</span>
           </div>
 
           <div className="flex items-center gap-1">
@@ -51,13 +52,7 @@ export default function Navbar() {
             <span className="text-sm text-slate-600">
               {user?.name} <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">{user?.role}</span>
             </span>
-            <button
-              onClick={logout}
-              className="flex items-center gap-1 text-sm text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
+            <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
       </div>
