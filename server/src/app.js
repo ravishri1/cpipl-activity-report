@@ -14,6 +14,7 @@ const pointsRoutes = require('./routes/points');
 const attendanceRoutes = require('./routes/attendance');
 const leaveRoutes = require('./routes/leave');
 const holidayRoutes = require('./routes/holidays');
+const importRoutes = require('./routes/import');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/points', pointsRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leave', leaveRoutes);
 app.use('/api/holidays', holidayRoutes);
+app.use('/api/import', importRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

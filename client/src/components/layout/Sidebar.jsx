@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CheckSquare,
   ClipboardCheck,
+  Upload,
   ChevronDown,
   X,
 } from 'lucide-react';
@@ -79,6 +80,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
         { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
         { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
+        { to: '/admin/import', label: 'Import Employees', icon: Upload },
         { to: '/admin/settings', label: 'Settings', icon: Settings },
       ],
     });

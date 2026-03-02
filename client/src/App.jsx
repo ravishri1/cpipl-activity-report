@@ -15,6 +15,7 @@ import EmployeeProfile from './components/employees/EmployeeProfile';
 import TeamManagement from './components/admin/TeamManagement';
 import HolidayManager from './components/admin/HolidayManager';
 import Settings from './components/admin/Settings';
+import EmployeeImport from './components/admin/EmployeeImport';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -62,6 +63,7 @@ function AppRoutes() {
                 <Route path="/admin/attendance" element={<AdminRoute><TeamAttendance /></AdminRoute>} />
                 <Route path="/admin/leave-requests" element={<AdminRoute><LeaveApproval /></AdminRoute>} />
                 <Route path="/admin/holidays" element={<AdminRoute><HolidayManager /></AdminRoute>} />
+                <Route path="/admin/import" element={<AdminRoute><EmployeeImport /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
 
                 {/* Fallback */}
