@@ -1,37 +1,33 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const { put } = require('@vercel/blob');
 const { authenticate, requireAdmin, requireManagerOrAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Multer config — memory storage for Vercel Blob uploads (max 5 MB images)
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Only JPEG, PNG, WebP and GIF images are allowed.'));
-  },
-});
-
 // ═══════════════════════════════════════════════
-// Photo Upload
+// Change-log helper — logs profile changes to ProfileChangeLog
 // ═══════════════════════════════════════════════
-
-// POST /api/users/:id/photo — Upload profile photo (self or admin)
-router.post('/:id/photo', authenticate, (req, res, next) => {
-  upload.single('photo')(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Image must be under 5 MB.' });
-      return res.status(400).json({ error: err.message });
+async function logChanges(prisma, { userId, changedBy, section, changes, action = 'update' }) {
+  const entries = [];
+  for (const { field, oldValue, newValue } of changes) {
+    const oldStr = oldValue != null ? String(oldValue) : null;
+    const newStr = newValue != null ? String(newValue) : null;
+    if (oldStr !== newStr) {
+      entries.push({ userId, changedBy, section, field, oldValue: oldStr, newValue: newStr, action });
     }
-    if (err) return res.status(400).json({ error: err.message });
-    next();
-  });
-}, async (req, res) => {
+  }
+  if (entries.length > 0) {
+    await prisma.profileChangeLog.createMany({ data: entries });
+  }
+  return entries.length;
+}
+
+// ═══════════════════════════════════════════════
+// Photo Upload (base64 — no external storage needed)
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/photo — Upload profile photo as base64 (self or admin)
+router.post('/:id/photo', authenticate, express.json({ limit: '2mb' }), async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
     const isSelf = req.user.id === targetId;
@@ -41,32 +37,35 @@ router.post('/:id/photo', authenticate, (req, res, next) => {
       return res.status(403).json({ error: 'You can only upload your own photo.' });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided.' });
+    const { photo } = req.body;
+    if (!photo || !photo.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image data.' });
     }
 
-    // Upload to Vercel Blob
-    const ext = req.file.mimetype.split('/')[1] || 'jpg';
-    const filename = `profile-photos/user-${targetId}-${Date.now()}.${ext}`;
+    // Validate size — base64 string should be under ~400KB (compressed 300x300 JPEG)
+    if (photo.length > 500000) {
+      return res.status(400).json({ error: 'Image too large. It will be auto-compressed on upload.' });
+    }
 
-    const blob = await put(filename, req.file.buffer, {
-      access: 'public',
-      contentType: req.file.mimetype,
-    });
+    // Fetch old photo URL for audit log
+    const existing = await req.prisma.user.findUnique({ where: { id: targetId }, select: { profilePhotoUrl: true } });
 
-    // Update user's profilePhotoUrl in DB
     const user = await req.prisma.user.update({
       where: { id: targetId },
-      data: { profilePhotoUrl: blob.url },
+      data: { profilePhotoUrl: photo },
       select: { id: true, profilePhotoUrl: true },
+    });
+
+    // Log the photo change
+    await logChanges(req.prisma, {
+      userId: targetId, changedBy: req.user.id, section: 'photo',
+      changes: [{ field: 'profilePhotoUrl', oldValue: existing?.profilePhotoUrl ? '(had photo)' : null, newValue: '(photo updated)' }],
+      action: existing?.profilePhotoUrl ? 'update' : 'add',
     });
 
     res.json({ profilePhotoUrl: user.profilePhotoUrl });
   } catch (err) {
     console.error('Photo upload error:', err);
-    if (err.message?.includes('BLOB_READ_WRITE_TOKEN')) {
-      return res.status(500).json({ error: 'Photo storage not configured. Ask admin to set BLOB_READ_WRITE_TOKEN.' });
-    }
     res.status(500).json({ error: 'Failed to upload photo.' });
   }
 });
@@ -259,6 +258,9 @@ router.put('/:id/profile', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'No fields to update.' });
     }
 
+    // Fetch current values for audit trail
+    const oldUser = await req.prisma.user.findUnique({ where: { id: targetId } });
+
     const user = await req.prisma.user.update({
       where: { id: targetId },
       data,
@@ -279,6 +281,14 @@ router.put('/:id/profile', authenticate, async (req, res) => {
         dateOfBirth: true, emergencyContact: true,
       },
     });
+
+    // Log all changed fields
+    const changes = Object.keys(data).map((field) => ({
+      field,
+      oldValue: oldUser[field],
+      newValue: data[field],
+    }));
+    await logChanges(req.prisma, { userId: targetId, changedBy: req.user.id, section: 'profile', changes });
 
     res.json(user);
   } catch (err) {
@@ -485,6 +495,12 @@ router.post('/:id/education', authenticate, async (req, res) => {
     const record = await req.prisma.education.create({
       data: { userId: targetId, degree, institution, university, specialization, yearOfPassing, percentage },
     });
+    // Log addition
+    await logChanges(req.prisma, {
+      userId: targetId, changedBy: req.user.id, section: 'education',
+      changes: [{ field: `${degree} at ${institution}`, oldValue: null, newValue: `Added: ${degree}, ${institution}` }],
+      action: 'add',
+    });
     res.status(201).json(record);
   } catch (err) {
     console.error('Add education error:', err);
@@ -492,18 +508,37 @@ router.post('/:id/education', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id/education/:eduId — Remove education record (admin or self)
-router.delete('/:id/education/:eduId', authenticate, async (req, res) => {
+// PUT /api/users/:id/education/:eduId — Edit education record (admin or self)
+router.put('/:id/education/:eduId', authenticate, async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
     if (req.user.id !== targetId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied.' });
     }
-    await req.prisma.education.delete({ where: { id: parseInt(req.params.eduId) } });
-    res.json({ message: 'Education record deleted.' });
+    const eduId = parseInt(req.params.eduId);
+    const old = await req.prisma.education.findUnique({ where: { id: eduId } });
+    if (!old || old.userId !== targetId) return res.status(404).json({ error: 'Record not found.' });
+
+    const { degree, institution, university, specialization, yearOfPassing, percentage } = req.body;
+    const data = {};
+    if (degree !== undefined) data.degree = degree;
+    if (institution !== undefined) data.institution = institution;
+    if (university !== undefined) data.university = university;
+    if (specialization !== undefined) data.specialization = specialization;
+    if (yearOfPassing !== undefined) data.yearOfPassing = yearOfPassing;
+    if (percentage !== undefined) data.percentage = percentage;
+
+    const record = await req.prisma.education.update({ where: { id: eduId }, data });
+
+    // Log changes
+    const changes = Object.keys(data).map((f) => ({ field: `education.${f}`, oldValue: old[f], newValue: data[f] }));
+    await logChanges(req.prisma, { userId: targetId, changedBy: req.user.id, section: 'education', changes });
+
+    res.json(record);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
-    res.status(500).json({ error: 'Failed to delete education.' });
+    console.error('Edit education error:', err);
+    res.status(500).json({ error: 'Failed to edit education.' });
   }
 });
 
@@ -523,6 +558,12 @@ router.post('/:id/family', authenticate, async (req, res) => {
     const record = await req.prisma.familyMember.create({
       data: { userId: targetId, name, relationship, dateOfBirth, occupation, phone, isDependent, isNominee, nomineeShare },
     });
+    // Log addition
+    await logChanges(req.prisma, {
+      userId: targetId, changedBy: req.user.id, section: 'family',
+      changes: [{ field: `${relationship}: ${name}`, oldValue: null, newValue: `Added: ${name} (${relationship})` }],
+      action: 'add',
+    });
     res.status(201).json(record);
   } catch (err) {
     console.error('Add family member error:', err);
@@ -530,18 +571,39 @@ router.post('/:id/family', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id/family/:fmId — Remove family member (admin or self)
-router.delete('/:id/family/:fmId', authenticate, async (req, res) => {
+// PUT /api/users/:id/family/:fmId — Edit family member (admin or self)
+router.put('/:id/family/:fmId', authenticate, async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
     if (req.user.id !== targetId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied.' });
     }
-    await req.prisma.familyMember.delete({ where: { id: parseInt(req.params.fmId) } });
-    res.json({ message: 'Family member deleted.' });
+    const fmId = parseInt(req.params.fmId);
+    const old = await req.prisma.familyMember.findUnique({ where: { id: fmId } });
+    if (!old || old.userId !== targetId) return res.status(404).json({ error: 'Record not found.' });
+
+    const { name, relationship, dateOfBirth, occupation, phone, isDependent, isNominee, nomineeShare } = req.body;
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (relationship !== undefined) data.relationship = relationship;
+    if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth;
+    if (occupation !== undefined) data.occupation = occupation;
+    if (phone !== undefined) data.phone = phone;
+    if (isDependent !== undefined) data.isDependent = isDependent;
+    if (isNominee !== undefined) data.isNominee = isNominee;
+    if (nomineeShare !== undefined) data.nomineeShare = nomineeShare;
+
+    const record = await req.prisma.familyMember.update({ where: { id: fmId }, data });
+
+    // Log changes
+    const changes = Object.keys(data).map((f) => ({ field: `family.${f}`, oldValue: String(old[f] ?? ''), newValue: String(data[f] ?? '') }));
+    await logChanges(req.prisma, { userId: targetId, changedBy: req.user.id, section: 'family', changes });
+
+    res.json(record);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
-    res.status(500).json({ error: 'Failed to delete family member.' });
+    console.error('Edit family member error:', err);
+    res.status(500).json({ error: 'Failed to edit family member.' });
   }
 });
 
@@ -561,6 +623,12 @@ router.post('/:id/employment-history', authenticate, async (req, res) => {
     const record = await req.prisma.previousEmployment.create({
       data: { userId: targetId, company, designation, fromDate, toDate, ctc, reasonForLeaving },
     });
+    // Log addition
+    await logChanges(req.prisma, {
+      userId: targetId, changedBy: req.user.id, section: 'employment',
+      changes: [{ field: `${company}`, oldValue: null, newValue: `Added: ${company}${designation ? ' (' + designation + ')' : ''}` }],
+      action: 'add',
+    });
     res.status(201).json(record);
   } catch (err) {
     console.error('Add employment error:', err);
@@ -568,18 +636,75 @@ router.post('/:id/employment-history', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id/employment-history/:empId — Remove previous employment (admin or self)
-router.delete('/:id/employment-history/:empId', authenticate, async (req, res) => {
+// PUT /api/users/:id/employment-history/:empId — Edit previous employment (admin or self)
+router.put('/:id/employment-history/:empId', authenticate, async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
     if (req.user.id !== targetId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied.' });
     }
-    await req.prisma.previousEmployment.delete({ where: { id: parseInt(req.params.empId) } });
-    res.json({ message: 'Employment record deleted.' });
+    const empId = parseInt(req.params.empId);
+    const old = await req.prisma.previousEmployment.findUnique({ where: { id: empId } });
+    if (!old || old.userId !== targetId) return res.status(404).json({ error: 'Record not found.' });
+
+    const { company, designation, fromDate, toDate, ctc, reasonForLeaving } = req.body;
+    const data = {};
+    if (company !== undefined) data.company = company;
+    if (designation !== undefined) data.designation = designation;
+    if (fromDate !== undefined) data.fromDate = fromDate;
+    if (toDate !== undefined) data.toDate = toDate;
+    if (ctc !== undefined) data.ctc = ctc;
+    if (reasonForLeaving !== undefined) data.reasonForLeaving = reasonForLeaving;
+
+    const record = await req.prisma.previousEmployment.update({ where: { id: empId }, data });
+
+    // Log changes
+    const changes = Object.keys(data).map((f) => ({ field: `employment.${f}`, oldValue: String(old[f] ?? ''), newValue: String(data[f] ?? '') }));
+    await logChanges(req.prisma, { userId: targetId, changedBy: req.user.id, section: 'employment', changes });
+
+    res.json(record);
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
-    res.status(500).json({ error: 'Failed to delete employment record.' });
+    console.error('Edit employment error:', err);
+    res.status(500).json({ error: 'Failed to edit employment record.' });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Profile Change History (audit trail)
+// ═══════════════════════════════════════════════
+
+// GET /api/users/:id/change-history — Profile change log (self or admin)
+router.get('/:id/change-history', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const isSelf = req.user.id === targetId;
+    const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'team_lead';
+    if (!isSelf && !isAdminOrLead) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      req.prisma.profileChangeLog.findMany({
+        where: { userId: targetId },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+        include: {
+          changedByUser: { select: { id: true, name: true, employeeId: true } },
+        },
+      }),
+      req.prisma.profileChangeLog.count({ where: { userId: targetId } }),
+    ]);
+
+    res.json({ logs, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    console.error('Change history error:', err);
+    res.status(500).json({ error: 'Failed to fetch change history.' });
   }
 });
 

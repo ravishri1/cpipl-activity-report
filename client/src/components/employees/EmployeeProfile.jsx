@@ -5,9 +5,9 @@ import api from '../../utils/api';
 import {
   User, Mail, Phone, Building2, Calendar, Briefcase, MapPin,
   Heart, Shield, ArrowLeft, Edit3, Save, X, CreditCard,
-  GraduationCap, Users, FileText, ChevronRight, Plus, Trash2,
+  GraduationCap, Users, FileText, ChevronRight, Plus, Pencil,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
-  Camera, Loader2,
+  Camera, Loader2, History, ChevronLeft,
 } from 'lucide-react';
 
 const TABS = [
@@ -17,6 +17,7 @@ const TABS = [
   { key: 'family', label: 'Family', icon: Users },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'documents', label: 'Documents', icon: FileText },
+  { key: 'history', label: 'Change History', icon: History },
 ];
 
 export default function EmployeeProfile() {
@@ -34,25 +35,43 @@ export default function EmployeeProfile() {
   const isSelf = currentUser?.id === parseInt(id);
   const canEdit = isAdmin && currentUser?.role === 'admin';
 
+  // Compress image on client side → base64 data URL (max 300x300, JPEG quality 0.7)
+  const compressImage = (file) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 300;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          const ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => reject(new Error('Failed to load image.'));
+      img.src = URL.createObjectURL(file);
+    });
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Validate on client side
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
       alert('Please select a JPEG, PNG, WebP or GIF image.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be under 10 MB.');
       return;
     }
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('photo', file);
-      const res = await api.post(`/users/${id}/photo`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const base64 = await compressImage(file);
+      const res = await api.post(`/users/${id}/photo`, { photo: base64 });
       setProfile({ ...profile, profilePhotoUrl: res.data.profilePhotoUrl });
       setForm({ ...form, profilePhotoUrl: res.data.profilePhotoUrl });
     } catch (err) {
@@ -288,7 +307,7 @@ export default function EmployeeProfile() {
             <PersonalTab profile={profile} form={form} editing={editing} canEdit={canEdit} isSelf={isSelf} updateField={updateField} />
           )}
           {activeTab === 'employment' && (
-            <EmploymentTab profile={profile} form={form} editing={editing} canEdit={canEdit} updateField={updateField} />
+            <EmploymentTab profile={profile} setProfile={setProfile} form={form} editing={editing} canEdit={canEdit} isSelf={isSelf} userId={id} updateField={updateField} />
           )}
           {activeTab === 'identity' && (
             <IdentityBankTab profile={profile} form={form} editing={editing} canEdit={canEdit} updateField={updateField} />
@@ -301,6 +320,9 @@ export default function EmployeeProfile() {
           )}
           {activeTab === 'documents' && (
             <DocumentsTab documents={documents} canEdit={canEdit} userId={id} />
+          )}
+          {activeTab === 'history' && (
+            <ChangeHistoryTab userId={id} />
           )}
         </div>
       </div>
@@ -375,82 +397,167 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
 /* ═══════════════════════════════════════════════════════════
    EMPLOYMENT TAB
    ═══════════════════════════════════════════════════════════ */
-function EmploymentTab({ profile, form, editing, canEdit, updateField }) {
+function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, userId, updateField }) {
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [newEmp, setNewEmp] = useState({ company: '', designation: '', fromDate: '', toDate: '', ctc: '', reasonForLeaving: '' });
+
+  const handleAdd = async () => {
+    try {
+      const res = await api.post(`/users/${userId}/employment-history`, newEmp);
+      setProfile({ ...profile, previousEmployments: [res.data, ...(profile.previousEmployments || [])] });
+      setAdding(false);
+      setNewEmp({ company: '', designation: '', fromDate: '', toDate: '', ctc: '', reasonForLeaving: '' });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to add employment record.');
+    }
+  };
+
+  const startEdit = (emp) => { setEditingId(emp.id); setEditForm({ ...emp }); };
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+  const handleEdit = async () => {
+    try {
+      const res = await api.put(`/users/${userId}/employment-history/${editingId}`, editForm);
+      setProfile({ ...profile, previousEmployments: profile.previousEmployments.map((e) => e.id === editingId ? res.data : e) });
+      cancelEdit();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update.');
+    }
+  };
+
+  const empRecords = profile.previousEmployments || [];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Current Position */}
-      <Section title="Current Position" icon={Briefcase}>
-        <Field icon={Shield} label="Employee ID" value={profile.employeeId} />
-        <Field icon={Briefcase} label="Designation" value={profile.designation}
-          editing={editing && canEdit} onChange={(v) => updateField('designation', v)} editValue={form.designation} />
-        <Field icon={Building2} label="Department" value={profile.department}
-          editing={editing && canEdit} onChange={(v) => updateField('department', v)} editValue={form.department} />
-        <Field icon={BadgeCheck} label="Grade / Level" value={profile.grade}
-          editing={editing && canEdit} onChange={(v) => updateField('grade', v)} editValue={form.grade} />
-        <Field icon={MapPin} label="Location" value={profile.location}
-          editing={editing && canEdit} onChange={(v) => updateField('location', v)} editValue={form.location} />
-        <Field icon={Clock} label="Shift" value={profile.shift}
-          editing={editing && canEdit} onChange={(v) => updateField('shift', v)} editValue={form.shift} />
-        <Field icon={Briefcase} label="Employment Type" value={profile.employmentType?.replace('_', ' ')}
-          editing={editing && canEdit} onChange={(v) => updateField('employmentType', v)} editValue={form.employmentType}
-          type="select" options={['full_time', 'part_time', 'contract', 'intern']} />
-        {profile.reportingManager && (
-          <div className="flex items-start gap-3">
-            <UserCheck className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-[10px] uppercase text-slate-400 font-medium">Reporting Manager</p>
-              <Link to={`/employee/${profile.reportingManager.id}`} className="text-sm text-blue-600 hover:underline font-medium">
-                {profile.reportingManager.name}
-                <span className="text-slate-400 font-normal ml-1">({profile.reportingManager.designation || profile.reportingManager.department})</span>
-              </Link>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Current Position */}
+        <Section title="Current Position" icon={Briefcase}>
+          <Field icon={Shield} label="Employee ID" value={profile.employeeId} />
+          <Field icon={Briefcase} label="Designation" value={profile.designation}
+            editing={editing && canEdit} onChange={(v) => updateField('designation', v)} editValue={form.designation} />
+          <Field icon={Building2} label="Department" value={profile.department}
+            editing={editing && canEdit} onChange={(v) => updateField('department', v)} editValue={form.department} />
+          <Field icon={BadgeCheck} label="Grade / Level" value={profile.grade}
+            editing={editing && canEdit} onChange={(v) => updateField('grade', v)} editValue={form.grade} />
+          <Field icon={MapPin} label="Location" value={profile.location}
+            editing={editing && canEdit} onChange={(v) => updateField('location', v)} editValue={form.location} />
+          <Field icon={Clock} label="Shift" value={profile.shift}
+            editing={editing && canEdit} onChange={(v) => updateField('shift', v)} editValue={form.shift} />
+          <Field icon={Briefcase} label="Employment Type" value={profile.employmentType?.replace('_', ' ')}
+            editing={editing && canEdit} onChange={(v) => updateField('employmentType', v)} editValue={form.employmentType}
+            type="select" options={['full_time', 'part_time', 'contract', 'intern']} />
+          {profile.reportingManager && (
+            <div className="flex items-start gap-3">
+              <UserCheck className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-[10px] uppercase text-slate-400 font-medium">Reporting Manager</p>
+                <Link to={`/employee/${profile.reportingManager.id}`} className="text-sm text-blue-600 hover:underline font-medium">
+                  {profile.reportingManager.name}
+                  <span className="text-slate-400 font-normal ml-1">({profile.reportingManager.designation || profile.reportingManager.department})</span>
+                </Link>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* Joining Details */}
+        <Section title="Joining Details" icon={Calendar}>
+          <Field icon={Calendar} label="Date of Joining" value={profile.dateOfJoining}
+            editing={editing && canEdit} onChange={(v) => updateField('dateOfJoining', v)} editValue={form.dateOfJoining} type="date" />
+          <Field icon={Calendar} label="Confirmation Date" value={profile.confirmationDate}
+            editing={editing && canEdit} onChange={(v) => updateField('confirmationDate', v)} editValue={form.confirmationDate} type="date" />
+          <Field icon={Calendar} label="Probation End Date" value={profile.probationEndDate}
+            editing={editing && canEdit} onChange={(v) => updateField('probationEndDate', v)} editValue={form.probationEndDate} type="date" />
+          <Field icon={Clock} label="Notice Period (Days)" value={profile.noticePeriodDays}
+            editing={editing && canEdit} onChange={(v) => updateField('noticePeriodDays', parseInt(v) || 0)} editValue={form.noticePeriodDays} type="number" />
+          <Field icon={Briefcase} label="Previous Experience (Yrs)" value={profile.previousExperience}
+            editing={editing && canEdit} onChange={(v) => updateField('previousExperience', parseFloat(v) || 0)} editValue={form.previousExperience} type="number" />
+          {profile.dateOfJoining && (
+            <div className="flex items-start gap-3">
+              <Clock className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[10px] uppercase text-slate-400 font-medium">Total Experience at CPIPL</p>
+                <p className="text-sm text-slate-700">{calcYears(profile.dateOfJoining)}</p>
+              </div>
+            </div>
+          )}
+        </Section>
+      </div>
+
+      {/* Previous Employment Section */}
+      <Section title="Previous Employment" icon={Briefcase}>
+        {(canEdit || isSelf) && (
+          <div className="flex justify-end mb-3">
+            <button onClick={() => setAdding(!adding)}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <Plus className="w-3.5 h-3.5" />Add Employment
+            </button>
+          </div>
+        )}
+
+        {adding && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <MiniInput label="Company *" value={newEmp.company} onChange={(v) => setNewEmp({ ...newEmp, company: v })} />
+              <MiniInput label="Designation" value={newEmp.designation} onChange={(v) => setNewEmp({ ...newEmp, designation: v })} />
+              <MiniInput label="From Date" value={newEmp.fromDate} onChange={(v) => setNewEmp({ ...newEmp, fromDate: v })} type="date" />
+              <MiniInput label="To Date" value={newEmp.toDate} onChange={(v) => setNewEmp({ ...newEmp, toDate: v })} type="date" />
+              <MiniInput label="CTC" value={newEmp.ctc} onChange={(v) => setNewEmp({ ...newEmp, ctc: v })} placeholder="Last drawn CTC" />
+              <MiniInput label="Reason for Leaving" value={newEmp.reasonForLeaving} onChange={(v) => setNewEmp({ ...newEmp, reasonForLeaving: v })} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleAdd} className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save</button>
+              <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
             </div>
           </div>
         )}
-      </Section>
 
-      {/* Joining Details */}
-      <Section title="Joining Details" icon={Calendar}>
-        <Field icon={Calendar} label="Date of Joining" value={profile.dateOfJoining}
-          editing={editing && canEdit} onChange={(v) => updateField('dateOfJoining', v)} editValue={form.dateOfJoining} type="date" />
-        <Field icon={Calendar} label="Confirmation Date" value={profile.confirmationDate}
-          editing={editing && canEdit} onChange={(v) => updateField('confirmationDate', v)} editValue={form.confirmationDate} type="date" />
-        <Field icon={Calendar} label="Probation End Date" value={profile.probationEndDate}
-          editing={editing && canEdit} onChange={(v) => updateField('probationEndDate', v)} editValue={form.probationEndDate} type="date" />
-        <Field icon={Clock} label="Notice Period (Days)" value={profile.noticePeriodDays}
-          editing={editing && canEdit} onChange={(v) => updateField('noticePeriodDays', parseInt(v) || 0)} editValue={form.noticePeriodDays} type="number" />
-        <Field icon={Briefcase} label="Previous Experience (Yrs)" value={profile.previousExperience}
-          editing={editing && canEdit} onChange={(v) => updateField('previousExperience', parseFloat(v) || 0)} editValue={form.previousExperience} type="number" />
-        {profile.dateOfJoining && (
-          <div className="flex items-start gap-3">
-            <Clock className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-[10px] uppercase text-slate-400 font-medium">Total Experience at CPIPL</p>
-              <p className="text-sm text-slate-700">{calcYears(profile.dateOfJoining)}</p>
+        {/* Edit form */}
+        {editingId && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3 mb-3">
+            <p className="text-xs font-semibold text-amber-700">Editing employment record</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <MiniInput label="Company *" value={editForm.company} onChange={(v) => setEditForm({ ...editForm, company: v })} />
+              <MiniInput label="Designation" value={editForm.designation} onChange={(v) => setEditForm({ ...editForm, designation: v })} />
+              <MiniInput label="From Date" value={editForm.fromDate} onChange={(v) => setEditForm({ ...editForm, fromDate: v })} type="date" />
+              <MiniInput label="To Date" value={editForm.toDate} onChange={(v) => setEditForm({ ...editForm, toDate: v })} type="date" />
+              <MiniInput label="CTC" value={editForm.ctc} onChange={(v) => setEditForm({ ...editForm, ctc: v })} />
+              <MiniInput label="Reason for Leaving" value={editForm.reasonForLeaving} onChange={(v) => setEditForm({ ...editForm, reasonForLeaving: v })} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleEdit} className="px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700">Update</button>
+              <button onClick={cancelEdit} className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
             </div>
           </div>
         )}
-      </Section>
 
-      {/* Previous Employment */}
-      {profile.previousEmployments?.length > 0 && (
-        <Section title="Previous Employment" icon={Briefcase} className="lg:col-span-2">
+        {empRecords.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-sm">No previous employment records added yet.</div>
+        ) : (
           <div className="space-y-3">
-            {profile.previousEmployments.map((emp) => (
-              <div key={emp.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            {empRecords.map((emp) => (
+              <div key={emp.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg group">
                 <Briefcase className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-700">{emp.company}</p>
                   <p className="text-xs text-slate-500">{emp.designation}</p>
                   <p className="text-[10px] text-slate-400 mt-0.5">
                     {emp.fromDate} → {emp.toDate || 'Present'}
+                    {emp.ctc && <span className="ml-2">· CTC: {emp.ctc}</span>}
                     {emp.reasonForLeaving && <span className="ml-2">· {emp.reasonForLeaving}</span>}
                   </p>
                 </div>
+                {(canEdit || isSelf) && (
+                  <button onClick={() => startEdit(emp)} className="text-amber-500 hover:text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Edit">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
-        </Section>
-      )}
+        )}
+      </Section>
     </div>
   );
 }
@@ -497,6 +604,8 @@ function IdentityBankTab({ profile, form, editing, canEdit, updateField }) {
    ═══════════════════════════════════════════════════════════ */
 function FamilyTab({ profile, setProfile, canEdit, isSelf, userId }) {
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const [newMember, setNewMember] = useState({ name: '', relationship: '', dateOfBirth: '', occupation: '', phone: '', isDependent: false, isNominee: false, nomineeShare: 0 });
 
   const handleAdd = async () => {
@@ -510,13 +619,15 @@ function FamilyTab({ profile, setProfile, canEdit, isSelf, userId }) {
     }
   };
 
-  const handleDelete = async (fmId) => {
-    if (!confirm('Remove this family member?')) return;
+  const startEdit = (m) => { setEditingId(m.id); setEditForm({ ...m }); };
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+  const handleEdit = async () => {
     try {
-      await api.delete(`/users/${userId}/family/${fmId}`);
-      setProfile({ ...profile, familyMembers: profile.familyMembers.filter((f) => f.id !== fmId) });
+      const res = await api.put(`/users/${userId}/family/${editingId}`, editForm);
+      setProfile({ ...profile, familyMembers: profile.familyMembers.map((f) => f.id === editingId ? res.data : f) });
+      cancelEdit();
     } catch (err) {
-      alert('Failed to delete.');
+      alert(err.response?.data?.error || 'Failed to update.');
     }
   };
 
@@ -560,6 +671,35 @@ function FamilyTab({ profile, setProfile, canEdit, isSelf, userId }) {
         </div>
       )}
 
+      {/* Edit form */}
+      {editingId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-amber-700">Editing family member</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <MiniInput label="Name *" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
+            <MiniSelect label="Relationship *" value={editForm.relationship} onChange={(v) => setEditForm({ ...editForm, relationship: v })}
+              options={['father', 'mother', 'spouse', 'child', 'sibling', 'other']} />
+            <MiniInput label="Date of Birth" value={editForm.dateOfBirth} onChange={(v) => setEditForm({ ...editForm, dateOfBirth: v })} type="date" />
+            <MiniInput label="Occupation" value={editForm.occupation} onChange={(v) => setEditForm({ ...editForm, occupation: v })} />
+            <MiniInput label="Phone" value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} />
+            <div className="flex items-center gap-4 pt-5">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={editForm.isDependent || false} onChange={(e) => setEditForm({ ...editForm, isDependent: e.target.checked })} className="rounded" />
+                Dependent
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={editForm.isNominee || false} onChange={(e) => setEditForm({ ...editForm, isNominee: e.target.checked })} className="rounded" />
+                Nominee
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleEdit} className="px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700">Update</button>
+            <button onClick={cancelEdit} className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {members.length === 0 ? (
         <div className="text-center py-8 text-slate-400 text-sm">No family members added yet.</div>
       ) : (
@@ -587,7 +727,7 @@ function FamilyTab({ profile, setProfile, canEdit, isSelf, userId }) {
                   <td className="px-3 py-2">{m.isNominee ? <span className="text-blue-600">Yes ({m.nomineeShare}%)</span> : '—'}</td>
                   {(canEdit || isSelf) && (
                     <td className="px-3 py-2">
-                      <button onClick={() => handleDelete(m.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => startEdit(m)} className="text-amber-500 hover:text-amber-700"><Pencil className="w-3.5 h-3.5" /></button>
                     </td>
                   )}
                 </tr>
@@ -605,6 +745,8 @@ function FamilyTab({ profile, setProfile, canEdit, isSelf, userId }) {
    ═══════════════════════════════════════════════════════════ */
 function EducationTab({ profile, setProfile, canEdit, isSelf, userId }) {
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const [newEdu, setNewEdu] = useState({ degree: '', institution: '', university: '', specialization: '', yearOfPassing: '', percentage: '' });
 
   const handleAdd = async () => {
@@ -618,13 +760,15 @@ function EducationTab({ profile, setProfile, canEdit, isSelf, userId }) {
     }
   };
 
-  const handleDelete = async (eduId) => {
-    if (!confirm('Remove this education record?')) return;
+  const startEdit = (edu) => { setEditingId(edu.id); setEditForm({ ...edu }); };
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+  const handleEdit = async () => {
     try {
-      await api.delete(`/users/${userId}/education/${eduId}`);
-      setProfile({ ...profile, educations: profile.educations.filter((e) => e.id !== eduId) });
+      const res = await api.put(`/users/${userId}/education/${editingId}`, editForm);
+      setProfile({ ...profile, educations: profile.educations.map((e) => e.id === editingId ? res.data : e) });
+      cancelEdit();
     } catch (err) {
-      alert('Failed to delete.');
+      alert(err.response?.data?.error || 'Failed to update.');
     }
   };
 
@@ -658,6 +802,25 @@ function EducationTab({ profile, setProfile, canEdit, isSelf, userId }) {
         </div>
       )}
 
+      {/* Edit form */}
+      {editingId && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-amber-700">Editing education record</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <MiniInput label="Degree *" value={editForm.degree} onChange={(v) => setEditForm({ ...editForm, degree: v })} />
+            <MiniInput label="Institution *" value={editForm.institution} onChange={(v) => setEditForm({ ...editForm, institution: v })} />
+            <MiniInput label="University" value={editForm.university} onChange={(v) => setEditForm({ ...editForm, university: v })} />
+            <MiniInput label="Specialization" value={editForm.specialization} onChange={(v) => setEditForm({ ...editForm, specialization: v })} />
+            <MiniInput label="Year of Passing" value={editForm.yearOfPassing} onChange={(v) => setEditForm({ ...editForm, yearOfPassing: v })} />
+            <MiniInput label="Percentage / CGPA" value={editForm.percentage} onChange={(v) => setEditForm({ ...editForm, percentage: v })} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleEdit} className="px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700">Update</button>
+            <button onClick={cancelEdit} className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {records.length === 0 ? (
         <div className="text-center py-8 text-slate-400 text-sm">No education records added yet.</div>
       ) : (
@@ -674,8 +837,8 @@ function EducationTab({ profile, setProfile, canEdit, isSelf, userId }) {
                 </div>
               </div>
               {(canEdit || isSelf) && (
-                <button onClick={() => handleDelete(edu.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Trash2 className="w-3.5 h-3.5" />
+                <button onClick={() => startEdit(edu)} className="text-amber-500 hover:text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -806,6 +969,118 @@ function MiniSelect({ label, value, onChange, options }) {
         <option value="">Select...</option>
         {options.map((o) => <option key={o} value={o} className="capitalize">{o}</option>)}
       </select>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHANGE HISTORY TAB
+   ═══════════════════════════════════════════════════════════ */
+function ChangeHistoryTab({ userId }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/users/${userId}/change-history?page=${page}&limit=30`);
+        setLogs(res.data.logs);
+        setTotalPages(res.data.pages);
+      } catch (err) {
+        console.error('Change history error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, [userId, page]);
+
+  const sectionColors = {
+    profile: 'bg-blue-100 text-blue-700',
+    photo: 'bg-purple-100 text-purple-700',
+    education: 'bg-green-100 text-green-700',
+    family: 'bg-orange-100 text-orange-700',
+    employment: 'bg-indigo-100 text-indigo-700',
+  };
+  const actionLabels = { add: 'Added', update: 'Updated', delete: 'Removed' };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-6 h-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return <div className="text-center py-12 text-slate-400 text-sm">No change history yet.</div>;
+  }
+
+  // Group logs by date
+  const grouped = {};
+  logs.forEach((log) => {
+    const date = new Date(log.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(log);
+  });
+
+  return (
+    <div className="space-y-6">
+      {Object.entries(grouped).map(([date, entries]) => (
+        <div key={date}>
+          <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5" />{date}
+          </h4>
+          <div className="space-y-2">
+            {entries.map((log) => (
+              <div key={log.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="flex-shrink-0 mt-0.5">
+                  <History className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${sectionColors[log.section] || 'bg-slate-100 text-slate-600'}`}>
+                      {log.section}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{actionLabels[log.action] || log.action}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">{log.field}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 text-xs">
+                    {log.oldValue && (
+                      <span className="text-red-500 line-through bg-red-50 px-1.5 py-0.5 rounded max-w-[200px] truncate">{log.oldValue}</span>
+                    )}
+                    {log.oldValue && log.newValue && <span className="text-slate-300">→</span>}
+                    {log.newValue && (
+                      <span className="text-green-600 bg-green-50 px-1.5 py-0.5 rounded max-w-[200px] truncate">{log.newValue}</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    by {log.changedByUser?.name || 'System'} · {new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-4">
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">
+            <ChevronLeft className="w-3.5 h-3.5" />Prev
+          </button>
+          <span className="text-xs text-slate-500">Page {page} of {totalPages}</span>
+          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40">
+            Next<ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

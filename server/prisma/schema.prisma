@@ -89,6 +89,8 @@ model User {
   educations         Education[]
   familyMembers      FamilyMember[]
   previousEmployments PreviousEmployment[]
+  profileChangeLogs  ProfileChangeLog[]   @relation("ProfileChanges")
+  changesLoggedBy    ProfileChangeLog[]   @relation("ChangesMadeBy")
 }
 
 model DailyReport {
@@ -379,4 +381,22 @@ model EmployeeDocument {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+model ProfileChangeLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int                                   // employee whose profile was changed
+  changedBy   Int                                   // user who made the change
+  section     String                                // "profile", "education", "family", "employment", "photo"
+  field       String                                // field name or sub-record description
+  oldValue    String?                               // previous value (null for new additions)
+  newValue    String?                               // new value
+  action      String   @default("update")           // "update", "add", "delete"
+  createdAt   DateTime @default(now())
+
+  user      User @relation("ProfileChanges", fields: [userId], references: [id])
+  changedByUser User @relation("ChangesMadeBy", fields: [changedBy], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([changedBy])
 }
