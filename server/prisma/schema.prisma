@@ -111,6 +111,11 @@ model User {
   separationHandler  Separation[]       @relation("SeparationHandler")
   overtimeRequests   OvertimeRequest[]
   overtimeReviews    OvertimeRequest[]  @relation("OvertimeReviews")
+  surveyResponses    SurveyResponse[]
+  surveysCreated     Survey[]           @relation("SurveyCreator")
+  tickets            Ticket[]
+  assignedTickets    Ticket[]           @relation("TicketAssignee")
+  ticketComments     TicketComment[]
 }
 
 model DailyReport {
@@ -439,8 +444,9 @@ model Company {
   users         User[]
   policies      Policy[]
   announcements Announcement[]
-  assets        Asset[]
+  assets           Asset[]
   shiftDefinitions ShiftDefinition[]
+  surveys          Survey[]
 }
 
 // ═══════════════════════════════════════════════
@@ -807,4 +813,84 @@ model OvertimeRequest {
   reviewer      User?     @relation("OvertimeReviews", fields: [reviewedBy], references: [id])
 
   @@unique([userId, date])
+}
+
+// ═══════════════════════════════════════════════
+// Surveys & Feedback
+// ═══════════════════════════════════════════════
+
+model Survey {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  type          String    @default("pulse")              // pulse, engagement, exit, custom
+  questions     String                                   // JSON array: [{question, type, options?}]
+  isActive      Boolean   @default(true)
+  isAnonymous   Boolean   @default(false)
+  expiresAt     DateTime?
+  companyId     Int?                                     // null = all companies
+  createdBy     Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  creator       User      @relation("SurveyCreator", fields: [createdBy], references: [id])
+  company       Company?  @relation(fields: [companyId], references: [id])
+  responses     SurveyResponse[]
+
+  @@index([isActive])
+}
+
+model SurveyResponse {
+  id          Int       @id @default(autoincrement())
+  surveyId    Int
+  userId      Int?                                       // null if anonymous
+  answers     String                                     // JSON: [{questionIndex, answer}]
+  submittedAt DateTime  @default(now())
+
+  survey      Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@unique([surveyId, userId])
+  @@index([surveyId])
+}
+
+// ═══════════════════════════════════════════════
+// Helpdesk / Ticketing
+// ═══════════════════════════════════════════════
+
+model Ticket {
+  id            Int       @id @default(autoincrement())
+  userId        Int                                       // ticket creator
+  subject       String
+  description   String
+  category      String    @default("hr")                  // it, hr, admin, facilities, other
+  priority      String    @default("medium")              // low, medium, high, urgent
+  status        String    @default("open")                // open, in_progress, resolved, closed
+  assignedTo    Int?                                      // admin/support userId
+  resolution    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+  assignee      User?     @relation("TicketAssignee", fields: [assignedTo], references: [id])
+  comments      TicketComment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([assignedTo])
+}
+
+model TicketComment {
+  id          Int       @id @default(autoincrement())
+  ticketId    Int
+  userId      Int
+  content     String
+  isInternal  Boolean   @default(false)                   // admin-only notes
+  createdAt   DateTime  @default(now())
+
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
 }

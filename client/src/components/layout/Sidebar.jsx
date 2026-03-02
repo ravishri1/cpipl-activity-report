@@ -30,16 +30,12 @@ import {
   UserPlus,
   UserMinus,
   PieChart,
-  Hourglass,
+  ClipboardList,
+  LifeBuoy,
+  Banknote,
+  Building2,
 } from 'lucide-react';
 import { useState } from 'react';
-
-const sectionIcons = {
-  overview: LayoutDashboard,
-  myWork: UserCircle,
-  team: Users,
-  admin: Settings,
-};
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user, isAdmin } = useAuth();
@@ -48,7 +44,9 @@ export default function Sidebar({ isOpen, onClose }) {
     overview: true,
     myWork: true,
     team: true,
-    admin: true,
+    people: false,
+    timePay: false,
+    organization: false,
   });
 
   const isActive = (path) => location.pathname === path;
@@ -78,6 +76,8 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
         { to: '/my-assets', label: 'My Assets', icon: Package },
         { to: '/policies', label: 'Policies', icon: Shield },
+        { to: '/surveys', label: 'Surveys', icon: ClipboardList },
+        { to: '/my-tickets', label: 'My Tickets', icon: LifeBuoy },
       ],
     },
     {
@@ -90,31 +90,50 @@ export default function Sidebar({ isOpen, onClose }) {
     },
   ];
 
-  // Admin section — only for admin/team_lead
+  // Admin sections — split into logical groups for admin/team_lead
   if (isAdmin) {
-    navSections.push({
-      key: 'admin',
-      label: 'Admin',
-      items: [
-        { to: '/admin/team', label: 'Team Management', icon: Users },
-        { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
-        { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
-        { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
-        { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
-        { to: '/admin/salary-setup', label: 'Salary Setup', icon: IndianRupee },
-        { to: '/admin/assets', label: 'Asset Manager', icon: Package },
-        { to: '/admin/letters', label: 'Letters', icon: Mail },
-        { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
-        { to: '/admin/separations', label: 'Separations', icon: UserMinus },
-        { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
-        { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
-        { to: '/admin/import', label: 'Import Employees', icon: Upload },
-        { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
-        { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },
-        { to: '/admin/ai-extract', label: 'AI Extract', icon: Brain },
-        { to: '/admin/settings', label: 'Settings', icon: Settings },
-      ],
-    });
+    navSections.push(
+      {
+        key: 'people',
+        label: 'People',
+        adminOnly: true,
+        items: [
+          { to: '/admin/team', label: 'Team Management', icon: Users },
+          { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
+          { to: '/admin/separations', label: 'Separations', icon: UserMinus },
+          { to: '/admin/import', label: 'Import Employees', icon: Upload },
+          { to: '/admin/ai-extract', label: 'AI Extract', icon: Brain },
+        ],
+      },
+      {
+        key: 'timePay',
+        label: 'Time & Pay',
+        adminOnly: true,
+        items: [
+          { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
+          { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
+          { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
+          { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
+          { to: '/admin/salary-setup', label: 'Salary Setup', icon: Banknote },
+          { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
+        ],
+      },
+      {
+        key: 'organization',
+        label: 'Organization',
+        adminOnly: true,
+        items: [
+          { to: '/admin/assets', label: 'Asset Manager', icon: Package },
+          { to: '/admin/letters', label: 'Letters', icon: Mail },
+          { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
+          { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },
+          { to: '/admin/surveys', label: 'Survey Manager', icon: ClipboardList },
+          { to: '/admin/tickets', label: 'Helpdesk', icon: LifeBuoy },
+          { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
+          { to: '/admin/settings', label: 'Settings', icon: Settings },
+        ],
+      }
+    );
   }
 
   const handleLinkClick = () => {
@@ -162,7 +181,6 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2 px-2">
           {navSections.map((section) => {
-            const SectionIcon = sectionIcons[section.key] || LayoutDashboard;
             const isExpanded = expandedSections[section.key];
 
             return (
@@ -170,7 +188,9 @@ export default function Sidebar({ isOpen, onClose }) {
                 {/* Section header */}
                 <button
                   onClick={() => toggleSection(section.key)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+                  className={`w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:text-slate-600 ${
+                    section.adminOnly ? 'text-amber-500' : 'text-slate-400'
+                  }`}
                 >
                   <span>{section.label}</span>
                   <ChevronDown

@@ -32,6 +32,10 @@ import OnboardingManager from './components/admin/OnboardingManager';
 import SeparationManager from './components/admin/SeparationManager';
 import HRReports from './components/admin/HRReports';
 import MyAssets from './components/assets/MyAssets';
+import SurveyManager from './components/admin/SurveyManager';
+import MySurveys from './components/surveys/MySurveys';
+import TicketManager from './components/admin/TicketManager';
+import MyTickets from './components/helpdesk/MyTickets';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -73,6 +77,8 @@ function AppRoutes() {
                 <Route path="/policies" element={<PolicyAcceptance />} />
                 <Route path="/announcements" element={<Announcements />} />
                 <Route path="/my-assets" element={<MyAssets />} />
+                <Route path="/surveys" element={<MySurveys />} />
+                <Route path="/my-tickets" element={<MyTickets />} />
 
                 {/* Team */}
                 <Route path="/directory" element={<EmployeeDirectory />} />
@@ -96,6 +102,8 @@ function AppRoutes() {
                 <Route path="/admin/separations" element={<AdminRoute><SeparationManager /></AdminRoute>} />
                 <Route path="/admin/reports" element={<AdminRoute><HRReports /></AdminRoute>} />
                 <Route path="/admin/ai-extract" element={<AdminRoute><ResumeExtractor /></AdminRoute>} />
+                <Route path="/admin/surveys" element={<AdminRoute><SurveyManager /></AdminRoute>} />
+                <Route path="/admin/tickets" element={<AdminRoute><TicketManager /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
 
                 {/* Fallback */}

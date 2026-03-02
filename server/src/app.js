@@ -26,6 +26,8 @@ const assetRoutes = require('./routes/assets');
 const lifecycleRoutes = require('./routes/lifecycle');
 const overtimeRoutes = require('./routes/overtime');
 const analyticsRoutes = require('./routes/analytics');
+const surveyRoutes = require('./routes/surveys');
+const ticketRoutes = require('./routes/tickets');
 
 const app = express();
 
@@ -79,6 +81,8 @@ app.use('/api/assets', assetRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
 app.use('/api/overtime', overtimeRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/surveys', surveyRoutes);
+app.use('/api/tickets', ticketRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
