@@ -47,6 +47,7 @@ const FIELD_MAP = {
   // Dates
   'date of joining': 'dateOfJoining',
   'joining date': 'dateOfJoining',
+  'join date': 'dateOfJoining',
   'doj': 'dateOfJoining',
   'date_of_joining': 'dateOfJoining',
   'date of birth': 'dateOfBirth',
@@ -59,12 +60,19 @@ const FIELD_MAP = {
   'emp type': 'employmentType',
   'type': 'employmentType',
 
+  // Employment status (greytHR: Confirmed, Probation, Intern, etc.)
+  'status': 'employmentStatus',
+  'employment status': 'employmentStatus',
+  'employee status': 'employmentStatus',
+
   // Contact
   'phone': 'phone',
+  'phone no': 'phone',
   'mobile': 'phone',
   'mobile number': 'phone',
   'contact number': 'phone',
   'phone number': 'phone',
+  'mobile no': 'phone',
   'personal email': 'personalEmail',
   'personal_email': 'personalEmail',
   'alternate email': 'personalEmail',
@@ -307,7 +315,7 @@ router.post('/execute', authenticate, requireAdmin, async (req, res) => {
           }
         });
 
-        // Skip rows with no email and no name (can't match)
+        // Skip rows with no email and no name and no employee ID (can't match)
         if (!mapped.email && !mapped.name && !mapped.employeeId) {
           results.skipped++;
           results.errors.push({ row: i + 1, error: 'No email, name, or employee ID to match.' });
@@ -338,6 +346,20 @@ router.post('/execute', authenticate, requireAdmin, async (req, res) => {
 
         // Enum/normalized fields
         if (mapped.employmentType) data.employmentType = normalizeEmploymentType(mapped.employmentType);
+        // Handle greytHR employment status: Confirmed/Probation/Intern
+        if (mapped.employmentStatus) {
+          const status = String(mapped.employmentStatus).toLowerCase().trim();
+          if (status === 'intern' || status === 'internship') {
+            data.employmentType = 'intern';
+          } else if (status === 'probation') {
+            data.employmentType = data.employmentType || 'full_time';
+            // Don't set confirmation date if on probation
+          } else if (status === 'confirmed') {
+            data.employmentType = data.employmentType || 'full_time';
+          } else if (status === 'contract' || status === 'contractual') {
+            data.employmentType = 'contract';
+          }
+        }
         if (mapped.gender) data.gender = normalizeGender(mapped.gender);
         if (mapped.maritalStatus) data.maritalStatus = normalizeMaritalStatus(mapped.maritalStatus);
 

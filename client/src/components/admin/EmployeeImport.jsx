@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import api from '../../utils/api';
 import {
   Upload,
@@ -22,7 +23,6 @@ function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return { headers: [], rows: [] };
 
-  // Parse a CSV line respecting quotes
   function parseLine(line) {
     const result = [];
     let current = '';
@@ -62,6 +62,52 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
+// ── Excel Parser ────────────────────────────────
+function parseExcel(buffer) {
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+
+  // Get raw rows (header:1 returns array of arrays)
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (rawRows.length < 2) return { headers: [], rows: [], sheetName };
+
+  // Auto-detect the header row — greytHR exports often have a title row first.
+  // The header row is the first row with 3+ non-empty cells that look like column names.
+  let headerRowIdx = 0;
+  for (let i = 0; i < Math.min(5, rawRows.length); i++) {
+    const nonEmpty = rawRows[i].filter((c) => String(c).trim() !== '').length;
+    if (nonEmpty >= 3) {
+      headerRowIdx = i;
+      break;
+    }
+  }
+
+  const headers = rawRows[headerRowIdx].map((h) => String(h).trim()).filter(Boolean);
+  const rows = [];
+
+  for (let i = headerRowIdx + 1; i < rawRows.length; i++) {
+    const rawRow = rawRows[i];
+    const row = {};
+    let hasValue = false;
+    headers.forEach((h, idx) => {
+      let val = rawRow[idx];
+      if (val instanceof Date) {
+        val = val.toISOString().split('T')[0];
+      } else if (val !== null && val !== undefined) {
+        val = String(val).trim();
+      } else {
+        val = '';
+      }
+      row[h] = val;
+      if (val) hasValue = true;
+    });
+    if (hasValue) rows.push(row);
+  }
+
+  return { headers, rows, sheetName, totalSheets: workbook.SheetNames.length, sheetNames: workbook.SheetNames };
+}
+
 // ── Steps ───────────────────────────────────────
 const STEPS = ['Upload', 'Map Fields', 'Preview', 'Import'];
 
@@ -85,14 +131,27 @@ export default function EmployeeImport() {
     if (!f) return;
 
     const ext = f.name.split('.').pop().toLowerCase();
-    if (!['csv', 'tsv', 'txt'].includes(ext)) {
-      setError('Please upload a CSV file. Export from greytHR as CSV first.');
+    if (!['csv', 'tsv', 'txt', 'xlsx', 'xls'].includes(ext)) {
+      setError('Please upload a CSV or Excel file (.csv, .xlsx, .xls)');
       return;
     }
 
     setFile(f);
-    const text = await f.text();
-    const { headers, rows } = parseCSV(text);
+
+    let headers, rows;
+    if (['xlsx', 'xls'].includes(ext)) {
+      // Parse Excel file
+      const buffer = await f.arrayBuffer();
+      const result = parseExcel(buffer);
+      headers = result.headers;
+      rows = result.rows;
+    } else {
+      // Parse CSV/TSV file
+      const text = await f.text();
+      const result = parseCSV(text);
+      headers = result.headers;
+      rows = result.rows;
+    }
 
     if (rows.length === 0) {
       setError('No data rows found in the file.');
@@ -271,8 +330,7 @@ export default function EmployeeImport() {
               <li>Login to <strong>greytHR Admin</strong> → <strong>Employee Information</strong> → <strong>Employee Directory</strong></li>
               <li>Click <strong>Export</strong> or <strong>Download</strong> button (usually top-right)</li>
               <li>Choose <strong>CSV</strong> or <strong>Excel</strong> format → download the file</li>
-              <li>If Excel, open in Excel/Google Sheets → <strong>File → Save As → CSV</strong></li>
-              <li>Upload that CSV file below</li>
+              <li>Upload the exported file below — <strong>Excel (.xlsx/.xls) and CSV</strong> formats are both supported</li>
             </ol>
           </div>
 
@@ -285,13 +343,13 @@ export default function EmployeeImport() {
           >
             <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-slate-600">
-              Drag & drop a CSV file here, or <span className="text-blue-600 underline">click to browse</span>
+              Drag & drop your file here, or <span className="text-blue-600 underline">click to browse</span>
             </p>
-            <p className="text-xs text-slate-400 mt-1">Supports .csv files exported from greytHR, Excel, or Google Sheets</p>
+            <p className="text-xs text-slate-400 mt-1">Supports Excel (.xlsx, .xls) and CSV files from greytHR or Google Sheets</p>
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.tsv,.txt"
+              accept=".csv,.tsv,.txt,.xlsx,.xls"
               onChange={(e) => handleFile(e.target.files?.[0])}
               className="hidden"
             />
@@ -363,6 +421,7 @@ export default function EmployeeImport() {
                       <optgroup label="Employment">
                         <option value="dateOfJoining">Date of Joining</option>
                         <option value="employmentType">Employment Type</option>
+                        <option value="employmentStatus">Employment Status (Confirmed/Probation/Intern)</option>
                         <option value="reportingManagerName">Reporting Manager</option>
                         <option value="location">Office Location</option>
                         <option value="grade">Grade</option>
