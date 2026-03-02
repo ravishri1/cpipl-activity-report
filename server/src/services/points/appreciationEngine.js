@@ -288,9 +288,13 @@ async function getAppreciationFeed(limit, prisma) {
   return prisma.appreciation.findMany({
     orderBy: { createdAt: 'desc' },
     take: limit,
-    include: {
-      giver: { select: { id: true, name: true, department: true } },
+    select: {
+      id: true,
+      points: true,
+      reason: true,
+      createdAt: true,
       receiver: { select: { id: true, name: true, department: true } },
+      // Giver is intentionally excluded — appreciations are anonymous
     },
   });
 }

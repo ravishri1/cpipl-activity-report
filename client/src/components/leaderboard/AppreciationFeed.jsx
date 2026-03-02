@@ -50,9 +50,8 @@ export default function AppreciationFeed({ refreshKey = 0 }) {
           <Heart className="w-4 h-4 text-pink-400 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-slate-700">
-              <span className="font-medium">{item.giver?.name?.split(' ')[0]}</span>
-              <span className="text-slate-400"> appreciated </span>
               <span className="font-medium">{item.receiver?.name?.split(' ')[0]}</span>
+              <span className="text-slate-400"> received appreciation</span>
             </p>
             <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">"{item.reason}"</p>
             <span className="text-xs text-slate-400">{timeAgo(item.createdAt)}</span>
