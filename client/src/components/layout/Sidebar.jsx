@@ -34,6 +34,9 @@ import {
   LifeBuoy,
   Banknote,
   Building2,
+  GraduationCap,
+  MessageSquare,
+  BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -78,6 +81,9 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/policies', label: 'Policies', icon: Shield },
         { to: '/surveys', label: 'Surveys', icon: ClipboardList },
         { to: '/my-tickets', label: 'My Tickets', icon: LifeBuoy },
+        { to: '/training', label: 'Training', icon: GraduationCap },
+        { to: '/suggestions', label: 'Suggestions', icon: MessageSquare },
+        { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
       ],
     },
     {
@@ -129,6 +135,8 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },
           { to: '/admin/surveys', label: 'Survey Manager', icon: ClipboardList },
           { to: '/admin/tickets', label: 'Helpdesk', icon: LifeBuoy },
+          { to: '/admin/training', label: 'Training Manager', icon: GraduationCap },
+          { to: '/admin/suggestions', label: 'Suggestions', icon: MessageSquare },
           { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
           { to: '/admin/settings', label: 'Settings', icon: Settings },
         ],

@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { normalizeName } = require('../utils/normalize');
 const { generateAuthUrl, exchangeCodeForTokens, storeTokens } = require('../services/google/googleAuth');
 const { fetchGoogleWorkspaceUsers } = require('../services/google/googleWorkspace');
 const { fetchTodayCalendarEvents, fetchTodayTasks } = require('../services/google/googleCalendar');
@@ -134,7 +135,7 @@ router.post('/import-users', authenticate, requireAdmin, async (req, res) => {
 
       const newUser = await req.prisma.user.create({
         data: {
-          name: u.name,
+          name: normalizeName(u.name),
           email: u.email,
           password: hashedPassword,
           role: 'member',

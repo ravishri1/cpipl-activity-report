@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -18,40 +18,92 @@ import {
   X,
   Check,
   AlertCircle,
+  Trash2,
+  Unlink,
+  History,
+  ShieldAlert,
+  Server,
+  Printer,
+  ScanLine,
+  Wifi,
+  Camera,
+  Armchair,
+  TabletSmartphone,
+  ChevronDown,
+  Users,
+  Eye,
+  Filter,
+  Download,
+  RefreshCw,
 } from 'lucide-react';
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const ASSET_TYPES = [
-  'laptop',
-  'phone',
-  'id_card',
-  'access_card',
-  'monitor',
-  'headset',
-  'keyboard',
-  'mouse',
-  'other',
+  'laptop', 'desktop', 'phone', 'tablet', 'id_card', 'access_card',
+  'monitor', 'keyboard', 'mouse', 'headset', 'printer', 'scanner',
+  'router', 'switch', 'server', 'projector', 'camera', 'furniture', 'other',
 ];
 
 const ASSET_TYPE_LABELS = {
   laptop: 'Laptop',
+  desktop: 'Desktop',
   phone: 'Phone',
+  tablet: 'Tablet',
   id_card: 'ID Card',
   access_card: 'Access Card',
   monitor: 'Monitor',
-  headset: 'Headset',
   keyboard: 'Keyboard',
   mouse: 'Mouse',
+  headset: 'Headset',
+  printer: 'Printer',
+  scanner: 'Scanner',
+  router: 'Router',
+  switch: 'Switch',
+  server: 'Server',
+  projector: 'Projector',
+  camera: 'Camera',
+  furniture: 'Furniture',
   other: 'Other',
 };
 
-const STATUS_OPTIONS = ['available', 'assigned', 'maintenance', 'retired'];
+const STATUS_OPTIONS = ['available', 'assigned', 'maintenance', 'retired', 'lost'];
 
 const STATUS_COLORS = {
-  available: 'bg-green-100 text-green-700',
-  assigned: 'bg-blue-100 text-blue-700',
-  maintenance: 'bg-yellow-100 text-yellow-700',
-  retired: 'bg-red-100 text-red-700',
+  available: 'bg-green-100 text-green-700 border-green-200',
+  assigned: 'bg-blue-100 text-blue-700 border-blue-200',
+  maintenance: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  retired: 'bg-slate-100 text-slate-500 border-slate-200',
+  lost: 'bg-red-100 text-red-700 border-red-200',
 };
+
+const CATEGORY_OPTIONS = ['personal', 'office', 'infrastructure'];
+const CATEGORY_LABELS = { personal: 'Personal', office: 'Office', infrastructure: 'Infrastructure' };
+
+const CONDITION_OPTIONS = ['new', 'good', 'fair', 'damaged', 'non_working'];
+const CONDITION_LABELS = { new: 'New', good: 'Good', fair: 'Fair', damaged: 'Damaged', non_working: 'Non-Working' };
+const CONDITION_COLORS = {
+  new: 'text-emerald-600',
+  good: 'text-green-600',
+  fair: 'text-amber-600',
+  damaged: 'text-orange-600',
+  non_working: 'text-red-600',
+};
+
+const LOCATION_OPTIONS = ['Miraroad', 'Lucknow'];
+
+const TABS = [
+  { key: 'all', label: 'All Assets' },
+  { key: 'free', label: 'Free Assets' },
+  { key: 'warranty', label: 'Warranty Expiring' },
+  { key: 'employee', label: 'By Employee' },
+];
+
+const WARRANTY_DAY_OPTIONS = [
+  { value: 30, label: '30 Days' },
+  { value: 60, label: '60 Days' },
+  { value: 90, label: '90 Days' },
+];
 
 const formatINR = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -59,31 +111,68 @@ const formatINR = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 0,
 });
 
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+}
+
+function capitalize(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
+}
+
+// ─── Icon Mapping ────────────────────────────────────────────────────────────
+
 function getTypeIcon(type, className = 'w-4 h-4') {
   const icons = {
     laptop: <Laptop className={className} />,
+    desktop: <Monitor className={className} />,
     phone: <Smartphone className={className} />,
-    monitor: <Monitor className={className} />,
+    tablet: <TabletSmartphone className={className} />,
     id_card: <CreditCard className={className} />,
     access_card: <CreditCard className={className} />,
-    headset: <Headphones className={className} />,
+    monitor: <Monitor className={className} />,
     keyboard: <Keyboard className={className} />,
     mouse: <Mouse className={className} />,
+    headset: <Headphones className={className} />,
+    printer: <Printer className={className} />,
+    scanner: <ScanLine className={className} />,
+    router: <Wifi className={className} />,
+    switch: <Wifi className={className} />,
+    server: <Server className={className} />,
+    projector: <Monitor className={className} />,
+    camera: <Camera className={className} />,
+    furniture: <Armchair className={className} />,
     other: <Package className={className} />,
   };
   return icons[type] || <Package className={className} />;
 }
 
-// --- Toast Component ---
+// ─── Toast Component ─────────────────────────────────────────────────────────
+
 function Toast({ toast, onDismiss }) {
   useEffect(() => {
-    const timer = setTimeout(() => onDismiss(toast.id), 3500);
+    const timer = setTimeout(() => onDismiss(toast.id), 4000);
     return () => clearTimeout(timer);
   }, [toast.id, onDismiss]);
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ${
+      className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all animate-slide-in ${
         toast.type === 'success'
           ? 'bg-green-600 text-white'
           : 'bg-red-600 text-white'
@@ -102,12 +191,22 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
-// --- Modal Wrapper ---
-function Modal({ title, onClose, children }) {
+// ─── Modal Wrapper ───────────────────────────────────────────────────────────
+
+function Modal({ title, onClose, children, wide = false }) {
+  useEffect(() => {
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className={`bg-white rounded-xl shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-lg'} w-full mx-4 max-h-[90vh] flex flex-col`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
           <button
             onClick={onClose}
@@ -116,40 +215,134 @@ function Modal({ title, onClose, children }) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-6 py-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
 
-// === Main Component ===
+// ─── Confirm Dialog ──────────────────────────────────────────────────────────
+
+function ConfirmDialog({ title, message, onConfirm, onCancel, confirmText = 'Confirm', danger = false }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={onCancel}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">{title}</h3>
+        <p className="text-sm text-slate-600 mb-6">{message}</p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg ${
+              danger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat Card ───────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, color, isText = false, onClick }) {
+  const colorMap = {
+    slate: 'bg-slate-50 border-slate-200 text-slate-700',
+    green: 'bg-green-50 border-green-200 text-green-700',
+    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+    red: 'bg-red-50 border-red-200 text-red-700',
+    purple: 'bg-purple-50 border-purple-200 text-purple-700',
+  };
+
+  return (
+    <div
+      className={`rounded-xl border p-4 ${colorMap[color] || colorMap.slate} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={onClick}
+    >
+      <div className="text-xs font-medium uppercase tracking-wide opacity-70 mb-1">{label}</div>
+      <div className={`font-bold ${isText ? 'text-lg' : 'text-2xl'}`}>{value}</div>
+    </div>
+  );
+}
+
+// ─── Select Dropdown ─────────────────────────────────────────────────────────
+
+function FilterSelect({ value, onChange, options, allLabel, className = '' }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${className}`}
+    >
+      <option value="all">{allLabel}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export default function AssetManager() {
   const { user: currentUser } = useAuth();
 
-  // Data
+  // ─── Data State ──────────────────────────────────────────────────────────
   const [assets, setAssets] = useState([]);
+  const [freeAssets, setFreeAssets] = useState([]);
+  const [warrantyAssets, setWarrantyAssets] = useState([]);
+  const [employeeAssets, setEmployeeAssets] = useState([]);
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [handoverHistory, setHandoverHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState(false);
 
-  // Filters
+  // ─── Tab & Filter State ──────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCondition, setFilterCondition] = useState('all');
+  const [filterLocation, setFilterLocation] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [warrantyDays, setWarrantyDays] = useState(30);
+  const [selectedEmployee, setSelectedEmployee] = useState('');
 
-  // Modals
+  // ─── Modal State ─────────────────────────────────────────────────────────
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignTarget, setAssignTarget] = useState(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyAsset, setHistoryAsset] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
 
-  // Form state
+  // ─── Form State ──────────────────────────────────────────────────────────
   const emptyForm = {
     name: '',
     type: 'laptop',
     serialNumber: '',
+    assetTag: '',
+    category: 'personal',
+    condition: 'good',
+    location: '',
     purchaseDate: '',
+    purchasePrice: '',
+    warrantyExpiry: '',
     value: '',
     notes: '',
     companyId: '',
@@ -160,9 +353,8 @@ export default function AssetManager() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Toasts
+  // ─── Toasts ──────────────────────────────────────────────────────────────
   const [toasts, setToasts] = useState([]);
-  let toastIdRef = 0;
 
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now() + Math.random();
@@ -173,42 +365,101 @@ export default function AssetManager() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // --- Data Fetching ---
-  const fetchAssets = async () => {
+  // ─── Data Fetching ───────────────────────────────────────────────────────
+
+  const fetchAssets = useCallback(async () => {
     try {
-      const res = await api.get('/assets');
+      const params = {};
+      if (filterType !== 'all') params.type = filterType;
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterCategory !== 'all') params.category = filterCategory;
+      if (filterCondition !== 'all') params.condition = filterCondition;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+      const res = await api.get('/assets', { params });
       setAssets(res.data);
     } catch (err) {
       console.error('Failed to fetch assets:', err);
     }
-  };
+  }, [filterType, filterStatus, filterCategory, filterCondition, searchQuery]);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     try {
       const res = await api.get('/assets/summary');
       setSummary(res.data);
     } catch (err) {
       console.error('Failed to fetch summary:', err);
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await api.get('/users');
       setUsers(res.data);
     } catch (err) {
       console.error('Failed to fetch users:', err);
     }
-  };
+  }, []);
 
-  const fetchCompanies = async () => {
+  const fetchCompanies = useCallback(async () => {
     try {
       const res = await api.get('/companies');
       setCompanies(res.data);
     } catch (err) {
       console.error('Failed to fetch companies:', err);
     }
-  };
+  }, []);
+
+  const fetchFreeAssets = useCallback(async () => {
+    try {
+      setTabLoading(true);
+      const res = await api.get('/assets/free');
+      setFreeAssets(res.data);
+    } catch (err) {
+      console.error('Failed to fetch free assets:', err);
+    } finally {
+      setTabLoading(false);
+    }
+  }, []);
+
+  const fetchWarrantyAssets = useCallback(async (days = 30) => {
+    try {
+      setTabLoading(true);
+      const res = await api.get('/assets/warranty-expiring', { params: { days } });
+      setWarrantyAssets(res.data);
+    } catch (err) {
+      console.error('Failed to fetch warranty-expiring assets:', err);
+    } finally {
+      setTabLoading(false);
+    }
+  }, []);
+
+  const fetchEmployeeAssets = useCallback(async (userId) => {
+    if (!userId) {
+      setEmployeeAssets([]);
+      return;
+    }
+    try {
+      setTabLoading(true);
+      const res = await api.get(`/assets/employee/${userId}`);
+      setEmployeeAssets(res.data);
+    } catch (err) {
+      console.error('Failed to fetch employee assets:', err);
+    } finally {
+      setTabLoading(false);
+    }
+  }, []);
+
+  const fetchHandoverHistory = useCallback(async (assetId) => {
+    try {
+      const res = await api.get(`/assets/handover-history/${assetId}`);
+      setHandoverHistory(res.data);
+    } catch (err) {
+      console.error('Failed to fetch handover history:', err);
+      setHandoverHistory([]);
+    }
+  }, []);
+
+  // ─── Initial Load ────────────────────────────────────────────────────────
 
   useEffect(() => {
     const loadAll = async () => {
@@ -219,20 +470,62 @@ export default function AssetManager() {
     loadAll();
   }, []);
 
-  // --- Filtering ---
-  const filteredAssets = assets.filter((a) => {
-    if (filterType !== 'all' && a.type !== filterType) return false;
-    if (filterStatus !== 'all' && a.status !== filterStatus) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const nameMatch = a.name?.toLowerCase().includes(q);
-      const serialMatch = a.serialNumber?.toLowerCase().includes(q);
-      if (!nameMatch && !serialMatch) return false;
+  // Re-fetch when filters change (only on All Assets tab)
+  useEffect(() => {
+    if (activeTab === 'all') {
+      fetchAssets();
     }
-    return true;
-  });
+  }, [filterType, filterStatus, filterCategory, filterCondition, searchQuery, fetchAssets]);
 
-  // --- Asset CRUD ---
+  // Tab data loading
+  useEffect(() => {
+    if (activeTab === 'free') fetchFreeAssets();
+    if (activeTab === 'warranty') fetchWarrantyAssets(warrantyDays);
+    if (activeTab === 'employee' && selectedEmployee) fetchEmployeeAssets(selectedEmployee);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'warranty') fetchWarrantyAssets(warrantyDays);
+  }, [warrantyDays]);
+
+  useEffect(() => {
+    if (activeTab === 'employee' && selectedEmployee) {
+      fetchEmployeeAssets(selectedEmployee);
+    }
+  }, [selectedEmployee]);
+
+  // ─── Filter by location (client-side since backend doesn't support location filter) ───
+  const applyLocationFilter = (list) => {
+    if (filterLocation === 'all') return list;
+    return list.filter((a) => a.location === filterLocation);
+  };
+
+  const getDisplayAssets = () => {
+    switch (activeTab) {
+      case 'free':
+        return applyLocationFilter(freeAssets);
+      case 'warranty':
+        return applyLocationFilter(warrantyAssets);
+      case 'employee':
+        return applyLocationFilter(employeeAssets);
+      default:
+        return applyLocationFilter(assets);
+    }
+  };
+
+  const displayAssets = getDisplayAssets();
+
+  // ─── Refresh all data ────────────────────────────────────────────────────
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchAssets(), fetchSummary()]);
+    if (activeTab === 'free') await fetchFreeAssets();
+    if (activeTab === 'warranty') await fetchWarrantyAssets(warrantyDays);
+    if (activeTab === 'employee' && selectedEmployee) await fetchEmployeeAssets(selectedEmployee);
+  }, [activeTab, warrantyDays, selectedEmployee, fetchAssets, fetchSummary, fetchFreeAssets, fetchWarrantyAssets, fetchEmployeeAssets]);
+
+  // ─── Asset CRUD ──────────────────────────────────────────────────────────
+
   const openAddModal = () => {
     setEditingAsset(null);
     setForm(emptyForm);
@@ -246,7 +539,13 @@ export default function AssetManager() {
       name: asset.name || '',
       type: asset.type || 'laptop',
       serialNumber: asset.serialNumber || '',
+      assetTag: asset.assetTag || '',
+      category: asset.category || 'personal',
+      condition: asset.condition || 'good',
+      location: asset.location || '',
       purchaseDate: asset.purchaseDate ? asset.purchaseDate.split('T')[0] : '',
+      purchasePrice: asset.purchasePrice ?? '',
+      warrantyExpiry: asset.warrantyExpiry ? asset.warrantyExpiry.split('T')[0] : '',
       value: asset.value ?? '',
       notes: asset.notes || '',
       companyId: asset.companyId ? String(asset.companyId) : '',
@@ -263,13 +562,27 @@ export default function AssetManager() {
       setFormError('Asset name is required.');
       return;
     }
+    if (!form.type) {
+      setFormError('Asset type is required.');
+      return;
+    }
     setFormLoading(true);
     try {
       const payload = {
-        ...form,
-        value: form.value ? parseFloat(form.value) : null,
-        companyId: form.companyId ? parseInt(form.companyId, 10) : null,
+        name: form.name.trim(),
+        type: form.type,
+        serialNumber: form.serialNumber.trim() || null,
+        assetTag: form.assetTag.trim() || null,
+        category: form.category || 'personal',
+        condition: form.condition || 'good',
+        location: form.location || null,
         purchaseDate: form.purchaseDate || null,
+        purchasePrice: form.purchasePrice ? parseFloat(form.purchasePrice) : null,
+        warrantyExpiry: form.warrantyExpiry || null,
+        value: form.value ? parseFloat(form.value) : null,
+        notes: form.notes.trim() || null,
+        companyId: form.companyId ? parseInt(form.companyId, 10) : null,
+        status: form.status || 'available',
       };
       if (editingAsset) {
         await api.put(`/assets/${editingAsset.id}`, payload);
@@ -281,7 +594,7 @@ export default function AssetManager() {
       setShowAssetModal(false);
       setEditingAsset(null);
       setForm(emptyForm);
-      await Promise.all([fetchAssets(), fetchSummary()]);
+      await refreshAll();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to save asset.');
     } finally {
@@ -289,7 +602,29 @@ export default function AssetManager() {
     }
   };
 
-  // --- Assign / Return ---
+  // ─── Delete (Soft) ───────────────────────────────────────────────────────
+
+  const handleDelete = (asset) => {
+    setConfirmAction({
+      title: 'Retire Asset',
+      message: `Are you sure you want to retire "${asset.name}"? This will mark it as retired.`,
+      confirmText: 'Retire',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/assets/${asset.id}`);
+          addToast(`"${asset.name}" has been retired`);
+          await refreshAll();
+        } catch (err) {
+          addToast(err.response?.data?.error || 'Failed to retire asset.', 'error');
+        }
+        setConfirmAction(null);
+      },
+    });
+  };
+
+  // ─── Assign ──────────────────────────────────────────────────────────────
+
   const openAssignModal = (asset) => {
     setAssignTarget(asset);
     setAssignForm({ userId: '', assignedDate: new Date().toISOString().split('T')[0] });
@@ -313,7 +648,7 @@ export default function AssetManager() {
       addToast(`Asset assigned successfully`);
       setShowAssignModal(false);
       setAssignTarget(null);
-      await Promise.all([fetchAssets(), fetchSummary()]);
+      await refreshAll();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to assign asset.');
     } finally {
@@ -321,19 +656,75 @@ export default function AssetManager() {
     }
   };
 
-  const handleReturn = async (asset) => {
-    try {
-      await api.put(`/assets/${asset.id}/return`);
-      addToast(`"${asset.name}" marked as returned`);
-      await Promise.all([fetchAssets(), fetchSummary()]);
-    } catch (err) {
-      addToast(err.response?.data?.error || 'Failed to return asset.', 'error');
-    }
+  // ─── Return ──────────────────────────────────────────────────────────────
+
+  const handleReturn = (asset) => {
+    setConfirmAction({
+      title: 'Return Asset',
+      message: `Mark "${asset.name}" as returned? It will become available again.`,
+      confirmText: 'Mark Returned',
+      danger: false,
+      onConfirm: async () => {
+        try {
+          await api.put(`/assets/${asset.id}/return`);
+          addToast(`"${asset.name}" marked as returned`);
+          await refreshAll();
+        } catch (err) {
+          addToast(err.response?.data?.error || 'Failed to return asset.', 'error');
+        }
+        setConfirmAction(null);
+      },
+    });
   };
+
+  // ─── Detach ──────────────────────────────────────────────────────────────
+
+  const handleDetach = (asset) => {
+    setConfirmAction({
+      title: 'Detach Asset',
+      message: `Remove assignment of "${asset.name}" from ${asset.assignee?.name || 'the employee'}? The asset will become available without a formal return record.`,
+      confirmText: 'Detach',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.put(`/assets/${asset.id}/detach`, { notes: 'Detached by admin' });
+          addToast(`"${asset.name}" detached successfully`);
+          await refreshAll();
+        } catch (err) {
+          addToast(err.response?.data?.error || 'Failed to detach asset.', 'error');
+        }
+        setConfirmAction(null);
+      },
+    });
+  };
+
+  // ─── Handover History ────────────────────────────────────────────────────
+
+  const openHistory = async (asset) => {
+    setHistoryAsset(asset);
+    setShowHistoryModal(true);
+    await fetchHandoverHistory(asset.id);
+  };
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────
 
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  // --- Render ---
+  const clearFilters = () => {
+    setFilterType('all');
+    setFilterStatus('all');
+    setFilterCategory('all');
+    setFilterCondition('all');
+    setFilterLocation('all');
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters = filterType !== 'all' || filterStatus !== 'all' ||
+    filterCategory !== 'all' || filterCondition !== 'all' ||
+    filterLocation !== 'all' || searchQuery.trim() !== '';
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -344,28 +735,58 @@ export default function AssetManager() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ─── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Package className="w-6 h-6 text-blue-600" />
           IT Asset Management
         </h1>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add Asset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={refreshAll}
+            className="flex items-center gap-1.5 px-3 py-2 text-slate-600 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Asset
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* ─── Stats Row ───────────────────────────────────────────────────── */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <StatCard label="Total Assets" value={summary.total ?? 0} color="slate" />
-          <StatCard label="Available" value={summary.available ?? 0} color="green" />
-          <StatCard label="Assigned" value={summary.assigned ?? 0} color="blue" />
-          <StatCard label="In Maintenance" value={summary.maintenance ?? 0} color="yellow" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard
+            label="Total Assets"
+            value={summary.totalCount ?? 0}
+            color="slate"
+          />
+          <StatCard
+            label="Assigned"
+            value={summary.byStatus?.assigned ?? 0}
+            color="blue"
+          />
+          <StatCard
+            label="Available"
+            value={summary.byStatus?.available ?? 0}
+            color="green"
+          />
+          <StatCard
+            label="Maintenance"
+            value={summary.byStatus?.maintenance ?? 0}
+            color="yellow"
+          />
+          <StatCard
+            label="Retired"
+            value={summary.byStatus?.retired ?? 0}
+            color="red"
+          />
           <StatCard
             label="Total Value"
             value={formatINR.format(summary.totalValue ?? 0)}
@@ -375,67 +796,210 @@ export default function AssetManager() {
         </div>
       )}
 
-      {/* Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex flex-wrap gap-3 items-center">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by name or serial number..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      {/* ─── Tab Navigation ──────────────────────────────────────────────── */}
+      <div className="border-b border-slate-200">
+        <nav className="flex gap-0 -mb-px">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              {tab.label}
+              {tab.key === 'warranty' && summary?.warrantyExpiring > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-amber-100 text-amber-700 rounded-full">
+                  {summary.warrantyExpiring}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* ─── Filter Bar (All Assets tab) ─────────────────────────────────── */}
+      {activeTab === 'all' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search name, serial, asset tag..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Type */}
+            <FilterSelect
+              value={filterType}
+              onChange={setFilterType}
+              options={ASSET_TYPES.map((t) => ({ value: t, label: ASSET_TYPE_LABELS[t] }))}
+              allLabel="All Types"
             />
-            {searchQuery && (
+
+            {/* Status */}
+            <FilterSelect
+              value={filterStatus}
+              onChange={setFilterStatus}
+              options={STATUS_OPTIONS.map((s) => ({ value: s, label: capitalize(s) }))}
+              allLabel="All Statuses"
+            />
+
+            {/* Category */}
+            <FilterSelect
+              value={filterCategory}
+              onChange={setFilterCategory}
+              options={CATEGORY_OPTIONS.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
+              allLabel="All Categories"
+            />
+
+            {/* Condition */}
+            <FilterSelect
+              value={filterCondition}
+              onChange={setFilterCondition}
+              options={CONDITION_OPTIONS.map((c) => ({ value: c, label: CONDITION_LABELS[c] }))}
+              allLabel="All Conditions"
+            />
+
+            {/* Location */}
+            <FilterSelect
+              value={filterLocation}
+              onChange={setFilterLocation}
+              options={LOCATION_OPTIONS.map((l) => ({ value: l, label: l }))}
+              allLabel="All Locations"
+            />
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                onClick={clearFilters}
+                className="flex items-center gap-1 px-3 py-2 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
+                Clear
               </button>
             )}
           </div>
-
-          {/* Type Filter */}
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Types</option>
-            {ASSET_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {ASSET_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Statuses</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
         </div>
-      </div>
+      )}
 
-      {/* Asset Table */}
+      {/* ─── Warranty Days Selector ──────────────────────────────────────── */}
+      {activeTab === 'warranty' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              <span className="font-medium">Warranty expiring within:</span>
+            </div>
+            <div className="flex gap-2">
+              {WARRANTY_DAY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setWarrantyDays(opt.value)}
+                  className={`px-3 py-1.5 text-sm rounded-lg border font-medium transition-colors ${
+                    warrantyDays === opt.value
+                      ? 'bg-amber-50 border-amber-300 text-amber-700'
+                      : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <FilterSelect
+              value={filterLocation}
+              onChange={setFilterLocation}
+              options={LOCATION_OPTIONS.map((l) => ({ value: l, label: l }))}
+              allLabel="All Locations"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── Employee Selector ───────────────────────────────────────────── */}
+      {activeTab === 'employee' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Users className="w-4 h-4 text-blue-500" />
+              <span className="font-medium">Select Employee:</span>
+            </div>
+            <select
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+              className="flex-1 max-w-md px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Choose Employee --</option>
+              {users
+                .filter((u) => u.isActive !== false)
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .map((u) => (
+                  <option key={u.id} value={String(u.id)}>
+                    {u.name} ({u.email})
+                  </option>
+                ))}
+            </select>
+            <FilterSelect
+              value={filterLocation}
+              onChange={setFilterLocation}
+              options={LOCATION_OPTIONS.map((l) => ({ value: l, label: l }))}
+              allLabel="All Locations"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── Free Assets filter bar ──────────────────────────────────────── */}
+      {activeTab === 'free' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Check className="w-4 h-4 text-green-500" />
+              <span className="font-medium">Available assets ready for assignment</span>
+            </div>
+            <FilterSelect
+              value={filterLocation}
+              onChange={setFilterLocation}
+              options={LOCATION_OPTIONS.map((l) => ({ value: l, label: l }))}
+              allLabel="All Locations"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ─── Asset Table ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        {filteredAssets.length === 0 ? (
+        {tabLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          </div>
+        ) : displayAssets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
             <Package className="w-12 h-12 mb-3" />
             <p className="text-sm font-medium">No assets found</p>
             <p className="text-xs mt-1">
-              {assets.length === 0
+              {activeTab === 'employee' && !selectedEmployee
+                ? 'Select an employee to view their assets.'
+                : activeTab === 'warranty'
+                ? `No assets with warranty expiring within ${warrantyDays} days.`
+                : activeTab === 'free'
+                ? 'No available assets at the moment.'
+                : assets.length === 0
                 ? 'Add your first asset to get started.'
                 : 'Try adjusting your filters.'}
             </p>
@@ -445,86 +1009,184 @@ export default function AssetManager() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Name</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Type</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Serial #</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Assigned To</th>
-                  <th className="text-right px-4 py-3 font-semibold text-slate-600">Value</th>
-                  <th className="text-right px-4 py-3 font-semibold text-slate-600">Actions</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Asset Tag</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Name</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Type</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Serial #</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Category</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Condition</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Location</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Status</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Assigned To</th>
+                  {activeTab === 'warranty' && (
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Warranty Expiry</th>
+                  )}
+                  <th className="text-right px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredAssets.map((asset) => (
-                  <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{asset.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-slate-600">
-                        {getTypeIcon(asset.type)}
-                        {ASSET_TYPE_LABELS[asset.type] || asset.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 font-mono text-xs">
-                      {asset.serialNumber || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {asset.assignedTo?.name || asset.user?.name || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-700 font-medium">
-                      {asset.value ? formatINR.format(asset.value) : '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEditModal(asset)}
-                          title="Edit"
-                          className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                {displayAssets.map((asset) => {
+                  const warrantyRemaining = daysUntil(asset.warrantyExpiry);
+                  return (
+                    <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                      {/* Asset Tag */}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs text-slate-500">
+                          {asset.assetTag || '-'}
+                        </span>
+                      </td>
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-800">{asset.name}</div>
+                        {asset.value ? (
+                          <div className="text-xs text-slate-400 mt-0.5">{formatINR.format(asset.value)}</div>
+                        ) : null}
+                      </td>
+                      {/* Type */}
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 text-slate-600">
+                          {getTypeIcon(asset.type)}
+                          <span className="whitespace-nowrap">{ASSET_TYPE_LABELS[asset.type] || asset.type}</span>
+                        </span>
+                      </td>
+                      {/* Serial */}
+                      <td className="px-4 py-3 text-slate-500 font-mono text-xs">
+                        {asset.serialNumber || '-'}
+                      </td>
+                      {/* Category */}
+                      <td className="px-4 py-3">
+                        <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          {CATEGORY_LABELS[asset.category] || asset.category || '-'}
+                        </span>
+                      </td>
+                      {/* Condition */}
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium ${CONDITION_COLORS[asset.condition] || 'text-slate-500'}`}>
+                          {CONDITION_LABELS[asset.condition] || asset.condition || '-'}
+                        </span>
+                      </td>
+                      {/* Location */}
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {asset.location || '-'}
+                      </td>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                            STATUS_COLORS[asset.status] || 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}
                         >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        {asset.status === 'available' && (
-                          <button
-                            onClick={() => openAssignModal(asset)}
-                            title="Assign"
-                            className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                          >
-                            <ArrowLeftRight className="w-4 h-4" />
-                          </button>
+                          {capitalize(asset.status)}
+                        </span>
+                      </td>
+                      {/* Assigned To */}
+                      <td className="px-4 py-3">
+                        {asset.assignee ? (
+                          <div>
+                            <div className="text-sm text-slate-700 font-medium">{asset.assignee.name}</div>
+                            {asset.assignedDate && (
+                              <div className="text-xs text-slate-400">since {formatDate(asset.assignedDate)}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
                         )}
-                        {asset.status === 'assigned' && (
+                      </td>
+                      {/* Warranty Expiry (warranty tab only) */}
+                      {activeTab === 'warranty' && (
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-slate-700">{formatDate(asset.warrantyExpiry)}</div>
+                          {warrantyRemaining !== null && (
+                            <div className={`text-xs font-medium ${
+                              warrantyRemaining <= 7 ? 'text-red-600' : warrantyRemaining <= 14 ? 'text-amber-600' : 'text-slate-400'
+                            }`}>
+                              {warrantyRemaining <= 0 ? 'Expired' : `${warrantyRemaining} days left`}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Edit */}
                           <button
-                            onClick={() => handleReturn(asset)}
-                            title="Mark Returned"
-                            className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                            onClick={() => openEditModal(asset)}
+                            title="Edit"
+                            className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           >
-                            <RotateCcw className="w-4 h-4" />
+                            <Edit className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {/* Assign (only if available) */}
+                          {asset.status === 'available' && (
+                            <button
+                              onClick={() => openAssignModal(asset)}
+                              title="Assign to Employee"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            >
+                              <ArrowLeftRight className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Return (only if assigned) */}
+                          {asset.status === 'assigned' && (
+                            <button
+                              onClick={() => handleReturn(asset)}
+                              title="Mark Returned"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Detach (only if assigned) */}
+                          {asset.status === 'assigned' && (
+                            <button
+                              onClick={() => handleDetach(asset)}
+                              title="Detach from Employee"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            >
+                              <Unlink className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* History */}
+                          <button
+                            onClick={() => openHistory(asset)}
+                            title="Handover History"
+                            className="p-1.5 rounded-md text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
+                          {/* Delete / Retire (only if not assigned) */}
+                          {asset.status !== 'assigned' && asset.status !== 'retired' && (
+                            <button
+                              onClick={() => handleDelete(asset)}
+                              title="Retire Asset"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-        {filteredAssets.length > 0 && (
-          <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
-            Showing {filteredAssets.length} of {assets.length} assets
+        {displayAssets.length > 0 && (
+          <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
+            <span>
+              Showing {displayAssets.length} asset{displayAssets.length !== 1 ? 's' : ''}
+              {activeTab === 'all' && hasActiveFilters ? ' (filtered)' : ''}
+            </span>
+            {activeTab === 'all' && (
+              <span className="text-slate-400">Total: {summary?.totalCount ?? assets.length}</span>
+            )}
           </div>
         )}
       </div>
 
-      {/* Add/Edit Asset Modal */}
+      {/* ─── Add/Edit Asset Modal ────────────────────────────────────────── */}
       {showAssetModal && (
         <Modal
           title={editingAsset ? 'Edit Asset' : 'Add New Asset'}
@@ -533,6 +1195,7 @@ export default function AssetManager() {
             setEditingAsset(null);
             setFormError('');
           }}
+          wide
         >
           <form onSubmit={handleAssetSubmit} className="space-y-4">
             {formError && (
@@ -542,25 +1205,39 @@ export default function AssetManager() {
               </div>
             )}
 
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Asset Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => updateForm('name', e.target.value)}
-                placeholder="e.g. Dell Latitude 5540"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
+            {/* Row 1: Name + Asset Tag */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Asset Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => updateForm('name', e.target.value)}
+                  placeholder="e.g. Dell Latitude 5540"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Asset Tag</label>
+                <input
+                  type="text"
+                  value={form.assetTag}
+                  onChange={(e) => updateForm('assetTag', e.target.value)}
+                  placeholder="e.g. CPIPL-LT-001"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
-            {/* Type + Status Row */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Row 2: Type + Status + Category */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Type <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={form.type}
                   onChange={(e) => updateForm('type', e.target.value)}
@@ -582,31 +1259,74 @@ export default function AssetManager() {
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                      {capitalize(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => updateForm('category', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_LABELS[c]}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {/* Serial Number */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
-              <input
-                type="text"
-                value={form.serialNumber}
-                onChange={(e) => updateForm('serialNumber', e.target.value)}
-                placeholder="e.g. SN-2024-001"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            {/* Row 3: Condition + Location + Serial Number */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Condition</label>
+                <select
+                  value={form.condition}
+                  onChange={(e) => updateForm('condition', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {CONDITION_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {CONDITION_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
+                <select
+                  value={form.location}
+                  onChange={(e) => updateForm('location', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Select Location --</option>
+                  {LOCATION_OPTIONS.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
+                <input
+                  type="text"
+                  value={form.serialNumber}
+                  onChange={(e) => updateForm('serialNumber', e.target.value)}
+                  placeholder="e.g. SN-2024-001"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
-            {/* Purchase Date + Value Row */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Row 4: Purchase Date + Purchase Price + Value */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Purchase Date
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Purchase Date</label>
                 <input
                   type="date"
                   value={form.purchaseDate}
@@ -615,33 +1335,57 @@ export default function AssetManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Value (INR)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Purchase Price (INR)</label>
+                <input
+                  type="number"
+                  value={form.purchasePrice}
+                  onChange={(e) => updateForm('purchasePrice', e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Current Value (INR)</label>
                 <input
                   type="number"
                   value={form.value}
                   onChange={(e) => updateForm('value', e.target.value)}
                   placeholder="0"
                   min="0"
+                  step="0.01"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Company */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
-              <select
-                value={form.companyId}
-                onChange={(e) => updateForm('companyId', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select Company --</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+            {/* Row 5: Warranty Expiry + Company */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Expiry</label>
+                <input
+                  type="date"
+                  value={form.warrantyExpiry}
+                  onChange={(e) => updateForm('warrantyExpiry', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+                <select
+                  value={form.companyId}
+                  onChange={(e) => updateForm('companyId', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Select Company --</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Notes */}
@@ -686,7 +1430,7 @@ export default function AssetManager() {
         </Modal>
       )}
 
-      {/* Assign Modal */}
+      {/* ─── Assign Modal ────────────────────────────────────────────────── */}
       {showAssignModal && assignTarget && (
         <Modal
           title={`Assign: ${assignTarget.name}`}
@@ -710,7 +1454,8 @@ export default function AssetManager() {
                 <div className="text-sm font-medium text-slate-800">{assignTarget.name}</div>
                 <div className="text-xs text-slate-500">
                   {ASSET_TYPE_LABELS[assignTarget.type] || assignTarget.type}
-                  {assignTarget.serialNumber ? ` - ${assignTarget.serialNumber}` : ''}
+                  {assignTarget.serialNumber ? ` | ${assignTarget.serialNumber}` : ''}
+                  {assignTarget.assetTag ? ` | ${assignTarget.assetTag}` : ''}
                 </div>
               </div>
             </div>
@@ -781,7 +1526,107 @@ export default function AssetManager() {
         </Modal>
       )}
 
-      {/* Toast Container */}
+      {/* ─── Handover History Modal ──────────────────────────────────────── */}
+      {showHistoryModal && historyAsset && (
+        <Modal
+          title={`Handover History: ${historyAsset.name}`}
+          onClose={() => {
+            setShowHistoryModal(false);
+            setHistoryAsset(null);
+            setHandoverHistory([]);
+          }}
+          wide
+        >
+          <div className="space-y-3">
+            {/* Asset info */}
+            <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-3">
+              {getTypeIcon(historyAsset.type, 'w-5 h-5 text-slate-500')}
+              <div>
+                <div className="text-sm font-medium text-slate-800">{historyAsset.name}</div>
+                <div className="text-xs text-slate-500">
+                  {ASSET_TYPE_LABELS[historyAsset.type] || historyAsset.type}
+                  {historyAsset.assetTag ? ` | ${historyAsset.assetTag}` : ''}
+                  {historyAsset.serialNumber ? ` | SN: ${historyAsset.serialNumber}` : ''}
+                </div>
+              </div>
+            </div>
+
+            {handoverHistory.length === 0 ? (
+              <div className="text-center py-8 text-slate-400">
+                <History className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm">No handover history recorded for this asset.</p>
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">Date</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">Type</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">From</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">To</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">Condition</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-600">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {handoverHistory.map((h) => {
+                      const fromUser = users.find((u) => u.id === h.fromUserId);
+                      const toUser = users.find((u) => u.id === h.toUserId);
+                      return (
+                        <tr key={h.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-2 text-slate-600 whitespace-nowrap">
+                            {formatDate(h.handoverDate || h.createdAt)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              h.handoverType === 'transfer'
+                                ? 'bg-blue-100 text-blue-700'
+                                : h.handoverType === 'exit_return'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-green-100 text-green-700'
+                            }`}>
+                              {capitalize(h.handoverType)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-slate-600">
+                            {fromUser?.name || (h.fromUserId ? `User #${h.fromUserId}` : '-')}
+                          </td>
+                          <td className="px-4 py-2 text-slate-600">
+                            {toUser?.name || (h.toUserId ? `User #${h.toUserId}` : 'Pool')}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`text-xs font-medium ${CONDITION_COLORS[h.condition] || 'text-slate-500'}`}>
+                              {CONDITION_LABELS[h.condition] || h.condition || '-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-xs text-slate-500 max-w-[200px] truncate" title={h.notes}>
+                            {h.notes || '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* ─── Confirm Dialog ──────────────────────────────────────────────── */}
+      {confirmAction && (
+        <ConfirmDialog
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmText={confirmAction.confirmText}
+          danger={confirmAction.danger}
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
+      {/* ─── Toast Container ─────────────────────────────────────────────── */}
       {toasts.length > 0 && (
         <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-2">
           {toasts.map((t) => (
@@ -789,24 +1634,6 @@ export default function AssetManager() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// --- Stats Card Sub-Component ---
-function StatCard({ label, value, color, isText = false }) {
-  const colorMap = {
-    slate: 'bg-slate-50 border-slate-200 text-slate-700',
-    green: 'bg-green-50 border-green-200 text-green-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-    purple: 'bg-purple-50 border-purple-200 text-purple-700',
-  };
-
-  return (
-    <div className={`rounded-xl border p-4 ${colorMap[color] || colorMap.slate}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-70 mb-1">{label}</div>
-      <div className={`font-bold ${isText ? 'text-lg' : 'text-2xl'}`}>{value}</div>
     </div>
   );
 }

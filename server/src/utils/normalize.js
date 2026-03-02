@@ -13,6 +13,7 @@ function normalizeName(name) {
   return name
     .trim()
     .replace(/\s+/g, ' ')
+    .toLowerCase()
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

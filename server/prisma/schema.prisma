@@ -28,9 +28,11 @@ model User {
   dateOfBirth        String?                   // "YYYY-MM-DD"
   employmentType     String   @default("full_time") // full_time, part_time, contract, intern
   phone              String?
+  phoneVerified      Boolean  @default(false)
   personalEmail      String?
   address            String?
-  emergencyContact   String?                   // JSON: {"name","phone","relation"}
+  emergencyContact   String?                   // JSON: [{"name","fatherName","phone","relation"}] (2 refs)
+  emergencyContact2  String?                   // JSON: {"name","fatherName","phone","relation"} (2nd ref)
   gender             String?                   // male, female, other
   bloodGroup         String?
   profilePhotoUrl    String?
@@ -116,6 +118,14 @@ model User {
   tickets            Ticket[]
   assignedTickets    Ticket[]           @relation("TicketAssignee")
   ticketComments     TicketComment[]
+  otpRequests        OtpVerification[]
+
+  @@index([department])
+  @@index([isActive])
+  @@index([companyId])
+  @@index([reportingManagerId])
+  @@index([role])
+  @@index([createdAt])
 }
 
 model DailyReport {
@@ -134,6 +144,8 @@ model DailyReport {
   thumbsUps ThumbsUp[]
 
   @@unique([userId, reportDate])
+  @@index([reportDate])
+  @@index([submittedAt])
 }
 
 model ReportTask {
@@ -652,6 +664,8 @@ model ExpenseClaim {
 
   @@index([userId])
   @@index([status])
+  @@index([date])
+  @@index([category])
 }
 
 // ═══════════════════════════════════════════════
@@ -716,23 +730,34 @@ model GeneratedLetter {
 model Asset {
   id             Int       @id @default(autoincrement())
   name           String                                  // "Dell Laptop", "iPhone 15"
-  type           String                                  // laptop, phone, id_card, access_card, monitor, headset, other
+  type           String                                  // laptop, phone, simcard, mouse, charger, monitor, keyboard, headset, id_card, access_card, scanner, ac_remote, other
   serialNumber   String?
+  assetTag       String?   @unique                       // "AST-001" office tracking tag
+  category       String    @default("personal")          // personal (assigned to person), office (shared/office use), infrastructure
   purchaseDate   String?                                 // "YYYY-MM-DD"
   value          Float?
-  status         String    @default("available")         // available, assigned, maintenance, retired
+  warrantyExpiry String?                                 // "YYYY-MM-DD" — warranty end date
+  warrantyVendor String?                                 // vendor/brand for warranty claims
+  condition      String    @default("good")              // new, good, fair, damaged, non_working
+  status         String    @default("available")         // available, assigned, maintenance, retired, lost
   assignedTo     Int?
   assignedDate   String?                                 // "YYYY-MM-DD"
   returnDate     String?                                 // "YYYY-MM-DD"
   notes          String?
   companyId      Int?
+  location       String?                                  // "Miraroad", "Lucknow" — office location where asset is
+  isMandatoryReturn Boolean @default(true)               // must return on exit (false for consumables)
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   assignee       User?     @relation("AssetAssignment", fields: [assignedTo], references: [id])
   company        Company?  @relation(fields: [companyId], references: [id])
+  handovers      AssetHandover[]
 
   @@index([assignedTo])
   @@index([status])
+  @@index([category])
+  @@index([type])
 }
 
 // ═══════════════════════════════════════════════
@@ -753,6 +778,7 @@ model OnboardingChecklist {
   user         User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([isCompleted])
 }
 
 model Separation {
@@ -766,7 +792,10 @@ model Separation {
   noticePeriodDays   Int       @default(30)
   exitInterviewDone  Boolean   @default(false)
   exitInterviewNotes String?
+  allAssetsReturned  Boolean   @default(false)           // must be true before FnF
+  assetReturnNotes   String?                             // JSON: details of pending/returned assets
   fnfAmount          Float?
+  fnfHoldReason      String?                             // "pending_asset_return" etc.
   fnfPaidOn          String?                             // "YYYY-MM-DD"
   processedBy        Int?
   createdAt          DateTime  @default(now())
@@ -879,6 +908,9 @@ model Ticket {
   @@index([userId])
   @@index([status])
   @@index([assignedTo])
+  @@index([category])
+  @@index([priority])
+  @@index([createdAt])
 }
 
 model TicketComment {
@@ -893,4 +925,161 @@ model TicketComment {
   user        User      @relation(fields: [userId], references: [id])
 
   @@index([ticketId])
+}
+
+// ═══════════════════════════════════════════════
+// OTP Verification
+// ═══════════════════════════════════════════════
+
+model OtpVerification {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  phone       String
+  otp         String
+  purpose     String    @default("mobile_verify")          // mobile_verify, emergency_verify
+  verified    Boolean   @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([phone, otp])
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// Asset Handover (Exit/Transfer tracking)
+// ═══════════════════════════════════════════════
+
+model AssetHandover {
+  id            Int       @id @default(autoincrement())
+  assetId       Int
+  fromUserId    Int
+  toUserId      Int?                                       // null = returned to office pool
+  handoverType  String    @default("return")               // return, transfer, exit_return
+  condition     String    @default("good")                 // good, damaged, lost
+  notes         String?
+  handoverDate  String                                     // "YYYY-MM-DD"
+  receivedBy    Int?                                       // admin who received
+  createdAt     DateTime  @default(now())
+
+  asset         Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([assetId])
+  @@index([fromUserId])
+}
+
+// ═══════════════════════════════════════════════
+// Employee Wiki / Knowledge Base
+// ═══════════════════════════════════════════════
+
+model WikiArticle {
+  id            Int       @id @default(autoincrement())
+  title         String
+  content       String                                     // markdown content
+  category      String    @default("general")              // travel, contacts, food, emergency, office_info, general
+  location      String?                                    // Miraroad, Lucknow, or null for all
+  isPinned      Boolean   @default(false)
+  createdBy     Int
+  lastEditedBy  Int?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([category])
+  @@index([location])
+  @@index([isActive])
+}
+
+// ═══════════════════════════════════════════════
+// Anonymous Suggestions
+// ═══════════════════════════════════════════════
+
+model Suggestion {
+  id            Int       @id @default(autoincrement())
+  content       String
+  category      String    @default("general")              // general, improvement, complaint, appreciation
+  userId        Int                                        // hidden from all except admin
+  adminReply    String?
+  status        String    @default("new")                  // new, reviewed, acknowledged, implemented
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════
+// Training & Exam System
+// ═══════════════════════════════════════════════
+
+model TrainingModule {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  category      String    @default("general")              // general, compliance, technical, soft_skills, ai, onboarding
+  content       String                                     // markdown/html training material
+  duration      Int?                                       // estimated minutes
+  passingScore  Int       @default(70)                     // % to pass exam
+  isActive      Boolean   @default(true)
+  isMandatory   Boolean   @default(false)
+  createdBy     Int
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  exams         TrainingExam[]
+  attempts      TrainingAttempt[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model TrainingExam {
+  id            Int       @id @default(autoincrement())
+  moduleId      Int
+  questions     String                                     // JSON: [{question, options:[], correctAnswer, points}]
+  totalPoints   Int       @default(100)
+  timeLimit     Int?                                       // minutes, null = unlimited
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  module        TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
+}
+
+model TrainingAttempt {
+  id            Int       @id @default(autoincrement())
+  moduleId      Int
+  userId        Int
+  answers       String?                                    // JSON: [{questionIndex, selectedAnswer}]
+  score         Float     @default(0)                      // percentage scored
+  totalPoints   Int       @default(0)
+  passed        Boolean   @default(false)
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  timeSpent     Int?                                       // seconds
+
+  module        TrainingModule @relation(fields: [moduleId], references: [id])
+
+  @@index([userId])
+  @@index([moduleId])
+  @@index([userId, moduleId])
+}
+
+// ═══════════════════════════════════════════════
+// Expense Approval History
+// ═══════════════════════════════════════════════
+
+model ExpenseApprovalLog {
+  id            Int       @id @default(autoincrement())
+  expenseId     Int
+  action        String                                     // submitted, approved, rejected, paid
+  actionBy      Int
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  @@index([expenseId])
+  @@index([actionBy])
 }

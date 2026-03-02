@@ -18,6 +18,28 @@ const VALID_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
 // Priority sort weight (urgent first)
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+// SLA targets in hours by priority
+const SLA_TARGETS = { urgent: 4, high: 24, medium: 72, low: 168 };
+
+// Helper: compute resolution hours and SLA status for a ticket
+function enrichTicket(t) {
+  const enriched = { ...t };
+  if (t.resolvedAt && t.createdAt) {
+    const ms = new Date(t.resolvedAt) - new Date(t.createdAt);
+    enriched.resolutionHours = Math.round(ms / (1000 * 60 * 60) * 10) / 10;
+  }
+  // SLA: compute elapsed hours and breach status
+  const refTime = t.resolvedAt || new Date();
+  const elapsedMs = new Date(refTime) - new Date(t.createdAt);
+  const elapsedHours = Math.round(elapsedMs / (1000 * 60 * 60) * 10) / 10;
+  const slaTarget = SLA_TARGETS[t.priority] || 72;
+  enriched.slaTargetHours = slaTarget;
+  enriched.elapsedHours = elapsedHours;
+  enriched.slaBreached = elapsedHours > slaTarget;
+  enriched.slaPercentUsed = Math.round((elapsedHours / slaTarget) * 100);
+  return enriched;
+}
+
 // ─── 1. GET /my ─── My tickets (any user)
 router.get('/my', async (req, res) => {
   try {
@@ -31,7 +53,7 @@ router.get('/my', async (req, res) => {
     });
 
     const result = tickets.map(t => ({
-      ...t,
+      ...enrichTicket(t),
       commentCount: t._count.comments,
       _count: undefined,
     }));
@@ -108,7 +130,7 @@ router.get('/:id', async (req, res) => {
       ticket.comments = ticket.comments.filter(c => !c.isInternal);
     }
 
-    res.json(ticket);
+    res.json(enrichTicket(ticket));
   } catch (err) {
     console.error('GET /tickets/:id error:', err);
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -342,7 +364,7 @@ router.get('/admin/all', async (req, res) => {
     });
 
     const result = tickets.map(t => ({
-      ...t,
+      ...enrichTicket(t),
       commentCount: t._count.comments,
       _count: undefined,
     }));
@@ -354,7 +376,7 @@ router.get('/admin/all', async (req, res) => {
   }
 });
 
-// ─── 10. GET /admin/stats ─── Ticket statistics (admin only)
+// ─── 10. GET /admin/stats ─── Ticket statistics with SLA tracking (admin only)
 router.get('/admin/stats', async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required' });
@@ -365,7 +387,7 @@ router.get('/admin/stats', async (req, res) => {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
     // Count by status
-    const [openCount, inProgressCount, resolvedThisMonth] = await Promise.all([
+    const [openCount, inProgressCount, resolvedThisMonth, totalClosed] = await Promise.all([
       req.prisma.ticket.count({ where: { status: 'open' } }),
       req.prisma.ticket.count({ where: { status: 'in_progress' } }),
       req.prisma.ticket.count({
@@ -374,29 +396,18 @@ router.get('/admin/stats', async (req, res) => {
           resolvedAt: { gte: monthStart, lte: monthEnd },
         },
       }),
+      req.prisma.ticket.count({ where: { status: 'closed' } }),
     ]);
 
-    // Average resolution time (for tickets resolved this month)
-    const resolvedTickets = await req.prisma.ticket.findMany({
-      where: {
-        resolvedAt: { not: null, gte: monthStart, lte: monthEnd },
-      },
-      select: { createdAt: true, resolvedAt: true },
-    });
-
-    let avgResolutionHours = 0;
-    if (resolvedTickets.length > 0) {
-      const totalMs = resolvedTickets.reduce((sum, t) => {
-        return sum + (new Date(t.resolvedAt) - new Date(t.createdAt));
-      }, 0);
-      avgResolutionHours = Math.round((totalMs / resolvedTickets.length) / (1000 * 60 * 60) * 10) / 10;
-    }
-
-    // Tickets by category
+    // All tickets for deep analysis
     const allTickets = await req.prisma.ticket.findMany({
-      select: { category: true, priority: true },
+      select: {
+        id: true, category: true, priority: true, status: true,
+        createdAt: true, resolvedAt: true, assignedTo: true,
+      },
     });
 
+    // ── Basic breakdowns ──
     const byCategory = {};
     const byPriority = {};
     for (const t of allTickets) {
@@ -404,13 +415,138 @@ router.get('/admin/stats', async (req, res) => {
       byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
     }
 
+    // ── Resolution speed analysis ──
+    const resolvedTickets = allTickets.filter(t => t.resolvedAt);
+    const thisMonthResolved = resolvedTickets.filter(t => {
+      const d = new Date(t.resolvedAt);
+      return d >= monthStart && d <= monthEnd;
+    });
+
+    // Average resolution time (all time)
+    let avgResolutionHours = 0;
+    if (resolvedTickets.length > 0) {
+      const totalMs = resolvedTickets.reduce((s, t) => s + (new Date(t.resolvedAt) - new Date(t.createdAt)), 0);
+      avgResolutionHours = Math.round((totalMs / resolvedTickets.length) / (1000 * 60 * 60) * 10) / 10;
+    }
+
+    // Avg resolution this month
+    let avgResolutionHoursThisMonth = 0;
+    if (thisMonthResolved.length > 0) {
+      const totalMs = thisMonthResolved.reduce((s, t) => s + (new Date(t.resolvedAt) - new Date(t.createdAt)), 0);
+      avgResolutionHoursThisMonth = Math.round((totalMs / thisMonthResolved.length) / (1000 * 60 * 60) * 10) / 10;
+    }
+
+    // ── SLA compliance ──
+    let slaCompliant = 0;
+    let slaBreached = 0;
+    for (const t of resolvedTickets) {
+      const hours = (new Date(t.resolvedAt) - new Date(t.createdAt)) / (1000 * 60 * 60);
+      const target = SLA_TARGETS[t.priority] || 72;
+      if (hours <= target) slaCompliant++;
+      else slaBreached++;
+    }
+
+    // Currently open tickets breaching SLA
+    const openBreaching = allTickets.filter(t => {
+      if (t.status === 'closed' || t.resolvedAt) return false;
+      const hours = (now - new Date(t.createdAt)) / (1000 * 60 * 60);
+      return hours > (SLA_TARGETS[t.priority] || 72);
+    }).length;
+
+    // ── Resolution by priority ──
+    const resolutionByPriority = {};
+    for (const p of VALID_PRIORITIES) {
+      const tickets = resolvedTickets.filter(t => t.priority === p);
+      if (tickets.length > 0) {
+        const totalMs = tickets.reduce((s, t) => s + (new Date(t.resolvedAt) - new Date(t.createdAt)), 0);
+        resolutionByPriority[p] = {
+          count: tickets.length,
+          avgHours: Math.round((totalMs / tickets.length) / (1000 * 60 * 60) * 10) / 10,
+          slaTarget: SLA_TARGETS[p],
+        };
+      } else {
+        resolutionByPriority[p] = { count: 0, avgHours: 0, slaTarget: SLA_TARGETS[p] };
+      }
+    }
+
+    // ── Resolution by category ──
+    const resolutionByCategory = {};
+    for (const c of VALID_CATEGORIES) {
+      const tickets = resolvedTickets.filter(t => t.category === c);
+      if (tickets.length > 0) {
+        const totalMs = tickets.reduce((s, t) => s + (new Date(t.resolvedAt) - new Date(t.createdAt)), 0);
+        resolutionByCategory[c] = {
+          count: tickets.length,
+          avgHours: Math.round((totalMs / tickets.length) / (1000 * 60 * 60) * 10) / 10,
+        };
+      }
+    }
+
+    // ── Resolution by assignee ──
+    const assigneeMap = {};
+    for (const t of resolvedTickets) {
+      if (!t.assignedTo) continue;
+      if (!assigneeMap[t.assignedTo]) assigneeMap[t.assignedTo] = { resolved: 0, totalMs: 0, breached: 0 };
+      const ms = new Date(t.resolvedAt) - new Date(t.createdAt);
+      assigneeMap[t.assignedTo].resolved++;
+      assigneeMap[t.assignedTo].totalMs += ms;
+      if (ms / (1000 * 60 * 60) > (SLA_TARGETS[t.priority] || 72)) assigneeMap[t.assignedTo].breached++;
+    }
+
+    // Fetch assignee names
+    const assigneeIds = Object.keys(assigneeMap).map(Number);
+    const assignees = assigneeIds.length > 0
+      ? await req.prisma.user.findMany({ where: { id: { in: assigneeIds } }, select: { id: true, name: true } })
+      : [];
+    const nameMap = Object.fromEntries(assignees.map(u => [u.id, u.name]));
+
+    const resolutionByAssignee = assigneeIds.map(id => ({
+      id,
+      name: nameMap[id] || 'Unknown',
+      resolved: assigneeMap[id].resolved,
+      avgHours: Math.round((assigneeMap[id].totalMs / assigneeMap[id].resolved) / (1000 * 60 * 60) * 10) / 10,
+      slaBreached: assigneeMap[id].breached,
+    })).sort((a, b) => b.resolved - a.resolved);
+
+    // ── Monthly trend (last 6 months) ──
+    const monthlyTrend = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+      const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+      const created = allTickets.filter(t => new Date(t.createdAt) >= mStart && new Date(t.createdAt) <= mEnd).length;
+      const resolved = resolvedTickets.filter(t => new Date(t.resolvedAt) >= mStart && new Date(t.resolvedAt) <= mEnd);
+      let avgH = 0;
+      if (resolved.length > 0) {
+        const totalMs = resolved.reduce((s, t) => s + (new Date(t.resolvedAt) - new Date(t.createdAt)), 0);
+        avgH = Math.round((totalMs / resolved.length) / (1000 * 60 * 60) * 10) / 10;
+      }
+
+      monthlyTrend.push({ month: label, created, resolved: resolved.length, avgResolutionHours: avgH });
+    }
+
     res.json({
       open: openCount,
       inProgress: inProgressCount,
       resolvedThisMonth,
+      totalClosed,
       avgResolutionHours,
+      avgResolutionHoursThisMonth,
+      sla: {
+        compliant: slaCompliant,
+        breached: slaBreached,
+        complianceRate: resolvedTickets.length > 0 ? Math.round((slaCompliant / resolvedTickets.length) * 100) : 100,
+        openBreaching,
+        targets: SLA_TARGETS,
+      },
       byCategory,
       byPriority,
+      resolutionByPriority,
+      resolutionByCategory,
+      resolutionByAssignee,
+      monthlyTrend,
     });
   } catch (err) {
     console.error('GET /tickets/admin/stats error:', err);

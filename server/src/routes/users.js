@@ -730,4 +730,113 @@ router.get('/:id/change-history', authenticate, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════
+// Profile Completion Score
+// ═══════════════════════════════════════════════
+
+// GET /api/users/:id/completion-score
+router.get('/:id/completion-score', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const isSelf = req.user.id === targetId;
+    const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'team_lead';
+    if (!isSelf && !isAdminOrLead) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    const user = await req.prisma.user.findUnique({ where: { id: targetId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Define all fields that contribute to profile completion
+    const fields = [
+      // Basic Info (30%)
+      { key: 'name', label: 'Full Name', weight: 5, section: 'basic' },
+      { key: 'middleName', label: 'Middle Name', weight: 3, section: 'basic' },
+      { key: 'lastName', label: 'Last Name', weight: 5, section: 'basic' },
+      { key: 'email', label: 'Email', weight: 3, section: 'basic' },
+      { key: 'phone', label: 'Phone Number', weight: 4, section: 'basic' },
+      { key: 'dateOfBirth', label: 'Date of Birth', weight: 3, section: 'basic' },
+      { key: 'gender', label: 'Gender', weight: 2, section: 'basic' },
+      { key: 'photo', label: 'Profile Photo', weight: 5, section: 'basic' },
+
+      // Work Info (20%)
+      { key: 'employeeId', label: 'Employee ID', weight: 3, section: 'work' },
+      { key: 'department', label: 'Department', weight: 3, section: 'work' },
+      { key: 'designation', label: 'Designation', weight: 3, section: 'work' },
+      { key: 'dateOfJoining', label: 'Date of Joining', weight: 3, section: 'work' },
+      { key: 'reportingManagerId', label: 'Reporting Manager', weight: 3, section: 'work' },
+      { key: 'location', label: 'Office Location', weight: 2, section: 'work' },
+      { key: 'shift', label: 'Shift', weight: 1, section: 'work' },
+
+      // Personal & Identity (25%)
+      { key: 'aadharNumber', label: 'Aadhar Number', weight: 4, section: 'identity' },
+      { key: 'panNumber', label: 'PAN Number', weight: 4, section: 'identity' },
+      { key: 'personalEmail', label: 'Personal Email', weight: 2, section: 'identity' },
+      { key: 'bloodGroup', label: 'Blood Group', weight: 2, section: 'identity' },
+      { key: 'maritalStatus', label: 'Marital Status', weight: 1, section: 'identity' },
+      { key: 'address', label: 'Address', weight: 3, section: 'identity' },
+      { key: 'city', label: 'City', weight: 2, section: 'identity' },
+      { key: 'state', label: 'State', weight: 2, section: 'identity' },
+      { key: 'pincode', label: 'Pincode', weight: 2, section: 'identity' },
+
+      // Bank & Finance (15%)
+      { key: 'bankName', label: 'Bank Name', weight: 3, section: 'finance' },
+      { key: 'bankAccountNumber', label: 'Bank Account', weight: 3, section: 'finance' },
+      { key: 'bankIfscCode', label: 'IFSC Code', weight: 3, section: 'finance' },
+      { key: 'uanNumber', label: 'UAN Number', weight: 2, section: 'finance' },
+      { key: 'pfNumber', label: 'PF Number', weight: 2, section: 'finance' },
+
+      // Emergency & References (10%)
+      { key: 'emergencyContactName', label: 'Emergency Contact Name', weight: 2, section: 'emergency' },
+      { key: 'emergencyContactPhone', label: 'Emergency Contact Phone', weight: 2, section: 'emergency' },
+      { key: 'emergencyContactRelation', label: 'Emergency Contact Relation', weight: 1, section: 'emergency' },
+      { key: 'reference1Name', label: 'Reference 1 Name', weight: 1, section: 'emergency' },
+      { key: 'reference1Phone', label: 'Reference 1 Phone', weight: 1, section: 'emergency' },
+      { key: 'reference2Name', label: 'Reference 2 Name', weight: 1, section: 'emergency' },
+      { key: 'reference2Phone', label: 'Reference 2 Phone', weight: 1, section: 'emergency' },
+    ];
+
+    const totalWeight = fields.reduce((sum, f) => sum + f.weight, 0);
+    let completedWeight = 0;
+    const missing = [];
+    const completed = [];
+
+    for (const field of fields) {
+      const val = user[field.key];
+      const isFilled = val !== null && val !== undefined && val !== '';
+      if (isFilled) {
+        completedWeight += field.weight;
+        completed.push({ key: field.key, label: field.label, section: field.section });
+      } else {
+        missing.push({ key: field.key, label: field.label, section: field.section, weight: field.weight });
+      }
+    }
+
+    const score = Math.round((completedWeight / totalWeight) * 100);
+
+    // Section-wise breakdown
+    const sections = {};
+    for (const field of fields) {
+      if (!sections[field.section]) sections[field.section] = { total: 0, completed: 0 };
+      sections[field.section].total += field.weight;
+      const val = user[field.key];
+      if (val !== null && val !== undefined && val !== '') sections[field.section].completed += field.weight;
+    }
+    for (const key of Object.keys(sections)) {
+      sections[key].percent = Math.round((sections[key].completed / sections[key].total) * 100);
+    }
+
+    res.json({
+      score,
+      totalFields: fields.length,
+      completedFields: completed.length,
+      missing: missing.sort((a, b) => b.weight - a.weight),
+      sections,
+    });
+  } catch (err) {
+    console.error('Profile completion score error:', err);
+    res.status(500).json({ error: 'Failed to calculate profile completion.' });
+  }
+});
+
 module.exports = router;

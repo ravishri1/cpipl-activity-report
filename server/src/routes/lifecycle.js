@@ -244,6 +244,15 @@ router.post('/separation', async (req, res) => {
       await req.prisma.separation.delete({ where: { userId } });
     }
 
+    // Check how many mandatory assets this employee has
+    const pendingAssets = await req.prisma.asset.count({
+      where: {
+        assignedTo: userId,
+        status: 'assigned',
+        isMandatoryReturn: true,
+      },
+    });
+
     const separation = await req.prisma.separation.create({
       data: {
         userId,
@@ -253,10 +262,18 @@ router.post('/separation', async (req, res) => {
         reason: reason || null,
         noticePeriodDays: noticePeriodDays || 30,
         processedBy: req.user.id,
+        allAssetsReturned: pendingAssets === 0,
+        fnfHoldReason: pendingAssets > 0 ? `${pendingAssets} mandatory asset(s) pending return` : null,
       },
     });
 
-    res.status(201).json(separation);
+    res.status(201).json({
+      ...separation,
+      pendingAssets,
+      assetWarning: pendingAssets > 0
+        ? `⚠️ Employee has ${pendingAssets} mandatory asset(s) to return. FnF will be held until all assets are returned.`
+        : null,
+    });
   } catch (err) {
     console.error('Initiate separation error:', err);
     res.status(500).json({ error: 'Failed to initiate separation.' });
@@ -336,7 +353,21 @@ router.get('/separation/:id', async (req, res) => {
       return res.status(404).json({ error: 'Separation record not found.' });
     }
 
-    res.json(separation);
+    // Fetch pending assets for this employee
+    const pendingAssets = await req.prisma.asset.findMany({
+      where: {
+        assignedTo: separation.userId,
+        status: 'assigned',
+        isMandatoryReturn: true,
+      },
+      select: { id: true, name: true, type: true, assetTag: true, serialNumber: true },
+    });
+
+    res.json({
+      ...separation,
+      pendingAssets,
+      pendingAssetCount: pendingAssets.length,
+    });
   } catch (err) {
     console.error('Get separation detail error:', err);
     res.status(500).json({ error: 'Failed to fetch separation details.' });
@@ -360,7 +391,7 @@ router.put('/separation/:id', async (req, res) => {
       return res.status(404).json({ error: 'Separation record not found.' });
     }
 
-    const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn } = req.body;
+    const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason } = req.body;
 
     // Validate status if provided
     const validStatuses = ['initiated', 'notice_period', 'fnf_pending', 'completed', 'cancelled'];
@@ -368,11 +399,31 @@ router.put('/separation/:id', async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    // Block FnF completion if mandatory assets not returned
+    if (status === 'completed') {
+      const pendingAssets = await req.prisma.asset.count({
+        where: {
+          assignedTo: existing.userId,
+          status: 'assigned',
+          isMandatoryReturn: true,
+        },
+      });
+      if (pendingAssets > 0) {
+        return res.status(400).json({
+          error: `Cannot complete FnF: ${pendingAssets} mandatory asset(s) still not returned. Employee must handover all assets first.`,
+          pendingAssets,
+        });
+      }
+    }
+
     const updateData = {};
     if (status !== undefined) updateData.status = status;
     if (lastWorkingDate !== undefined) updateData.lastWorkingDate = lastWorkingDate;
     if (exitInterviewDone !== undefined) updateData.exitInterviewDone = exitInterviewDone;
     if (exitInterviewNotes !== undefined) updateData.exitInterviewNotes = exitInterviewNotes;
+    if (allAssetsReturned !== undefined) updateData.allAssetsReturned = allAssetsReturned;
+    if (assetReturnNotes !== undefined) updateData.assetReturnNotes = assetReturnNotes;
+    if (fnfHoldReason !== undefined) updateData.fnfHoldReason = fnfHoldReason;
     if (fnfAmount !== undefined) updateData.fnfAmount = fnfAmount;
     if (fnfPaidOn !== undefined) updateData.fnfPaidOn = fnfPaidOn;
 

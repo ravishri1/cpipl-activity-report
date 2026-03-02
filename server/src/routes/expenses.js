@@ -2,17 +2,21 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
-// All routes require authentication
 router.use(authenticateToken);
 
-// Helper: check if user is admin or team_lead
 function isAdmin(req) {
   return req.user.role === 'admin' || req.user.role === 'team_lead';
 }
 
-// Valid categories and statuses
 const VALID_CATEGORIES = ['travel', 'food', 'medical', 'office', 'other'];
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid'];
+
+// Helper: log expense action
+async function logExpenseAction(prisma, { expenseId, action, actionBy, notes }) {
+  await prisma.expenseApprovalLog.create({
+    data: { expenseId, action, actionBy, notes: notes || null },
+  });
+}
 
 // ─── 1. POST / ─── Submit new expense claim
 router.post('/', async (req, res) => {
@@ -42,6 +46,12 @@ router.post('/', async (req, res) => {
       },
     });
 
+    // Log submission
+    await logExpenseAction(req.prisma, {
+      expenseId: expense.id, action: 'submitted', actionBy: req.user.id,
+      notes: `Submitted: ${title} - ₹${amount}`,
+    });
+
     res.status(201).json(expense);
   } catch (err) {
     console.error('POST /expenses error:', err);
@@ -63,15 +73,26 @@ router.get('/my', async (req, res) => {
   }
 });
 
-// ─── 3. GET /pending ─── Pending claims for admin review
+// ─── 3. GET /pending ─── Pending claims for review
+// Admin/team_lead sees all pending. Reporting managers see their direct reports' expenses.
 router.get('/pending', async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+    const where = { status: 'pending' };
+
+    // If not admin, only show expenses from direct reports
+    if (!isAdmin(req)) {
+      const directReports = await req.prisma.user.findMany({
+        where: { reportingManagerId: req.user.id, isActive: true },
+        select: { id: true },
+      });
+      if (directReports.length === 0) return res.json([]);
+      where.userId = { in: directReports.map(u => u.id) };
+    }
 
     const expenses = await req.prisma.expenseClaim.findMany({
-      where: { status: 'pending' },
+      where,
       include: {
-        user: { select: { id: true, name: true, email: true, employeeId: true, department: true } },
+        user: { select: { id: true, name: true, email: true, employeeId: true, department: true, designation: true, reportingManagerId: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -109,33 +130,73 @@ router.get('/all', async (req, res) => {
   }
 });
 
-// ─── 5. GET /:id ─── Single expense detail
+// ─── 5. GET /history/:expenseId ─── Approval history for an expense
+router.get('/history/:expenseId', async (req, res) => {
+  try {
+    const expenseId = parseInt(req.params.expenseId);
+    const expense = await req.prisma.expenseClaim.findUnique({ where: { id: expenseId } });
+    if (!expense) return res.status(404).json({ error: 'Expense not found' });
+    if (!isAdmin(req) && expense.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const logs = await req.prisma.expenseApprovalLog.findMany({
+      where: { expenseId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Attach actor names
+    const userIds = [...new Set(logs.map(l => l.actionBy))];
+    const users = await req.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true },
+    });
+    const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
+
+    const result = logs.map(l => ({ ...l, actionByName: userMap[l.actionBy] || 'Unknown' }));
+    res.json(result);
+  } catch (err) {
+    console.error('GET /expenses/history/:expenseId error:', err);
+    res.status(500).json({ error: 'Failed to fetch expense history' });
+  }
+});
+
+// ─── 6. GET /:id ─── Single expense detail
 router.get('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const expense = await req.prisma.expenseClaim.findUnique({
       where: { id },
       include: {
-        user: { select: { id: true, name: true, email: true, employeeId: true, department: true, designation: true } },
+        user: { select: { id: true, name: true, email: true, employeeId: true, department: true, designation: true, reportingManagerId: true } },
         reviewer: { select: { name: true } },
       },
     });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
-    if (!isAdmin(req) && expense.userId !== req.user.id) {
+
+    // Access: admin, self, or reporting manager
+    const isReportingManager = expense.user.reportingManagerId === req.user.id;
+    if (!isAdmin(req) && expense.userId !== req.user.id && !isReportingManager) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    res.json(expense);
+
+    // Attach approval history
+    const history = await req.prisma.expenseApprovalLog.findMany({
+      where: { expenseId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({ ...expense, approvalHistory: history });
   } catch (err) {
     console.error('GET /expenses/:id error:', err);
     res.status(500).json({ error: 'Failed to fetch expense' });
   }
 });
 
-// ─── 6. PUT /:id/review ─── Approve or reject expense (admin)
+// ─── 7. PUT /:id/review ─── Approve or reject expense
+// Hierarchy: Reporting manager approves their reports. Admin/owner approves leadership.
 router.put('/:id/review', async (req, res) => {
   try {
-    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
-
     const id = parseInt(req.params.id);
     const { status, reviewNote } = req.body;
 
@@ -143,10 +204,28 @@ router.put('/:id/review', async (req, res) => {
       return res.status(400).json({ error: 'Status must be "approved" or "rejected"' });
     }
 
-    const expense = await req.prisma.expenseClaim.findUnique({ where: { id } });
+    const expense = await req.prisma.expenseClaim.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, reportingManagerId: true, role: true } } },
+    });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
     if (expense.status !== 'pending') {
       return res.status(400).json({ error: `Cannot review expense with status "${expense.status}"` });
+    }
+
+    // Authorization check:
+    // 1. Admin can approve anyone's expenses
+    // 2. Reporting manager can approve their direct reports' expenses
+    // 3. Leadership/team_lead expenses can only be approved by admin (owner)
+    const isReportingManager = expense.user.reportingManagerId === req.user.id;
+    const isLeadershipExpense = expense.user.role === 'team_lead' || expense.user.role === 'admin';
+
+    if (!isAdmin(req) && !isReportingManager) {
+      return res.status(403).json({ error: 'You can only review expenses of your direct reports' });
+    }
+
+    if (isLeadershipExpense && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Leadership expenses can only be approved by admin' });
     }
 
     const updated = await req.prisma.expenseClaim.update({
@@ -162,6 +241,12 @@ router.put('/:id/review', async (req, res) => {
       },
     });
 
+    // Log the action
+    await logExpenseAction(req.prisma, {
+      expenseId: id, action: status, actionBy: req.user.id,
+      notes: reviewNote || `${status === 'approved' ? 'Approved' : 'Rejected'} by ${req.user.name || 'manager'}`,
+    });
+
     res.json(updated);
   } catch (err) {
     console.error('PUT /expenses/:id/review error:', err);
@@ -169,7 +254,7 @@ router.put('/:id/review', async (req, res) => {
   }
 });
 
-// ─── 7. PUT /:id/paid ─── Mark expense as paid (admin)
+// ─── 8. PUT /:id/paid ─── Mark expense as paid (admin)
 router.put('/:id/paid', async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
@@ -189,6 +274,11 @@ router.put('/:id/paid', async (req, res) => {
       },
     });
 
+    await logExpenseAction(req.prisma, {
+      expenseId: id, action: 'paid', actionBy: req.user.id,
+      notes: `Paid on ${updated.paidOn}`,
+    });
+
     res.json(updated);
   } catch (err) {
     console.error('PUT /expenses/:id/paid error:', err);
@@ -196,7 +286,7 @@ router.put('/:id/paid', async (req, res) => {
   }
 });
 
-// ─── 8. GET /summary ─── Expense summary for a month (admin)
+// ─── 9. GET /reports/summary ─── Expense summary for a month (admin)
 router.get('/reports/summary', async (req, res) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
@@ -206,32 +296,23 @@ router.get('/reports/summary', async (req, res) => {
 
     const expenses = await req.prisma.expenseClaim.findMany({
       where: { date: { startsWith: month } },
-      include: {
-        user: { select: { name: true, department: true } },
-      },
+      include: { user: { select: { name: true, department: true } } },
     });
 
-    // Aggregate by category
     const byCategory = {};
     const byStatus = { pending: 0, approved: 0, rejected: 0, paid: 0 };
     const byDepartment = {};
     let totalAmount = 0;
 
     for (const exp of expenses) {
-      // By category
       if (!byCategory[exp.category]) byCategory[exp.category] = { count: 0, amount: 0 };
       byCategory[exp.category].count++;
       byCategory[exp.category].amount += exp.amount;
-
-      // By status
       byStatus[exp.status] = (byStatus[exp.status] || 0) + exp.amount;
-
-      // By department
       const dept = exp.user.department || 'Unassigned';
       if (!byDepartment[dept]) byDepartment[dept] = { count: 0, amount: 0 };
       byDepartment[dept].count++;
       byDepartment[dept].amount += exp.amount;
-
       totalAmount += exp.amount;
     }
 

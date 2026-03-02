@@ -28,6 +28,10 @@ const overtimeRoutes = require('./routes/overtime');
 const analyticsRoutes = require('./routes/analytics');
 const surveyRoutes = require('./routes/surveys');
 const ticketRoutes = require('./routes/tickets');
+const otpRoutes = require('./routes/otp');
+const wikiRoutes = require('./routes/wiki');
+const suggestionRoutes = require('./routes/suggestions');
+const trainingRoutes = require('./routes/training');
 
 const app = express();
 
@@ -83,6 +87,10 @@ app.use('/api/overtime', overtimeRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/otp', otpRoutes);
+app.use('/api/wiki', wikiRoutes);
+app.use('/api/suggestions', suggestionRoutes);
+app.use('/api/training', trainingRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
+const { normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/clerk-sync', authenticate, async (req, res) => {
         // Internal employee — auto-register on first Clerk sign-in
         user = await req.prisma.user.create({
           data: {
-            name: name || email.split('@')[0],
+            name: normalizeName(name || email.split('@')[0]),
             email,
             password: '',
             role: 'member',
@@ -45,7 +46,7 @@ router.post('/clerk-sync', authenticate, async (req, res) => {
         // External user — auto-register (freelancers, contractors, etc.)
         user = await req.prisma.user.create({
           data: {
-            name: name || email.split('@')[0],
+            name: normalizeName(name || email.split('@')[0]),
             email,
             password: '',
             role: 'member',
