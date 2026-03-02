@@ -96,4 +96,10 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { authenticate, requireAdmin };
+function requireManagerOrAdmin(req, res, next) {
+  if (req.user.role === 'admin') return next();
+  if (req.user.role === 'team_lead' && req.user.department) return next();
+  return res.status(403).json({ error: 'Manager or admin access required.' });
+}
+
+module.exports = { authenticate, requireAdmin, requireManagerOrAdmin };

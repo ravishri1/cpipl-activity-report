@@ -11,6 +11,9 @@ const dashboardRoutes = require('./routes/dashboard');
 const settingsRoutes = require('./routes/settings');
 const googleRoutes = require('./routes/google');
 const pointsRoutes = require('./routes/points');
+const attendanceRoutes = require('./routes/attendance');
+const leaveRoutes = require('./routes/leave');
+const holidayRoutes = require('./routes/holidays');
 
 const app = express();
 
@@ -49,6 +52,9 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/points', pointsRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/leave', leaveRoutes);
+app.use('/api/holidays', holidayRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

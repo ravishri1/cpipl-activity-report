@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
-import { Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail, ClipboardEdit, FileText, ThumbsUp, Heart } from 'lucide-react';
+import {
+  Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail,
+  ClipboardEdit, ThumbsUp, Heart, LogIn, LogOut, CalendarOff,
+  ClipboardCheck, CalendarDays, Briefcase,
+} from 'lucide-react';
 import AppreciationModal from '../leaderboard/AppreciationModal';
 
 export default function Dashboard() {
@@ -11,10 +15,15 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
-  // Member-specific state
   const [myReport, setMyReport] = useState(null);
   const [myReportLoading, setMyReportLoading] = useState(true);
   const [appreciateUser, setAppreciateUser] = useState(null);
+
+  // HR widget states
+  const [attendance, setAttendance] = useState(null);
+  const [leaveBalances, setLeaveBalances] = useState([]);
+  const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -42,13 +51,61 @@ export default function Dashboard() {
     }
   };
 
+  const fetchHRData = async () => {
+    try {
+      const [attRes, balRes] = await Promise.all([
+        api.get('/attendance/today').catch(() => ({ data: null })),
+        api.get(`/leave/balance?year=${new Date().getFullYear()}`).catch(() => ({ data: [] })),
+      ]);
+      setAttendance(attRes.data);
+      setLeaveBalances(balRes.data);
+    } catch (err) {
+      console.error('HR data error:', err);
+    }
+  };
+
+  const fetchPendingLeaves = async () => {
+    try {
+      const res = await api.get('/leave/pending');
+      setPendingLeaves(res.data);
+    } catch (err) {
+      console.error('Pending leaves error:', err);
+    }
+  };
+
   useEffect(() => {
+    fetchHRData();
     if (isAdmin) {
       fetchDashboard();
+      fetchPendingLeaves();
     } else {
       fetchMyReport();
     }
   }, [date, isAdmin]);
+
+  const handleCheckIn = async () => {
+    setCheckingIn(true);
+    try {
+      const res = await api.post('/attendance/check-in');
+      setAttendance(res.data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Check-in failed.');
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  const handleCheckOut = async () => {
+    setCheckingIn(true);
+    try {
+      const res = await api.post('/attendance/check-out');
+      setAttendance(res.data);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Check-out failed.');
+    } finally {
+      setCheckingIn(false);
+    }
+  };
 
   if (isAdmin && loading) {
     return (
@@ -61,11 +118,113 @@ export default function Dashboard() {
   // ─── Member View ──────────────────────────────────────────
   if (!isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-slate-800 mb-4">My Dashboard</h1>
+      <div className="space-y-6">
+        <h1 className="text-xl font-bold text-slate-800">My Dashboard</h1>
 
-        <div className="bg-white rounded-lg border border-slate-200 p-5">
-          <p className="text-sm text-slate-500 mb-3">
+        {/* Quick Actions + Attendance */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Attendance card */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="w-4 h-4 text-blue-500" />
+              <h3 className="text-sm font-semibold text-slate-700">Attendance</h3>
+            </div>
+            {!attendance || !attendance.checkIn ? (
+              <button
+                onClick={handleCheckIn}
+                disabled={checkingIn}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+              >
+                <LogIn className="w-4 h-4" />
+                {checkingIn ? 'Checking in...' : 'Check In'}
+              </button>
+            ) : !attendance.checkOut ? (
+              <div>
+                <p className="text-xs text-emerald-600 font-medium mb-2">
+                  ✓ Checked in at {new Date(attendance.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </p>
+                <button
+                  onClick={handleCheckOut}
+                  disabled={checkingIn}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {checkingIn ? 'Checking out...' : 'Check Out'}
+                </button>
+              </div>
+            ) : (
+              <div className="text-sm space-y-1">
+                <p className="text-emerald-600 font-medium">✓ Day complete</p>
+                <p className="text-xs text-slate-500">
+                  {new Date(attendance.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                  {' → '}
+                  {new Date(attendance.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </p>
+                {attendance.workHours && (
+                  <p className="text-xs text-blue-600 font-medium">{attendance.workHours.toFixed(1)}h worked</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick actions */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate('/submit-report')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 bg-slate-50 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors"
+              >
+                <ClipboardEdit className="w-4 h-4" />
+                Submit Report
+              </button>
+              <button
+                onClick={() => navigate('/leave')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 bg-slate-50 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors"
+              >
+                <CalendarOff className="w-4 h-4" />
+                Apply Leave
+              </button>
+              <button
+                onClick={() => navigate('/attendance')}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 bg-slate-50 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-colors"
+              >
+                <CalendarDays className="w-4 h-4" />
+                View Attendance
+              </button>
+            </div>
+          </div>
+
+          {/* Leave balance mini */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-700">Leave Balance</h3>
+              <Link to="/leave" className="text-xs text-blue-600 hover:underline">View all</Link>
+            </div>
+            {leaveBalances.length > 0 ? (
+              <div className="space-y-2">
+                {leaveBalances.map((lb) => (
+                  <div key={lb.id} className="flex items-center justify-between">
+                    <span className="text-xs text-slate-600">{lb.leaveType?.code || lb.leaveType?.name}</span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      {lb.balance} <span className="text-slate-400 font-normal">/ {lb.total}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">No leave data</p>
+            )}
+          </div>
+        </div>
+
+        {/* Today's report status */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-blue-500" />
+            Today's Report
+          </h3>
+          <p className="text-xs text-slate-400 mb-3">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
 
@@ -73,17 +232,17 @@ export default function Dashboard() {
             <p className="text-slate-400">Checking...</p>
           ) : myReport ? (
             <div>
-              <p className="text-green-700 font-medium mb-3">
-                ✓ Report submitted at {new Date(myReport.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              <p className="text-green-700 font-medium text-sm mb-3">
+                ✓ Submitted at {new Date(myReport.submittedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
               </p>
               <div className="text-sm text-slate-700 space-y-2 mb-3">
                 {myReport.tasks && myReport.tasks.length > 0 ? (
                   <div>
-                    <p className="font-medium mb-1.5">Tasks:</p>
+                    <p className="font-medium mb-1.5 text-xs text-slate-500">Tasks:</p>
                     <div className="space-y-1">
                       {myReport.tasks.map((task, idx) => (
                         <div key={task.id || idx} className="flex items-center justify-between bg-slate-50 rounded px-3 py-1.5">
-                          <span>{task.description}</span>
+                          <span className="text-sm">{task.description}</span>
                           {task.hours > 0 && (
                             <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full ml-2">
                               {task.hours}h
@@ -99,8 +258,8 @@ export default function Dashboard() {
                 ) : (
                   <p><strong>Activities:</strong> {myReport.activities}</p>
                 )}
-                {myReport.challenges && <p><strong>Challenges:</strong> {myReport.challenges}</p>}
-                {myReport.planTomorrow && <p><strong>Plan for Tomorrow:</strong> {myReport.planTomorrow}</p>}
+                {myReport.challenges && <p className="text-sm"><strong>Challenges:</strong> {myReport.challenges}</p>}
+                {myReport.planTomorrow && <p className="text-sm"><strong>Plan for Tomorrow:</strong> {myReport.planTomorrow}</p>}
               </div>
               <button onClick={() => navigate('/submit-report')} className="text-sm text-blue-600 hover:underline">
                 Edit Report
@@ -108,7 +267,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div>
-              <p className="text-red-600 mb-3">✗ Not yet submitted</p>
+              <p className="text-red-600 mb-3 text-sm">✗ Not yet submitted</p>
               <button
                 onClick={() => navigate('/submit-report')}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
@@ -128,19 +287,15 @@ export default function Dashboard() {
   const { summary, reported, notReported, ignoredReminder, emailDataDate } = data;
 
   const handleThumbsUp = async (reportId) => {
-    // Check if current user already gave a thumbs up
     const member = reported.find((m) => m.reportId === reportId);
     if (!member) return;
-
     const alreadyGiven = member.thumbsUps.some((t) => t.givenBy.id === user.id);
-
     try {
       if (alreadyGiven) {
         await api.delete('/points/thumbsup', { data: { reportId } });
       } else {
         await api.post('/points/thumbsup', { reportId });
       }
-      // Refresh dashboard to get updated data
       fetchDashboard();
     } catch (err) {
       console.error('Thumbs up error:', err);
@@ -148,16 +303,16 @@ export default function Dashboard() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
         <div className="flex items-center gap-3">
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
           <button
             onClick={fetchDashboard}
@@ -168,8 +323,98 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      {/* HR Quick Widgets — admin row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Attendance widget */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 text-blue-500" />
+            <h3 className="text-xs font-semibold text-slate-500 uppercase">My Attendance</h3>
+          </div>
+          {!attendance || !attendance.checkIn ? (
+            <button
+              onClick={handleCheckIn}
+              disabled={checkingIn}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <LogIn className="w-4 h-4" />
+              {checkingIn ? 'Checking in...' : 'Check In'}
+            </button>
+          ) : !attendance.checkOut ? (
+            <div>
+              <p className="text-xs text-emerald-600 font-medium mb-1.5">
+                ✓ In at {new Date(attendance.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </p>
+              <button
+                onClick={handleCheckOut}
+                disabled={checkingIn}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg text-xs font-medium hover:bg-red-600 disabled:opacity-50"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Check Out
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-emerald-700">✓ Complete</p>
+              <p className="text-xs text-slate-500">
+                {attendance.workHours ? `${attendance.workHours.toFixed(1)}h worked` : 'Done for today'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Pending leave requests widget */}
+        <Link to="/admin/leave-requests" className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-blue-200 transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardCheck className="w-4 h-4 text-amber-500" />
+            <h3 className="text-xs font-semibold text-slate-500 uppercase">Pending Leaves</h3>
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{pendingLeaves.length}</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {pendingLeaves.length > 0 ? 'Awaiting review' : 'All clear'}
+          </p>
+        </Link>
+
+        {/* Leave balance widget */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <CalendarOff className="w-4 h-4 text-purple-500" />
+            <h3 className="text-xs font-semibold text-slate-500 uppercase">My Leave</h3>
+          </div>
+          {leaveBalances.length > 0 ? (
+            <div className="space-y-1">
+              {leaveBalances.slice(0, 3).map((lb) => (
+                <div key={lb.id} className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500">{lb.leaveType?.code}</span>
+                  <span className="text-xs font-semibold text-slate-700">{lb.balance}/{lb.total}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">No data</p>
+          )}
+        </div>
+
+        {/* Quick links */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Quick Links</h3>
+          <div className="space-y-1.5">
+            <Link to="/admin/attendance" className="flex items-center gap-2 text-xs text-slate-600 hover:text-blue-700">
+              <CalendarDays className="w-3.5 h-3.5" /> Team Attendance
+            </Link>
+            <Link to="/admin/holidays" className="flex items-center gap-2 text-xs text-slate-600 hover:text-blue-700">
+              <CalendarDays className="w-3.5 h-3.5" /> Holidays
+            </Link>
+            <Link to="/directory" className="flex items-center gap-2 text-xs text-slate-600 hover:text-blue-700">
+              <Users className="w-3.5 h-3.5" /> Directory
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Report Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <SummaryCard icon={Users} label="Total Members" value={summary.total} color="blue" />
         <SummaryCard icon={CheckCircle} label="Reported" value={summary.reported} color="green" />
         <SummaryCard icon={XCircle} label="Not Reported" value={summary.notReported} color="red" />
@@ -178,7 +423,7 @@ export default function Dashboard() {
 
       {/* Email data note */}
       {emailDataDate && (
-        <div className="mb-4 text-xs text-slate-400 flex items-center gap-1">
+        <div className="text-xs text-slate-400 flex items-center gap-1">
           <Mail className="w-3 h-3" />
           Email data from {emailDataDate} (2-day delay from Google Reports API)
         </div>
@@ -208,7 +453,6 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       <EmailBadge sent={m.emailsSent} received={m.emailsReceived} />
-                      {/* Appreciate button - for ALL users, not for self */}
                       {m.id !== user.id && (
                         <button
                           onClick={() => setAppreciateUser({ id: m.id, name: m.name })}
@@ -218,7 +462,6 @@ export default function Dashboard() {
                           <Heart className="w-3 h-3" />
                         </button>
                       )}
-                      {/* Thumbs up button - only for admin/team_lead, not for own report */}
                       {isAdmin && m.id !== user.id && (
                         <button
                           onClick={() => handleThumbsUp(m.reportId)}
@@ -233,7 +476,6 @@ export default function Dashboard() {
                           {m.thumbsUpCount > 0 && <span>{m.thumbsUpCount}</span>}
                         </button>
                       )}
-                      {/* Show thumbsup count for self or non-admin */}
                       {(!isAdmin || m.id === user.id) && m.thumbsUpCount > 0 && (
                         <span className="flex items-center gap-1 text-xs bg-pink-50 text-pink-600 px-2 py-0.5 rounded-full">
                           <ThumbsUp className="w-3 h-3 fill-current" />

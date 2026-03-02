@@ -21,6 +21,22 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // ── HR Profile Fields ──
+  employeeId         String?  @unique          // "CPIPL-001" format
+  designation        String?                   // "Software Engineer"
+  dateOfJoining      String?                   // "YYYY-MM-DD"
+  dateOfBirth        String?                   // "YYYY-MM-DD"
+  employmentType     String   @default("full_time") // full_time, part_time, contract, intern
+  phone              String?
+  personalEmail      String?
+  address            String?
+  emergencyContact   String?                   // JSON: {"name","phone","relation"}
+  gender             String?                   // male, female, other
+  bloodGroup         String?
+  profilePhotoUrl    String?
+  reportingManagerId Int?
+
+  // ── Existing Relations ──
   reports          DailyReport[]
   reminders        Reminder[]
   googleToken      GoogleToken?
@@ -32,6 +48,14 @@ model User {
   appreciationsGiven    Appreciation[]      @relation("AppreciationsGiven")
   appreciationsReceived Appreciation[]      @relation("AppreciationsReceived")
   appreciationBudgets   AppreciationBudget[]
+
+  // ── HR Relations ──
+  reportingManager   User?    @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  subordinates       User[]   @relation("ReportingManager")
+  attendances        Attendance[]
+  leaveRequests      LeaveRequest[]
+  leaveBalances      LeaveBalance[]
+  documents          EmployeeDocument[]
 }
 
 model DailyReport {
@@ -183,4 +207,99 @@ model AppreciationBudget {
   user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, weekStart])
+}
+
+// ═══════════════════════════════════════════════
+// HR Core Models
+// ═══════════════════════════════════════════════
+
+model Attendance {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  date      String                              // "YYYY-MM-DD"
+  checkIn   DateTime?
+  checkOut  DateTime?
+  status    String    @default("present")       // present, absent, half_day, on_leave, holiday, weekend
+  workHours Float?                              // auto-calc from checkIn/checkOut
+  ipAddress String?
+  notes     String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model LeaveType {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique              // "Casual Leave", "Sick Leave", "Earned Leave"
+  code            String   @unique              // "CL", "SL", "EL"
+  defaultBalance  Float    @default(0)          // annual entitlement
+  carryForward    Boolean  @default(false)
+  maxCarryForward Float    @default(0)
+  isActive        Boolean  @default(true)
+
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+}
+
+model LeaveBalance {
+  id          Int   @id @default(autoincrement())
+  userId      Int
+  leaveTypeId Int
+  year        Int                               // 2026
+  total       Float @default(0)                 // allocated
+  used        Float @default(0)                 // consumed
+  balance     Float @default(0)                 // remaining = total - used
+
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([userId, leaveTypeId, year])
+}
+
+model LeaveRequest {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  leaveTypeId Int
+  startDate   String                            // "YYYY-MM-DD"
+  endDate     String                            // "YYYY-MM-DD"
+  days        Float                             // computed (supports half-days: 0.5)
+  reason      String
+  status      String    @default("pending")     // pending, approved, rejected, cancelled
+  reviewedBy  Int?                              // userId of approver
+  reviewedAt  DateTime?
+  reviewNote  String?
+  createdAt   DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model Holiday {
+  id         Int     @id @default(autoincrement())
+  name       String                              // "Republic Day"
+  date       String                              // "YYYY-MM-DD"
+  year       Int
+  isOptional Boolean @default(false)
+
+  @@unique([date])
+  @@index([year])
+}
+
+model EmployeeDocument {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  name       String                              // "Aadhar Card"
+  type       String                              // "id_proof", "address_proof", "education", "other"
+  fileUrl    String                              // Vercel Blob URL
+  uploadedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
