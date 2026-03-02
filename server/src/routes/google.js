@@ -77,8 +77,13 @@ router.delete('/disconnect', authenticate, async (req, res) => {
 // ─── Google Admin: Import Users ───
 
 // GET /api/google/import-users - Fetch users from Google Workspace
+// Restricted to me@colorpapers.in only
 router.get('/import-users', authenticate, requireAdmin, async (req, res) => {
   try {
+    if (req.user.email !== 'me@colorpapers.in') {
+      return res.status(403).json({ error: 'Only the primary admin can import Google Workspace users.' });
+    }
+
     const domain = process.env.GOOGLE_WORKSPACE_DOMAIN;
     if (!domain) {
       return res.status(400).json({ error: 'GOOGLE_WORKSPACE_DOMAIN not configured in .env' });
@@ -105,8 +110,13 @@ router.get('/import-users', authenticate, requireAdmin, async (req, res) => {
 });
 
 // POST /api/google/import-users - Create selected users in the system
+// Restricted to me@colorpapers.in only
 router.post('/import-users', authenticate, requireAdmin, async (req, res) => {
   try {
+    if (req.user.email !== 'me@colorpapers.in') {
+      return res.status(403).json({ error: 'Only the primary admin can import Google Workspace users.' });
+    }
+
     const { users } = req.body; // array of { googleId, name, email, department }
     if (!users || !Array.isArray(users) || users.length === 0) {
       return res.status(400).json({ error: 'No users provided.' });

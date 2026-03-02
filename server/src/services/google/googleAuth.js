@@ -96,10 +96,6 @@ async function getServiceAccountClient(subjectEmail, scopes) {
     'https://www.googleapis.com/auth/admin.directory.user.readonly',
   ];
 
-  console.log('[DWD Debug] client_email:', keyFile.client_email);
-  console.log('[DWD Debug] subject:', subjectEmail);
-  console.log('[DWD Debug] scopes:', requestScopes);
-
   const auth = new google.auth.JWT({
     email: keyFile.client_email,
     key: keyFile.private_key,
@@ -107,13 +103,7 @@ async function getServiceAccountClient(subjectEmail, scopes) {
     subject: subjectEmail, // Impersonate admin for domain-wide delegation
   });
 
-  try {
-    await auth.authorize();
-  } catch (err) {
-    console.error('[DWD Error] Authorization failed:', err.message);
-    console.error('[DWD Error] Full error:', JSON.stringify(err.response?.data || err));
-    throw err;
-  }
+  await auth.authorize();
   return auth;
 }
 

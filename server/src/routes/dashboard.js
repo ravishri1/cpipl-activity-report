@@ -14,9 +14,16 @@ router.get('/', authenticate, async (req, res) => {
 
     const date = req.query.date || getTodayDate();
 
-    // Get all active members
+    // Build member filter based on role
+    // Admin sees everyone; team_lead sees only their department members
+    const memberFilter = { isActive: true };
+    if (req.user.role === 'team_lead') {
+      memberFilter.department = req.user.department;
+    }
+
+    // Get members (scoped by role)
     const allMembers = await req.prisma.user.findMany({
-      where: { isActive: true },
+      where: memberFilter,
       select: { id: true, name: true, email: true, department: true, role: true },
     });
 
