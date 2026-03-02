@@ -102,4 +102,4 @@ function requireManagerOrAdmin(req, res, next) {
   return res.status(403).json({ error: 'Manager or admin access required.' });
 }
 
-module.exports = { authenticate, requireAdmin, requireManagerOrAdmin };
+module.exports = { authenticate, authenticateToken: authenticate, requireAdmin, requireManagerOrAdmin };

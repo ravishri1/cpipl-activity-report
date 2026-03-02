@@ -103,6 +103,14 @@ model User {
   expenseClaims      ExpenseClaim[]
   expenseReviews     ExpenseClaim[]     @relation("ExpenseReviews")
   announcements      Announcement[]     @relation("AnnouncementAuthor")
+  generatedLetters   GeneratedLetter[]
+  lettersGeneratedBy GeneratedLetter[]  @relation("LetterGeneratedBy")
+  assignedAssets     Asset[]            @relation("AssetAssignment")
+  onboardingTasks    OnboardingChecklist[]
+  separation         Separation?
+  separationHandler  Separation[]       @relation("SeparationHandler")
+  overtimeRequests   OvertimeRequest[]
+  overtimeReviews    OvertimeRequest[]  @relation("OvertimeReviews")
 }
 
 model DailyReport {
@@ -431,6 +439,8 @@ model Company {
   users         User[]
   policies      Policy[]
   announcements Announcement[]
+  assets        Asset[]
+  shiftDefinitions ShiftDefinition[]
 }
 
 // ═══════════════════════════════════════════════
@@ -659,4 +669,142 @@ model Announcement {
 
   @@index([isActive])
   @@index([category])
+}
+
+// ═══════════════════════════════════════════════
+// Letter Templates & Generated Letters
+// ═══════════════════════════════════════════════
+
+model LetterTemplate {
+  id          Int       @id @default(autoincrement())
+  name        String                                     // "Offer Letter", "Appointment Letter"
+  type        String                                     // offer, appointment, salary_revision, experience, relieving, custom
+  content     String                                     // HTML template with {{placeholders}}
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  generatedLetters GeneratedLetter[]
+}
+
+model GeneratedLetter {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  templateId    Int
+  letterType    String                                   // same as template.type
+  content       String                                   // rendered HTML
+  generatedBy   Int                                      // admin userId
+  generatedAt   DateTime  @default(now())
+
+  user          User            @relation(fields: [userId], references: [id])
+  template      LetterTemplate  @relation(fields: [templateId], references: [id])
+  generatedByUser User          @relation("LetterGeneratedBy", fields: [generatedBy], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// Asset Management
+// ═══════════════════════════════════════════════
+
+model Asset {
+  id             Int       @id @default(autoincrement())
+  name           String                                  // "Dell Laptop", "iPhone 15"
+  type           String                                  // laptop, phone, id_card, access_card, monitor, headset, other
+  serialNumber   String?
+  purchaseDate   String?                                 // "YYYY-MM-DD"
+  value          Float?
+  status         String    @default("available")         // available, assigned, maintenance, retired
+  assignedTo     Int?
+  assignedDate   String?                                 // "YYYY-MM-DD"
+  returnDate     String?                                 // "YYYY-MM-DD"
+  notes          String?
+  companyId      Int?
+  createdAt      DateTime  @default(now())
+
+  assignee       User?     @relation("AssetAssignment", fields: [assignedTo], references: [id])
+  company        Company?  @relation(fields: [companyId], references: [id])
+
+  @@index([assignedTo])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// Employee Lifecycle (Onboarding & Separation)
+// ═══════════════════════════════════════════════
+
+model OnboardingChecklist {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  task         String                                    // "Submit ID proof", "Bank account form"
+  category     String    @default("hr_formalities")      // documents, it_setup, hr_formalities, training
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  dueDate      String?                                   // "YYYY-MM-DD"
+  assignedTo   String?                                   // "HR", "IT", "Manager"
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Separation {
+  id                 Int       @id @default(autoincrement())
+  userId             Int       @unique
+  type               String                              // resignation, termination, absconding, retirement
+  requestDate        String                              // "YYYY-MM-DD"
+  lastWorkingDate    String?                             // "YYYY-MM-DD"
+  reason             String?
+  status             String    @default("initiated")     // initiated, notice_period, fnf_pending, completed, cancelled
+  noticePeriodDays   Int       @default(30)
+  exitInterviewDone  Boolean   @default(false)
+  exitInterviewNotes String?
+  fnfAmount          Float?
+  fnfPaidOn          String?                             // "YYYY-MM-DD"
+  processedBy        Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user               User     @relation(fields: [userId], references: [id])
+  processor          User?    @relation("SeparationHandler", fields: [processedBy], references: [id])
+}
+
+// ═══════════════════════════════════════════════
+// Shift Management
+// ═══════════════════════════════════════════════
+
+model ShiftDefinition {
+  id            Int       @id @default(autoincrement())
+  name          String                                   // "General", "Morning", "Night", "Flexi"
+  startTime     String                                   // "09:00"
+  endTime       String                                   // "18:00"
+  graceMinutes  Int       @default(15)
+  isActive      Boolean   @default(true)
+  companyId     Int?
+  createdAt     DateTime  @default(now())
+
+  company       Company?  @relation(fields: [companyId], references: [id])
+}
+
+// ═══════════════════════════════════════════════
+// Overtime & Comp-Off
+// ═══════════════════════════════════════════════
+
+model OvertimeRequest {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  date          String                                   // "YYYY-MM-DD"
+  hours         Float
+  reason        String?
+  status        String    @default("pending")            // pending, approved, rejected
+  compOffEarned Boolean   @default(false)
+  reviewedBy    Int?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id])
+  reviewer      User?     @relation("OvertimeReviews", fields: [reviewedBy], references: [id])
+
+  @@unique([userId, date])
 }

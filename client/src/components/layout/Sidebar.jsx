@@ -25,6 +25,12 @@ import {
   IndianRupee,
   Receipt,
   CreditCard,
+  Package,
+  Mail,
+  UserPlus,
+  UserMinus,
+  PieChart,
+  Hourglass,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -70,6 +76,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/leave', label: 'Leave', icon: CalendarOff },
         { to: '/expenses', label: 'Expenses', icon: Wallet },
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
+        { to: '/my-assets', label: 'My Assets', icon: Package },
         { to: '/policies', label: 'Policies', icon: Shield },
       ],
     },
@@ -95,6 +102,11 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
         { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
         { to: '/admin/salary-setup', label: 'Salary Setup', icon: IndianRupee },
+        { to: '/admin/assets', label: 'Asset Manager', icon: Package },
+        { to: '/admin/letters', label: 'Letters', icon: Mail },
+        { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
+        { to: '/admin/separations', label: 'Separations', icon: UserMinus },
+        { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
         { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
         { to: '/admin/import', label: 'Import Employees', icon: Upload },
         { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },

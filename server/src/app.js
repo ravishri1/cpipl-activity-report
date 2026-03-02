@@ -21,6 +21,11 @@ const policyRoutes = require('./routes/policies');
 const payrollRoutes = require('./routes/payroll');
 const expenseRoutes = require('./routes/expenses');
 const announcementRoutes = require('./routes/announcements');
+const letterRoutes = require('./routes/letters');
+const assetRoutes = require('./routes/assets');
+const lifecycleRoutes = require('./routes/lifecycle');
+const overtimeRoutes = require('./routes/overtime');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 
@@ -69,6 +74,11 @@ app.use('/api/policies', policyRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/letters', letterRoutes);
+app.use('/api/assets', assetRoutes);
+app.use('/api/lifecycle', lifecycleRoutes);
+app.use('/api/overtime', overtimeRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

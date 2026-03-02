@@ -26,6 +26,12 @@ import MyPayslips from './components/payroll/MyPayslips';
 import MyExpenses from './components/expenses/MyExpenses';
 import ExpenseApproval from './components/admin/ExpenseApproval';
 import Announcements from './components/announcements/Announcements';
+import LetterManager from './components/admin/LetterManager';
+import AssetManager from './components/admin/AssetManager';
+import OnboardingManager from './components/admin/OnboardingManager';
+import SeparationManager from './components/admin/SeparationManager';
+import HRReports from './components/admin/HRReports';
+import MyAssets from './components/assets/MyAssets';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -66,6 +72,7 @@ function AppRoutes() {
                 <Route path="/payslips" element={<MyPayslips />} />
                 <Route path="/policies" element={<PolicyAcceptance />} />
                 <Route path="/announcements" element={<Announcements />} />
+                <Route path="/my-assets" element={<MyAssets />} />
 
                 {/* Team */}
                 <Route path="/directory" element={<EmployeeDirectory />} />
@@ -83,6 +90,11 @@ function AppRoutes() {
                 <Route path="/admin/import" element={<AdminRoute><EmployeeImport /></AdminRoute>} />
                 <Route path="/admin/policies" element={<AdminRoute><PolicyManager /></AdminRoute>} />
                 <Route path="/admin/policy-scorecard" element={<AdminRoute><PolicyScorecard /></AdminRoute>} />
+                <Route path="/admin/assets" element={<AdminRoute><AssetManager /></AdminRoute>} />
+                <Route path="/admin/letters" element={<AdminRoute><LetterManager /></AdminRoute>} />
+                <Route path="/admin/onboarding" element={<AdminRoute><OnboardingManager /></AdminRoute>} />
+                <Route path="/admin/separations" element={<AdminRoute><SeparationManager /></AdminRoute>} />
+                <Route path="/admin/reports" element={<AdminRoute><HRReports /></AdminRoute>} />
                 <Route path="/admin/ai-extract" element={<AdminRoute><ResumeExtractor /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
 
