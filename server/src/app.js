@@ -32,6 +32,7 @@ const otpRoutes = require('./routes/otp');
 const wikiRoutes = require('./routes/wiki');
 const suggestionRoutes = require('./routes/suggestions');
 const trainingRoutes = require('./routes/training');
+const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -91,6 +92,9 @@ app.use('/api/otp', otpRoutes);
 app.use('/api/wiki', wikiRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/training', trainingRoutes);
+
+// Global error handler (must be after all routes)
+app.use(errorHandler);
 
 // Health check
 app.get('/api/health', (req, res) => {

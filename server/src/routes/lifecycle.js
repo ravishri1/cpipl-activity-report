@@ -1,540 +1,258 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
+const { asyncHandler } = require('../utils/asyncHandler');
+const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
+const { requireFields, requireEnum, parseId } = require('../utils/validate');
 
 const router = express.Router();
+router.use(authenticate);
 
-// ── Auth gate ──
-router.use(authenticateToken);
-
-// ── Helper: admin / team_lead check ──
-function isAdmin(req) {
-  return req.user.role === 'admin' || req.user.role === 'team_lead';
-}
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
 
 // ============================================================
 //  ONBOARDING
 // ============================================================
 
-// Default onboarding template tasks
 const ONBOARDING_TEMPLATE = [
-  // Documents
   { task: 'Submit Aadhaar copy', category: 'documents', assignedTo: 'HR' },
   { task: 'Submit PAN card', category: 'documents', assignedTo: 'HR' },
   { task: 'Submit bank passbook', category: 'documents', assignedTo: 'HR' },
   { task: 'Submit educational certificates', category: 'documents', assignedTo: 'HR' },
   { task: 'Submit passport photos', category: 'documents', assignedTo: 'HR' },
-  // IT Setup
   { task: 'Laptop assignment', category: 'it_setup', assignedTo: 'IT' },
   { task: 'Email account setup', category: 'it_setup', assignedTo: 'IT' },
   { task: 'Software access setup', category: 'it_setup', assignedTo: 'IT' },
-  // HR Formalities
   { task: 'Sign offer letter', category: 'hr_formalities', assignedTo: 'HR' },
   { task: 'Sign NDA', category: 'hr_formalities', assignedTo: 'HR' },
   { task: 'Fill emergency contact form', category: 'hr_formalities', assignedTo: 'HR' },
   { task: 'Add bank details', category: 'hr_formalities', assignedTo: 'HR' },
-  // Training
   { task: 'Company orientation', category: 'training', assignedTo: 'Manager' },
   { task: 'Department introduction', category: 'training', assignedTo: 'Manager' },
   { task: 'Tool training', category: 'training', assignedTo: 'Manager' },
 ];
 
-// 1. GET /onboarding/:userId — Get onboarding checklist for a user (admin or self)
-router.get('/onboarding/:userId', async (req, res) => {
-  try {
-    const userId = parseInt(req.params.userId);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID.' });
-    }
+const VALID_ONBOARDING_CATEGORIES = ['documents', 'it_setup', 'hr_formalities', 'training'];
 
-    // Allow admin/team_lead or the user themselves
-    if (!isAdmin(req) && req.user.id !== userId) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
+// 1. GET /onboarding/:userId — Get onboarding checklist (admin or self)
+router.get('/onboarding/:userId', asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  if (!isAdminRole(req.user) && req.user.id !== userId) throw forbidden();
 
-    const user = await req.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, department: true, dateOfJoining: true },
-    });
+  const user = await req.prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, department: true, dateOfJoining: true },
+  });
+  if (!user) throw notFound('User');
 
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
+  const checklist = await req.prisma.onboardingChecklist.findMany({
+    where: { userId },
+    orderBy: [{ category: 'asc' }, { id: 'asc' }],
+  });
 
-    const checklist = await req.prisma.onboardingChecklist.findMany({
-      where: { userId },
-      orderBy: [{ category: 'asc' }, { id: 'asc' }],
-    });
-
-    res.json({ user, checklist });
-  } catch (err) {
-    console.error('Get onboarding checklist error:', err);
-    res.status(500).json({ error: 'Failed to fetch onboarding checklist.' });
-  }
-});
+  res.json({ user, checklist });
+}));
 
 // 2. POST /onboarding/:userId — Create checklist items in bulk (admin only)
-router.post('/onboarding/:userId', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.post('/onboarding/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const user = await req.prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw notFound('User');
 
-    const userId = parseInt(req.params.userId);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID.' });
-    }
+  const { tasks } = req.body;
+  if (!Array.isArray(tasks) || tasks.length === 0) throw badRequest('tasks array is required and must not be empty.');
 
-    const user = await req.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
+  const data = tasks.map((t) => {
+    if (!t.task) throw badRequest('Each task must have a "task" field.');
+    const category = t.category || 'hr_formalities';
+    requireEnum(category, VALID_ONBOARDING_CATEGORIES, 'category');
+    return { userId, task: t.task, category, dueDate: t.dueDate || null, assignedTo: t.assignedTo || null };
+  });
 
-    const { tasks } = req.body;
-    if (!Array.isArray(tasks) || tasks.length === 0) {
-      return res.status(400).json({ error: 'tasks array is required and must not be empty.' });
-    }
+  const created = await req.prisma.onboardingChecklist.createMany({ data });
+  res.status(201).json({ message: `${created.count} checklist items created.`, count: created.count });
+}));
 
-    const validCategories = ['documents', 'it_setup', 'hr_formalities', 'training'];
+// 3. POST /onboarding/:userId/from-template — Create default checklist (admin only)
+router.post('/onboarding/:userId/from-template', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const user = await req.prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw notFound('User');
 
-    const data = tasks.map((t) => {
-      if (!t.task) throw new Error('Each task must have a "task" field.');
-      const category = t.category || 'hr_formalities';
-      if (!validCategories.includes(category)) {
-        throw new Error(`Invalid category "${category}". Must be one of: ${validCategories.join(', ')}`);
-      }
-      return {
-        userId,
-        task: t.task,
-        category,
-        dueDate: t.dueDate || null,
-        assignedTo: t.assignedTo || null,
-      };
-    });
+  const existing = await req.prisma.onboardingChecklist.count({ where: { userId } });
+  if (existing > 0) throw conflict('Onboarding checklist already exists for this user. Delete existing items first or add tasks individually.');
 
-    const created = await req.prisma.onboardingChecklist.createMany({ data });
+  const data = ONBOARDING_TEMPLATE.map((t) => ({ userId, task: t.task, category: t.category, assignedTo: t.assignedTo }));
+  const created = await req.prisma.onboardingChecklist.createMany({ data });
 
-    res.status(201).json({ message: `${created.count} checklist items created.`, count: created.count });
-  } catch (err) {
-    console.error('Create onboarding tasks error:', err);
-    if (err.message && err.message.includes('Invalid category')) {
-      return res.status(400).json({ error: err.message });
-    }
-    if (err.message && err.message.includes('must have a "task"')) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.status(500).json({ error: 'Failed to create onboarding tasks.' });
-  }
-});
-
-// 3. POST /onboarding/:userId/from-template — Create default checklist from template (admin only)
-router.post('/onboarding/:userId/from-template', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
-
-    const userId = parseInt(req.params.userId);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user ID.' });
-    }
-
-    const user = await req.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    // Check if checklist already exists
-    const existing = await req.prisma.onboardingChecklist.count({ where: { userId } });
-    if (existing > 0) {
-      return res.status(409).json({
-        error: 'Onboarding checklist already exists for this user. Delete existing items first or add tasks individually.',
-      });
-    }
-
-    const data = ONBOARDING_TEMPLATE.map((t) => ({
-      userId,
-      task: t.task,
-      category: t.category,
-      assignedTo: t.assignedTo,
-    }));
-
-    const created = await req.prisma.onboardingChecklist.createMany({ data });
-
-    res.status(201).json({
-      message: `${created.count} template tasks created for ${user.name}.`,
-      count: created.count,
-    });
-  } catch (err) {
-    console.error('Create onboarding from template error:', err);
-    res.status(500).json({ error: 'Failed to create onboarding template.' });
-  }
-});
+  res.status(201).json({ message: `${created.count} template tasks created for ${user.name}.`, count: created.count });
+}));
 
 // 4. PUT /onboarding/task/:id — Toggle task complete/incomplete (admin or self)
-router.put('/onboarding/task/:id', async (req, res) => {
-  try {
-    const taskId = parseInt(req.params.id);
-    if (isNaN(taskId)) {
-      return res.status(400).json({ error: 'Invalid task ID.' });
-    }
+router.put('/onboarding/task/:id', asyncHandler(async (req, res) => {
+  const taskId = parseId(req.params.id);
+  const task = await req.prisma.onboardingChecklist.findUnique({ where: { id: taskId } });
+  if (!task) throw notFound('Task');
+  if (!isAdminRole(req.user) && req.user.id !== task.userId) throw forbidden();
 
-    const task = await req.prisma.onboardingChecklist.findUnique({
-      where: { id: taskId },
-    });
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found.' });
-    }
-
-    // Allow admin/team_lead or the user themselves
-    if (!isAdmin(req) && req.user.id !== task.userId) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
-
-    const updated = await req.prisma.onboardingChecklist.update({
-      where: { id: taskId },
-      data: {
-        isCompleted: !task.isCompleted,
-        completedAt: !task.isCompleted ? new Date() : null,
-      },
-    });
-
-    res.json(updated);
-  } catch (err) {
-    console.error('Toggle onboarding task error:', err);
-    res.status(500).json({ error: 'Failed to update onboarding task.' });
-  }
-});
+  const updated = await req.prisma.onboardingChecklist.update({
+    where: { id: taskId },
+    data: { isCompleted: !task.isCompleted, completedAt: !task.isCompleted ? new Date() : null },
+  });
+  res.json(updated);
+}));
 
 // ============================================================
 //  SEPARATION
 // ============================================================
 
+const VALID_SEP_TYPES = ['resignation', 'termination', 'absconding', 'retirement'];
+const VALID_SEP_STATUSES = ['initiated', 'notice_period', 'fnf_pending', 'completed', 'cancelled'];
+
 // 5. POST /separation — Initiate separation (admin only)
-router.post('/separation', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.post('/separation', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, type, requestDate, lastWorkingDate, reason, noticePeriodDays } = req.body;
+  requireFields(req.body, 'userId', 'type', 'requestDate');
+  requireEnum(type, VALID_SEP_TYPES, 'type');
 
-    const { userId, type, requestDate, lastWorkingDate, reason, noticePeriodDays } = req.body;
+  const user = await req.prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw notFound('User');
 
-    if (!userId || !type || !requestDate) {
-      return res.status(400).json({ error: 'userId, type, and requestDate are required.' });
-    }
-
-    const validTypes = ['resignation', 'termination', 'absconding', 'retirement'];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ error: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
-    }
-
-    const user = await req.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    // Check for existing active separation
-    const existing = await req.prisma.separation.findUnique({ where: { userId } });
-    if (existing && existing.status !== 'completed' && existing.status !== 'cancelled') {
-      return res.status(409).json({ error: 'An active separation already exists for this user.' });
-    }
-
-    // If a completed/cancelled one exists, delete it first (userId is @unique)
-    if (existing) {
-      await req.prisma.separation.delete({ where: { userId } });
-    }
-
-    // Check how many mandatory assets this employee has
-    const pendingAssets = await req.prisma.asset.count({
-      where: {
-        assignedTo: userId,
-        status: 'assigned',
-        isMandatoryReturn: true,
-      },
-    });
-
-    const separation = await req.prisma.separation.create({
-      data: {
-        userId,
-        type,
-        requestDate,
-        lastWorkingDate: lastWorkingDate || null,
-        reason: reason || null,
-        noticePeriodDays: noticePeriodDays || 30,
-        processedBy: req.user.id,
-        allAssetsReturned: pendingAssets === 0,
-        fnfHoldReason: pendingAssets > 0 ? `${pendingAssets} mandatory asset(s) pending return` : null,
-      },
-    });
-
-    res.status(201).json({
-      ...separation,
-      pendingAssets,
-      assetWarning: pendingAssets > 0
-        ? `⚠️ Employee has ${pendingAssets} mandatory asset(s) to return. FnF will be held until all assets are returned.`
-        : null,
-    });
-  } catch (err) {
-    console.error('Initiate separation error:', err);
-    res.status(500).json({ error: 'Failed to initiate separation.' });
+  const existing = await req.prisma.separation.findUnique({ where: { userId } });
+  if (existing && existing.status !== 'completed' && existing.status !== 'cancelled') {
+    throw conflict('An active separation already exists for this user.');
   }
-});
+  if (existing) await req.prisma.separation.delete({ where: { userId } });
+
+  const pendingAssets = await req.prisma.asset.count({
+    where: { assignedTo: userId, status: 'assigned', isMandatoryReturn: true },
+  });
+
+  const separation = await req.prisma.separation.create({
+    data: {
+      userId, type, requestDate,
+      lastWorkingDate: lastWorkingDate || null,
+      reason: reason || null,
+      noticePeriodDays: noticePeriodDays || 30,
+      processedBy: req.user.id,
+      allAssetsReturned: pendingAssets === 0,
+      fnfHoldReason: pendingAssets > 0 ? `${pendingAssets} mandatory asset(s) pending return` : null,
+    },
+  });
+
+  res.status(201).json({
+    ...separation, pendingAssets,
+    assetWarning: pendingAssets > 0
+      ? `⚠️ Employee has ${pendingAssets} mandatory asset(s) to return. FnF will be held until all assets are returned.`
+      : null,
+  });
+}));
 
 // 6. GET /separations — List all active separations (admin only)
-router.get('/separations', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
-
-    const separations = await req.prisma.separation.findMany({
-      where: {
-        status: { notIn: ['completed', 'cancelled'] },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            department: true,
-            designation: true,
-            employeeId: true,
-            dateOfJoining: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    res.json(separations);
-  } catch (err) {
-    console.error('List separations error:', err);
-    res.status(500).json({ error: 'Failed to fetch separations.' });
-  }
-});
+router.get('/separations', requireAdmin, asyncHandler(async (req, res) => {
+  const separations = await req.prisma.separation.findMany({
+    where: { status: { notIn: ['completed', 'cancelled'] } },
+    include: {
+      user: { select: { id: true, name: true, email: true, department: true, designation: true, employeeId: true, dateOfJoining: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(separations);
+}));
 
 // 7. GET /separation/:id — Single separation detail (admin only)
-router.get('/separation/:id', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.get('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const separation = await req.prisma.separation.findUnique({
+    where: { id },
+    include: {
+      user: { select: { id: true, name: true, email: true, department: true, designation: true, employeeId: true, dateOfJoining: true, phone: true, personalEmail: true, profilePhotoUrl: true } },
+      processor: { select: { id: true, name: true, email: true } },
+    },
+  });
+  if (!separation) throw notFound('Separation record');
 
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid separation ID.' });
-    }
+  const pendingAssets = await req.prisma.asset.findMany({
+    where: { assignedTo: separation.userId, status: 'assigned', isMandatoryReturn: true },
+    select: { id: true, name: true, type: true, assetTag: true, serialNumber: true },
+  });
 
-    const separation = await req.prisma.separation.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            department: true,
-            designation: true,
-            employeeId: true,
-            dateOfJoining: true,
-            phone: true,
-            personalEmail: true,
-            profilePhotoUrl: true,
-          },
-        },
-        processor: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
-
-    if (!separation) {
-      return res.status(404).json({ error: 'Separation record not found.' });
-    }
-
-    // Fetch pending assets for this employee
-    const pendingAssets = await req.prisma.asset.findMany({
-      where: {
-        assignedTo: separation.userId,
-        status: 'assigned',
-        isMandatoryReturn: true,
-      },
-      select: { id: true, name: true, type: true, assetTag: true, serialNumber: true },
-    });
-
-    res.json({
-      ...separation,
-      pendingAssets,
-      pendingAssetCount: pendingAssets.length,
-    });
-  } catch (err) {
-    console.error('Get separation detail error:', err);
-    res.status(500).json({ error: 'Failed to fetch separation details.' });
-  }
-});
+  res.json({ ...separation, pendingAssets, pendingAssetCount: pendingAssets.length });
+}));
 
 // 8. PUT /separation/:id — Update separation (admin only)
-router.put('/separation/:id', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const existing = await req.prisma.separation.findUnique({ where: { id } });
+  if (!existing) throw notFound('Separation record');
 
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid separation ID.' });
-    }
+  const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason } = req.body;
 
-    const existing = await req.prisma.separation.findUnique({ where: { id } });
-    if (!existing) {
-      return res.status(404).json({ error: 'Separation record not found.' });
-    }
+  if (status) requireEnum(status, VALID_SEP_STATUSES, 'status');
 
-    const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason } = req.body;
-
-    // Validate status if provided
-    const validStatuses = ['initiated', 'notice_period', 'fnf_pending', 'completed', 'cancelled'];
-    if (status && !validStatuses.includes(status)) {
-      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
-    }
-
-    // Block FnF completion if mandatory assets not returned
-    if (status === 'completed') {
-      const pendingAssets = await req.prisma.asset.count({
-        where: {
-          assignedTo: existing.userId,
-          status: 'assigned',
-          isMandatoryReturn: true,
-        },
-      });
-      if (pendingAssets > 0) {
-        return res.status(400).json({
-          error: `Cannot complete FnF: ${pendingAssets} mandatory asset(s) still not returned. Employee must handover all assets first.`,
-          pendingAssets,
-        });
-      }
-    }
-
-    const updateData = {};
-    if (status !== undefined) updateData.status = status;
-    if (lastWorkingDate !== undefined) updateData.lastWorkingDate = lastWorkingDate;
-    if (exitInterviewDone !== undefined) updateData.exitInterviewDone = exitInterviewDone;
-    if (exitInterviewNotes !== undefined) updateData.exitInterviewNotes = exitInterviewNotes;
-    if (allAssetsReturned !== undefined) updateData.allAssetsReturned = allAssetsReturned;
-    if (assetReturnNotes !== undefined) updateData.assetReturnNotes = assetReturnNotes;
-    if (fnfHoldReason !== undefined) updateData.fnfHoldReason = fnfHoldReason;
-    if (fnfAmount !== undefined) updateData.fnfAmount = fnfAmount;
-    if (fnfPaidOn !== undefined) updateData.fnfPaidOn = fnfPaidOn;
-
-    const updated = await req.prisma.separation.update({
-      where: { id },
-      data: updateData,
+  if (status === 'completed') {
+    const pendingAssets = await req.prisma.asset.count({
+      where: { assignedTo: existing.userId, status: 'assigned', isMandatoryReturn: true },
     });
-
-    res.json(updated);
-  } catch (err) {
-    console.error('Update separation error:', err);
-    res.status(500).json({ error: 'Failed to update separation.' });
+    if (pendingAssets > 0) {
+      throw badRequest(`Cannot complete FnF: ${pendingAssets} mandatory asset(s) still not returned. Employee must handover all assets first.`);
+    }
   }
-});
+
+  const updateData = {};
+  if (status !== undefined) updateData.status = status;
+  if (lastWorkingDate !== undefined) updateData.lastWorkingDate = lastWorkingDate;
+  if (exitInterviewDone !== undefined) updateData.exitInterviewDone = exitInterviewDone;
+  if (exitInterviewNotes !== undefined) updateData.exitInterviewNotes = exitInterviewNotes;
+  if (allAssetsReturned !== undefined) updateData.allAssetsReturned = allAssetsReturned;
+  if (assetReturnNotes !== undefined) updateData.assetReturnNotes = assetReturnNotes;
+  if (fnfHoldReason !== undefined) updateData.fnfHoldReason = fnfHoldReason;
+  if (fnfAmount !== undefined) updateData.fnfAmount = fnfAmount;
+  if (fnfPaidOn !== undefined) updateData.fnfPaidOn = fnfPaidOn;
+
+  const updated = await req.prisma.separation.update({ where: { id }, data: updateData });
+  res.json(updated);
+}));
 
 // ============================================================
 //  ANALYTICS
 // ============================================================
 
 // 9. GET /confirmations-due — Employees pending confirmation (admin only)
-router.get('/confirmations-due', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.get('/confirmations-due', requireAdmin, asyncHandler(async (req, res) => {
+  const today = new Date();
+  const thirtyDaysFromNow = new Date(today);
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  const cutoffDate = thirtyDaysFromNow.toISOString().split('T')[0];
 
-    const today = new Date();
-    const thirtyDaysFromNow = new Date(today);
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const cutoffDate = thirtyDaysFromNow.toISOString().split('T')[0]; // "YYYY-MM-DD"
-
-    const users = await req.prisma.user.findMany({
-      where: {
-        isActive: true,
-        confirmationDate: null,
-        probationEndDate: { not: null, lte: cutoffDate },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        employeeId: true,
-        department: true,
-        designation: true,
-        dateOfJoining: true,
-        probationEndDate: true,
-        confirmationDate: true,
-      },
-      orderBy: { probationEndDate: 'asc' },
-    });
-
-    res.json(users);
-  } catch (err) {
-    console.error('Confirmations due error:', err);
-    res.status(500).json({ error: 'Failed to fetch confirmations due.' });
-  }
-});
+  const users = await req.prisma.user.findMany({
+    where: { isActive: true, confirmationDate: null, probationEndDate: { not: null, lte: cutoffDate } },
+    select: { id: true, name: true, email: true, employeeId: true, department: true, designation: true, dateOfJoining: true, probationEndDate: true, confirmationDate: true },
+    orderBy: { probationEndDate: 'asc' },
+  });
+  res.json(users);
+}));
 
 // 10. GET /new-joinees — Employees who joined in last 30 days (admin only)
-router.get('/new-joinees', async (req, res) => {
-  try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin or Team Lead access required.' });
-    }
+router.get('/new-joinees', requireAdmin, asyncHandler(async (req, res) => {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoffDate = thirtyDaysAgo.toISOString().split('T')[0];
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoffDate = thirtyDaysAgo.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  const users = await req.prisma.user.findMany({
+    where: { isActive: true, dateOfJoining: { not: null, gte: cutoffDate } },
+    select: { id: true, name: true, email: true, employeeId: true, department: true, designation: true, dateOfJoining: true, employmentType: true },
+    orderBy: { dateOfJoining: 'desc' },
+  });
 
-    const users = await req.prisma.user.findMany({
-      where: {
-        isActive: true,
-        dateOfJoining: { not: null, gte: cutoffDate },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        employeeId: true,
-        department: true,
-        designation: true,
-        dateOfJoining: true,
-        employmentType: true,
-      },
-      orderBy: { dateOfJoining: 'desc' },
-    });
+  const usersWithProgress = await Promise.all(
+    users.map(async (user) => {
+      const totalTasks = await req.prisma.onboardingChecklist.count({ where: { userId: user.id } });
+      const completedTasks = await req.prisma.onboardingChecklist.count({ where: { userId: user.id, isCompleted: true } });
+      return { ...user, onboardingProgress: { completed: completedTasks, total: totalTasks } };
+    })
+  );
 
-    // Fetch onboarding progress for each new joinee
-    const usersWithProgress = await Promise.all(
-      users.map(async (user) => {
-        const totalTasks = await req.prisma.onboardingChecklist.count({
-          where: { userId: user.id },
-        });
-        const completedTasks = await req.prisma.onboardingChecklist.count({
-          where: { userId: user.id, isCompleted: true },
-        });
-        return {
-          ...user,
-          onboardingProgress: {
-            completed: completedTasks,
-            total: totalTasks,
-          },
-        };
-      })
-    );
-
-    res.json(usersWithProgress);
-  } catch (err) {
-    console.error('New joinees error:', err);
-    res.status(500).json({ error: 'Failed to fetch new joinees.' });
-  }
-});
+  res.json(usersWithProgress);
+}));
 
 module.exports = router;

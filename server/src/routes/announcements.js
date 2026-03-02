@@ -1,369 +1,150 @@
-const express = require("express");
+const express = require('express');
+const { authenticate, requireAdmin } = require('../middleware/auth');
+const { asyncHandler } = require('../utils/asyncHandler');
+const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
+const { requireFields, requireEnum, parseId } = require('../utils/validate');
+
 const router = express.Router();
-const { authenticateToken } = require("../middleware/auth");
+router.use(authenticate);
 
-// Helper: check if user is admin or team_lead
-function isAdmin(user) {
-  return user.role === "admin" || user.role === "team_lead";
-}
-
-// Priority sort order mapping
 const PRIORITY_ORDER = { urgent: 0, important: 1, normal: 2 };
+const VALID_CATEGORIES = ['general', 'policy', 'event', 'birthday', 'anniversary'];
+const VALID_PRIORITIES = ['normal', 'important', 'urgent'];
 
-// ============================================================
-// GET /celebrations - Upcoming birthdays & work anniversaries
-// Must be defined BEFORE GET /:id to avoid route conflicts
-// ============================================================
-router.get("/celebrations", authenticateToken, async (req, res) => {
-  try {
-    const now = new Date();
-    const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
-    const currentYear = now.getFullYear();
+// GET /celebrations — Upcoming birthdays & work anniversaries (must be before /:id)
+router.get('/celebrations', asyncHandler(async (req, res) => {
+  const now = new Date();
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const currentYear = now.getFullYear();
 
-    // Fetch active employees in the user company
-    const employees = await req.prisma.user.findMany({
-      where: {
-        isActive: true,
-        companyId: req.user.companyId,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        dateOfBirth: true,
-        dateOfJoining: true,
-        department: true,
-      },
-    });
+  const employees = await req.prisma.user.findMany({
+    where: { isActive: true, companyId: req.user.companyId },
+    select: { id: true, name: true, email: true, dateOfBirth: true, dateOfJoining: true, department: true },
+  });
 
-    const birthdays = [];
-    const anniversaries = [];
+  const birthdays = [];
+  const anniversaries = [];
 
-    for (const emp of employees) {
-      // Check birthdays: dateOfBirth format is "YYYY-MM-DD"
-      if (emp.dateOfBirth) {
-        const parts = emp.dateOfBirth.split("-");
-        if (parts.length === 3) {
-          const birthMonth = parts[1];
-          const birthDay = parts[2];
-          if (birthMonth === currentMonth) {
-            birthdays.push({
-              id: emp.id,
-              name: emp.name,
-              date: emp.dateOfBirth,
-              day: parseInt(birthDay, 10),
-              department: emp.department || null,
-            });
-          }
-        }
+  for (const emp of employees) {
+    if (emp.dateOfBirth) {
+      const parts = emp.dateOfBirth.split('-');
+      if (parts.length === 3 && parts[1] === currentMonth) {
+        birthdays.push({ id: emp.id, name: emp.name, date: emp.dateOfBirth, day: parseInt(parts[2], 10), department: emp.department || null });
       }
-
-      // Check work anniversaries: dateOfJoining format is "YYYY-MM-DD"
-      if (emp.dateOfJoining) {
-        const parts = emp.dateOfJoining.split("-");
-        if (parts.length === 3) {
-          const joinYear = parseInt(parts[0], 10);
-          const joinMonth = parts[1];
-          const joinDay = parts[2];
-          const years = currentYear - joinYear;
-          // Only include if at least 1 year completed and the month matches
-          if (joinMonth === currentMonth && years >= 1) {
-            anniversaries.push({
-              id: emp.id,
-              name: emp.name,
-              date: emp.dateOfJoining,
-              day: parseInt(joinDay, 10),
-              department: emp.department || null,
-              years,
-            });
-          }
+    }
+    if (emp.dateOfJoining) {
+      const parts = emp.dateOfJoining.split('-');
+      if (parts.length === 3) {
+        const years = currentYear - parseInt(parts[0], 10);
+        if (parts[1] === currentMonth && years >= 1) {
+          anniversaries.push({ id: emp.id, name: emp.name, date: emp.dateOfJoining, day: parseInt(parts[2], 10), department: emp.department || null, years });
         }
       }
     }
-
-    // Sort by day within the month
-    birthdays.sort((a, b) => a.day - b.day);
-    anniversaries.sort((a, b) => a.day - b.day);
-
-    // Remove the temporary "day" field used for sorting
-    const cleanBirthdays = birthdays.map(({ day, ...rest }) => rest);
-    const cleanAnniversaries = anniversaries.map(({ day, ...rest }) => rest);
-
-    return res.json({
-      birthdays: cleanBirthdays,
-      anniversaries: cleanAnniversaries,
-    });
-  } catch (error) {
-    console.error("Error fetching celebrations:", error);
-    return res.status(500).json({ error: "Failed to fetch celebrations" });
   }
-});
 
-// ============================================================
-// GET / - List active announcements for the authenticated user
-// ============================================================
-router.get("/", authenticateToken, async (req, res) => {
-  try {
-    const now = new Date();
+  birthdays.sort((a, b) => a.day - b.day);
+  anniversaries.sort((a, b) => a.day - b.day);
 
-    // Use AND to combine the two OR conditions correctly
-    const announcements = await req.prisma.announcement.findMany({
-      where: {
-        isActive: true,
-        AND: [
-          {
-            OR: [
-              { companyId: null },
-              { companyId: req.user.companyId },
-            ],
-          },
-          {
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: now } },
-            ],
-          },
-        ],
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+  res.json({
+    birthdays: birthdays.map(({ day, ...rest }) => rest),
+    anniversaries: anniversaries.map(({ day, ...rest }) => rest),
+  });
+}));
 
-    // Sort by priority (urgent > important > normal), then by createdAt desc
-    announcements.sort((a, b) => {
-      const pa = PRIORITY_ORDER[a.priority] !== undefined ? PRIORITY_ORDER[a.priority] : 2;
-      const pb = PRIORITY_ORDER[b.priority] !== undefined ? PRIORITY_ORDER[b.priority] : 2;
-      const priorityDiff = pa - pb;
-      if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+// GET / — List active announcements for the authenticated user
+router.get('/', asyncHandler(async (req, res) => {
+  const now = new Date();
+  const announcements = await req.prisma.announcement.findMany({
+    where: {
+      isActive: true,
+      AND: [
+        { OR: [{ companyId: null }, { companyId: req.user.companyId }] },
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      ],
+    },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      company: { select: { id: true, name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 
-    return res.json(announcements);
-  } catch (error) {
-    console.error("Error fetching announcements:", error);
-    return res.status(500).json({ error: "Failed to fetch announcements" });
-  }
-});
-// ============================================================
-// POST / - Create a new announcement (admin/team_lead only)
-// ============================================================
-router.post("/", authenticateToken, async (req, res) => {
-  try {
-    if (!isAdmin(req.user)) {
-      return res
-        .status(403)
-        .json({ error: "Access denied. Admin or team lead role required." });
-    }
+  announcements.sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.priority] !== undefined ? PRIORITY_ORDER[a.priority] : 2;
+    const pb = PRIORITY_ORDER[b.priority] !== undefined ? PRIORITY_ORDER[b.priority] : 2;
+    const priorityDiff = pa - pb;
+    if (priorityDiff !== 0) return priorityDiff;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
 
-    const { title, content, category, priority, companyId, expiresAt } =
-      req.body;
+  res.json(announcements);
+}));
 
-    if (!title || !content) {
-      return res
-        .status(400)
-        .json({ error: "Title and content are required." });
-    }
+// POST / — Create a new announcement (admin/team_lead only)
+router.post('/', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'title', 'content');
+  const { title, content, category, priority, companyId, expiresAt } = req.body;
+  if (category) requireEnum(category, VALID_CATEGORIES, 'category');
+  if (priority) requireEnum(priority, VALID_PRIORITIES, 'priority');
 
-    const validCategories = [
-      "general",
-      "policy",
-      "event",
-      "birthday",
-      "anniversary",
-    ];
-    if (category && !validCategories.includes(category)) {
-      return res.status(400).json({
-        error:
-          "Invalid category. Must be one of: " + validCategories.join(", "),
-      });
-    }
+  const announcement = await req.prisma.announcement.create({
+    data: {
+      title, content,
+      category: category || 'general',
+      priority: priority || 'normal',
+      companyId: companyId !== undefined ? companyId : null,
+      postedBy: req.user.id,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+    },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      company: { select: { id: true, name: true } },
+    },
+  });
 
-    const validPriorities = ["normal", "important", "urgent"];
-    if (priority && !validPriorities.includes(priority)) {
-      return res.status(400).json({
-        error:
-          "Invalid priority. Must be one of: " + validPriorities.join(", "),
-      });
-    }
+  res.status(201).json(announcement);
+}));
 
-    const announcement = await req.prisma.announcement.create({
-      data: {
-        title,
-        content,
-        category: category || "general",
-        priority: priority || "normal",
-        companyId: companyId !== undefined ? companyId : null,
-        postedBy: req.user.id,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+// PUT /:id — Update an announcement (admin/team_lead only)
+router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const announcementId = parseId(req.params.id);
+  const existing = await req.prisma.announcement.findUnique({ where: { id: announcementId } });
+  if (!existing) throw notFound('Announcement');
 
-    return res.status(201).json(announcement);
-  } catch (error) {
-    console.error("Error creating announcement:", error);
-    return res.status(500).json({ error: "Failed to create announcement" });
-  }
-});
+  const { title, content, category, priority, companyId, expiresAt, isActive } = req.body;
+  if (category) requireEnum(category, VALID_CATEGORIES, 'category');
+  if (priority) requireEnum(priority, VALID_PRIORITIES, 'priority');
 
-// ============================================================
-// PUT /:id - Update an announcement (admin/team_lead only)
-// ============================================================
-router.put("/:id", authenticateToken, async (req, res) => {
-  try {
-    if (!isAdmin(req.user)) {
-      return res
-        .status(403)
-        .json({ error: "Access denied. Admin or team lead role required." });
-    }
+  const updateData = {};
+  if (title !== undefined) updateData.title = title;
+  if (content !== undefined) updateData.content = content;
+  if (category !== undefined) updateData.category = category;
+  if (priority !== undefined) updateData.priority = priority;
+  if (companyId !== undefined) updateData.companyId = companyId;
+  if (expiresAt !== undefined) updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
+  if (isActive !== undefined) updateData.isActive = isActive;
 
-    const announcementId = parseInt(req.params.id, 10);
-    if (isNaN(announcementId)) {
-      return res.status(400).json({ error: "Invalid announcement ID." });
-    }
+  const updated = await req.prisma.announcement.update({
+    where: { id: announcementId },
+    data: updateData,
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      company: { select: { id: true, name: true } },
+    },
+  });
 
-    // Verify the announcement exists
-    const existing = await req.prisma.announcement.findUnique({
-      where: { id: announcementId },
-    });
+  res.json(updated);
+}));
 
-    if (!existing) {
-      return res.status(404).json({ error: "Announcement not found." });
-    }
+// DELETE /:id — Soft deactivate an announcement (admin/team_lead only)
+router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const announcementId = parseId(req.params.id);
+  const existing = await req.prisma.announcement.findUnique({ where: { id: announcementId } });
+  if (!existing) throw notFound('Announcement');
 
-    const { title, content, category, priority, companyId, expiresAt, isActive } =
-      req.body;
-
-    // Validate category if provided
-    const validCategories = [
-      "general",
-      "policy",
-      "event",
-      "birthday",
-      "anniversary",
-    ];
-    if (category && !validCategories.includes(category)) {
-      return res.status(400).json({
-        error:
-          "Invalid category. Must be one of: " + validCategories.join(", "),
-      });
-    }
-
-    // Validate priority if provided
-    const validPriorities = ["normal", "important", "urgent"];
-    if (priority && !validPriorities.includes(priority)) {
-      return res.status(400).json({
-        error:
-          "Invalid priority. Must be one of: " + validPriorities.join(", "),
-      });
-    }
-
-    // Build update data from provided fields only
-    const updateData = {};
-    if (title !== undefined) updateData.title = title;
-    if (content !== undefined) updateData.content = content;
-    if (category !== undefined) updateData.category = category;
-    if (priority !== undefined) updateData.priority = priority;
-    if (companyId !== undefined) updateData.companyId = companyId;
-    if (expiresAt !== undefined)
-      updateData.expiresAt = expiresAt ? new Date(expiresAt) : null;
-    if (isActive !== undefined) updateData.isActive = isActive;
-
-    const updated = await req.prisma.announcement.update({
-      where: { id: announcementId },
-      data: updateData,
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    return res.json(updated);
-  } catch (error) {
-    console.error("Error updating announcement:", error);
-    return res.status(500).json({ error: "Failed to update announcement" });
-  }
-});
-
-// ============================================================
-// DELETE /:id - Soft deactivate an announcement (admin/team_lead only)
-// ============================================================
-router.delete("/:id", authenticateToken, async (req, res) => {
-  try {
-    if (!isAdmin(req.user)) {
-      return res
-        .status(403)
-        .json({ error: "Access denied. Admin or team lead role required." });
-    }
-
-    const announcementId = parseInt(req.params.id, 10);
-    if (isNaN(announcementId)) {
-      return res.status(400).json({ error: "Invalid announcement ID." });
-    }
-
-    // Verify the announcement exists
-    const existing = await req.prisma.announcement.findUnique({
-      where: { id: announcementId },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ error: "Announcement not found." });
-    }
-
-    // Soft delete: set isActive to false
-    await req.prisma.announcement.update({
-      where: { id: announcementId },
-      data: { isActive: false },
-    });
-
-    return res.json({ message: "Announcement deactivated successfully." });
-  } catch (error) {
-    console.error("Error deactivating announcement:", error);
-    return res
-      .status(500)
-      .json({ error: "Failed to deactivate announcement" });
-  }
-});
+  await req.prisma.announcement.update({ where: { id: announcementId }, data: { isActive: false } });
+  res.json({ message: 'Announcement deactivated successfully.' });
+}));
 
 module.exports = router;

@@ -1,5 +1,8 @@
 const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { asyncHandler } = require('../utils/asyncHandler');
+const { badRequest } = require('../utils/httpErrors');
+const { requireFields } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
@@ -78,74 +81,53 @@ Resume/Biodata text:
 `;
 
 // POST /api/extraction/resume — Extract data from pasted resume text
-router.post('/resume', authenticate, requireAdmin, async (req, res) => {
+router.post('/resume', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'text');
+
+  const setting = await req.prisma.setting.findUnique({ where: { key: 'gemini_api_key' } });
+  if (!setting?.value) throw badRequest('Gemini API key not configured. Go to Admin → Settings to add it.');
+
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(setting.value);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+  let result;
   try {
-    const { text } = req.body;
-    if (!text?.trim()) {
-      return res.status(400).json({ error: 'Resume text is required.' });
-    }
-
-    // Get Gemini API key from settings
-    const setting = await req.prisma.setting.findUnique({ where: { key: 'gemini_api_key' } });
-    if (!setting?.value) {
-      return res.status(400).json({ error: 'Gemini API key not configured. Go to Admin → Settings to add it.' });
-    }
-
-    // Dynamic import for ES module
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(setting.value);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    const prompt = EXTRACTION_PROMPT + text.trim() + '\n---';
-
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-
-    // Parse JSON from response (handle markdown code blocks)
-    let cleaned = responseText.trim();
-    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
-    else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
-    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-    cleaned = cleaned.trim();
-
-    let extracted;
-    try {
-      extracted = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error('Failed to parse Gemini response:', responseText);
-      return res.status(500).json({ error: 'AI returned invalid format. Please try again.' });
-    }
-
-    // Apply normalization
-    if (extracted.name) extracted.name = normalizeName(extracted.name);
-    if (extracted.email) extracted.email = normalizeEmail(extracted.email);
-    if (extracted.personalEmail) extracted.personalEmail = normalizeEmail(extracted.personalEmail);
-    if (extracted.fatherName) extracted.fatherName = normalizeName(extracted.fatherName);
-    if (extracted.spouseName) extracted.spouseName = normalizeName(extracted.spouseName);
-
-    // Normalize education entries
-    if (extracted.education?.length) {
-      extracted.education = extracted.education.filter((e) => e && e.degree);
-    }
-    // Normalize employment entries
-    if (extracted.previousEmployment?.length) {
-      extracted.previousEmployment = extracted.previousEmployment.filter((e) => e && e.company);
-    }
-    // Normalize family entries
-    if (extracted.familyMembers?.length) {
-      extracted.familyMembers = extracted.familyMembers
-        .filter((f) => f && f.name)
-        .map((f) => ({ ...f, name: normalizeName(f.name) }));
-    }
-
-    res.json(extracted);
-  } catch (err) {
-    console.error('AI extraction error:', err);
-    const msg = err.message?.includes('API_KEY_INVALID')
+    result = await model.generateContent(EXTRACTION_PROMPT + req.body.text.trim() + '\n---');
+  } catch (aiErr) {
+    throw badRequest(aiErr.message?.includes('API_KEY_INVALID')
       ? 'Invalid Gemini API key. Check Settings.'
-      : 'AI extraction failed. Please try again.';
-    res.status(500).json({ error: msg });
+      : 'AI extraction failed. Please try again.');
   }
-});
+
+  // Parse JSON from response (handle markdown code blocks)
+  let cleaned = result.response.text().trim();
+  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+  cleaned = cleaned.trim();
+
+  let extracted;
+  try {
+    extracted = JSON.parse(cleaned);
+  } catch {
+    throw badRequest('AI returned invalid format. Please try again.');
+  }
+
+  // Apply normalization
+  if (extracted.name) extracted.name = normalizeName(extracted.name);
+  if (extracted.email) extracted.email = normalizeEmail(extracted.email);
+  if (extracted.personalEmail) extracted.personalEmail = normalizeEmail(extracted.personalEmail);
+  if (extracted.fatherName) extracted.fatherName = normalizeName(extracted.fatherName);
+  if (extracted.spouseName) extracted.spouseName = normalizeName(extracted.spouseName);
+
+  if (extracted.education?.length) extracted.education = extracted.education.filter((e) => e && e.degree);
+  if (extracted.previousEmployment?.length) extracted.previousEmployment = extracted.previousEmployment.filter((e) => e && e.company);
+  if (extracted.familyMembers?.length) {
+    extracted.familyMembers = extracted.familyMembers.filter((f) => f && f.name).map((f) => ({ ...f, name: normalizeName(f.name) }));
+  }
+
+  res.json(extracted);
+}));
 
 module.exports = router;

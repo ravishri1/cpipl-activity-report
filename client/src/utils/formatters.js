@@ -1,0 +1,55 @@
+/**
+ * Shared formatting utilities.
+ * Import these instead of defining formatDate/formatINR locally in components.
+ */
+
+/** Format date as "02 Mar 2026" */
+export function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/** Format date+time as "02 Mar 2026, 09:30 AM" */
+export function formatDateTime(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/** Format INR currency: "₹12,500" */
+const inrFormatter = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+});
+
+export function formatINR(amount) {
+  return inrFormatter.format(amount || 0);
+}
+
+/** Capitalize & clean: "in_progress" → "In Progress" */
+export function capitalize(str) {
+  if (!str) return '';
+  return str
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Format time string: "14:30" → "02:30 PM" */
+export function formatTime(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+}
