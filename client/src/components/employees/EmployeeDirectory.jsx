@@ -10,6 +10,8 @@ import {
   Building2,
   LayoutGrid,
   List,
+  UserCheck,
+  MapPin,
 } from 'lucide-react';
 
 export default function EmployeeDirectory() {
@@ -126,15 +128,23 @@ export default function EmployeeDirectory() {
                   </span>
                 )}
               </div>
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4">
-                <div className="flex items-center gap-1 text-xs text-slate-400">
-                  <Mail className="w-3 h-3" />
-                  <span className="truncate">{emp.email}</span>
-                </div>
-                {emp.phone && (
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1 text-xs text-slate-400">
-                    <Phone className="w-3 h-3" />
-                    <span>{emp.phone}</span>
+                    <Mail className="w-3 h-3" />
+                    <span className="truncate">{emp.email}</span>
+                  </div>
+                  {emp.phone && (
+                    <div className="flex items-center gap-1 text-xs text-slate-400">
+                      <Phone className="w-3 h-3" />
+                      <span>{emp.phone}</span>
+                    </div>
+                  )}
+                </div>
+                {emp.reportingManager && (
+                  <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                    <UserCheck className="w-3 h-3 text-blue-400" />
+                    <span>Reports to <span className="text-slate-500 font-medium">{emp.reportingManager.name}</span></span>
                   </div>
                 )}
               </div>
@@ -151,6 +161,7 @@ export default function EmployeeDirectory() {
                 <th className="px-4 py-2.5 font-medium text-slate-600">ID</th>
                 <th className="px-4 py-2.5 font-medium text-slate-600">Department</th>
                 <th className="px-4 py-2.5 font-medium text-slate-600">Designation</th>
+                <th className="px-4 py-2.5 font-medium text-slate-600 hidden lg:table-cell">Reports To</th>
                 <th className="px-4 py-2.5 font-medium text-slate-600">Email</th>
               </tr>
             </thead>
@@ -159,8 +170,10 @@ export default function EmployeeDirectory() {
                 <tr key={emp.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2.5">
                     <Link to={`/employee/${emp.id}`} className="flex items-center gap-2 hover:text-blue-700">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
-                        {emp.name?.charAt(0)?.toUpperCase()}
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
+                        {emp.profilePhotoUrl
+                          ? <img src={emp.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          : emp.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <span className="font-medium text-slate-800">{emp.name}</span>
                     </Link>
@@ -168,6 +181,13 @@ export default function EmployeeDirectory() {
                   <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{emp.employeeId || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-600">{emp.department}</td>
                   <td className="px-4 py-2.5 text-slate-600">{emp.designation || '—'}</td>
+                  <td className="px-4 py-2.5 text-slate-500 hidden lg:table-cell">
+                    {emp.reportingManager ? (
+                      <Link to={`/employee/${emp.reportingManager.id}`} className="text-blue-600 hover:underline text-xs">
+                        {emp.reportingManager.name}
+                      </Link>
+                    ) : '—'}
+                  </td>
                   <td className="px-4 py-2.5 text-slate-500">{emp.email}</td>
                 </tr>
               ))}

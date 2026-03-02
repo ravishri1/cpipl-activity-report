@@ -37,6 +37,9 @@ router.get('/directory', authenticate, async (req, res) => {
         phone: true,
         dateOfJoining: true,
         role: true,
+        location: true,
+        reportingManagerId: true,
+        reportingManager: { select: { id: true, name: true, employeeId: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -59,6 +62,23 @@ router.get('/departments', authenticate, async (req, res) => {
     res.json(departments.map((d) => d.department));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch departments.' });
+  }
+});
+
+// GET /api/users/org-chart — Org chart data (reporting hierarchy)
+router.get('/org-chart', authenticate, async (req, res) => {
+  try {
+    const users = await req.prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true, name: true, employeeId: true, designation: true,
+        department: true, profilePhotoUrl: true, reportingManagerId: true, role: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch org chart.' });
   }
 });
 
@@ -89,12 +109,28 @@ router.get('/:id/profile', authenticate, async (req, res) => {
       select: {
         id: true, name: true, email: true, role: true, department: true,
         isActive: true, createdAt: true,
+        // Basic HR
         employeeId: true, designation: true, dateOfJoining: true, dateOfBirth: true,
         employmentType: true, phone: true, personalEmail: true, address: true,
         emergencyContact: true, gender: true, bloodGroup: true,
         profilePhotoUrl: true, reportingManagerId: true,
-        reportingManager: { select: { id: true, name: true, employeeId: true } },
-        subordinates: { select: { id: true, name: true, employeeId: true, designation: true } },
+        // Extended Personal
+        maritalStatus: true, nationality: true, fatherName: true, spouseName: true,
+        religion: true, placeOfBirth: true, permanentAddress: true,
+        // Identity Documents
+        aadhaarNumber: true, panNumber: true, passportNumber: true, passportExpiry: true,
+        drivingLicense: true, uanNumber: true,
+        // Bank Details
+        bankName: true, bankAccountNumber: true, bankBranch: true, bankIfscCode: true,
+        // Employment Extended
+        confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
+        previousExperience: true, location: true, grade: true, shift: true,
+        // Relations
+        reportingManager: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
+        subordinates: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
+        educations: { orderBy: { id: 'desc' } },
+        familyMembers: { orderBy: { id: 'asc' } },
+        previousEmployments: { orderBy: { id: 'desc' } },
       },
     });
 
@@ -124,33 +160,32 @@ router.put('/:id/profile', authenticate, async (req, res) => {
 
     // Self-editable fields (employees can update their own contact info)
     if (isSelf || isAdmin) {
-      const { phone, personalEmail, address, emergencyContact, profilePhotoUrl } = req.body;
-      if (phone !== undefined) data.phone = phone;
-      if (personalEmail !== undefined) data.personalEmail = personalEmail;
-      if (address !== undefined) data.address = address;
-      if (emergencyContact !== undefined) data.emergencyContact = emergencyContact;
-      if (profilePhotoUrl !== undefined) data.profilePhotoUrl = profilePhotoUrl;
+      const selfFields = ['phone', 'personalEmail', 'address', 'permanentAddress', 'emergencyContact', 'profilePhotoUrl'];
+      selfFields.forEach((f) => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
     }
 
     // Admin-only fields
     if (isAdmin) {
-      const {
-        designation, dateOfJoining, dateOfBirth, employmentType,
-        gender, bloodGroup, reportingManagerId, employeeId,
-        department, role, name, email,
-      } = req.body;
-      if (designation !== undefined) data.designation = designation;
-      if (dateOfJoining !== undefined) data.dateOfJoining = dateOfJoining;
-      if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth;
-      if (employmentType !== undefined) data.employmentType = employmentType;
-      if (gender !== undefined) data.gender = gender;
-      if (bloodGroup !== undefined) data.bloodGroup = bloodGroup;
-      if (reportingManagerId !== undefined) data.reportingManagerId = reportingManagerId || null;
-      if (employeeId !== undefined) data.employeeId = employeeId;
-      if (department !== undefined) data.department = department;
-      if (role !== undefined) data.role = role;
-      if (name !== undefined) data.name = name;
-      if (email !== undefined) data.email = email;
+      const adminFields = [
+        // Basic
+        'name', 'email', 'role', 'department', 'employeeId',
+        'designation', 'dateOfJoining', 'dateOfBirth', 'employmentType',
+        'gender', 'bloodGroup',
+        // Extended Personal
+        'maritalStatus', 'nationality', 'fatherName', 'spouseName',
+        'religion', 'placeOfBirth',
+        // Identity
+        'aadhaarNumber', 'panNumber', 'passportNumber', 'passportExpiry',
+        'drivingLicense', 'uanNumber',
+        // Bank
+        'bankName', 'bankAccountNumber', 'bankBranch', 'bankIfscCode',
+        // Employment Extended
+        'confirmationDate', 'probationEndDate', 'noticePeriodDays',
+        'previousExperience', 'location', 'grade', 'shift',
+      ];
+      adminFields.forEach((f) => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
+      // Handle reportingManagerId specially (can be null)
+      if (req.body.reportingManagerId !== undefined) data.reportingManagerId = req.body.reportingManagerId || null;
     }
 
     if (Object.keys(data).length === 0) {
@@ -166,6 +201,15 @@ router.put('/:id/profile', authenticate, async (req, res) => {
         employmentType: true, phone: true, personalEmail: true,
         gender: true, bloodGroup: true, profilePhotoUrl: true,
         reportingManagerId: true,
+        // Extended fields
+        maritalStatus: true, nationality: true, fatherName: true, spouseName: true,
+        religion: true, placeOfBirth: true, permanentAddress: true, address: true,
+        aadhaarNumber: true, panNumber: true, passportNumber: true, passportExpiry: true,
+        drivingLicense: true, uanNumber: true,
+        bankName: true, bankAccountNumber: true, bankBranch: true, bankIfscCode: true,
+        confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
+        previousExperience: true, location: true, grade: true, shift: true,
+        dateOfBirth: true, emergencyContact: true,
       },
     });
 
@@ -355,6 +399,120 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found.' });
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Education CRUD
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/education — Add education record (admin or self)
+router.post('/:id/education', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const { degree, institution, university, specialization, yearOfPassing, percentage } = req.body;
+    if (!degree || !institution) return res.status(400).json({ error: 'Degree and institution are required.' });
+    const record = await req.prisma.education.create({
+      data: { userId: targetId, degree, institution, university, specialization, yearOfPassing, percentage },
+    });
+    res.status(201).json(record);
+  } catch (err) {
+    console.error('Add education error:', err);
+    res.status(500).json({ error: 'Failed to add education.' });
+  }
+});
+
+// DELETE /api/users/:id/education/:eduId — Remove education record (admin or self)
+router.delete('/:id/education/:eduId', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    await req.prisma.education.delete({ where: { id: parseInt(req.params.eduId) } });
+    res.json({ message: 'Education record deleted.' });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
+    res.status(500).json({ error: 'Failed to delete education.' });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Family Members CRUD
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/family — Add family member (admin or self)
+router.post('/:id/family', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const { name, relationship, dateOfBirth, occupation, phone, isDependent, isNominee, nomineeShare } = req.body;
+    if (!name || !relationship) return res.status(400).json({ error: 'Name and relationship are required.' });
+    const record = await req.prisma.familyMember.create({
+      data: { userId: targetId, name, relationship, dateOfBirth, occupation, phone, isDependent, isNominee, nomineeShare },
+    });
+    res.status(201).json(record);
+  } catch (err) {
+    console.error('Add family member error:', err);
+    res.status(500).json({ error: 'Failed to add family member.' });
+  }
+});
+
+// DELETE /api/users/:id/family/:fmId — Remove family member (admin or self)
+router.delete('/:id/family/:fmId', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    await req.prisma.familyMember.delete({ where: { id: parseInt(req.params.fmId) } });
+    res.json({ message: 'Family member deleted.' });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
+    res.status(500).json({ error: 'Failed to delete family member.' });
+  }
+});
+
+// ═══════════════════════════════════════════════
+// Previous Employment CRUD
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/employment-history — Add previous employment (admin or self)
+router.post('/:id/employment-history', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    const { company, designation, fromDate, toDate, ctc, reasonForLeaving } = req.body;
+    if (!company) return res.status(400).json({ error: 'Company name is required.' });
+    const record = await req.prisma.previousEmployment.create({
+      data: { userId: targetId, company, designation, fromDate, toDate, ctc, reasonForLeaving },
+    });
+    res.status(201).json(record);
+  } catch (err) {
+    console.error('Add employment error:', err);
+    res.status(500).json({ error: 'Failed to add employment history.' });
+  }
+});
+
+// DELETE /api/users/:id/employment-history/:empId — Remove previous employment (admin or self)
+router.delete('/:id/employment-history/:empId', authenticate, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (req.user.id !== targetId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+    await req.prisma.previousEmployment.delete({ where: { id: parseInt(req.params.empId) } });
+    res.json({ message: 'Employment record deleted.' });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Record not found.' });
+    res.status(500).json({ error: 'Failed to delete employment record.' });
   }
 });
 
