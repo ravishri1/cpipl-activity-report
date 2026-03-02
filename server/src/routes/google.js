@@ -74,6 +74,71 @@ router.delete('/disconnect', authenticate, async (req, res) => {
   }
 });
 
+// ─── Temporary DWD Diagnostic (remove after debugging) ───
+router.get('/dwd-diag', authenticate, requireAdmin, async (req, res) => {
+  try {
+    if (req.user.email !== 'me@colorpapers.in') {
+      return res.status(403).json({ error: 'Only primary admin.' });
+    }
+
+    const diag = {
+      GOOGLE_ADMIN_EMAIL: process.env.GOOGLE_ADMIN_EMAIL || '(not set)',
+      GOOGLE_ADMIN_EMAIL_length: (process.env.GOOGLE_ADMIN_EMAIL || '').length,
+      GOOGLE_ADMIN_EMAIL_chars: [...(process.env.GOOGLE_ADMIN_EMAIL || '')].map(c => c.charCodeAt(0)),
+      GOOGLE_WORKSPACE_DOMAIN: process.env.GOOGLE_WORKSPACE_DOMAIN || '(not set)',
+      GOOGLE_SERVICE_ACCOUNT_KEY_set: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+      GOOGLE_SERVICE_ACCOUNT_KEY_length: (process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '').length,
+      GOOGLE_SERVICE_ACCOUNT_KEY_PATH: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || '(not set)',
+      nodeVersion: process.version,
+    };
+
+    // Try to parse the key
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+      try {
+        const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+        diag.key_client_email = parsed.client_email;
+        diag.key_project_id = parsed.project_id;
+        diag.key_private_key_starts = parsed.private_key?.substring(0, 40);
+        diag.key_private_key_ends = parsed.private_key?.substring(parsed.private_key.length - 40);
+        diag.key_private_key_length = parsed.private_key?.length;
+        diag.key_private_key_has_real_newlines = parsed.private_key?.includes('\n');
+        diag.key_private_key_has_literal_backslash_n = parsed.private_key?.includes('\\n');
+      } catch (e) {
+        diag.key_parse_error = e.message;
+      }
+    }
+
+    // Try actual DWD auth
+    try {
+      const { google } = require('googleapis');
+      const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
+      let keyFile;
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+        keyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+      }
+
+      const auth = new google.auth.JWT({
+        email: keyFile.client_email,
+        key: keyFile.private_key,
+        scopes: ['https://www.googleapis.com/auth/admin.directory.user.readonly'],
+        subject: adminEmail,
+      });
+
+      await auth.authorize();
+      diag.dwd_auth = 'SUCCESS';
+    } catch (e) {
+      diag.dwd_auth = 'FAILED';
+      diag.dwd_error_message = e.message;
+      diag.dwd_error_code = e.code;
+      diag.dwd_error_response = e.response?.data || null;
+    }
+
+    res.json(diag);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Google Admin: Import Users ───
 
 // GET /api/google/import-users - Fetch users from Google Workspace
