@@ -1,8 +1,75 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const { put } = require('@vercel/blob');
 const { authenticate, requireAdmin, requireManagerOrAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Multer config — memory storage for Vercel Blob uploads (max 5 MB images)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPEG, PNG, WebP and GIF images are allowed.'));
+  },
+});
+
+// ═══════════════════════════════════════════════
+// Photo Upload
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/photo — Upload profile photo (self or admin)
+router.post('/:id/photo', authenticate, (req, res, next) => {
+  upload.single('photo')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Image must be under 5 MB.' });
+      return res.status(400).json({ error: err.message });
+    }
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const isSelf = req.user.id === targetId;
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ error: 'You can only upload your own photo.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided.' });
+    }
+
+    // Upload to Vercel Blob
+    const ext = req.file.mimetype.split('/')[1] || 'jpg';
+    const filename = `profile-photos/user-${targetId}-${Date.now()}.${ext}`;
+
+    const blob = await put(filename, req.file.buffer, {
+      access: 'public',
+      contentType: req.file.mimetype,
+    });
+
+    // Update user's profilePhotoUrl in DB
+    const user = await req.prisma.user.update({
+      where: { id: targetId },
+      data: { profilePhotoUrl: blob.url },
+      select: { id: true, profilePhotoUrl: true },
+    });
+
+    res.json({ profilePhotoUrl: user.profilePhotoUrl });
+  } catch (err) {
+    console.error('Photo upload error:', err);
+    if (err.message?.includes('BLOB_READ_WRITE_TOKEN')) {
+      return res.status(500).json({ error: 'Photo storage not configured. Ask admin to set BLOB_READ_WRITE_TOKEN.' });
+    }
+    res.status(500).json({ error: 'Failed to upload photo.' });
+  }
+});
 
 // ═══════════════════════════════════════════════
 // Employee Directory & Profile (HR)
@@ -160,7 +227,7 @@ router.put('/:id/profile', authenticate, async (req, res) => {
 
     // Self-editable fields (employees can update their own contact info)
     if (isSelf || isAdmin) {
-      const selfFields = ['phone', 'personalEmail', 'address', 'permanentAddress', 'emergencyContact', 'profilePhotoUrl'];
+      const selfFields = ['name', 'phone', 'personalEmail', 'address', 'permanentAddress', 'emergencyContact', 'profilePhotoUrl'];
       selfFields.forEach((f) => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
     }
 

@@ -7,6 +7,7 @@ import {
   Heart, Shield, ArrowLeft, Edit3, Save, X, CreditCard,
   GraduationCap, Users, FileText, ChevronRight, Plus, Trash2,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
+  Camera, Loader2,
 } from 'lucide-react';
 
 const TABS = [
@@ -28,9 +29,39 @@ export default function EmployeeProfile() {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [uploading, setUploading] = useState(false);
 
   const isSelf = currentUser?.id === parseInt(id);
   const canEdit = isAdmin && currentUser?.role === 'admin';
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Validate on client side
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      alert('Please select a JPEG, PNG, WebP or GIF image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5 MB.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const res = await api.post(`/users/${id}/photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setProfile({ ...profile, profilePhotoUrl: res.data.profilePhotoUrl });
+      setForm({ ...form, profilePhotoUrl: res.data.profilePhotoUrl });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to upload photo.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -95,14 +126,27 @@ export default function EmployeeProfile() {
         <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-700" />
         <div className="px-6 pb-5">
           <div className="flex flex-col sm:flex-row items-start gap-4 -mt-10">
-            {/* Avatar */}
-            <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center flex-shrink-0">
-              {profile.profilePhotoUrl ? (
-                <img src={profile.profilePhotoUrl} alt="" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
-                  {profile.name?.charAt(0)?.toUpperCase()}
-                </div>
+            {/* Avatar with upload */}
+            <div className="relative w-20 h-20 flex-shrink-0 group">
+              <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
+                {profile.profilePhotoUrl ? (
+                  <img src={profile.profilePhotoUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {profile.name?.charAt(0)?.toUpperCase()}
+                  </div>
+                )}
+              </div>
+              {/* Camera overlay — self or admin can upload */}
+              {(isSelf || canEdit) && (
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  {uploading ? (
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-6 h-6 text-white" />
+                  )}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+                </label>
               )}
             </div>
             {/* Info */}
@@ -272,6 +316,8 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Contact Information */}
       <Section title="Contact Information" icon={Phone}>
+        <Field icon={User} label="Full Name" value={profile.name}
+          editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('name', v)} editValue={form.name} />
         <Field icon={Mail} label="Work Email" value={profile.email} />
         <Field icon={Mail} label="Personal Email" value={profile.personalEmail}
           editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('personalEmail', v)} editValue={form.personalEmail} />
