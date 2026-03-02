@@ -95,6 +95,7 @@ model User {
   previousEmployments PreviousEmployment[]
   profileChangeLogs  ProfileChangeLog[]   @relation("ProfileChanges")
   changesLoggedBy    ProfileChangeLog[]   @relation("ChangesMadeBy")
+  policyAcceptances  PolicyAcceptance[]
 }
 
 model DailyReport {
@@ -421,4 +422,79 @@ model Company {
   createdAt DateTime @default(now())
 
   users     User[]
+  policies  Policy[]
+}
+
+// ═══════════════════════════════════════════════
+// Policy Management
+// ═══════════════════════════════════════════════
+
+model Policy {
+  id            Int      @id @default(autoincrement())
+  title         String                                // "Work From Home Policy"
+  slug          String   @unique                      // "work-from-home-policy"
+  category      String   @default("general")          // general, attendance, leave, conduct, benefits, safety
+  content       String                                // Full policy text (markdown/HTML)
+  summary       String?                               // Brief summary for listing
+  version       Int      @default(1)                  // version number
+  effectiveDate String?                               // "YYYY-MM-DD"
+  isActive      Boolean  @default(true)
+  isMandatory   Boolean  @default(true)               // Must all employees accept?
+  companyId     Int?                                   // null = applies to all companies
+  createdBy     Int?                                   // admin who created it
+  protectionScore Float? @default(0)                   // 0-100 score of how well policy protects company
+  scoreBreakdown  String?                              // JSON: {"legal":80,"compliance":70,...}
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company?           @relation(fields: [companyId], references: [id])
+  sections      PolicySection[]
+  acceptances   PolicyAcceptance[]
+  versions      PolicyVersion[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model PolicySection {
+  id        Int     @id @default(autoincrement())
+  policyId  Int
+  title     String                                    // "Scope", "Eligibility", "Procedure"
+  content   String                                    // Section text
+  sortOrder Int     @default(0)
+  isEditable Boolean @default(false)                  // HR can customize this section per employee
+
+  policy    Policy  @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId])
+}
+
+model PolicyAcceptance {
+  id         Int      @id @default(autoincrement())
+  policyId   Int
+  userId     Int
+  version    Int      @default(1)                     // which version was accepted
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+  remarks    String?                                  // optional employee comment
+
+  policy     Policy @relation(fields: [policyId], references: [id])
+  user       User   @relation(fields: [userId], references: [id])
+
+  @@unique([policyId, userId, version])
+  @@index([userId])
+}
+
+model PolicyVersion {
+  id        Int      @id @default(autoincrement())
+  policyId  Int
+  version   Int
+  content   String                                    // snapshot of content at this version
+  changedBy Int?                                      // admin who made changes
+  changeLog String?                                   // what changed
+  createdAt DateTime @default(now())
+
+  policy    Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, version])
 }

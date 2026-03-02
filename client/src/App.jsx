@@ -17,6 +17,9 @@ import HolidayManager from './components/admin/HolidayManager';
 import Settings from './components/admin/Settings';
 import EmployeeImport from './components/admin/EmployeeImport';
 import ResumeExtractor from './components/admin/ResumeExtractor';
+import PolicyAcceptance from './components/policies/PolicyAcceptance';
+import PolicyManager from './components/admin/PolicyManager';
+import PolicyScorecard from './components/admin/PolicyScorecard';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -53,6 +56,7 @@ function AppRoutes() {
                 <Route path="/reports" element={<ReportHistory />} />
                 <Route path="/attendance" element={<MyAttendance />} />
                 <Route path="/leave" element={<MyLeave />} />
+                <Route path="/policies" element={<PolicyAcceptance />} />
 
                 {/* Team */}
                 <Route path="/directory" element={<EmployeeDirectory />} />
@@ -65,6 +69,8 @@ function AppRoutes() {
                 <Route path="/admin/leave-requests" element={<AdminRoute><LeaveApproval /></AdminRoute>} />
                 <Route path="/admin/holidays" element={<AdminRoute><HolidayManager /></AdminRoute>} />
                 <Route path="/admin/import" element={<AdminRoute><EmployeeImport /></AdminRoute>} />
+                <Route path="/admin/policies" element={<AdminRoute><PolicyManager /></AdminRoute>} />
+                <Route path="/admin/policy-scorecard" element={<AdminRoute><PolicyScorecard /></AdminRoute>} />
                 <Route path="/admin/ai-extract" element={<AdminRoute><ResumeExtractor /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
 
