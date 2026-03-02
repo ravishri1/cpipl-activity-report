@@ -4,10 +4,16 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/users - List all users
+// GET /api/users - List users (admins see all, team_leads see own department)
 router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
+    const where = {};
+    if (req.user.role === 'team_lead') {
+      where.department = req.user.department;
+    }
+
     const users = await req.prisma.user.findMany({
+      where,
       select: {
         id: true, name: true, email: true, role: true,
         department: true, isActive: true, createdAt: true,

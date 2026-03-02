@@ -123,12 +123,24 @@ router.get('/my', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/reports?date=YYYY-MM-DD - Get all reports for a date (admin/team_lead)
+// GET /api/reports?date=YYYY-MM-DD - Get reports for a date (admins see all, team_leads see own dept)
 router.get('/', authenticate, async (req, res) => {
   try {
     const date = req.query.date || getTodayDate();
+    const where = { reportDate: date };
+
+    // Members can only see their own reports
+    if (req.user.role === 'member') {
+      where.userId = req.user.id;
+    }
+    // Team leads can only see reports from their department
+    else if (req.user.role === 'team_lead') {
+      where.user = { department: req.user.department };
+    }
+    // Admins see all (no extra filter)
+
     const reports = await req.prisma.dailyReport.findMany({
-      where: { reportDate: date },
+      where,
       include: {
         user: { select: { id: true, name: true, email: true, department: true } },
         tasks: true,
@@ -150,11 +162,29 @@ router.get('/history', authenticate, async (req, res) => {
 
     if (from) where.reportDate = { ...where.reportDate, gte: from };
     if (to) where.reportDate = { ...where.reportDate, lte: to };
-    if (userId) where.userId = parseInt(userId);
 
-    // Non-admin can only see their own history
+    // Members can only see their own history
     if (req.user.role === 'member') {
       where.userId = req.user.id;
+    }
+    // Team leads can only see their own department's history
+    else if (req.user.role === 'team_lead') {
+      where.user = { department: req.user.department };
+      // Allow filtering by specific user only if they're in same department
+      if (userId) {
+        const target = await req.prisma.user.findUnique({
+          where: { id: parseInt(userId) },
+          select: { department: true },
+        });
+        if (!target || target.department !== req.user.department) {
+          return res.json([]); // Not allowed to see this user's data
+        }
+        where.userId = parseInt(userId);
+      }
+    }
+    // Admins see all — just apply userId filter if requested
+    else if (userId) {
+      where.userId = parseInt(userId);
     }
 
     const reports = await req.prisma.dailyReport.findMany({
