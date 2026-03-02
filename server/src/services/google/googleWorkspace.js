@@ -47,7 +47,9 @@ async function fetchEmailActivity(domain, date) {
     throw new Error('GOOGLE_ADMIN_EMAIL not configured in .env');
   }
 
-  const authClient = await getServiceAccountClient(adminEmail);
+  const authClient = await getServiceAccountClient(adminEmail, [
+    'https://www.googleapis.com/auth/admin.reports.audit.readonly',
+  ]);
   const reports = google.admin({ version: 'reports_v1', auth: authClient });
 
   try {

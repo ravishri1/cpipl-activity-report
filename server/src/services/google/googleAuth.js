@@ -71,7 +71,8 @@ async function getAuthedClientForUser(userId, prisma) {
 }
 
 // Service account client for admin-level operations (Admin SDK, Reports API)
-async function getServiceAccountClient(subjectEmail) {
+// Pass specific scopes to only request what's needed for each operation
+async function getServiceAccountClient(subjectEmail, scopes) {
   let keyFile;
 
   // Support env var JSON string (for Vercel) or file path (for local dev)
@@ -90,13 +91,15 @@ async function getServiceAccountClient(subjectEmail) {
     }
   }
 
+  // Default to directory scope if none specified
+  const requestScopes = scopes || [
+    'https://www.googleapis.com/auth/admin.directory.user.readonly',
+  ];
+
   const auth = new google.auth.JWT({
     email: keyFile.client_email,
     key: keyFile.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/admin.directory.user.readonly',
-      'https://www.googleapis.com/auth/admin.reports.audit.readonly',
-    ],
+    scopes: requestScopes,
     subject: subjectEmail, // Impersonate admin for domain-wide delegation
   });
 
