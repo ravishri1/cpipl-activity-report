@@ -96,6 +96,13 @@ model User {
   profileChangeLogs  ProfileChangeLog[]   @relation("ProfileChanges")
   changesLoggedBy    ProfileChangeLog[]   @relation("ChangesMadeBy")
   policyAcceptances  PolicyAcceptance[]
+  salaryStructure    SalaryStructure?
+  payslips           Payslip[]
+  salaryRevisions    SalaryRevision[]
+  salaryRevisionsBy  SalaryRevision[]   @relation("SalaryRevisionsBy")
+  expenseClaims      ExpenseClaim[]
+  expenseReviews     ExpenseClaim[]     @relation("ExpenseReviews")
+  announcements      Announcement[]     @relation("AnnouncementAuthor")
 }
 
 model DailyReport {
@@ -421,8 +428,9 @@ model Company {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  users     User[]
-  policies  Policy[]
+  users         User[]
+  policies      Policy[]
+  announcements Announcement[]
 }
 
 // ═══════════════════════════════════════════════
@@ -497,4 +505,158 @@ model PolicyVersion {
   policy    Policy @relation(fields: [policyId], references: [id], onDelete: Cascade)
 
   @@unique([policyId, version])
+}
+
+// ═══════════════════════════════════════════════
+// Payroll & Salary
+// ═══════════════════════════════════════════════
+
+model SalaryStructure {
+  id                   Int      @id @default(autoincrement())
+  userId               Int      @unique
+  ctcAnnual            Float                          // Annual CTC
+  ctcMonthly           Float                          // CTC / 12
+
+  // Earnings
+  basic                Float    @default(0)
+  hra                  Float    @default(0)
+  da                   Float    @default(0)           // Dearness Allowance
+  specialAllowance     Float    @default(0)
+  medicalAllowance     Float    @default(0)
+  conveyanceAllowance  Float    @default(0)
+  otherAllowance       Float    @default(0)
+  otherAllowanceLabel  String?                        // custom label for other allowance
+
+  // Employer Contributions (not part of net pay)
+  employerPf           Float    @default(0)
+  employerEsi          Float    @default(0)
+
+  // Employee Deductions
+  employeePf           Float    @default(0)
+  employeeEsi          Float    @default(0)
+  professionalTax      Float    @default(0)
+  tds                  Float    @default(0)
+
+  netPayMonthly        Float    @default(0)           // Gross - Deductions
+  effectiveFrom        String?                        // "YYYY-MM-DD"
+  notes                String?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user                 User     @relation(fields: [userId], references: [id])
+}
+
+model Payslip {
+  id                   Int      @id @default(autoincrement())
+  userId               Int
+  month                String                          // "2026-03"
+  year                 Int
+
+  // Earnings
+  basic                Float    @default(0)
+  hra                  Float    @default(0)
+  da                   Float    @default(0)
+  specialAllowance     Float    @default(0)
+  medicalAllowance     Float    @default(0)
+  conveyanceAllowance  Float    @default(0)
+  otherAllowance       Float    @default(0)
+  otherAllowanceLabel  String?
+  grossEarnings        Float    @default(0)
+
+  // Deductions
+  employeePf           Float    @default(0)
+  employeeEsi          Float    @default(0)
+  professionalTax      Float    @default(0)
+  tds                  Float    @default(0)
+  otherDeductions      Float    @default(0)
+  otherDeductionsLabel String?
+  totalDeductions      Float    @default(0)
+
+  netPay               Float    @default(0)
+
+  // Attendance
+  workingDays          Int      @default(0)
+  presentDays          Float    @default(0)
+  lopDays              Float    @default(0)           // Loss of Pay days
+  lopDeduction         Float    @default(0)
+
+  status               String   @default("draft")     // draft, generated, published
+  generatedAt          DateTime?
+  publishedAt          DateTime?
+  pdfUrl               String?
+
+  createdAt            DateTime @default(now())
+
+  user                 User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, month])
+  @@index([month])
+  @@index([status])
+}
+
+model SalaryRevision {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  effectiveFrom String                                // "YYYY-MM-DD"
+  oldCtc        Float
+  newCtc        Float
+  reason        String?
+  revisedBy     Int                                   // admin userId
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+  revisedByUser User     @relation("SalaryRevisionsBy", fields: [revisedBy], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// Expense Claims
+// ═══════════════════════════════════════════════
+
+model ExpenseClaim {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  title         String
+  category      String    @default("other")            // travel, food, medical, office, other
+  amount        Float
+  description   String?
+  receiptUrl    String?                                // base64 or URL
+  date          String                                 // "YYYY-MM-DD"
+  status        String    @default("pending")          // pending, approved, rejected, paid
+  reviewedBy    Int?
+  reviewedAt    DateTime?
+  reviewNote    String?
+  paidOn        String?                                // "YYYY-MM-DD"
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id])
+  reviewer      User?     @relation("ExpenseReviews", fields: [reviewedBy], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// Announcements
+// ═══════════════════════════════════════════════
+
+model Announcement {
+  id            Int       @id @default(autoincrement())
+  title         String
+  content       String                                 // markdown/rich text
+  category      String    @default("general")          // general, policy, event, birthday, anniversary
+  priority      String    @default("normal")           // normal, important, urgent
+  companyId     Int?                                   // null = all companies
+  postedBy      Int
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  company       Company?  @relation(fields: [companyId], references: [id])
+  author        User      @relation("AnnouncementAuthor", fields: [postedBy], references: [id])
+
+  @@index([isActive])
+  @@index([category])
 }

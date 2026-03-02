@@ -18,6 +18,9 @@ const importRoutes = require('./routes/import');
 const companyRoutes = require('./routes/companies');
 const extractionRoutes = require('./routes/extraction');
 const policyRoutes = require('./routes/policies');
+const payrollRoutes = require('./routes/payroll');
+const expenseRoutes = require('./routes/expenses');
+const announcementRoutes = require('./routes/announcements');
 
 const app = express();
 
@@ -63,6 +66,9 @@ app.use('/api/import', importRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/extraction', extractionRoutes);
 app.use('/api/policies', policyRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

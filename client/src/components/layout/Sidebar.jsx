@@ -20,6 +20,11 @@ import {
   Shield,
   ShieldCheck,
   BarChart3,
+  Megaphone,
+  Wallet,
+  IndianRupee,
+  Receipt,
+  CreditCard,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -52,6 +57,7 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Overview',
       items: [
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { to: '/announcements', label: 'Announcements', icon: Megaphone },
       ],
     },
     {
@@ -62,6 +68,8 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/reports', label: 'Report History', icon: FileText },
         { to: '/attendance', label: 'Attendance', icon: Clock },
         { to: '/leave', label: 'Leave', icon: CalendarOff },
+        { to: '/expenses', label: 'Expenses', icon: Wallet },
+        { to: '/payslips', label: 'Payslips', icon: IndianRupee },
         { to: '/policies', label: 'Policies', icon: Shield },
       ],
     },
@@ -84,6 +92,9 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/team', label: 'Team Management', icon: Users },
         { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
         { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
+        { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
+        { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
+        { to: '/admin/salary-setup', label: 'Salary Setup', icon: IndianRupee },
         { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
         { to: '/admin/import', label: 'Import Employees', icon: Upload },
         { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
