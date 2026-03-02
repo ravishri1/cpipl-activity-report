@@ -3,7 +3,7 @@ const { getServiceAccountClient } = require('./googleAuth');
 
 // Fetch all users from Google Workspace Admin Directory
 async function fetchGoogleWorkspaceUsers(domain) {
-  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
   if (!adminEmail) {
     throw new Error('GOOGLE_ADMIN_EMAIL not configured in .env');
   }
@@ -42,7 +42,7 @@ async function fetchGoogleWorkspaceUsers(domain) {
 // Fetch email activity stats from Google Reports API
 // Note: Reports API has a 2-day data delay
 async function fetchEmailActivity(domain, date) {
-  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
   if (!adminEmail) {
     throw new Error('GOOGLE_ADMIN_EMAIL not configured in .env');
   }
@@ -78,7 +78,7 @@ async function fetchEmailActivity(domain, date) {
 
 // Fetch and store email activity in the database
 async function fetchAndStoreEmailActivity(prisma, date) {
-  const domain = process.env.GOOGLE_WORKSPACE_DOMAIN;
+  const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
   if (!domain) return;
 
   try {

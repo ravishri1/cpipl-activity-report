@@ -60,54 +60,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── TEMPORARY: DWD diagnostic (no auth, secret path) ── REMOVE AFTER FIX ──
-app.get('/api/_dwd-diag-x7k9', async (req, res) => {
-  const { google } = require('googleapis');
-  const diag = {
-    nodeVersion: process.version,
-    GOOGLE_ADMIN_EMAIL: process.env.GOOGLE_ADMIN_EMAIL || '(not set)',
-    GOOGLE_ADMIN_EMAIL_length: (process.env.GOOGLE_ADMIN_EMAIL || '').length,
-    GOOGLE_ADMIN_EMAIL_charCodes: [...(process.env.GOOGLE_ADMIN_EMAIL || '')].map(c => c.charCodeAt(0)),
-    GOOGLE_WORKSPACE_DOMAIN: process.env.GOOGLE_WORKSPACE_DOMAIN || '(not set)',
-    GOOGLE_SERVICE_ACCOUNT_KEY_set: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
-    GOOGLE_SERVICE_ACCOUNT_KEY_length: (process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '').length,
-  };
-
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    try {
-      const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-      diag.key_client_email = parsed.client_email;
-      diag.key_project_id = parsed.project_id;
-      diag.key_pk_length = parsed.private_key?.length;
-      diag.key_pk_has_real_newlines = parsed.private_key?.includes('\n');
-      diag.key_pk_has_escaped_newlines = parsed.private_key?.includes('\\n');
-      diag.key_pk_first30 = parsed.private_key?.substring(0, 30);
-      diag.key_pk_last30 = parsed.private_key?.substring(parsed.private_key.length - 30);
-    } catch (e) {
-      diag.key_parse_error = e.message;
-    }
-  }
-
-  // Test actual DWD auth
-  try {
-    const keyFile = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    const auth = new google.auth.JWT({
-      email: keyFile.client_email,
-      key: keyFile.private_key,
-      scopes: ['https://www.googleapis.com/auth/admin.directory.user.readonly'],
-      subject: process.env.GOOGLE_ADMIN_EMAIL,
-    });
-    await auth.authorize();
-    diag.dwd_result = 'SUCCESS';
-  } catch (e) {
-    diag.dwd_result = 'FAILED';
-    diag.dwd_error = e.message;
-    diag.dwd_error_code = e.code;
-    if (e.response?.data) diag.dwd_response = e.response.data;
-  }
-
-  res.json(diag);
-});
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

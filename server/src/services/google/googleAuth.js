@@ -100,7 +100,7 @@ async function getServiceAccountClient(subjectEmail, scopes) {
     email: keyFile.client_email,
     key: keyFile.private_key,
     scopes: requestScopes,
-    subject: subjectEmail, // Impersonate admin for domain-wide delegation
+    subject: subjectEmail?.trim(), // Impersonate admin for domain-wide delegation (trim protects against env var trailing whitespace)
   });
 
   await auth.authorize();
