@@ -17,16 +17,22 @@ import {
 export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('all');
+  const [company, setCompany] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/companies').then((r) => setCompanies(r.data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [empRes, deptRes] = await Promise.all([
-          api.get('/users/directory', { params: { search, department } }),
+          api.get('/users/directory', { params: { search, department, company } }),
           api.get('/users/departments'),
         ]);
         setEmployees(empRes.data);
@@ -38,7 +44,7 @@ export default function EmployeeDirectory() {
       }
     };
     fetchData();
-  }, [search, department]);
+  }, [search, department, company]);
 
   return (
     <div className="space-y-6">
@@ -60,6 +66,16 @@ export default function EmployeeDirectory() {
             className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
+        <select
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          <option value="all">All Companies</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
+          ))}
+        </select>
         <select
           value={department}
           onChange={(e) => setDepartment(e.target.value)}
@@ -120,6 +136,9 @@ export default function EmployeeDirectory() {
                   <div className="flex items-center gap-1 mt-1">
                     <Building2 className="w-3 h-3 text-slate-400" />
                     <span className="text-[11px] text-slate-400">{emp.department}</span>
+                    {emp.company?.shortName && (
+                      <span className="text-[9px] font-mono bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded ml-1">{emp.company.shortName}</span>
+                    )}
                   </div>
                 </div>
                 {emp.employeeId && (

@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { normalizeEmail, normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
 
@@ -270,7 +271,7 @@ router.post('/preview', authenticate, requireAdmin, async (req, res) => {
 // POST /api/import/execute — Execute bulk import/update
 router.post('/execute', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { rows, mapping, mode } = req.body;
+    const { rows, mapping, mode, companyId } = req.body;
     // mode: 'update' (update existing by email match), 'create' (create new), 'upsert' (both)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -335,6 +336,13 @@ router.post('/execute', authenticate, requireAdmin, async (req, res) => {
           'location', 'grade', 'shift', 'emergencyContact', 'role',
         ];
         stringFields.forEach((f) => { if (mapped[f]) data[f] = mapped[f]; });
+
+        // ── Normalize name/email fields ──
+        if (data.name) data.name = normalizeName(data.name);
+        if (data.email) data.email = normalizeEmail(data.email);
+        if (data.personalEmail) data.personalEmail = normalizeEmail(data.personalEmail);
+        if (data.fatherName) data.fatherName = normalizeName(data.fatherName);
+        if (data.spouseName) data.spouseName = normalizeName(data.spouseName);
 
         // Date fields
         ['dateOfJoining', 'dateOfBirth', 'passportExpiry', 'confirmationDate', 'probationEndDate'].forEach((f) => {
@@ -442,6 +450,7 @@ router.post('/execute', authenticate, requireAdmin, async (req, res) => {
               password: defaultPass,
               role: data.role || 'member',
               department: data.department || 'General',
+              companyId: companyId ? parseInt(companyId) : null,
             },
           });
 

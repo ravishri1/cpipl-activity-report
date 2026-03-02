@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireAdmin, requireManagerOrAdmin } = require('../middleware/auth');
+const { normalizeEmail, normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
 
@@ -81,6 +82,9 @@ router.get('/directory', authenticate, async (req, res) => {
     if (req.query.department && req.query.department !== 'all') {
       where.department = req.query.department;
     }
+    if (req.query.company && req.query.company !== 'all') {
+      where.companyId = parseInt(req.query.company);
+    }
     if (req.query.search) {
       where.OR = [
         { name: { contains: req.query.search, mode: 'insensitive' } },
@@ -105,7 +109,9 @@ router.get('/directory', authenticate, async (req, res) => {
         role: true,
         location: true,
         reportingManagerId: true,
+        companyId: true,
         reportingManager: { select: { id: true, name: true, employeeId: true } },
+        company: { select: { id: true, name: true, shortName: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -191,7 +197,9 @@ router.get('/:id/profile', authenticate, async (req, res) => {
         // Employment Extended
         confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
         previousExperience: true, location: true, grade: true, shift: true,
+        companyId: true,
         // Relations
+        company: { select: { id: true, name: true, shortName: true } },
         reportingManager: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
         subordinates: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
         educations: { orderBy: { id: 'desc' } },
@@ -252,7 +260,16 @@ router.put('/:id/profile', authenticate, async (req, res) => {
       adminFields.forEach((f) => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
       // Handle reportingManagerId specially (can be null)
       if (req.body.reportingManagerId !== undefined) data.reportingManagerId = req.body.reportingManagerId || null;
+      // Handle companyId (can be null)
+      if (req.body.companyId !== undefined) data.companyId = req.body.companyId ? parseInt(req.body.companyId) : null;
     }
+
+    // ── Normalize name/email ──
+    if (data.name) data.name = normalizeName(data.name);
+    if (data.email) data.email = normalizeEmail(data.email);
+    if (data.personalEmail) data.personalEmail = normalizeEmail(data.personalEmail);
+    if (data.fatherName) data.fatherName = normalizeName(data.fatherName);
+    if (data.spouseName) data.spouseName = normalizeName(data.spouseName);
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: 'No fields to update.' });
@@ -279,6 +296,8 @@ router.put('/:id/profile', authenticate, async (req, res) => {
         confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
         previousExperience: true, location: true, grade: true, shift: true,
         dateOfBirth: true, emergencyContact: true,
+        companyId: true,
+        company: { select: { id: true, name: true, shortName: true } },
       },
     });
 
@@ -407,12 +426,13 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 // POST /api/users - Create user
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, email, password, role, department } = req.body;
+    const { name, email, password, role, department, companyId } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
-    const existing = await req.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = normalizeEmail(email);
+    const existing = await req.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
       return res.status(409).json({ error: 'Email already exists.' });
     }
@@ -420,11 +440,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await req.prisma.user.create({
       data: {
-        name,
-        email,
+        name: normalizeName(name),
+        email: normalizedEmail,
         password: hashedPassword,
         role: role || 'member',
         department: department || 'General',
+        companyId: companyId ? parseInt(companyId) : null,
       },
     });
 
@@ -441,14 +462,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // PUT /api/users/:id - Update user
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, email, role, department, isActive, password } = req.body;
+    const { name, email, role, department, isActive, password, companyId } = req.body;
     const data = {};
-    if (name) data.name = name;
-    if (email) data.email = email;
+    if (name) data.name = normalizeName(name);
+    if (email) data.email = normalizeEmail(email);
     if (role) data.role = role;
     if (department) data.department = department;
     if (typeof isActive === 'boolean') data.isActive = isActive;
     if (password) data.password = await bcrypt.hash(password, 10);
+    if (companyId !== undefined) data.companyId = companyId ? parseInt(companyId) : null;
 
     const user = await req.prisma.user.update({
       where: { id: parseInt(req.params.id) },

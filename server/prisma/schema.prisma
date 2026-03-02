@@ -66,6 +66,10 @@ model User {
   grade              String?                   // pay grade / level
   shift              String?  @default("General") // shift name
 
+  // ── Company ──
+  companyId          Int?
+  company            Company? @relation(fields: [companyId], references: [id])
+
   // ── Existing Relations ──
   reports          DailyReport[]
   reminders        Reminder[]
@@ -399,4 +403,22 @@ model ProfileChangeLog {
 
   @@index([userId, createdAt])
   @@index([changedBy])
+}
+
+// ═══════════════════════════════════════════════
+// Company Model
+// ═══════════════════════════════════════════════
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  shortName String?                              // "CPIPL", "Gimmick"
+  gst       String?
+  state     String?
+  city      String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users     User[]
 }

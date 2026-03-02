@@ -15,6 +15,8 @@ const attendanceRoutes = require('./routes/attendance');
 const leaveRoutes = require('./routes/leave');
 const holidayRoutes = require('./routes/holidays');
 const importRoutes = require('./routes/import');
+const companyRoutes = require('./routes/companies');
+const extractionRoutes = require('./routes/extraction');
 
 const app = express();
 
@@ -57,6 +59,8 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leave', leaveRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/extraction', extractionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
