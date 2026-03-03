@@ -159,7 +159,34 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
   const where = month ? { month } : {};
   const payslips = await req.prisma.payslip.findMany({
     where,
-    include: { user: { select: { id: true, name: true, email: true, employeeId: true, designation: true, department: true, companyId: true } } },
+    include: { 
+      user: { 
+        select: { 
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, companyId: true,
+          shiftAssignments: {
+            where: {
+              status: 'active',
+              effectiveFrom: { lte: new Date() },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gte: new Date() } }
+              ]
+            },
+            take: 1,
+            select: {
+              shift: {
+                select: {
+                  id: true,
+                  name: true,
+                  startTime: true,
+                  endTime: true,
+                }
+              }
+            }
+          }
+        } 
+      } 
+    },
     orderBy: { user: { name: 'asc' } },
   });
   res.json(payslips);
@@ -170,7 +197,32 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
   const payslips = await req.prisma.payslip.findMany({
     where: { userId: req.user.id, status: 'published' },
     include: {
-      user: { select: { id: true, name: true, email: true, employeeId: true, designation: true, department: true } },
+      user: { 
+        select: { 
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          shiftAssignments: {
+            where: {
+              status: 'active',
+              effectiveFrom: { lte: new Date() },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gte: new Date() } }
+              ]
+            },
+            take: 1,
+            select: {
+              shift: {
+                select: {
+                  id: true,
+                  name: true,
+                  startTime: true,
+                  endTime: true,
+                }
+              }
+            }
+          }
+        } 
+      },
     },
     orderBy: { month: 'desc' },
   });
@@ -183,7 +235,32 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
   const payslip = await req.prisma.payslip.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true, employeeId: true, designation: true, department: true, bankName: true, bankAccountNumber: true, bankIfscCode: true } },
+      user: { 
+        select: { 
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, bankName: true, bankAccountNumber: true, bankIfscCode: true,
+          shiftAssignments: {
+            where: {
+              status: 'active',
+              effectiveFrom: { lte: new Date() },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gte: new Date() } }
+              ]
+            },
+            take: 1,
+            select: {
+              shift: {
+                select: {
+                  id: true,
+                  name: true,
+                  startTime: true,
+                  endTime: true,
+                }
+              }
+            }
+          }
+        } 
+      },
     },
   });
   if (!payslip) throw notFound('Payslip');
@@ -219,7 +296,33 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
 
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    include: { 
+      user: { 
+        select: { 
+          name: true, employeeId: true, department: true, designation: true,
+          shiftAssignments: {
+            where: {
+              status: 'active',
+              effectiveFrom: { lte: new Date() },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gte: new Date() } }
+              ]
+            },
+            take: 1,
+            select: {
+              shift: {
+                select: {
+                  name: true,
+                  startTime: true,
+                  endTime: true,
+                }
+              }
+            }
+          }
+        } 
+      } 
+    },
   });
 
   const totals = {

@@ -230,6 +230,7 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
+          { to: '/admin/shifts', label: 'Shift Management', icon: Clock },
           { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
           { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
           { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },

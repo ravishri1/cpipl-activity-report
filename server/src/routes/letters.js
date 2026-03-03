@@ -59,11 +59,37 @@ router.post('/generate', requireAdmin, asyncHandler(async (req, res) => {
 
   const user = await req.prisma.user.findUnique({
     where: { id: userId },
-    include: { company: true, salaryStructure: true },
+    include: { 
+      company: true, 
+      salaryStructure: true,
+      shiftAssignments: {
+        where: {
+          status: 'active',
+          effectiveFrom: { lte: new Date() },
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gte: new Date() } }
+          ]
+        },
+        take: 1,
+        select: {
+          shift: {
+            select: {
+              id: true,
+              name: true,
+              startTime: true,
+              endTime: true,
+              breakDuration: true,
+            }
+          }
+        }
+      }
+    },
   });
   if (!user) throw notFound('Employee');
 
   const dateStr = new Date().toISOString().split('T')[0];
+  const currentShift = user.shiftAssignments?.[0]?.shift;
   const placeholders = {
     '{{name}}': user.name || '', '{{employeeId}}': user.employeeId || '',
     '{{designation}}': user.designation || '', '{{department}}': user.department || '',
@@ -82,6 +108,10 @@ router.post('/generate', requireAdmin, asyncHandler(async (req, res) => {
     '{{ctcMonthly}}': user.salaryStructure?.ctcMonthly?.toLocaleString('en-IN') || '',
     '{{basic}}': user.salaryStructure?.basic?.toLocaleString('en-IN') || '',
     '{{hra}}': user.salaryStructure?.hra?.toLocaleString('en-IN') || '',
+    '{{shift.name}}': currentShift?.name || '', 
+    '{{shift.startTime}}': currentShift?.startTime || '', 
+    '{{shift.endTime}}': currentShift?.endTime || '',
+    '{{shift.breakDuration}}': currentShift?.breakDuration?.toString() || '',
     '{{date}}': dateStr,
   };
 

@@ -361,6 +361,17 @@ function PayslipDetail({ payslip, onBack }) {
               label="Designation"
               value={payslip.user?.designation || '-'}
             />
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Shift</p>
+              {payslip.user?.shift ? (
+                <div className="text-sm font-medium text-slate-700">
+                  <p>{payslip.user.shift.name}</p>
+                  <p className="text-xs text-slate-500">{payslip.user.shift.startTime} - {payslip.user.shift.endTime}</p>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-slate-500">—</p>
+              )}
+            </div>
           </div>
         </div>
 

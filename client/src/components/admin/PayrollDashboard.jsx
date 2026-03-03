@@ -861,6 +861,9 @@ export default function PayrollDashboard() {
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">
                         Department
                       </th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">
+                        Shift
+                      </th>
                       <th className="text-right px-4 py-3 font-semibold text-slate-600">
                         Gross Earnings
                       </th>
@@ -919,6 +922,18 @@ export default function PayrollDashboard() {
                           {/* Department */}
                           <td className="px-4 py-3 text-slate-600">
                             {payslip.user?.department || '-'}
+                          </td>
+
+                          {/* Shift */}
+                          <td className="px-4 py-3">
+                            {payslip.user?.shift ? (
+                              <div className="flex flex-col gap-0.5">
+                                <p className="font-medium text-slate-700 text-xs">{payslip.user.shift.name}</p>
+                                <p className="text-xs text-slate-500">{payslip.user.shift.startTime} - {payslip.user.shift.endTime}</p>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </td>
 
                           {/* Gross Earnings */}

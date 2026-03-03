@@ -150,12 +150,36 @@ async function getTeamAttendance(date, department, prisma) {
         where: { date },
         take: 1,
       },
+      shiftAssignments: {
+        where: {
+          status: 'active',
+          effectiveFrom: { lte: new Date() },
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gte: new Date() } }
+          ]
+        },
+        take: 1,
+        select: {
+          shift: {
+            select: {
+              id: true,
+              name: true,
+              startTime: true,
+              endTime: true,
+              breakDuration: true,
+            }
+          }
+        }
+      }
     },
     orderBy: { name: 'asc' },
   });
 
   const result = users.map((u) => {
     const att = u.attendances[0] || null;
+    const shiftAssignment = u.shiftAssignments[0];
+    const shift = shiftAssignment?.shift || null;
     return {
       userId: u.id,
       name: u.name,
@@ -166,6 +190,13 @@ async function getTeamAttendance(date, department, prisma) {
       checkOut: att?.checkOut || null,
       workHours: att?.workHours || null,
       status: att?.status || 'absent',
+      shift: shift ? {
+        id: shift.id,
+        name: shift.name,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        breakDuration: shift.breakDuration,
+      } : null,
     };
   });
 

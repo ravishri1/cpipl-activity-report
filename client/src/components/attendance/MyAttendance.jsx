@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
+import EmployeeShiftInfo from '../shifts/EmployeeShiftInfo';
 import {
   Clock,
   LogIn,
@@ -25,6 +27,7 @@ const statusConfig = {
 };
 
 export default function MyAttendance() {
+  const { user } = useAuth();
   const [today, setToday] = useState(null);
   const [monthly, setMonthly] = useState(null);
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
@@ -125,6 +128,9 @@ export default function MyAttendance() {
         <Clock className="w-6 h-6 text-blue-600" />
         My Attendance
       </h1>
+
+      {/* Current Shift Information */}
+      {user && <EmployeeShiftInfo userId={user.id} />}
 
       {/* Check-in / Check-out Card */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">

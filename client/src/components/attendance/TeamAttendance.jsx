@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import {
   CheckSquare,
@@ -113,6 +114,7 @@ export default function TeamAttendance() {
                 <tr className="bg-slate-50 text-left">
                   <th className="px-4 py-2.5 font-medium text-slate-600">Employee</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Department</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Shift</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Status</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
@@ -129,6 +131,16 @@ export default function TeamAttendance() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{emp.department}</td>
+                    <td className="px-4 py-2.5">
+                      {emp.shift ? (
+                        <div className="flex flex-col gap-0.5">
+                          <p className="font-medium text-slate-700 text-xs">{emp.shift.name}</p>
+                          <p className="text-xs text-slate-500">{emp.shift.startTime} - {emp.shift.endTime}</p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5">
                       {emp.checkIn ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
@@ -152,7 +164,7 @@ export default function TeamAttendance() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                       No attendance data for this date.
                     </td>
                   </tr>

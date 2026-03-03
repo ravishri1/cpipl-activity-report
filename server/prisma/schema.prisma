@@ -74,6 +74,9 @@ model User {
   location           String?                   // office/branch location
   grade              String?                   // pay grade / level
   shift              String?  @default("General") // shift name
+  shiftId            Int?                        // Current shift assignment
+  shiftAssignments   ShiftAssignment[]           @relation("ShiftAssignments")    // History of shift assignments by this user
+  shiftAssignmentsCreated ShiftAssignment[]      @relation("ShiftAssignmentsCreatedBy")  // Shift assignments created by this user (manager)
 
   // ── Company ──
   companyId          Int?
@@ -468,6 +471,7 @@ model Company {
   announcements Announcement[]
   assets           Asset[]
   shiftDefinitions ShiftDefinition[]
+  shifts        Shift[]
   surveys          Survey[]
 }
 
@@ -1132,4 +1136,50 @@ model DriveFile {
   @@index([userId])
   @@index([category])
   @@index([userId, category])
+}
+
+// ─── Shift Management ───
+model Shift {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique              // "Morning", "Evening", "Night", "General"
+  startTime       String                         // "09:00" format (24-hour)
+  endTime         String                         // "18:00" format (24-hour)
+  breakDuration   Int       @default(60)         // minutes
+  flexibility     Int       @default(0)          // flexibility in minutes (e.g., 15 min early/late)
+  description     String?
+  isActive        Boolean   @default(true)
+  companyId       Int?                           // null for company-wide shifts
+  company         Company?  @relation(fields: [companyId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shiftAssignments ShiftAssignment[]
+
+  @@index([isActive])
+  @@index([companyId])
+}
+
+model ShiftAssignment {
+  id                Int       @id @default(autoincrement())
+  userId            Int
+  shiftId           Int
+  assignedAt        DateTime  @default(now())
+  assignedBy        Int                          // Manager/Admin who assigned
+  effectiveFrom     String?                      // "YYYY-MM-DD" when shift takes effect (future date allowed)
+  effectiveTo       String?                      // "YYYY-MM-DD" when shift assignment ends
+  reason            String?                      // "Promotion", "Request", "Manager Decision", etc.
+  status            String    @default("active") // active, pending, expired, cancelled
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation("ShiftAssignments", fields: [userId], references: [id])
+  shift             Shift     @relation(fields: [shiftId], references: [id])
+  assignedByUser    User      @relation("ShiftAssignmentsCreatedBy", fields: [assignedBy], references: [id])
+
+  @@unique([userId, shiftId, effectiveFrom])
+  @@index([userId])
+  @@index([shiftId])
+  @@index([status])
+  @@index([effectiveFrom])
 }

@@ -46,6 +46,7 @@ const SuggestionManager = lazy(() => import('./components/admin/SuggestionManage
 const MyTraining = lazy(() => import('./components/training/MyTraining'));
 const TrainingManager = lazy(() => import('./components/admin/TrainingManager'));
 const MyFiles = lazy(() => import('./components/files/MyFiles'));
+const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
@@ -154,6 +155,7 @@ function AppRoutes() {
                   <Route path="/admin/payroll" element={<SeparatedRoute><AdminRoute><PayrollDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/shifts" element={<SeparatedRoute><AdminRoute><ShiftManagement /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/import" element={<SeparatedRoute><AdminRoute><EmployeeImport /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
