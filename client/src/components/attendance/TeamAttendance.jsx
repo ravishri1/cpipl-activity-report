@@ -12,6 +12,7 @@ import {
 
 export default function TeamAttendance() {
   const [data, setData] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, present: 0, absent: 0, onLeave: 0 });
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
 
@@ -20,9 +21,13 @@ export default function TeamAttendance() {
       setLoading(true);
       try {
         const res = await api.get(`/attendance/team?date=${date}`);
-        setData(res.data);
+        // Backend returns { employees: [...], summary: {...} }
+        const result = res.data;
+        setData(Array.isArray(result) ? result : (result.employees || []));
+        if (result.summary) setSummary(result.summary);
       } catch (err) {
         console.error('Team attendance error:', err);
+        setData([]);
       } finally {
         setLoading(false);
       }
@@ -37,7 +42,7 @@ export default function TeamAttendance() {
   };
 
   const present = data.filter((d) => d.status === 'present' || d.status === 'half_day');
-  const absent = data.filter((d) => d.status === 'absent' || !d.checkIn);
+  const absent = data.filter((d) => d.status === 'absent');
   const onLeave = data.filter((d) => d.status === 'on_leave');
 
   return (
