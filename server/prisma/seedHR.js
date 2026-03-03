@@ -50,6 +50,64 @@ async function seedHR() {
   }
   console.log(`   ✅ ${holidays2026.length} holidays created/updated`);
 
+  // ── Indian Holidays for 2027 ──
+  console.log('🎉 Creating 2027 holidays...');
+  const holidays2027 = [
+    { name: 'Republic Day', date: '2027-01-26', year: 2027 },
+    { name: 'Maha Shivaratri', date: '2027-03-07', year: 2027 },
+    { name: 'Holi', date: '2027-02-28', year: 2027 },
+    { name: 'Good Friday', date: '2027-04-02', year: 2027 },
+    { name: 'Ram Navami', date: '2027-03-29', year: 2027 },
+    { name: 'Eid ul-Fitr', date: '2027-03-11', year: 2027 },
+    { name: 'Buddha Purnima', date: '2027-05-13', year: 2027 },
+    { name: 'Eid ul-Adha', date: '2027-05-18', year: 2027 },
+    { name: 'Independence Day', date: '2027-08-15', year: 2027 },
+    { name: 'Janmashtami', date: '2027-08-15', year: 2027 },
+    { name: 'Mahatma Gandhi Jayanti', date: '2027-10-02', year: 2027 },
+    { name: 'Dussehra', date: '2027-10-02', year: 2027 },
+    { name: 'Diwali', date: '2027-11-10', year: 2027 },
+    { name: 'Guru Nanak Jayanti', date: '2027-11-30', year: 2027 },
+    { name: 'Christmas', date: '2027-12-25', year: 2027 },
+  ];
+
+  for (const h of holidays2027) {
+    await prisma.holiday.upsert({
+      where: { date: h.date },
+      update: { name: h.name, year: h.year },
+      create: h,
+    });
+  }
+  console.log(`   ✅ ${holidays2027.length} holidays created/updated`);
+
+  // ── Indian Holidays for 2028 ──
+  console.log('🎉 Creating 2028 holidays...');
+  const holidays2028 = [
+    { name: 'Republic Day', date: '2028-01-26', year: 2028 },
+    { name: 'Maha Shivaratri', date: '2028-02-24', year: 2028 },
+    { name: 'Holi', date: '2028-03-17', year: 2028 },
+    { name: 'Good Friday', date: '2028-04-07', year: 2028 },
+    { name: 'Ram Navami', date: '2028-04-17', year: 2028 },
+    { name: 'Eid ul-Fitr', date: '2028-02-28', year: 2028 },
+    { name: 'Buddha Purnima', date: '2028-05-31', year: 2028 },
+    { name: 'Eid ul-Adha', date: '2028-05-08', year: 2028 },
+    { name: 'Independence Day', date: '2028-08-15', year: 2028 },
+    { name: 'Janmashtami', date: '2028-09-03', year: 2028 },
+    { name: 'Mahatma Gandhi Jayanti', date: '2028-10-02', year: 2028 },
+    { name: 'Dussehra', date: '2028-10-21', year: 2028 },
+    { name: 'Diwali', date: '2028-10-30', year: 2028 },
+    { name: 'Guru Nanak Jayanti', date: '2028-11-19', year: 2028 },
+    { name: 'Christmas', date: '2028-12-25', year: 2028 },
+  ];
+
+  for (const h of holidays2028) {
+    await prisma.holiday.upsert({
+      where: { date: h.date },
+      update: { name: h.name, year: h.year },
+      create: h,
+    });
+  }
+  console.log(`   ✅ ${holidays2028.length} holidays created/updated`);
+
   // ── 3. Generate Employee IDs for existing users ──
   console.log('🆔 Assigning employee IDs...');
   const users = await prisma.user.findMany({

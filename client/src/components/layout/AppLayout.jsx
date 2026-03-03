@@ -10,15 +10,17 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <Sidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar - constrained height for sticky scroll */}
+        <div className="h-screen overflow-hidden">
+          <Sidebar
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
+        </div>
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Main content area - scrollable */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
 
           {/* Separated employee banner */}

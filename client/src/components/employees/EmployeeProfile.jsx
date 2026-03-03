@@ -25,7 +25,7 @@ const TABS = [
 
 export default function EmployeeProfile() {
   const { id } = useParams();
-  const { user: currentUser, isAdmin, updateUserPhoto } = useAuth();
+  const { user: currentUser, isAdmin, updateUserPhoto, refreshUserData } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('personal');
@@ -95,6 +95,10 @@ export default function EmployeeProfile() {
       const res = await api.put(`/users/${id}/profile`, form);
       setProfile({ ...profile, ...res.data });
       setEditing(false);
+      // Refresh global user data if updating own profile (so sidebar/header updates immediately)
+      if (isSelf) {
+        await refreshUserData();
+      }
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to update profile.');
     } finally {

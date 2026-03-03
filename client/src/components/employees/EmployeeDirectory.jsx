@@ -36,7 +36,7 @@ export default function EmployeeDirectory() {
           api.get('/users/directory', { params: { search, department, company } }),
           api.get('/users/departments'),
         ]);
-        setEmployees(empRes.data);
+        setEmployees(empRes.data.users || empRes.data);
         setDepartments(deptRes.data);
       } catch (err) {
         console.error('Directory error:', err);

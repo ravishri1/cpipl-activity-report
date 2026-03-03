@@ -186,7 +186,7 @@ export default function SuggestionBox() {
             <div>
               <p className="text-sm font-medium text-blue-800">Anonymous Submission</p>
               <p className="text-xs text-blue-600 mt-0.5">
-                Your identity is hidden from everyone except admin. Feel free to share openly.
+                Your name and identity are completely hidden. No one will be able to see who you are. Feel free to share openly.
               </p>
             </div>
           </div>

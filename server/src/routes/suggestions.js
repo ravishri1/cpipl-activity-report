@@ -25,7 +25,31 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json({ id: suggestion.id, message: 'Suggestion submitted anonymously' });
 }));
 
-// ─── 2. GET / ─── List suggestions (admin sees userId + name, others see anonymous)
+// ─── 2. GET /my ─── My own suggestions
+router.get('/my', asyncHandler(async (req, res) => {
+  const suggestions = await req.prisma.suggestion.findMany({
+    where: { userId: req.user.id, isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json({ suggestions: suggestions.map(({ userId, ...rest }) => rest) });
+}));
+
+// ─── 3. GET /stats ─── Summary stats (admin)
+router.get('/stats', requireAdmin, asyncHandler(async (req, res) => {
+  const [total, byStatus, byCategory] = await Promise.all([
+    req.prisma.suggestion.count({ where: { isActive: true } }),
+    req.prisma.suggestion.groupBy({ by: ['status'], where: { isActive: true }, _count: true }),
+    req.prisma.suggestion.groupBy({ by: ['category'], where: { isActive: true }, _count: true }),
+  ]);
+
+  res.json({
+    total,
+    byStatus: Object.fromEntries(byStatus.map(s => [s.status, s._count])),
+    byCategory: Object.fromEntries(byCategory.map(c => [c.category, c._count])),
+  });
+}));
+
+// ─── 4. GET / ─── List suggestions (admin sees userId + name, others see anonymous)
 router.get('/', asyncHandler(async (req, res) => {
   const { status, category } = req.query;
   const where = { isActive: true };
@@ -44,15 +68,6 @@ router.get('/', asyncHandler(async (req, res) => {
     return res.json(suggestions.map(s => ({ ...s, submittedBy: userMap[s.userId] || { name: 'Unknown' } })));
   }
 
-  res.json(suggestions.map(({ userId, ...rest }) => rest));
-}));
-
-// ─── 3. GET /my ─── My own suggestions
-router.get('/my', asyncHandler(async (req, res) => {
-  const suggestions = await req.prisma.suggestion.findMany({
-    where: { userId: req.user.id, isActive: true },
-    orderBy: { createdAt: 'desc' },
-  });
   res.json(suggestions.map(({ userId, ...rest }) => rest));
 }));
 

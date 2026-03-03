@@ -130,6 +130,20 @@ export function AuthProvider({ children }) {
     }
   }, [isSignedIn, clerkUser, getToken, syncUser]);
 
+  // Refresh user data from server — called after profile updates to ensure cache is fresh
+  const refreshUserData = useCallback(async () => {
+    if (!isSignedIn || !dbUser || dbUser.error) return;
+    try {
+      // Fetch complete user profile to get all fields (name, photo, company info, etc.)
+      const res = await api.get(`/users/${dbUser.id}/profile`);
+      setDbUser(res.data);
+      localStorage.setItem('user', JSON.stringify(res.data));
+    } catch (err) {
+      console.error('Failed to refresh user data:', err);
+      // Don't show error to user — silently fail, data might be stale
+    }
+  }, [isSignedIn, dbUser]);
+
   // Update photo URL in global state without re-syncing
   const updateUserPhoto = useCallback((photoUrl) => {
     setDbUser(prev => {
@@ -153,7 +167,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, loading, isAdmin, isStrictAdmin, isTeamLead, isSeparated, isHibernated, canSelfReactivate, remainingReactivations, accessDenied, syncError,
-      logout, retrySync, selfReactivate, updateUserPhoto, clerkUser, isSignedIn
+      logout, retrySync, selfReactivate, updateUserPhoto, refreshUserData, clerkUser, isSignedIn
     }}>
       {children}
     </AuthContext.Provider>
