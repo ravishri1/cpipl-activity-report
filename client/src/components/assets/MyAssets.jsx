@@ -67,7 +67,7 @@ export default function MyAssets() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/api/assets/my');
+      const response = await api.get('/assets/my');
       setAssets(response.data || []);
     } catch (err) {
       console.error('Failed to fetch assets:', err);

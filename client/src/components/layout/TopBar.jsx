@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { UserButton } from '@clerk/clerk-react';
 import { FileText, Menu } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 export default function TopBar({ onMenuToggle }) {
   const { user } = useAuth();
@@ -27,8 +28,9 @@ export default function TopBar({ onMenuToggle }) {
           </Link>
         </div>
 
-        {/* Right: user info + Clerk button */}
+        {/* Right: notification bell + user info + Clerk button */}
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <div className="hidden sm:block text-right">
             <p className="text-sm font-medium text-slate-700">{user?.name}</p>
             <p className="text-[10px] text-slate-400 capitalize">{user?.department} · {user?.role?.replace('_', ' ')}</p>

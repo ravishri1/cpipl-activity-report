@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId, requireEnum } = require('../utils/validate');
+const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -67,6 +68,15 @@ router.post('/', asyncHandler(async (req, res) => {
       createdBy: req.user.id,
     },
   });
+
+  // Notify all employees about new KB article
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'wiki_update',
+    title: 'New Knowledge Base Article',
+    message: `"${title}" was added to Knowledge Base`,
+    link: '/wiki',
+  });
+
   res.status(201).json(article);
 }));
 
@@ -85,6 +95,15 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (isAdminRole(req.user) && isPinned !== undefined) data.isPinned = isPinned;
 
   const updated = await req.prisma.wikiArticle.update({ where: { id }, data });
+
+  // Notify all employees about KB article update
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'wiki_update',
+    title: 'Knowledge Base Updated',
+    message: `"${updated.title}" was updated`,
+    link: '/wiki',
+  });
+
   res.json(updated);
 }));
 

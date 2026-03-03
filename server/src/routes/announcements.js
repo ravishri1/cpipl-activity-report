@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -101,6 +102,14 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
       author: { select: { id: true, name: true, email: true } },
       company: { select: { id: true, name: true } },
     },
+  });
+
+  // Notify all employees about new announcement
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'announcement',
+    title: `New Announcement: ${title}`,
+    message: priority === 'urgent' ? '🚨 Urgent announcement posted' : `A new ${category || 'general'} announcement was posted`,
+    link: '/announcements',
   });
 
   res.status(201).json(announcement);

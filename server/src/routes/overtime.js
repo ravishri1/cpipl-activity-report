@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -24,6 +25,19 @@ router.post('/', asyncHandler(async (req, res) => {
   const request = await req.prisma.overtimeRequest.create({
     data: { userId: req.user.id, date, hours: parsedHours, reason: reason || null },
   });
+
+  // Notify admins about new overtime request
+  const admins = await req.prisma.user.findMany({
+    where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } },
+    select: { id: true },
+  });
+  notifyUsers(req.prisma, {
+    userIds: admins.map(a => a.id), type: 'overtime',
+    title: 'New Overtime Request',
+    message: `${req.user.name || 'An employee'} requested ${parsedHours}h overtime on ${date}`,
+    link: '/overtime',
+  });
+
   res.status(201).json(request);
 }));
 
@@ -77,6 +91,17 @@ router.put('/:id/review', requireAdmin, asyncHandler(async (req, res) => {
     data: { status, compOffEarned: compOffEarned === true, reviewedBy: req.user.id, reviewedAt: new Date() },
     include: { user: { select: { name: true, email: true, employeeId: true, department: true } } },
   });
+
+  // Notify the requestor about the review decision
+  if (existing.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [existing.userId], type: 'overtime',
+      title: `Overtime ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
+      message: `Your overtime request for ${existing.date} has been ${status}`,
+      link: '/overtime',
+    });
+  }
+
   res.json(updated);
 }));
 

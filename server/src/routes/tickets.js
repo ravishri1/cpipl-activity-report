@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -59,6 +60,19 @@ router.post('/', asyncHandler(async (req, res) => {
   const ticket = await req.prisma.ticket.create({
     data: { userId: req.user.id, subject, description, category: category || 'other', priority: priority || 'medium', status: 'open' },
   });
+
+  // Notify admins about new ticket
+  const admins = await req.prisma.user.findMany({
+    where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } },
+    select: { id: true },
+  });
+  notifyUsers(req.prisma, {
+    userIds: admins.map(a => a.id), type: 'ticket',
+    title: `New Ticket: ${subject}`,
+    message: `${req.user.name || 'An employee'} raised a ${(priority || 'medium').toUpperCase()} priority ticket`,
+    link: `/tickets/${ticket.id}`,
+  });
+
   res.status(201).json(ticket);
 }));
 
@@ -97,6 +111,22 @@ router.post('/:id/comment', asyncHandler(async (req, res) => {
     data: { ticketId: id, userId: req.user.id, content: content.trim(), isInternal: internalFlag },
     include: { user: { select: { id: true, name: true, role: true } } },
   });
+
+  // Notify the other party about the comment (skip internal notes to ticket owner)
+  if (!internalFlag) {
+    const notifyId = req.user.id === ticket.userId
+      ? (ticket.assignedTo || null)  // employee commented → notify assignee
+      : ticket.userId;                // admin/assignee commented → notify ticket owner
+    if (notifyId && notifyId !== req.user.id) {
+      notifyUsers(req.prisma, {
+        userIds: [notifyId], type: 'ticket',
+        title: `New Comment on Ticket #${id}`,
+        message: `${req.user.name || 'Someone'} commented on "${ticket.subject}"`,
+        link: `/tickets/${id}`,
+      });
+    }
+  }
+
   res.status(201).json(comment);
 }));
 
@@ -123,6 +153,17 @@ router.put('/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
     where: { id }, data,
     include: { user: { select: { id: true, name: true, email: true } }, assignee: { select: { id: true, name: true, email: true } } },
   });
+
+  // Notify the assignee
+  if (assignedTo !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [assignedTo], type: 'ticket',
+      title: `Ticket Assigned to You: #${id}`,
+      message: `"${ticket.subject}" has been assigned to you`,
+      link: `/tickets/${id}`,
+    });
+  }
+
   res.json(updated);
 }));
 
@@ -142,6 +183,17 @@ router.put('/:id/resolve', asyncHandler(async (req, res) => {
     data: { status: 'resolved', resolution: resolution.trim(), resolvedAt: new Date() },
     include: { user: { select: { id: true, name: true } }, assignee: { select: { id: true, name: true } } },
   });
+
+  // Notify ticket owner if resolved by someone else
+  if (ticket.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [ticket.userId], type: 'ticket',
+      title: `Ticket Resolved: #${id}`,
+      message: `Your ticket "${ticket.subject}" has been resolved`,
+      link: `/tickets/${id}`,
+    });
+  }
+
   res.json(updated);
 }));
 

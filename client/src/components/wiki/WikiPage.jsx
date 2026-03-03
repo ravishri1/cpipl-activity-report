@@ -119,108 +119,81 @@ function ArticleCard({ article, isAdmin, currentUserId, onEdit, onDelete, onTogg
 
   return (
     <div
-      className={`bg-white rounded-lg shadow-sm border-l-4 ${style.border} transition-shadow hover:shadow-md ${
+      className={`bg-white rounded-lg border border-gray-200 border-l-4 ${style.border} transition-shadow hover:shadow-sm ${
         article.isPinned ? 'ring-1 ring-amber-200' : ''
       }`}
     >
       {/* Header */}
       <div
-        className="px-5 py-4 cursor-pointer select-none"
+        className="px-3 py-2.5 cursor-pointer select-none"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              {article.isPinned && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
-                  <Pin className="w-3 h-3" />
-                  Pinned
-                </span>
-              )}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${style.badge}`}
-              >
-                {categoryLabel}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            {article.isPinned && (
+              <Pin className="w-3 h-3 text-amber-500 flex-shrink-0" />
+            )}
+            <h3 className="text-sm font-semibold text-gray-900 truncate">{article.title}</h3>
+            <span className={`hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${style.badge}`}>
+              {categoryLabel}
+            </span>
+            {article.location && (
+              <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] text-gray-400 flex-shrink-0">
+                <MapPin className="w-2.5 h-2.5" />
+                {article.location}
               </span>
-              {article.location && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                  <MapPin className="w-3 h-3" />
-                  {article.location}
-                </span>
-              )}
-            </div>
-            <h3 className="text-base font-semibold text-gray-900">{article.title}</h3>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            {/* Edit - any employee can edit */}
+          <div className="flex items-center gap-0.5 shrink-0">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(article);
-              }}
-              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+              onClick={(e) => { e.stopPropagation(); onEdit(article); }}
+              className="p-1 text-gray-400 hover:text-blue-600 rounded transition-colors"
               title="Edit"
             >
-              <Edit3 className="w-4 h-4" />
+              <Edit3 className="w-3.5 h-3.5" />
             </button>
-
-            {/* Pin/Unpin - admin only */}
             {isAdmin && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePin(article);
-                }}
-                className={`p-1.5 rounded transition-colors ${
-                  article.isPinned
-                    ? 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
-                    : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50'
-                }`}
+                onClick={(e) => { e.stopPropagation(); onTogglePin(article); }}
+                className={`p-1 rounded transition-colors ${article.isPinned ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
                 title={article.isPinned ? 'Unpin' : 'Pin'}
               >
-                <Pin className="w-4 h-4" />
+                <Pin className="w-3.5 h-3.5" />
               </button>
             )}
-
-            {/* Delete - admin only */}
             {isAdmin && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(article.id);
-                }}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                onClick={(e) => { e.stopPropagation(); onDelete(article.id); }}
+                className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
                 title="Delete"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
-
-            {/* Expand/Collapse chevron */}
             {expanded ? (
-              <ChevronUp className="w-4 h-4 text-gray-400 ml-1" />
+              <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
             ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400 ml-1" />
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
             )}
           </div>
         </div>
 
-        {/* Preview when collapsed */}
+        {/* Preview when collapsed — single line */}
         {!expanded && (
-          <p className="mt-2 text-sm text-gray-500 line-clamp-2">{article.content}</p>
+          <p className="mt-1 text-xs text-gray-500 line-clamp-1">{article.content}</p>
         )}
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="px-5 pb-4 border-t border-gray-100">
-          <div className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+        <div className="px-3 pb-3 border-t border-gray-100">
+          <div className="mt-2 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
             {renderContent(article.content)}
           </div>
 
           {/* Footer */}
-          <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-4 text-xs text-gray-400">
+          <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap items-center gap-3 text-[11px] text-gray-400">
             {article.lastEditedBy && (
               <span className="flex items-center gap-1">
                 <User className="w-3.5 h-3.5" />
@@ -450,7 +423,7 @@ export default function WikiPage() {
       if (activeLocation) {
         params.location = activeLocation;
       }
-      const res = await api.get('/api/wiki', { params });
+      const res = await api.get('/wiki', { params });
       const data = Array.isArray(res.data) ? res.data : res.data.articles || [];
       setArticles(data);
     } catch (err) {
@@ -492,7 +465,7 @@ export default function WikiPage() {
   const handleCreate = async (formData) => {
     try {
       setSubmitting(true);
-      await api.post('/api/wiki', {
+      await api.post('/wiki', {
         title: formData.title.trim(),
         content: formData.content.trim(),
         category: formData.category,
@@ -514,7 +487,7 @@ export default function WikiPage() {
     if (!editingArticle) return;
     try {
       setSubmitting(true);
-      await api.put(`/api/wiki/${editingArticle.id}`, {
+      await api.put(`/wiki/${editingArticle.id}`, {
         title: formData.title.trim(),
         content: formData.content.trim(),
         category: formData.category,
@@ -548,7 +521,7 @@ export default function WikiPage() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this article?')) return;
     try {
-      await api.delete(`/api/wiki/${id}`);
+      await api.delete(`/wiki/${id}`);
       addToast('Article deleted');
       fetchArticles();
     } catch (err) {
@@ -559,7 +532,7 @@ export default function WikiPage() {
 
   const handleTogglePin = async (article) => {
     try {
-      await api.put(`/api/wiki/${article.id}`, {
+      await api.put(`/wiki/${article.id}`, {
         title: article.title,
         content: article.content,
         category: article.category,
@@ -598,7 +571,7 @@ export default function WikiPage() {
   // -----------------------------------------------------------------------
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-4">
       {/* Toast Stack */}
       <div className="fixed top-4 right-4 z-[60] space-y-2">
         {toasts.map((t) => (
@@ -607,16 +580,14 @@ export default function WikiPage() {
       </div>
 
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <BookOpen className="w-6 h-6 text-blue-600" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-blue-100 rounded-xl">
+            <BookOpen className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Employee Wiki</h1>
-            <p className="text-sm text-gray-500">
-              Knowledge base for travel, contacts, food, and more
-            </p>
+            <h1 className="text-xl font-bold text-gray-900">Knowledge Base</h1>
+            <p className="text-xs text-gray-500">Travel, contacts, food & more</p>
           </div>
         </div>
 
@@ -625,15 +596,15 @@ export default function WikiPage() {
             setEditingArticle(null);
             setShowModal(true);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
         >
-          <Plus className="w-4 h-4" />
-          New Article
+          <Plus className="w-3.5 h-3.5" />
+          New
         </button>
       </div>
 
       {/* Search + Location Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row gap-2">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -673,18 +644,18 @@ export default function WikiPage() {
       </div>
 
       {/* Category Tabs */}
-      <div className="mb-6 -mx-4 px-4 overflow-x-auto">
-        <div className="flex gap-1 min-w-max border-b border-gray-200">
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex gap-1 min-w-max">
           {CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat.value;
             return (
               <button
                 key={cat.value}
                 onClick={() => setActiveCategory(cat.value)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap ${
                   isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {cat.label}
@@ -717,7 +688,7 @@ export default function WikiPage() {
           ))}
         </div>
       ) : sortedArticles.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {sortedArticles.map((article) => (
             <ArticleCard
               key={article.id}

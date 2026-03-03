@@ -11,6 +11,7 @@ const {
   getMyLeaveRequests,
   getPendingRequests,
 } = require('../services/leave/leaveService');
+const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -48,6 +49,19 @@ router.get('/pending', authenticate, requireAdmin, asyncHandler(async (req, res)
 // POST /api/leave/apply — Apply for leave
 router.post('/apply', authenticate, asyncHandler(async (req, res) => {
   const request = await applyLeave(req.user.id, req.body, req.prisma);
+
+  // Notify admins/team leads about new leave request
+  const admins = await req.prisma.user.findMany({
+    where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } },
+    select: { id: true },
+  });
+  notifyUsers(req.prisma, {
+    userIds: admins.map(a => a.id), type: 'leave',
+    title: 'New Leave Request',
+    message: `${req.user.name || 'An employee'} applied for leave (${req.body.startDate} to ${req.body.endDate})`,
+    link: '/leave',
+  });
+
   res.status(201).json(request);
 }));
 
@@ -57,6 +71,17 @@ router.put('/:id/review', authenticate, requireAdmin, asyncHandler(async (req, r
   const { status, reviewNote } = req.body;
   if (!status) throw badRequest('Status is required (approved or rejected).');
   const updated = await reviewLeave(requestId, req.user.id, status, reviewNote, req.prisma);
+
+  // Notify the requestor about the review decision
+  if (updated.userId && updated.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [updated.userId], type: 'leave',
+      title: `Leave Request ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
+      message: `Your leave request has been ${status} by ${req.user.name || 'an admin'}`,
+      link: '/leave',
+    });
+  }
+
   res.json(updated);
 }));
 

@@ -50,7 +50,7 @@ export default function MyPayslips() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/api/payroll/my-payslips');
+      const response = await api.get('/payroll/my-payslips');
       const published = (response.data || []).filter(
         (p) => p.status === 'published'
       );

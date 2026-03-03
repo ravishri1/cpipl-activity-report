@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
+const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 
@@ -143,6 +144,14 @@ router.post('/admin/create', authenticate, requireAdmin, asyncHandler(async (req
 
   await req.prisma.policyVersion.create({
     data: { policyId: policy.id, version: 1, content, changedBy: req.user.id, changeLog: 'Initial version' },
+  });
+
+  // Notify all employees about new policy
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'policy',
+    title: `New Policy Published: ${title.trim()}`,
+    message: isMandatory !== false ? 'A new mandatory policy requires your acceptance' : 'A new company policy has been published',
+    link: `/policies/${policy.slug}`,
   });
 
   res.json(policy);

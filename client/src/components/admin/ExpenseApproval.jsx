@@ -85,7 +85,7 @@ export default function ExpenseApproval() {
       if (statusFilter) params.append('status', statusFilter);
       if (monthFilter) params.append('month', monthFilter);
       const query = params.toString() ? `?${params.toString()}` : '';
-      const res = await api.get(`/api/expenses/all${query}`);
+      const res = await api.get(`/expenses/all${query}`);
       setExpenses(res.data.expenses || res.data || []);
     } catch (err) {
       setError('Failed to load expense claims');
@@ -126,7 +126,7 @@ export default function ExpenseApproval() {
   const handleReview = async (id, status) => {
     try {
       setActionLoading(id);
-      await api.put(`/api/expenses/${id}/review`, {
+      await api.put(`/expenses/${id}/review`, {
         status,
         reviewNote: reviewNote.trim() || null,
       });
@@ -145,7 +145,7 @@ export default function ExpenseApproval() {
   const handleMarkPaid = async (id) => {
     try {
       setActionLoading(id);
-      await api.put(`/api/expenses/${id}/paid`, {
+      await api.put(`/expenses/${id}/paid`, {
         paidOn: new Date().toISOString().split('T')[0],
       });
       setSuccess('Expense marked as paid');

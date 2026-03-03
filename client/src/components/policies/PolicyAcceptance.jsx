@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import api from '../../utils/api';
 import {
   Shield,
   CheckCircle,
@@ -234,18 +235,8 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`/api/policies/${slug}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Failed to load policy (${res.status})`);
-        }
-        const data = await res.json();
-        setPolicy(data);
+        const response = await api.get(`/policies/${slug}`);
+        setPolicy(response.data);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -260,18 +251,7 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
     setAccepting(true);
     setAcceptError('');
     try {
-      const res = await fetch(`/api/policies/${policy.id}/accept`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ remarks: remarks.trim() || undefined }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to accept policy.');
-      }
+      await api.post(`/policies/${policy.id}/accept`, { remarks: remarks.trim() || undefined });
       setPolicy((prev) => ({
         ...prev,
         acceptedAt: new Date().toISOString(),
@@ -504,17 +484,8 @@ export default function PolicyAcceptance() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/policies', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Failed to load policies (${res.status})`);
-      }
-      const data = await res.json();
+      const response = await api.get('/policies');
+      const data = response.data;
       const sorted = (Array.isArray(data) ? data : []).sort((a, b) => {
         // Mandatory first
         if (a.isMandatory && !b.isMandatory) return -1;

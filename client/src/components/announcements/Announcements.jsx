@@ -493,7 +493,7 @@ export default function Announcements() {
   const fetchAnnouncements = useCallback(async () => {
     try {
       setLoadingAnnouncements(true);
-      const res = await api.get('/api/announcements');
+      const res = await api.get('/announcements');
       setAnnouncements(
         Array.isArray(res.data) ? res.data : res.data.announcements || []
       );
@@ -508,7 +508,7 @@ export default function Announcements() {
   const fetchCelebrations = useCallback(async () => {
     try {
       setLoadingCelebrations(true);
-      const res = await api.get('/api/announcements/celebrations');
+      const res = await api.get('/announcements/celebrations');
       setCelebrations(res.data || { birthdays: [], anniversaries: [] });
     } catch (err) {
       console.error('Failed to fetch celebrations:', err);
@@ -542,9 +542,9 @@ export default function Announcements() {
       }
 
       if (editingAnnouncement) {
-        await api.put(`/api/announcements/${editingAnnouncement.id}`, payload);
+        await api.put(`/announcements/${editingAnnouncement.id}`, payload);
       } else {
-        await api.post('/api/announcements', payload);
+        await api.post('/announcements', payload);
       }
 
       setShowForm(false);
@@ -574,7 +574,7 @@ export default function Announcements() {
     }
     try {
       setError('');
-      await api.delete(`/api/announcements/${id}`);
+      await api.delete(`/announcements/${id}`);
       fetchAnnouncements();
     } catch (err) {
       console.error('Failed to delete announcement:', err);

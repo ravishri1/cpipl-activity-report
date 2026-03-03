@@ -137,7 +137,7 @@ function NewTicketModal({ onClose, onCreated }) {
     try {
       setSubmitting(true);
       setError('');
-      await api.post('/api/tickets', {
+      await api.post('/tickets', {
         subject: form.subject.trim(),
         description: form.description.trim(),
         category: form.category,
@@ -277,7 +277,7 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
   const fetchComments = useCallback(async () => {
     try {
       setLoadingComments(true);
-      const res = await api.get(`/api/tickets/${ticket.id}/comments`);
+      const res = await api.get(`/tickets/${ticket.id}/comments`);
       setComments(res.data.comments || res.data || []);
     } catch {
       setComments([]);
@@ -295,7 +295,7 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
     if (!newComment.trim()) return;
     try {
       setSubmitting(true);
-      await api.post(`/api/tickets/${ticket.id}/comment`, {
+      await api.post(`/tickets/${ticket.id}/comment`, {
         content: newComment.trim(),
         isInternal: false,
       });
@@ -311,7 +311,7 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
   const handleReopen = async () => {
     try {
       setActionLoading(true);
-      await api.put(`/api/tickets/${ticket.id}/status`, { status: 'open' });
+      await api.put(`/tickets/${ticket.id}/status`, { status: 'open' });
       onUpdate();
     } catch {
       // handled by parent
@@ -485,7 +485,7 @@ export default function MyTickets() {
   const fetchTickets = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/api/tickets/my');
+      const res = await api.get('/tickets/my');
       setTickets(res.data.tickets || res.data || []);
     } catch (err) {
       addToast('Failed to load tickets', 'error');

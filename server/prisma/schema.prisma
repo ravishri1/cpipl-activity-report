@@ -1083,3 +1083,21 @@ model ExpenseApprovalLog {
   @@index([expenseId])
   @@index([actionBy])
 }
+
+// ═══════════════════════════════════════════════
+// Notifications
+// ═══════════════════════════════════════════════
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  type      String    @default("info")              // wiki_update, announcement, policy, ticket, general, info
+  title     String
+  message   String?
+  link      String?                                 // frontend route to navigate to
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}

@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -61,6 +62,15 @@ router.post('/modules', requireAdmin, asyncHandler(async (req, res) => {
       createdBy: req.user.id,
     },
   });
+
+  // Notify all employees about new training module
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'training',
+    title: `New Training: ${title}`,
+    message: isMandatory ? 'A new mandatory training module has been published' : 'A new training module is available',
+    link: '/training',
+  });
+
   res.status(201).json(module);
 }));
 

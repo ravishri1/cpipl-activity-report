@@ -32,6 +32,7 @@ const otpRoutes = require('./routes/otp');
 const wikiRoutes = require('./routes/wiki');
 const suggestionRoutes = require('./routes/suggestions');
 const trainingRoutes = require('./routes/training');
+const notificationRoutes = require('./routes/notifications');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -92,6 +93,7 @@ app.use('/api/otp', otpRoutes);
 app.use('/api/wiki', wikiRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

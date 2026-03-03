@@ -91,7 +91,7 @@ export default function SalaryStructure() {
     const fetchEmployees = async () => {
       try {
         setLoading(true);
-        const res = await api.get('/api/users');
+        const res = await api.get('/users');
         const active = (res.data || []).filter((u) => u.isActive !== false);
         setEmployees(active);
       } catch (err) {
@@ -153,7 +153,7 @@ export default function SalaryStructure() {
     setSalaryForm({ ...emptySalary });
 
     try {
-      const res = await api.get(`/api/payroll/salary/${employee.id}`);
+      const res = await api.get(`/payroll/salary/${employee.id}`);
       if (res.data) {
         const d = res.data;
         setSalaryForm({
@@ -260,7 +260,7 @@ export default function SalaryStructure() {
     };
 
     try {
-      await api.put(`/api/payroll/salary/${selectedEmployee.id}`, payload);
+      await api.put(`/payroll/salary/${selectedEmployee.id}`, payload);
       setIsExisting(true);
       setSaveMessage({ type: 'success', text: 'Salary structure saved successfully.' });
       setSalaryCache((prev) => ({
@@ -286,7 +286,7 @@ export default function SalaryStructure() {
     setShowRevisions(true);
 
     try {
-      const res = await api.get(`/api/payroll/salary/${selectedEmployee.id}/revisions`);
+      const res = await api.get(`/payroll/salary/${selectedEmployee.id}/revisions`);
       setRevisions(res.data || []);
     } catch (err) {
       console.error('Failed to fetch revisions:', err);

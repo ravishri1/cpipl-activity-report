@@ -331,7 +331,7 @@ const PayRegister = ({ month }) => {
     setError(null);
     try {
       const response = await api.get(
-        `/api/payroll/pay-register?month=${month}`
+        `/payroll/pay-register?month=${month}`
       );
       setRegisterData(response.data);
     } catch (err) {
@@ -540,7 +540,7 @@ export default function PayrollDashboard() {
     setLoading(true);
     try {
       const response = await api.get(
-        `/api/payroll/payslips?month=${selectedMonth}`
+        `/payroll/payslips?month=${selectedMonth}`
       );
       setPayslips(response.data);
     } catch (err) {
@@ -561,7 +561,7 @@ export default function PayrollDashboard() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const response = await api.post('/api/payroll/generate', {
+      const response = await api.post('/payroll/generate', {
         month: selectedMonth,
       });
       showToast(
@@ -583,7 +583,7 @@ export default function PayrollDashboard() {
   const handlePublish = async (payslipId) => {
     setPublishingId(payslipId);
     try {
-      await api.post(`/api/payroll/payslips/${payslipId}/publish`);
+      await api.post(`/payroll/payslips/${payslipId}/publish`);
       showToast('Payslip published successfully', 'success');
       fetchPayslips();
     } catch (err) {
@@ -599,7 +599,7 @@ export default function PayrollDashboard() {
   const handlePublishAll = async () => {
     setPublishing(true);
     try {
-      const response = await api.post('/api/payroll/payslips/publish-all', {
+      const response = await api.post('/payroll/payslips/publish-all', {
         month: selectedMonth,
       });
       showToast(

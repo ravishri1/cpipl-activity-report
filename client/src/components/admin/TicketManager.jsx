@@ -170,7 +170,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
   const fetchComments = useCallback(async () => {
     try {
       setLoadingComments(true);
-      const res = await api.get(`/api/tickets/${ticket.id}/comments`);
+      const res = await api.get(`/tickets/${ticket.id}/comments`);
       setComments(res.data.comments || res.data || []);
     } catch {
       setComments([]);
@@ -188,7 +188,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
     if (!newComment.trim()) return;
     try {
       setSubmittingComment(true);
-      await api.post(`/api/tickets/${ticket.id}/comment`, {
+      await api.post(`/tickets/${ticket.id}/comment`, {
         content: newComment.trim(),
         isInternal,
       });
@@ -206,7 +206,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
     if (!assigneeId) return;
     try {
       setActionLoading(true);
-      await api.put(`/api/tickets/${ticket.id}/assign`, {
+      await api.put(`/tickets/${ticket.id}/assign`, {
         assignedToId: parseInt(assigneeId),
       });
       onUpdate();
@@ -224,7 +224,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
       if (newStatus === 'resolved' && resolution.trim()) {
         body.resolution = resolution.trim();
       }
-      await api.put(`/api/tickets/${ticket.id}/status`, body);
+      await api.put(`/tickets/${ticket.id}/status`, body);
       setShowResolve(false);
       setResolution('');
       onUpdate();
@@ -546,7 +546,7 @@ export default function TicketManager() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await api.get('/api/tickets/admin/stats');
+      const res = await api.get('/tickets/admin/stats');
       const data = res.data;
       setStats({
         open: data.open ?? 0,
@@ -567,7 +567,7 @@ export default function TicketManager() {
       if (categoryFilter) params.append('category', categoryFilter);
       if (priorityFilter) params.append('priority', priorityFilter);
       const query = params.toString() ? `?${params.toString()}` : '';
-      const res = await api.get(`/api/tickets/admin/all${query}`);
+      const res = await api.get(`/tickets/admin/all${query}`);
       setTickets(res.data.tickets || res.data || []);
     } catch (err) {
       addToast('Failed to load tickets', 'error');
@@ -579,7 +579,7 @@ export default function TicketManager() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await api.get('/api/users');
+      const res = await api.get('/users');
       setUsers(res.data.users || res.data || []);
     } catch {
       // users list optional
@@ -605,7 +605,7 @@ export default function TicketManager() {
           if (categoryFilter) params.append('category', categoryFilter);
           if (priorityFilter) params.append('priority', priorityFilter);
           const query = params.toString() ? `?${params.toString()}` : '';
-          const res = await api.get(`/api/tickets/admin/all${query}`);
+          const res = await api.get(`/tickets/admin/all${query}`);
           const all = res.data.tickets || res.data || [];
           const updated = all.find((t) => t.id === selectedTicket.id);
           if (updated) setSelectedTicket(updated);

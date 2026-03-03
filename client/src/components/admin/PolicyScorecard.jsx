@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import api from '../../utils/api';
 import {
   Shield, ShieldCheck, ShieldAlert, BarChart3, Users, CheckCircle,
   AlertTriangle, TrendingUp, Eye, ChevronDown,
@@ -212,17 +213,8 @@ export default function PolicyScorecard() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('/api/policies/admin/scorecard', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!res.ok) {
-          throw new Error(`Failed to load scorecard (${res.status})`);
-        }
-        const json = await res.json();
-        setData(json);
+        const response = await api.get('/policies/admin/scorecard');
+        setData(response.data);
       } catch (err) {
         setError(err.message || 'Failed to load policy scorecard.');
       } finally {

@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -34,6 +35,19 @@ router.post('/', asyncHandler(async (req, res) => {
     expenseId: expense.id, action: 'submitted', actionBy: req.user.id,
     notes: `Submitted: ${title} - ₹${amount}`,
   });
+
+  // Notify admins about new expense claim
+  const admins = await req.prisma.user.findMany({
+    where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } },
+    select: { id: true },
+  });
+  notifyUsers(req.prisma, {
+    userIds: admins.map(a => a.id), type: 'expense',
+    title: 'New Expense Claim',
+    message: `${req.user.name || 'An employee'} submitted ₹${amount} for ${title}`,
+    link: '/expenses',
+  });
+
   res.status(201).json(expense);
 }));
 
@@ -157,6 +171,17 @@ router.put('/:id/review', asyncHandler(async (req, res) => {
     expenseId: id, action: status, actionBy: req.user.id,
     notes: reviewNote || `${status === 'approved' ? 'Approved' : 'Rejected'} by ${req.user.name || 'manager'}`,
   });
+
+  // Notify the requestor about the review decision
+  if (expense.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [expense.userId], type: 'expense',
+      title: `Expense ${status === 'approved' ? 'Approved ✅' : 'Rejected ❌'}`,
+      message: `Your expense claim has been ${status} by ${req.user.name || 'a reviewer'}`,
+      link: '/expenses',
+    });
+  }
+
   res.json(updated);
 }));
 
@@ -175,6 +200,17 @@ router.put('/:id/paid', requireAdmin, asyncHandler(async (req, res) => {
     expenseId: id, action: 'paid', actionBy: req.user.id,
     notes: `Paid on ${updated.paidOn}`,
   });
+
+  // Notify the employee that their expense has been paid
+  if (expense.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [expense.userId], type: 'expense',
+      title: 'Expense Paid 💰',
+      message: `Your expense claim has been paid`,
+      link: '/expenses',
+    });
+  }
+
   res.json(updated);
 }));
 

@@ -79,7 +79,7 @@ export default function MyExpenses() {
   const fetchExpenses = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/api/expenses/my');
+      const res = await api.get('/expenses/my');
       setExpenses(res.data.expenses || res.data || []);
     } catch (err) {
       setError('Failed to load expenses');
@@ -121,7 +121,7 @@ export default function MyExpenses() {
     try {
       setSubmitting(true);
       setError('');
-      await api.post('/api/expenses', {
+      await api.post('/expenses', {
         title: form.title.trim(),
         category: form.category,
         amount: parseFloat(form.amount),

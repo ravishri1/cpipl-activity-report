@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
@@ -57,6 +58,14 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
       createdBy: req.user.id,
     },
     include: { creator: { select: { id: true, name: true, email: true } } },
+  });
+
+  // Notify all employees about new survey
+  notifyAllExcept(req.prisma, req.user.id, {
+    type: 'survey',
+    title: `New Survey: ${title}`,
+    message: `Please participate in the "${title}" survey`,
+    link: '/surveys',
   });
 
   res.status(201).json({ ...survey, questions: JSON.parse(survey.questions) });

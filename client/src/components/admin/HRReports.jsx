@@ -783,7 +783,7 @@ export default function HRReports() {
     setLoading('headcount', true);
     setError('headcount', null);
     try {
-      const res = await api.get('/api/analytics/headcount');
+      const res = await api.get('/analytics/headcount');
       setHeadcount(res.data);
     } catch (err) {
       console.error('Headcount fetch error:', err);
@@ -797,7 +797,7 @@ export default function HRReports() {
     setLoading('attrition', true);
     setError('attrition', null);
     try {
-      const res = await api.get('/api/analytics/attrition', { params: { months: 6 } });
+      const res = await api.get('/analytics/attrition', { params: { months: 6 } });
       setAttrition(res.data);
     } catch (err) {
       console.error('Attrition fetch error:', err);
@@ -811,7 +811,7 @@ export default function HRReports() {
     setLoading('attendance', true);
     setError('attendance', null);
     try {
-      const res = await api.get('/api/analytics/attendance-summary', { params: { month } });
+      const res = await api.get('/analytics/attendance-summary', { params: { month } });
       setAttendance(res.data);
     } catch (err) {
       console.error('Attendance fetch error:', err);
@@ -825,7 +825,7 @@ export default function HRReports() {
     setLoading('leave', true);
     setError('leave', null);
     try {
-      const res = await api.get('/api/analytics/leave-summary', { params: { month } });
+      const res = await api.get('/analytics/leave-summary', { params: { month } });
       setLeaveSummary(res.data);
     } catch (err) {
       console.error('Leave summary fetch error:', err);
@@ -840,9 +840,9 @@ export default function HRReports() {
     setError('diversity', null);
     try {
       const [genderRes, ageRes, tenureRes] = await Promise.allSettled([
-        api.get('/api/analytics/gender-diversity'),
-        api.get('/api/analytics/age-distribution'),
-        api.get('/api/analytics/tenure-distribution'),
+        api.get('/analytics/gender-diversity'),
+        api.get('/analytics/age-distribution'),
+        api.get('/analytics/tenure-distribution'),
       ]);
       if (genderRes.status === 'fulfilled') setGenderData(genderRes.value.data);
       if (ageRes.status === 'fulfilled') setAgeData(ageRes.value.data);
@@ -859,7 +859,7 @@ export default function HRReports() {
     setLoading('birthday', true);
     setError('birthday', null);
     try {
-      const res = await api.get('/api/analytics/birthday-calendar');
+      const res = await api.get('/analytics/birthday-calendar');
       setBirthdayData(res.data);
     } catch (err) {
       console.error('Birthday fetch error:', err);
