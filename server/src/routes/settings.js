@@ -1,8 +1,10 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/settings
 router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {

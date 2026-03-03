@@ -1,10 +1,12 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // greytHR CSV column → our DB field mapping
 const FIELD_MAP = {

@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { runFirstReminder, runEscalation } = require('./notifications/reminderService');
 const { fetchAndStoreEmailActivity } = require('./google/googleWorkspace');
 const { fetchAndStoreChatActivity } = require('./google/googleChat');
+const { runHibernationCheck } = require('./hibernation');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -62,6 +63,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Chat activity fetch scheduled: 5 6 * * 1-6 (06:05 Mon-Sat)');
+
+  // Auto-hibernation check: 2:00 AM daily
+  // Hibernates accounts with 3+ consecutive inactive days (excluding leave/holidays)
+  cron.schedule('0 2 * * *', async () => {
+    console.log(`[CRON] Hibernation check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runHibernationCheck(prisma);
+      console.log(`[CRON] Hibernation check complete: ${count} user(s) hibernated.`);
+    } catch (err) {
+      console.error('[CRON] Hibernation check failed:', err);
+    }
+  });
+  console.log('  -> Hibernation check scheduled: 0 2 * * * (02:00 daily)');
 }
 
 module.exports = { initCronJobs };

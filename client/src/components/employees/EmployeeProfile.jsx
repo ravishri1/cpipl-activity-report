@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
+import { driveImageUrl } from '../../utils/formatters';
 import {
   User, Mail, Phone, Building2, Calendar, Briefcase, MapPin,
   Heart, Shield, ArrowLeft, Edit3, Save, X, CreditCard,
   GraduationCap, Users, FileText, ChevronRight, Plus, Pencil,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
-  Camera, Loader2, History, ChevronLeft,
+  Camera, Loader2, History, ChevronLeft, FolderOpen, Upload,
+  Trash2, ExternalLink, Image as ImageIcon, File,
 } from 'lucide-react';
 
 const TABS = [
@@ -17,12 +19,13 @@ const TABS = [
   { key: 'family', label: 'Family', icon: Users },
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'documents', label: 'Documents', icon: FileText },
+  { key: 'driveFiles', label: 'Drive Files', icon: FolderOpen },
   { key: 'history', label: 'Change History', icon: History },
 ];
 
 export default function EmployeeProfile() {
   const { id } = useParams();
-  const { user: currentUser, isAdmin } = useAuth();
+  const { user: currentUser, isAdmin, updateUserPhoto } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('personal');
@@ -35,28 +38,7 @@ export default function EmployeeProfile() {
   const isSelf = currentUser?.id === parseInt(id);
   const canEdit = isAdmin && currentUser?.role === 'admin';
 
-  // Compress image on client side → base64 data URL (max 300x300, JPEG quality 0.7)
-  const compressImage = (file) =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 300;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) {
-          const ratio = Math.min(MAX / w, MAX / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => reject(new Error('Failed to load image.'));
-      img.src = URL.createObjectURL(file);
-    });
-
+  // Upload profile photo to Google Drive (no base64 in DB)
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -64,16 +46,22 @@ export default function EmployeeProfile() {
       alert('Please select a JPEG, PNG, WebP or GIF image.');
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image must be under 10 MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5 MB.');
       return;
     }
     setUploading(true);
     try {
-      const base64 = await compressImage(file);
-      const res = await api.post(`/users/${id}/photo`, { photo: base64 });
-      setProfile({ ...profile, profilePhotoUrl: res.data.profilePhotoUrl });
-      setForm({ ...form, profilePhotoUrl: res.data.profilePhotoUrl });
+      const formData = new FormData();
+      formData.append('photo', file);
+      if (isAdmin && !isSelf) formData.append('userId', id);
+      const res = await api.post('/files/upload-profile-photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setProfile({ ...profile, driveProfilePhotoUrl: res.data.driveProfilePhotoUrl });
+      setForm({ ...form, driveProfilePhotoUrl: res.data.driveProfilePhotoUrl });
+      // Update global user photo if uploading own photo (so Sidebar updates)
+      if (isSelf) updateUserPhoto(res.data.driveProfilePhotoUrl);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to upload photo.');
     } finally {
@@ -142,14 +130,39 @@ export default function EmployeeProfile() {
 
       {/* ─── Header Card ─── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-700" />
-        <div className="px-6 pb-5">
-          <div className="flex flex-col sm:flex-row items-start gap-4 -mt-10">
-            {/* Avatar with upload */}
-            <div className="relative w-20 h-20 flex-shrink-0 group">
+        {/* Gradient banner — edit button sits inside it */}
+        <div className="h-28 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
+          {(canEdit || isSelf) && (
+            <div className="absolute top-3 right-4">
+              {editing ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={handleSave} disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-white/90 text-blue-700 rounded-lg text-xs font-semibold hover:bg-white disabled:opacity-50 shadow-sm">
+                    <Save className="w-3.5 h-3.5" />{saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => { setEditing(false); setForm(profile); }}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-white/20 text-white rounded-lg text-xs font-medium hover:bg-white/30 border border-white/30">
+                    <X className="w-3.5 h-3.5" />Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setEditing(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/20 text-white rounded-lg text-xs font-medium hover:bg-white/30 border border-white/30">
+                  <Edit3 className="w-3.5 h-3.5" />Edit
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* White content — avatar overlaps upward into gradient */}
+        <div className="relative px-6 pb-5 pt-14">
+          {/* Avatar — positioned to straddle the gradient/white boundary */}
+          <div className="absolute -top-10 left-6">
+            <div className="relative w-20 h-20 group">
               <div className="w-20 h-20 rounded-full bg-white border-4 border-white shadow-lg flex items-center justify-center">
-                {profile.profilePhotoUrl ? (
-                  <img src={profile.profilePhotoUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                {(driveImageUrl(profile.driveProfilePhotoUrl) || profile.profilePhotoUrl) ? (
+                  <img src={driveImageUrl(profile.driveProfilePhotoUrl) || profile.profilePhotoUrl} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
                     {profile.name?.charAt(0)?.toUpperCase()}
@@ -168,51 +181,30 @@ export default function EmployeeProfile() {
                 </label>
               )}
             </div>
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl font-bold text-slate-800">{profile.name}</h1>
-                {profile.employeeId && (
-                  <span className="text-xs font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{profile.employeeId}</span>
-                )}
-                {profile.isActive === false && (
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">Inactive</span>
-                )}
-              </div>
-              <p className="text-sm text-slate-500 mt-0.5">{profile.designation || 'Employee'} · {profile.department}</p>
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="capitalize text-[11px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">{profile.role?.replace('_', ' ')}</span>
-                <span className="capitalize text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded">{profile.employmentType?.replace('_', ' ')}</span>
-                {profile.location && <span className="text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded flex items-center gap-0.5"><MapPin className="w-3 h-3" />{profile.location}</span>}
-              </div>
-              {/* Quick contact */}
-              <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-500">
-                <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{profile.email}</span>
-                {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{profile.phone}</span>}
-              </div>
+          </div>
+
+          {/* Info — guaranteed in white area */}
+          <div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-800">{profile.name}</h1>
+              {profile.employeeId && (
+                <span className="text-xs font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{profile.employeeId}</span>
+              )}
+              {profile.isActive === false && (
+                <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">Inactive</span>
+              )}
             </div>
-            {/* Edit button */}
-            {(canEdit || isSelf) && (
-              <div className="sm:ml-auto flex-shrink-0">
-                {editing ? (
-                  <div className="flex items-center gap-2">
-                    <button onClick={handleSave} disabled={saving}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
-                      <Save className="w-3.5 h-3.5" />{saving ? 'Saving...' : 'Save'}
-                    </button>
-                    <button onClick={() => { setEditing(false); setForm(profile); }}
-                      className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-50">
-                      <X className="w-3.5 h-3.5" />Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setEditing(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-50">
-                    <Edit3 className="w-3.5 h-3.5" />Edit
-                  </button>
-                )}
-              </div>
-            )}
+            <p className="text-sm text-slate-500 mt-0.5">{profile.designation || 'Employee'} · {profile.department}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="capitalize text-[11px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">{profile.role?.replace('_', ' ')}</span>
+              <span className="capitalize text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded">{profile.employmentType?.replace('_', ' ')}</span>
+              {profile.location && <span className="text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded flex items-center gap-0.5"><MapPin className="w-3 h-3" />{profile.location}</span>}
+            </div>
+            {/* Quick contact */}
+            <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-500">
+              <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{profile.email?.toLowerCase()}</span>
+              {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{profile.phone}</span>}
+            </div>
           </div>
         </div>
       </div>
@@ -228,8 +220,8 @@ export default function EmployeeProfile() {
                 <Link to={`/employee/${profile.reportingManager.id}`}
                   className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-colors w-full sm:w-auto sm:min-w-[280px]">
                   <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 text-sm font-bold flex-shrink-0">
-                    {profile.reportingManager.profilePhotoUrl
-                      ? <img src={profile.reportingManager.profilePhotoUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    {(driveImageUrl(profile.reportingManager.driveProfilePhotoUrl) || profile.reportingManager.profilePhotoUrl)
+                      ? <img src={driveImageUrl(profile.reportingManager.driveProfilePhotoUrl) || profile.reportingManager.profilePhotoUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
                       : profile.reportingManager.name?.charAt(0)?.toUpperCase()}
                   </div>
                   <div className="min-w-0">
@@ -247,8 +239,8 @@ export default function EmployeeProfile() {
             {/* Current user */}
             <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 border-2 border-indigo-200 rounded-lg w-full sm:w-auto sm:min-w-[280px]">
               <div className="w-9 h-9 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0">
-                {profile.profilePhotoUrl
-                  ? <img src={profile.profilePhotoUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
+                {(driveImageUrl(profile.driveProfilePhotoUrl) || profile.profilePhotoUrl)
+                  ? <img src={driveImageUrl(profile.driveProfilePhotoUrl) || profile.profilePhotoUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
                   : profile.name?.charAt(0)?.toUpperCase()}
               </div>
               <div>
@@ -266,8 +258,8 @@ export default function EmployeeProfile() {
                     <Link key={s.id} to={`/employee/${s.id}`}
                       className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-100 rounded-lg hover:bg-green-100 transition-colors">
                       <div className="w-7 h-7 rounded-full bg-green-200 flex items-center justify-center text-green-700 text-xs font-bold flex-shrink-0">
-                        {s.profilePhotoUrl
-                          ? <img src={s.profilePhotoUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                        {(driveImageUrl(s.driveProfilePhotoUrl) || s.profilePhotoUrl)
+                          ? <img src={driveImageUrl(s.driveProfilePhotoUrl) || s.profilePhotoUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
                           : s.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -321,6 +313,9 @@ export default function EmployeeProfile() {
           {activeTab === 'documents' && (
             <DocumentsTab documents={documents} canEdit={canEdit} userId={id} />
           )}
+          {activeTab === 'driveFiles' && (
+            <DriveFilesTab userId={id} canEdit={canEdit} />
+          )}
           {activeTab === 'history' && (
             <ChangeHistoryTab userId={id} />
           )}
@@ -340,9 +335,9 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
       <Section title="Contact Information" icon={Phone}>
         <Field icon={User} label="Full Name" value={profile.name}
           editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('name', v)} editValue={form.name} />
-        <Field icon={Mail} label="Work Email" value={profile.email} />
-        <Field icon={Mail} label="Personal Email" value={profile.personalEmail}
-          editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('personalEmail', v)} editValue={form.personalEmail} />
+        <Field icon={Mail} label="Work Email" value={profile.email?.toLowerCase()} noCapitalize />
+        <Field icon={Mail} label="Personal Email" value={profile.personalEmail?.toLowerCase()}
+          editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('personalEmail', v)} editValue={form.personalEmail} noCapitalize />
         <Field icon={Phone} label="Phone" value={profile.phone}
           editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('phone', v)} editValue={form.phone} />
       </Section>
@@ -890,7 +885,7 @@ function Section({ title, icon: Icon, children, className = '' }) {
   );
 }
 
-function Field({ icon: Icon, label, value, editing, onChange, editValue, type = 'text', options = [] }) {
+function Field({ icon: Icon, label, value, editing, onChange, editValue, type = 'text', options = [], noCapitalize = false }) {
   return (
     <div className="flex items-start gap-3">
       <Icon className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
@@ -911,7 +906,7 @@ function Field({ icon: Icon, label, value, editing, onChange, editValue, type = 
               className="w-full border border-slate-200 rounded px-2 py-1 text-sm mt-0.5" />
           )
         ) : (
-          <p className="text-sm text-slate-700 capitalize">{typeof value === 'object' ? value : (value || '—')}</p>
+          <p className={`text-sm text-slate-700 ${noCapitalize ? '' : 'capitalize'}`}>{typeof value === 'object' ? value : (value || '—')}</p>
         )}
       </div>
     </div>
@@ -1080,6 +1075,200 @@ function ChangeHistoryTab({ userId }) {
             Next<ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DRIVE FILES TAB (admin views/uploads employee files from Google Drive)
+   ═══════════════════════════════════════════════════════════ */
+function DriveFilesTab({ userId, canEdit }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [category, setCategory] = useState('all');
+  const CATEGORIES = [
+    { key: 'all', label: 'All' },
+    { key: 'document', label: 'Documents' },
+    { key: 'receipt', label: 'Receipts' },
+    { key: 'id_proof', label: 'ID Proofs' },
+    { key: 'education', label: 'Education' },
+    { key: 'photo', label: 'Photos' },
+    { key: 'other', label: 'Other' },
+  ];
+
+  const CATEGORY_COLORS = {
+    photo: 'bg-emerald-100 text-emerald-700',
+    document: 'bg-blue-100 text-blue-700',
+    receipt: 'bg-amber-100 text-amber-700',
+    id_proof: 'bg-purple-100 text-purple-700',
+    education: 'bg-indigo-100 text-indigo-700',
+    other: 'bg-gray-100 text-gray-600',
+  };
+
+  const fetchFiles = async () => {
+    setLoading(true);
+    try {
+      const url = `/files/user/${userId}${category !== 'all' ? `?category=${category}` : ''}`;
+      const res = await api.get(url);
+      setFiles(res.data);
+    } catch (err) {
+      console.error('Drive files error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchFiles(); }, [userId, category]);
+
+  const handleUpload = async (file) => {
+    if (!file || file.size > 15 * 1024 * 1024) {
+      alert('File too large. Maximum size is 15 MB.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('category', detectCategory(file.name));
+      await api.post(`/files/upload/${userId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      fetchFiles();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (fileId, fileName) => {
+    if (!confirm(`Delete "${fileName}"? This will also remove it from Google Drive.`)) return;
+    try {
+      await api.delete(`/files/${fileId}`);
+      fetchFiles();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Delete failed.');
+    }
+  };
+
+  function detectCategory(filename) {
+    const lower = filename.toLowerCase();
+    if (/receipt|invoice|bill/i.test(lower)) return 'receipt';
+    if (/aadhaar|pan|passport|license|id/i.test(lower)) return 'id_proof';
+    if (/degree|marksheet|certificate|diploma/i.test(lower)) return 'education';
+    if (/\.(jpg|jpeg|png|webp|gif)$/i.test(lower)) return 'photo';
+    return 'document';
+  }
+
+  function getFileIcon(mimeType) {
+    if (mimeType?.startsWith('image/')) return <ImageIcon className="w-4 h-4 text-emerald-500" />;
+    if (mimeType?.includes('pdf')) return <FileText className="w-4 h-4 text-red-500" />;
+    return <File className="w-4 h-4 text-blue-500" />;
+  }
+
+  function formatSize(bytes) {
+    if (!bytes) return '—';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="w-6 h-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header with filter + upload */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {CATEGORIES.map((c) => (
+            <button key={c.key} onClick={() => setCategory(c.key)}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-full whitespace-nowrap transition-colors ${
+                category === c.key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {canEdit && (
+          <div className="flex-shrink-0">
+            <label className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors ${
+              uploading ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}>
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {uploading ? 'Uploading...' : 'Upload File'}
+              <input type="file" className="hidden" disabled={uploading}
+                onChange={(e) => { handleUpload(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* File list */}
+      {files.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 text-sm">
+          <FolderOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+          No files uploaded yet.
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+          {files.map((file) => (
+            <div key={file.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+              {/* Thumbnail or icon */}
+              <div className="w-9 h-9 flex-shrink-0 rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200">
+                {file.thumbnailUrl ? (
+                  <img src={file.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  getFileIcon(file.mimeType)
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-700 truncate">{file.fileName}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium capitalize ${
+                    CATEGORY_COLORS[file.category] || CATEGORY_COLORS.other
+                  }`}>
+                    {file.category?.replace('_', ' ')}
+                  </span>
+                  <span className="text-[9px] text-slate-400">{formatSize(file.fileSize)}</span>
+                  <span className="text-[9px] text-slate-400">
+                    {new Date(file.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <a href={file.driveUrl} target="_blank" rel="noopener noreferrer"
+                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Open in Drive">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                {canEdit && (
+                  <button onClick={() => handleDelete(file.id, file.fileName)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {files.length > 0 && (
+        <p className="text-[10px] text-slate-400 text-right">{files.length} file{files.length !== 1 ? 's' : ''}</p>
       )}
     </div>
   );

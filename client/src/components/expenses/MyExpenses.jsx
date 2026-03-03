@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Receipt,
   Plus,
@@ -13,6 +13,13 @@ import {
   ChevronUp,
   Loader2,
   AlertTriangle,
+  Upload,
+  FileText,
+  Image,
+  Trash2,
+  Sparkles,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -312,18 +319,23 @@ export default function MyExpenses() {
               />
             </div>
 
-            {/* Receipt URL */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Receipt URL (optional)</label>
-              <input
-                type="text"
-                name="receiptUrl"
-                value={form.receiptUrl}
-                onChange={handleChange}
-                placeholder="https://drive.google.com/... or paste link to receipt image"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-              />
-            </div>
+            {/* Receipt Upload + AI Extraction */}
+            <ReceiptUploader
+              onExtracted={(extracted, driveUrl) => {
+                if (driveUrl) setForm(prev => ({ ...prev, receiptUrl: driveUrl }));
+                if (extracted) {
+                  setForm(prev => ({
+                    ...prev,
+                    title: extracted.vendor && !prev.title ? `${extracted.vendor} - ${extracted.description || 'Expense'}` : prev.title,
+                    amount: extracted.amount && !prev.amount ? String(extracted.amount) : prev.amount,
+                    date: extracted.date || prev.date,
+                    category: extracted.category || prev.category,
+                    description: extracted.description && !prev.description ? extracted.description : prev.description,
+                  }));
+                }
+              }}
+              receiptUrl={form.receiptUrl}
+            />
 
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -410,6 +422,272 @@ export default function MyExpenses() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Receipt Upload + AI Extraction Component ──────────────────────────
+function ReceiptUploader({ onExtracted, receiptUrl }) {
+  const [files, setFiles] = useState([]); // { file, preview, status, extracted, driveUrl, error }
+  const [isDragging, setIsDragging] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  const MAX_SIZE = 3 * 1024 * 1024; // 3 MB
+  const MAX_FILES = 3;
+
+  const addFiles = useCallback((newFiles) => {
+    const incoming = Array.from(newFiles).slice(0, MAX_FILES);
+    const valid = [];
+    for (const f of incoming) {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        alert(`"${f.name}" is not supported. Use JPEG, PNG, WebP, or PDF.`);
+        continue;
+      }
+      if (f.size > MAX_SIZE) {
+        alert(`"${f.name}" is too large. Maximum 3 MB per file.`);
+        continue;
+      }
+      valid.push({
+        file: f,
+        preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+        status: 'ready', // ready | extracting | done | error
+        extracted: null,
+        driveUrl: null,
+        error: null,
+      });
+    }
+    setFiles(prev => [...prev, ...valid].slice(0, MAX_FILES));
+  }, []);
+
+  const removeFile = useCallback((idx) => {
+    setFiles(prev => {
+      const updated = [...prev];
+      if (updated[idx]?.preview) URL.revokeObjectURL(updated[idx].preview);
+      updated.splice(idx, 1);
+      return updated;
+    });
+  }, []);
+
+  const handleDragOver = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
+  const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
+
+  // Extract all receipts at once
+  const handleExtract = useCallback(async () => {
+    if (files.length === 0) return;
+    setExtracting(true);
+
+    // Mark all as extracting
+    setFiles(prev => prev.map(f => ({ ...f, status: 'extracting' })));
+
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append('receipts', f.file));
+
+      const res = await api.post('/files/extract-receipts', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const results = res.data; // array of { fileName, extracted, error, driveFile }
+      setFiles(prev => prev.map((f, i) => {
+        const result = results[i];
+        if (!result) return { ...f, status: 'error', error: 'No result returned' };
+        return {
+          ...f,
+          status: result.error ? 'error' : 'done',
+          extracted: result.extracted || null,
+          driveUrl: result.driveFile?.driveUrl || null,
+          error: result.error || null,
+        };
+      }));
+
+      // Auto-apply first successful extraction to form
+      const firstSuccess = results.find(r => r.extracted && !r.error);
+      if (firstSuccess) {
+        onExtracted(firstSuccess.extracted, firstSuccess.driveFile?.driveUrl || null);
+      }
+    } catch (err) {
+      setFiles(prev => prev.map(f => ({
+        ...f,
+        status: 'error',
+        error: err.response?.data?.message || 'Extraction failed',
+      })));
+    } finally {
+      setExtracting(false);
+    }
+  }, [files, onExtracted]);
+
+  // Apply a specific extraction result to the form
+  const applyToForm = useCallback((idx) => {
+    const f = files[idx];
+    if (f?.extracted) onExtracted(f.extracted, f.driveUrl);
+  }, [files, onExtracted]);
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-slate-700">
+        Receipt / Invoice (optional)
+      </label>
+
+      {/* Drop zone */}
+      {files.length < MAX_FILES && (
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
+            isDragging
+              ? 'border-violet-500 bg-violet-50'
+              : 'border-slate-300 hover:border-violet-400 hover:bg-slate-50'
+          }`}
+        >
+          <Upload className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
+          <p className="text-sm text-slate-600 font-medium">
+            Drop receipt images or PDFs here
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Up to {MAX_FILES} files, max 3 MB each — JPEG, PNG, WebP, PDF
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,.pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
+          />
+        </div>
+      )}
+
+      {/* File previews */}
+      {files.length > 0 && (
+        <div className="space-y-2">
+          {files.map((f, idx) => (
+            <div key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              {/* Thumbnail */}
+              <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-white border border-slate-200 flex items-center justify-center">
+                {f.preview ? (
+                  <img src={f.preview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <FileText className="w-5 h-5 text-red-500" />
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-700 truncate">{f.file.name}</p>
+                <p className="text-xs text-slate-400">
+                  {(f.file.size / 1024).toFixed(0)} KB
+                  {f.status === 'extracting' && (
+                    <span className="ml-2 text-violet-600 font-medium">
+                      <Loader2 className="w-3 h-3 inline animate-spin mr-1" />Scanning...
+                    </span>
+                  )}
+                  {f.status === 'done' && (
+                    <span className="ml-2 text-green-600 font-medium">
+                      <Check className="w-3 h-3 inline mr-0.5" />Extracted
+                    </span>
+                  )}
+                  {f.status === 'error' && (
+                    <span className="ml-2 text-red-500 font-medium">
+                      <AlertTriangle className="w-3 h-3 inline mr-0.5" />{f.error}
+                    </span>
+                  )}
+                </p>
+
+                {/* Extracted data preview */}
+                {f.extracted && (
+                  <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200 text-xs space-y-1">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      {f.extracted.vendor && (
+                        <div><span className="text-slate-400">Vendor:</span> <span className="text-slate-700 font-medium">{f.extracted.vendor}</span></div>
+                      )}
+                      {f.extracted.amount && (
+                        <div><span className="text-slate-400">Amount:</span> <span className="text-slate-700 font-medium">₹{f.extracted.amount}</span></div>
+                      )}
+                      {f.extracted.date && (
+                        <div><span className="text-slate-400">Date:</span> <span className="text-slate-700 font-medium">{f.extracted.date}</span></div>
+                      )}
+                      {f.extracted.category && (
+                        <div><span className="text-slate-400">Category:</span> <span className="text-slate-700 font-medium capitalize">{f.extracted.category}</span></div>
+                      )}
+                    </div>
+                    {f.extracted.description && (
+                      <p className="text-slate-500 truncate">{f.extracted.description}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); applyToForm(idx); }}
+                      className="mt-1 text-xs text-violet-600 hover:text-violet-700 font-medium flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Apply to expense form
+                    </button>
+                  </div>
+                )}
+
+                {/* Drive link */}
+                {f.driveUrl && (
+                  <a
+                    href={f.driveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-1 text-xs text-blue-600 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View in Drive
+                  </a>
+                )}
+              </div>
+
+              {/* Remove button */}
+              <button
+                type="button"
+                onClick={() => removeFile(idx)}
+                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+
+          {/* Extract button */}
+          {files.some(f => f.status === 'ready') && (
+            <button
+              type="button"
+              onClick={handleExtract}
+              disabled={extracting}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-medium rounded-lg hover:from-violet-700 hover:to-purple-700 disabled:opacity-50 transition-all shadow-sm"
+            >
+              {extracting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              {extracting ? 'Scanning receipts...' : `Scan & Extract (${files.filter(f => f.status === 'ready').length} file${files.filter(f => f.status === 'ready').length !== 1 ? 's' : ''})`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Show current receipt URL if set (from extraction or manual) */}
+      {receiptUrl && (
+        <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <Check className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="font-medium">Receipt attached</span>
+          <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-blue-600 hover:underline flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <ExternalLink className="w-3 h-3" />View
+          </a>
+        </div>
+      )}
     </div>
   );
 }

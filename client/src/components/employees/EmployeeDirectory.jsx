@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { driveImageUrl } from '../../utils/formatters';
 import {
   Users,
   Search,
@@ -122,8 +123,8 @@ export default function EmployeeDirectory() {
             >
               <div className="flex items-start gap-3">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                  {emp.profilePhotoUrl ? (
-                    <img src={emp.profilePhotoUrl} alt="" className="w-12 h-12 rounded-full object-cover" />
+                  {(driveImageUrl(emp.driveProfilePhotoUrl) || emp.profilePhotoUrl) ? (
+                    <img src={driveImageUrl(emp.driveProfilePhotoUrl) || emp.profilePhotoUrl} alt="" className="w-12 h-12 rounded-full object-cover" />
                   ) : (
                     emp.name?.charAt(0)?.toUpperCase()
                   )}
@@ -190,8 +191,8 @@ export default function EmployeeDirectory() {
                   <td className="px-4 py-2.5">
                     <Link to={`/employee/${emp.id}`} className="flex items-center gap-2 hover:text-blue-700">
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold flex-shrink-0">
-                        {emp.profilePhotoUrl
-                          ? <img src={emp.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                        {(driveImageUrl(emp.driveProfilePhotoUrl) || emp.profilePhotoUrl)
+                          ? <img src={driveImageUrl(emp.driveProfilePhotoUrl) || emp.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                           : emp.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <span className="font-medium text-slate-800">{emp.name}</span>

@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
@@ -14,6 +14,8 @@ const {
 const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/leave/types — List active leave types
 router.get('/types', authenticate, asyncHandler(async (req, res) => {

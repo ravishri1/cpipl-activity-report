@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId, requireEnum } = require('../utils/validate');
@@ -7,6 +7,7 @@ const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 const VALID_CATEGORIES = ['travel', 'contacts', 'food', 'emergency', 'office_info', 'general'];
 const VALID_LOCATIONS = ['Miraroad', 'Lucknow'];

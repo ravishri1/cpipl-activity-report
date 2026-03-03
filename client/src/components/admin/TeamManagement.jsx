@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe } from 'lucide-react';
+import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe, Moon, RefreshCw } from 'lucide-react';
 import GoogleImportModal from '../google/GoogleImportModal';
 import { useAuth } from '../../context/AuthContext';
 
@@ -67,6 +67,25 @@ export default function TeamManagement() {
     } catch (err) {
       console.error('Toggle active error:', err);
     }
+  };
+
+  const reactivateUser = async (user) => {
+    try {
+      await api.post(`/users/${user.id}/reactivate`);
+      fetchUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to reactivate user.');
+    }
+  };
+
+  const formatLastActivity = (dateStr) => {
+    if (!dateStr) return 'Never';
+    const d = new Date(dateStr);
+    const diffMs = Date.now() - d.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return '1 day ago';
+    return `${diffDays} days ago`;
   };
 
   return (
@@ -187,12 +206,27 @@ export default function TeamManagement() {
                 </td>
                 <td className="px-5 py-3 text-sm text-slate-600">{user.department}</td>
                 <td className="px-5 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  {user.isHibernated ? (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      <Moon className="w-3 h-3" /> Hibernated
+                    </span>
+                  ) : (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {user.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
+                  {user.lastActivityAt && (
+                    <p className="text-[10px] text-slate-400 mt-0.5">Last active: {formatLastActivity(user.lastActivityAt)}</p>
+                  )}
                 </td>
                 <td className="px-5 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
+                    {user.isHibernated && (
+                      <button onClick={() => reactivateUser(user)} title="Reactivate account"
+                        className="p-1.5 text-amber-500 hover:text-amber-700 transition-colors">
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    )}
                     <button onClick={() => handleEdit(user)} className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors">
                       <Edit3 className="w-4 h-4" />
                     </button>

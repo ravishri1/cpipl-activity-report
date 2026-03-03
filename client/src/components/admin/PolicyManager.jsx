@@ -4,7 +4,8 @@ import {
   Shield, FileText, Users, CheckCircle, XCircle, Plus, Edit,
   Eye, ChevronDown, Search, Filter, AlertTriangle,
   X, Loader2, ChevronUp, ToggleLeft, ToggleRight, Trash2,
-  GripVertical, Save,
+  GripVertical, Save, Clock, GitCompare, TrendingUp,
+  AlertOctagon, ArrowRight, Building2, History,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -54,6 +55,16 @@ export default function PolicyManager() {
   // ── Companies for dropdown ──
   const [companies, setCompanies] = useState([]);
 
+  // ── Version history state ──
+  const [versionModal, setVersionModal] = useState(null); // policy object
+
+  // ── Impact analysis state ──
+  const [impactModal, setImpactModal] = useState(null); // policy object
+
+  // ── Conflict detection state ──
+  const [conflicts, setConflicts] = useState([]);
+  const [conflictsLoading, setConflictsLoading] = useState(false);
+
   // ── Fetch policies ──
   const fetchPolicies = async () => {
     try {
@@ -76,9 +87,22 @@ export default function PolicyManager() {
     }
   };
 
+  const fetchConflicts = async () => {
+    setConflictsLoading(true);
+    try {
+      const res = await api.get('/policies/admin/conflicts');
+      setConflicts(res.data.conflicts || []);
+    } catch {
+      // non-critical
+    } finally {
+      setConflictsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPolicies();
     fetchCompanies();
+    fetchConflicts();
   }, []);
 
   // ── Toggle active ──
@@ -86,6 +110,7 @@ export default function PolicyManager() {
     try {
       await api.put(`/policies/admin/${policy.id}`, { isActive: !policy.isActive });
       fetchPolicies();
+      fetchConflicts(); // re-check conflicts after status change
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to toggle status.');
     }
@@ -154,7 +179,10 @@ export default function PolicyManager() {
   const handleFormClose = (didSave) => {
     setShowForm(false);
     setEditingPolicy(null);
-    if (didSave) fetchPolicies();
+    if (didSave) {
+      fetchPolicies();
+      fetchConflicts();
+    }
   };
 
   // ── Stats ──
@@ -186,6 +214,11 @@ export default function PolicyManager() {
           Create Policy
         </button>
       </div>
+
+      {/* ── Conflict Detection Banner ── */}
+      {conflicts.length > 0 && (
+        <ConflictBanner conflicts={conflicts} loading={conflictsLoading} />
+      )}
 
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -325,6 +358,8 @@ export default function PolicyManager() {
                     onScoreChange={setScoreValue}
                     onSaveScore={() => saveScore(policy.id)}
                     onCancelScore={() => setEditingScore(null)}
+                    onViewVersions={() => setVersionModal(policy)}
+                    onViewImpact={() => setImpactModal(policy)}
                   />
                 );
               })}
@@ -342,9 +377,99 @@ export default function PolicyManager() {
         />
       )}
 
+      {/* ── Version History Modal ── */}
+      {versionModal && (
+        <VersionHistoryModal
+          policy={versionModal}
+          onClose={() => setVersionModal(null)}
+        />
+      )}
+
+      {/* ── Impact Analysis Modal ── */}
+      {impactModal && (
+        <ImpactModal
+          policy={impactModal}
+          onClose={() => setImpactModal(null)}
+        />
+      )}
+
       {/* Close dropdown on outside click */}
       {showFilters && (
         <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// Conflict Detection Banner
+// ═══════════════════════════════════════════════
+function ConflictBanner({ conflicts }) {
+  const [expanded, setExpanded] = useState(false);
+  const highCount = conflicts.filter(c => c.severity === 'high').length;
+  const medCount = conflicts.filter(c => c.severity === 'medium').length;
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-100 rounded-lg">
+            <AlertOctagon className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">
+              {conflicts.length} Policy Conflict{conflicts.length !== 1 ? 's' : ''} Detected
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              {highCount > 0 && <span className="font-bold text-red-600">{highCount} high</span>}
+              {highCount > 0 && medCount > 0 && ' · '}
+              {medCount > 0 && <span className="font-bold text-amber-600">{medCount} medium</span>}
+              {(highCount > 0 || medCount > 0) && conflicts.length - highCount - medCount > 0 && ' · '}
+              {conflicts.length - highCount - medCount > 0 && (
+                <span>{conflicts.length - highCount - medCount} low</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-amber-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
+          {conflicts.map((c, i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-3 p-3 rounded-lg text-xs ${
+                c.severity === 'high' ? 'bg-red-50 border border-red-200' :
+                c.severity === 'medium' ? 'bg-amber-100 border border-amber-200' :
+                'bg-yellow-50 border border-yellow-200'
+              }`}
+            >
+              <span className={`shrink-0 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                c.severity === 'high' ? 'bg-red-200 text-red-800' :
+                c.severity === 'medium' ? 'bg-amber-200 text-amber-800' :
+                'bg-yellow-200 text-yellow-800'
+              }`}>
+                {c.severity}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-slate-700">
+                  <span className="text-slate-900">{c.policyA.title}</span>
+                  <ArrowRight className="w-3 h-3 inline mx-1 text-slate-400" />
+                  <span className="text-slate-900">{c.policyB.title}</span>
+                </p>
+                <ul className="mt-1 space-y-0.5 text-slate-500">
+                  {c.reasons.map((r, ri) => (
+                    <li key={ri}>• {r}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -358,6 +483,7 @@ function PolicyRow({
   editingScore, scoreValue, scoreSaving,
   onToggleActive, onEdit, onToggleAcceptance,
   onStartEditScore, onScoreChange, onSaveScore, onCancelScore,
+  onViewVersions, onViewImpact,
 }) {
   const isEditingThisScore = editingScore === policy.id;
 
@@ -391,9 +517,14 @@ function PolicyRow({
 
         {/* Version */}
         <td className="px-4 py-3 text-center">
-          <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+          <button
+            onClick={onViewVersions}
+            className="inline-flex items-center gap-1 text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded hover:bg-blue-100 hover:text-blue-700 transition-colors cursor-pointer"
+            title="View version history"
+          >
             v{policy.version}
-          </span>
+            {policy.version > 1 && <History className="w-3 h-3" />}
+          </button>
         </td>
 
         {/* Status Toggle */}
@@ -481,6 +612,20 @@ function PolicyRow({
               <Edit className="w-4 h-4" />
             </button>
             <button
+              onClick={onViewVersions}
+              className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-400 hover:text-purple-600 transition-colors"
+              title="Version history"
+            >
+              <GitCompare className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onViewImpact}
+              className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"
+              title="Impact analysis"
+            >
+              <TrendingUp className="w-4 h-4" />
+            </button>
+            <button
               onClick={onToggleAcceptance}
               className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600 transition-colors"
               title="View acceptances"
@@ -536,11 +681,10 @@ function AcceptancePanel({ loading, data, policyTitle }) {
 
   return (
     <div className="bg-slate-50 rounded-lg border border-slate-200 my-3 overflow-hidden">
-      {/* Acceptance summary bar */}
       <div className="px-4 py-3 border-b border-slate-200">
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-semibold text-slate-700">
-            Acceptance Rate for "{policyTitle}"
+            Acceptance Rate for &ldquo;{policyTitle}&rdquo;
           </p>
           <span className="text-xs font-bold text-slate-600">
             {acceptedCount}/{totalCount} ({rate}%)
@@ -556,7 +700,6 @@ function AcceptancePanel({ loading, data, policyTitle }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setTab('accepted')}
@@ -582,7 +725,6 @@ function AcceptancePanel({ loading, data, policyTitle }) {
         </button>
       </div>
 
-      {/* Content */}
       <div className="max-h-56 overflow-y-auto">
         {tab === 'accepted' ? (
           acceptedCount === 0 ? (
@@ -648,6 +790,446 @@ function AcceptancePanel({ loading, data, policyTitle }) {
 }
 
 // ═══════════════════════════════════════════════
+// Version History Modal (with side-by-side diff)
+// ═══════════════════════════════════════════════
+function VersionHistoryModal({ policy, onClose }) {
+  const [versions, setVersions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedV1, setSelectedV1] = useState(null);
+  const [selectedV2, setSelectedV2] = useState(null);
+  const [diffData, setDiffData] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [policyInfo, setPolicyInfo] = useState(null);
+
+  useEffect(() => {
+    loadVersions();
+  }, []);
+
+  const loadVersions = async () => {
+    try {
+      const res = await api.get(`/policies/admin/${policy.id}/versions`);
+      setPolicyInfo(res.data.policy);
+      setVersions(res.data.versions);
+      // Auto-select latest two for comparison
+      if (res.data.versions.length >= 2) {
+        setSelectedV1(res.data.versions[1].version);
+        setSelectedV2(res.data.versions[0].version);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load versions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDiff = async () => {
+    if (!selectedV1 || !selectedV2) return;
+    setDiffLoading(true);
+    setDiffData(null);
+    try {
+      const res = await api.get(`/policies/admin/${policy.id}/compare?v1=${selectedV1}&v2=${selectedV2}`);
+      setDiffData(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to compare versions');
+    } finally {
+      setDiffLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (compareMode && selectedV1 && selectedV2) {
+      loadDiff();
+    }
+  }, [compareMode, selectedV1, selectedV2]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-4xl mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <History className="w-5 h-5 text-purple-600" />
+              Version History
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">{policyInfo?.title || policy.title}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {versions.length >= 2 && (
+              <button
+                onClick={() => setCompareMode(!compareMode)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  compareMode
+                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <GitCompare className="w-3.5 h-3.5" />
+                {compareMode ? 'Hide Comparison' : 'Compare Versions'}
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+            </div>
+          ) : error ? (
+            <div className="p-6 text-center text-sm text-red-500">{error}</div>
+          ) : versions.length === 0 ? (
+            <div className="p-6 text-center text-sm text-slate-400">
+              <Clock className="w-8 h-8 mx-auto mb-2 text-slate-200" />
+              No version history available.
+            </div>
+          ) : (
+            <>
+              {/* Version Timeline */}
+              <div className="px-6 py-4 space-y-2">
+                {versions.map((v, i) => (
+                  <div
+                    key={v.version}
+                    className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                      i === 0 ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      i === 0 ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      v{v.version}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-800">
+                          {v.changeLog || 'No description'}
+                        </span>
+                        {i === 0 && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        by {v.changedByName} · {new Date(v.createdAt).toLocaleDateString('en-IN', {
+                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    {compareMode && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <input
+                            type="radio"
+                            name="v1"
+                            checked={selectedV1 === v.version}
+                            onChange={() => setSelectedV1(v.version)}
+                            className="w-3 h-3"
+                          />
+                          Before
+                        </label>
+                        <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <input
+                            type="radio"
+                            name="v2"
+                            checked={selectedV2 === v.version}
+                            onChange={() => setSelectedV2(v.version)}
+                            className="w-3 h-3"
+                          />
+                          After
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Side-by-Side Diff */}
+              {compareMode && selectedV1 && selectedV2 && (
+                <div className="border-t border-slate-200">
+                  <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-600">
+                      Comparing v{selectedV1} → v{selectedV2}
+                    </p>
+                  </div>
+                  {diffLoading ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                    </div>
+                  ) : diffData ? (
+                    <DiffViewer
+                      oldContent={diffData.v1?.content || ''}
+                      newContent={diffData.v2?.content || ''}
+                      oldLabel={`v${diffData.v1?.version} — ${diffData.v1?.changedByName}`}
+                      newLabel={`v${diffData.v2?.version} — ${diffData.v2?.changedByName}`}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// Side-by-Side Diff Viewer
+// ═══════════════════════════════════════════════
+function DiffViewer({ oldContent, newContent, oldLabel, newLabel }) {
+  const oldLines = oldContent.split('\n');
+  const newLines = newContent.split('\n');
+
+  // Simple line-by-line diff using LCS approach
+  const diff = computeLineDiff(oldLines, newLines);
+
+  const stats = {
+    added: diff.filter(d => d.type === 'add').length,
+    removed: diff.filter(d => d.type === 'remove').length,
+    unchanged: diff.filter(d => d.type === 'same').length,
+  };
+
+  return (
+    <div>
+      <div className="px-6 py-2 flex items-center gap-4 text-xs text-slate-500 border-b border-slate-200 bg-white">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-green-200" /> {stats.added} added
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-red-200" /> {stats.removed} removed
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-slate-100" /> {stats.unchanged} unchanged
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-slate-200">
+        {/* Headers */}
+        <div className="px-3 py-1.5 bg-red-50 text-xs font-medium text-red-700 border-b border-slate-200">
+          ← {oldLabel}
+        </div>
+        <div className="px-3 py-1.5 bg-green-50 text-xs font-medium text-green-700 border-b border-slate-200">
+          → {newLabel}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-slate-200 max-h-96 overflow-y-auto font-mono text-xs">
+        {/* Left (old) */}
+        <div className="min-w-0">
+          {diff.map((line, i) => {
+            if (line.type === 'add') {
+              return <div key={i} className="px-3 py-0.5 bg-slate-50 text-transparent select-none min-h-[1.25rem]">&nbsp;</div>;
+            }
+            return (
+              <div
+                key={i}
+                className={`px-3 py-0.5 min-h-[1.25rem] ${
+                  line.type === 'remove' ? 'bg-red-100 text-red-800' : 'text-slate-600'
+                }`}
+              >
+                <span className="inline-block w-4 mr-2 text-slate-300 select-none text-right">
+                  {line.type === 'remove' ? '−' : ' '}
+                </span>
+                <span className="break-all whitespace-pre-wrap">{line.text}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right (new) */}
+        <div className="min-w-0">
+          {diff.map((line, i) => {
+            if (line.type === 'remove') {
+              return <div key={i} className="px-3 py-0.5 bg-slate-50 text-transparent select-none min-h-[1.25rem]">&nbsp;</div>;
+            }
+            return (
+              <div
+                key={i}
+                className={`px-3 py-0.5 min-h-[1.25rem] ${
+                  line.type === 'add' ? 'bg-green-100 text-green-800' : 'text-slate-600'
+                }`}
+              >
+                <span className="inline-block w-4 mr-2 text-slate-300 select-none text-right">
+                  {line.type === 'add' ? '+' : ' '}
+                </span>
+                <span className="break-all whitespace-pre-wrap">{line.text}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Simple line diff using Longest Common Subsequence
+function computeLineDiff(oldLines, newLines) {
+  const m = oldLines.length;
+  const n = newLines.length;
+
+  // Build LCS table
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  // Backtrack to build diff
+  const result = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      result.unshift({ type: 'same', text: oldLines[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: 'add', text: newLines[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: 'remove', text: oldLines[i - 1] });
+      i--;
+    }
+  }
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════
+// Impact Analysis Modal
+// ═══════════════════════════════════════════════
+function ImpactModal({ policy, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadImpact();
+  }, []);
+
+  const loadImpact = async () => {
+    try {
+      const res = await api.get(`/policies/admin/${policy.id}/impact`);
+      setData(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load impact data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-indigo-600" />
+            Policy Impact
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+            </div>
+          ) : error ? (
+            <div className="text-center text-sm text-red-500 py-4">{error}</div>
+          ) : data ? (
+            <div className="space-y-5">
+              {/* Policy info */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">{data.title}</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">v{data.version}</span>
+                  {data.isMandatory && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-red-50 text-red-600 px-1.5 py-0.5 rounded">Mandatory</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{data.totalAffected}</p>
+                  <p className="text-[11px] text-blue-600 font-medium">Affected</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-700">{data.accepted}</p>
+                  <p className="text-[11px] text-green-600 font-medium">Accepted</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-700">{data.pending}</p>
+                  <p className="text-[11px] text-amber-600 font-medium">Pending</p>
+                </div>
+              </div>
+
+              {/* Overall acceptance bar */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-slate-600">Overall Acceptance</span>
+                  <span className="text-xs font-bold text-slate-700">{data.acceptanceRate}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      data.acceptanceRate >= 75 ? 'bg-green-500' :
+                      data.acceptanceRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${data.acceptanceRate}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Department breakdown */}
+              {data.departments?.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" />
+                    Department Breakdown
+                  </h4>
+                  <div className="space-y-2">
+                    {data.departments.map(dept => (
+                      <div key={dept.name} className="flex items-center gap-3">
+                        <span className="text-xs text-slate-700 w-28 truncate font-medium">{dept.name}</span>
+                        <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              dept.rate >= 75 ? 'bg-green-400' : dept.rate >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${dept.rate}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-500 w-20 text-right">
+                          {dept.accepted}/{dept.total} ({dept.rate}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
 // Policy Create/Edit Modal
 // ═══════════════════════════════════════════════
 function PolicyFormModal({ policy, companies, onClose }) {
@@ -662,6 +1244,8 @@ function PolicyFormModal({ policy, companies, onClose }) {
     isMandatory: policy?.isMandatory ?? true,
     isActive: policy?.isActive ?? true,
     companyId: policy?.companyId ? String(policy.companyId) : '',
+    bumpVersion: false,
+    changeLog: '',
   });
 
   const [sections, setSections] = useState([]);
@@ -690,7 +1274,7 @@ function PolicyFormModal({ policy, companies, onClose }) {
         })));
       }
     } catch {
-      // Non-critical, sections may not exist
+      // Non-critical
     } finally {
       setLoadingSections(false);
     }
@@ -744,6 +1328,11 @@ function PolicyFormModal({ policy, companies, onClose }) {
       };
 
       if (isEdit) {
+        // Add version bump fields
+        if (form.bumpVersion) {
+          payload.bumpVersion = true;
+          payload.changeLog = form.changeLog.trim() || 'Updated policy';
+        }
         await api.put(`/policies/admin/${policy.id}`, payload);
         // Update sections
         if (sections.length > 0) {
@@ -785,6 +1374,11 @@ function PolicyFormModal({ policy, companies, onClose }) {
           <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
             {isEdit ? <Edit className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
             {isEdit ? 'Edit Policy' : 'Create Policy'}
+            {isEdit && (
+              <span className="text-xs font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded ml-1">
+                v{policy.version}
+              </span>
+            )}
           </h2>
           <button onClick={() => onClose(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
@@ -950,6 +1544,43 @@ function PolicyFormModal({ policy, companies, onClose }) {
                   </label>
                 </div>
               </div>
+
+              {/* ── Version Bump (Edit mode only) ── */}
+              {isEdit && (
+                <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => updateForm('bumpVersion', !form.bumpVersion)}
+                      className="text-slate-500"
+                    >
+                      {form.bumpVersion ? (
+                        <ToggleRight className="w-6 h-6 text-purple-600" />
+                      ) : (
+                        <ToggleLeft className="w-6 h-6 text-slate-400" />
+                      )}
+                    </button>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Create New Version</p>
+                      <p className="text-xs text-slate-500">
+                        Bump from v{policy.version} → v{policy.version + 1}. Employees will need to re-accept.
+                      </p>
+                    </div>
+                  </div>
+                  {form.bumpVersion && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Change Log</label>
+                      <input
+                        type="text"
+                        value={form.changeLog}
+                        onChange={(e) => updateForm('changeLog', e.target.value)}
+                        placeholder="Describe what changed in this version..."
+                        className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-400 outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1044,31 +1675,41 @@ function PolicyFormModal({ policy, companies, onClose }) {
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-            <button
-              type="button"
-              onClick={() => onClose(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  {isEdit ? 'Update Policy' : 'Create Policy'}
-                </>
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+            <div>
+              {isEdit && form.bumpVersion && (
+                <span className="text-xs text-purple-600 font-medium flex items-center gap-1">
+                  <History className="w-3.5 h-3.5" />
+                  Will create v{policy.version + 1}
+                </span>
               )}
-            </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onClose(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {isEdit ? 'Update Policy' : 'Create Policy'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

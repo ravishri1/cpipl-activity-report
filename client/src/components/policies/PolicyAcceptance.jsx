@@ -15,6 +15,10 @@ import {
   Calendar,
   Tag,
   Info,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 
 const CATEGORY_STYLES = {
@@ -36,6 +40,18 @@ function formatDate(dateStr) {
     return new Date(dateStr).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatMonthYear(dateStr) {
+  if (!dateStr) return '';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      month: 'long',
       year: 'numeric',
     });
   } catch {
@@ -70,11 +86,40 @@ function renderPolicyContent(text) {
         </h2>
       );
     }
+    if (/^\d+\.\s/.test(trimmed)) {
+      const match = trimmed.match(/^(\d+)\.\s(.*)/);
+      return (
+        <li key={i} className="text-sm text-slate-600 leading-relaxed ml-4 list-decimal">
+          {match[2]}
+        </li>
+      );
+    }
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       return (
         <li key={i} className="text-sm text-slate-600 leading-relaxed ml-4 list-disc">
           {trimmed.slice(2)}
         </li>
+      );
+    }
+    if (trimmed.startsWith('> ')) {
+      return (
+        <blockquote key={i} className="border-l-3 border-blue-300 pl-3 text-sm text-slate-500 italic my-2">
+          {trimmed.slice(2)}
+        </blockquote>
+      );
+    }
+    // Bold text: **text**
+    const parts = trimmed.split(/(\*\*[^*]+\*\*)/g);
+    const hasBold = parts.some(p => p.startsWith('**') && p.endsWith('**'));
+    if (hasBold) {
+      return (
+        <p key={i} className="text-sm text-slate-600 leading-relaxed">
+          {parts.map((part, j) =>
+            part.startsWith('**') && part.endsWith('**')
+              ? <strong key={j} className="font-semibold text-slate-700">{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
       );
     }
     return (
@@ -114,7 +159,7 @@ function LoadingSkeleton() {
 }
 
 // -- Empty State --
-function EmptyState() {
+function EmptyPolicies() {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
       <FileText className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -158,6 +203,74 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
+// -- Version Changes Banner --
+function VersionChangesBanner({ versionChanges, lastAcceptedVersion, currentVersion }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!versionChanges || versionChanges.length === 0) return null;
+
+  const changesWithLog = versionChanges.filter(v => v.changeLog);
+  if (changesWithLog.length === 0) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-blue-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-blue-800">
+              {lastAcceptedVersion
+                ? `Updated since you last accepted (v${lastAcceptedVersion} → v${currentVersion})`
+                : `${changesWithLog.length} version update${changesWithLog.length > 1 ? 's' : ''} to review`
+              }
+            </p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              {changesWithLog.length} change{changesWithLog.length > 1 ? 's' : ''} documented
+            </p>
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-4 border-t border-blue-200">
+          <div className="relative pl-6 pt-3 space-y-3">
+            {/* Timeline line */}
+            <div className="absolute left-[9px] top-6 bottom-2 w-0.5 bg-blue-200" />
+
+            {changesWithLog.map((v, i) => (
+              <div key={v.version} className="relative flex items-start gap-3">
+                <div className={`w-[18px] h-[18px] rounded-full border-2 flex-shrink-0 flex items-center justify-center -ml-6 z-10 ${
+                  i === 0 ? 'bg-blue-600 border-blue-600' : 'bg-white border-blue-300'
+                }`}>
+                  {i === 0 && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+                      v{v.version}
+                    </span>
+                    <span className="text-[11px] text-slate-400">{formatDate(v.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-slate-700 leading-relaxed">{v.changeLog}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // -- Policy Card --
 function PolicyCard({ policy, onClick }) {
   const catStyle = getCategoryStyle(policy.category);
@@ -194,7 +307,7 @@ function PolicyCard({ policy, onClick }) {
           {policy.category || 'General'}
         </span>
         <span className="text-[11px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
-          v{policy.version || '1.0'}
+          v{policy.version || '1'}
         </span>
         {policy.isMandatory && (
           <span className="text-[11px] font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
@@ -256,6 +369,10 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
         ...prev,
         acceptedAt: new Date().toISOString(),
         acceptanceRemarks: remarks.trim(),
+        acceptance: { acceptedAt: new Date().toISOString() },
+        lastAcceptedVersion: prev.version,
+        lastAcceptedAt: new Date().toISOString(),
+        versionChanges: [],
       }));
       onAccepted();
     } catch (err) {
@@ -301,8 +418,9 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
 
   if (!policy) return null;
 
-  const isAccepted = !!policy.acceptedAt;
+  const isAccepted = !!policy.acceptance?.acceptedAt;
   const catStyle = getCategoryStyle(policy.category);
+  const needsReAcceptance = policy.lastAcceptedVersion && policy.lastAcceptedVersion < policy.version;
 
   return (
     <div className="space-y-5">
@@ -329,23 +447,33 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
               )}
             </div>
           </div>
-          {isAccepted && (
+          {isAccepted && !needsReAcceptance && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium flex-shrink-0">
               <CheckCircle className="w-3.5 h-3.5" />
-              Accepted {formatDate(policy.acceptedAt)}
+              Accepted
+            </span>
+          )}
+          {needsReAcceptance && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium flex-shrink-0">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Updated
             </span>
           )}
         </div>
 
+        {/* Metadata chips */}
         <div className="flex items-center flex-wrap gap-2">
           <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${catStyle.bg} ${catStyle.text}`}>
             <Tag className="w-3 h-3" />
             {policy.category || 'General'}
           </span>
-          <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">
-            <Info className="w-3 h-3" />
-            Version {policy.version || '1.0'}
+
+          {/* Version indicator — prominent */}
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">
+            <History className="w-3 h-3" />
+            v{policy.version}{policy.lastUpdatedAt ? ` — Updated ${formatMonthYear(policy.lastUpdatedAt)}` : ''}
           </span>
+
           {policy.effectiveDate && (
             <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full">
               <Calendar className="w-3 h-3" />
@@ -365,7 +493,29 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
             </span>
           )}
         </div>
+
+        {/* Re-acceptance notice */}
+        {needsReAcceptance && (
+          <div className="mt-4 flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                This policy has been updated since you last accepted it
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                You accepted v{policy.lastAcceptedVersion} on {formatDate(policy.lastAcceptedAt)}. The current version is v{policy.version}. Please review the changes and re-accept.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Version Changes Timeline */}
+      <VersionChangesBanner
+        versionChanges={policy.versionChanges}
+        lastAcceptedVersion={policy.lastAcceptedVersion}
+        currentVersion={policy.version}
+      />
 
       {/* Policy content */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -378,10 +528,13 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
         {policy.sections && policy.sections.length > 0 && (
           <div className="space-y-6">
             {policy.sections
-              .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+              .sort((a, b) => (a.order ?? a.sortOrder ?? 0) - (b.order ?? b.sortOrder ?? 0))
               .map((section, idx) => (
                 <div key={section.id || idx} className="border-l-2 border-blue-200 pl-4">
-                  <h3 className="text-base font-semibold text-slate-800 mb-2">
+                  <h3 className="text-base font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                      {idx + 1}
+                    </span>
                     {section.title}
                   </h3>
                   <div className="prose prose-sm max-w-none">
@@ -402,17 +555,17 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
 
       {/* Accept section */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        {isAccepted ? (
+        {isAccepted && !needsReAcceptance ? (
           <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
             <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-emerald-800">
-                You accepted this policy on {formatDate(policy.acceptedAt)}
+                You accepted this policy (v{policy.version}) on {formatDate(policy.acceptance?.acceptedAt)}
               </p>
-              {policy.acceptanceRemarks && (
+              {policy.acceptance?.remarks && (
                 <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
                   <MessageSquare className="w-3 h-3" />
-                  {policy.acceptanceRemarks}
+                  {policy.acceptance.remarks}
                 </p>
               )}
             </div>
@@ -423,7 +576,9 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-800">
-                  {policy.isMandatory
+                  {needsReAcceptance
+                    ? `This policy was updated to v${policy.version}. Please review the changes and re-accept.`
+                    : policy.isMandatory
                     ? 'This is a mandatory policy. Please review and accept it.'
                     : 'Please review the policy above and accept when ready.'}
                 </p>
@@ -462,7 +617,7 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  I have read and accept this policy
+                  {needsReAcceptance ? `I accept the updated policy (v${policy.version})` : 'I have read and accept this policy'}
                 </>
               )}
             </button>
@@ -515,7 +670,6 @@ export default function PolicyAcceptance() {
   const allAccepted = totalCount > 0 && acceptedCount === totalCount;
 
   const handleAccepted = () => {
-    // Refresh the list so the accepted status updates
     fetchPolicies();
   };
 
@@ -558,7 +712,7 @@ export default function PolicyAcceptance() {
           <Shield className="w-6 h-6 text-blue-600" />
           Company Policies
         </h1>
-        <EmptyState />
+        <EmptyPolicies />
       </div>
     );
   }

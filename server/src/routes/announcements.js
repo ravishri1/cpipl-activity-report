@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
@@ -7,6 +7,7 @@ const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 const PRIORITY_ORDER = { urgent: 0, important: 1, normal: 2 };
 const VALID_CATEGORIES = ['general', 'policy', 'event', 'birthday', 'anniversary'];

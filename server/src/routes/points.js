@@ -1,18 +1,23 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { requireFields, requireEnum } = require('../utils/validate');
+const { maskName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 const { getLeaderboard, getUserPoints, awardThumbsUp, removeThumbsUp } = require('../services/points/pointsEngine');
 const { giveAppreciation, getAppreciationBudget, getAppreciationHistory, getAppreciationFeed } = require('../services/points/appreciationEngine');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/points/leaderboard?period=weekly|monthly|alltime
 router.get('/leaderboard', authenticate, asyncHandler(async (req, res) => {
   const period = req.query.period || 'weekly';
   requireEnum(period, ['weekly', 'monthly', 'alltime'], 'period');
-  res.json(await getLeaderboard(period, req.prisma));
+  const results = await getLeaderboard(period, req.prisma);
+  // Name privacy: non-admin users see only first name + last initial
+  res.json(canSeeFullNames(req.user) ? results : maskUserNames(results));
 }));
 
 // GET /api/points/my?period=weekly|monthly|alltime
@@ -55,13 +60,32 @@ router.get('/appreciations', authenticate, asyncHandler(async (req, res) => {
   const type = req.query.type || 'received';
   requireEnum(type, ['given', 'received'], 'type');
   const page = parseInt(req.query.page) || 1;
-  res.json(await getAppreciationHistory(req.user.id, type, page, req.prisma));
+  const result = await getAppreciationHistory(req.user.id, type, page, req.prisma);
+  // Name privacy: mask giver/receiver names for non-admin users
+  if (!canSeeFullNames(req.user) && result.appreciations) {
+    result.appreciations = result.appreciations.map(item => ({
+      ...item,
+      ...(item.giver ? { giver: { ...item.giver, name: maskName(item.giver.name) } } : {}),
+      ...(item.receiver ? { receiver: { ...item.receiver, name: maskName(item.receiver.name) } } : {}),
+    }));
+  }
+  res.json(result);
 }));
 
 // GET /api/points/appreciation-feed?limit=10
 router.get('/appreciation-feed', authenticate, asyncHandler(async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-  res.json(await getAppreciationFeed(limit, req.prisma));
+  const feed = await getAppreciationFeed(limit, req.prisma);
+  // Name privacy: mask giver/receiver names for non-admin users
+  if (!canSeeFullNames(req.user)) {
+    res.json(feed.map(item => ({
+      ...item,
+      ...(item.giver ? { giver: { ...item.giver, name: maskName(item.giver.name) } } : {}),
+      ...(item.receiver ? { receiver: { ...item.receiver, name: maskName(item.receiver.name) } } : {}),
+    })));
+  } else {
+    res.json(feed);
+  }
 }));
 
 module.exports = router;

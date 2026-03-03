@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, forbidden } = require('../utils/httpErrors');
 const { normalizeName } = require('../utils/normalize');
@@ -13,7 +13,7 @@ const router = express.Router();
 // ─── Per-User OAuth2 Flow (Calendar/Tasks) ───
 
 // GET /api/google/auth-url
-router.get('/auth-url', authenticate, asyncHandler(async (req, res) => {
+router.get('/auth-url', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) throw badRequest('Google OAuth2 not configured. Set GOOGLE_CLIENT_ID in .env');
   const url = generateAuthUrl(req.user.id);
   res.json({ url });
@@ -37,7 +37,7 @@ router.get('/callback', async (req, res) => {
 });
 
 // GET /api/google/status
-router.get('/status', authenticate, asyncHandler(async (req, res) => {
+router.get('/status', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const token = await req.prisma.googleToken.findUnique({
     where: { userId: req.user.id },
     select: { scopes: true, expiresAt: true },
@@ -46,7 +46,7 @@ router.get('/status', authenticate, asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/google/disconnect
-router.delete('/disconnect', authenticate, asyncHandler(async (req, res) => {
+router.delete('/disconnect', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   await req.prisma.googleToken.deleteMany({ where: { userId: req.user.id } });
   res.json({ message: 'Google account disconnected.' });
 }));
@@ -54,7 +54,7 @@ router.delete('/disconnect', authenticate, asyncHandler(async (req, res) => {
 // ─── Google Admin: Import Users ───
 
 // GET /api/google/import-users — Restricted to me@colorpapers.in
-router.get('/import-users', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/import-users', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   if (req.user.email !== 'me@colorpapers.in') throw forbidden('Only the primary admin can import Google Workspace users.');
   const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
   if (!domain) throw badRequest('GOOGLE_WORKSPACE_DOMAIN not configured in .env');
@@ -67,7 +67,7 @@ router.get('/import-users', authenticate, requireAdmin, asyncHandler(async (req,
 }));
 
 // POST /api/google/import-users — Create selected users
-router.post('/import-users', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/import-users', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   if (req.user.email !== 'me@colorpapers.in') throw forbidden('Only the primary admin can import Google Workspace users.');
   const { users } = req.body;
   if (!users || !Array.isArray(users) || users.length === 0) throw badRequest('No users provided.');
@@ -93,13 +93,13 @@ router.post('/import-users', authenticate, requireAdmin, asyncHandler(async (req
 // ─── Calendar & Tasks ───
 
 // GET /api/google/calendar-events
-router.get('/calendar-events', authenticate, asyncHandler(async (req, res) => {
+router.get('/calendar-events', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const events = await fetchTodayCalendarEvents(req.user.id, req.prisma);
   res.json(events);
 }));
 
 // GET /api/google/tasks
-router.get('/tasks', authenticate, asyncHandler(async (req, res) => {
+router.get('/tasks', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const tasks = await fetchTodayTasks(req.user.id, req.prisma);
   res.json(tasks);
 }));
@@ -108,7 +108,7 @@ router.get('/tasks', authenticate, asyncHandler(async (req, res) => {
 
 // GET /api/google/auto-tasks?date=YYYY-MM-DD
 // Inner try-catches intentional: each source fails independently for partial results
-router.get('/auto-tasks', authenticate, asyncHandler(async (req, res) => {
+router.get('/auto-tasks', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
   const result = { calendar: [], tasks: [], email: null, chat: null };
 

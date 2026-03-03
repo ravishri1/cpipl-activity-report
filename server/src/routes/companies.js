@@ -1,9 +1,11 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { requireFields, parseId } = require('../utils/validate');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/companies — List all companies (any authenticated user)
 router.get('/', authenticate, asyncHandler(async (req, res) => {

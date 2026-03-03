@@ -1,15 +1,32 @@
+import { useState } from 'react';
 import { SignIn, useUser } from '@clerk/clerk-react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { FileText, Building2, Globe, AlertCircle, Shield, RefreshCw, LogOut } from 'lucide-react';
+import { FileText, Building2, Globe, AlertCircle, Shield, RefreshCw, LogOut, Moon, Unlock } from 'lucide-react';
 
 export default function Login() {
   const { isSignedIn } = useUser();
-  const { user, loading, accessDenied, syncError, logout, retrySync } = useAuth();
+  const { user, loading, accessDenied, isHibernated, canSelfReactivate, remainingReactivations, syncError, logout, retrySync, selfReactivate } = useAuth();
+  const [reactivating, setReactivating] = useState(false);
+  const [reactivateError, setReactivateError] = useState('');
 
-  // If signed in with Clerk AND synced to DB, redirect
+  const handleSelfReactivate = async () => {
+    setReactivating(true);
+    setReactivateError('');
+    try {
+      await selfReactivate();
+    } catch (err) {
+      setReactivateError(err.message);
+    } finally {
+      setReactivating(false);
+    }
+  };
+
+  // If signed in with Clerk AND synced to DB, redirect to last page or default
   if (isSignedIn && user && !loading) {
-    return <Navigate to={user.role === 'member' ? '/submit-report' : '/dashboard'} />;
+    const savedPath = sessionStorage.getItem('lastPath');
+    const defaultPath = user.role === 'member' ? '/submit-report' : '/dashboard';
+    return <Navigate to={savedPath || defaultPath} />;
   }
 
   return (
@@ -24,8 +41,49 @@ export default function Login() {
           <p className="text-blue-600 font-semibold text-xs mt-0.5">Color Papers India Private Limited</p>
         </div>
 
-        {/* Access Denied */}
-        {accessDenied && (
+        {/* Account Hibernated */}
+        {isHibernated && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-3 rounded-lg mb-4 text-xs">
+            <div className="flex items-start gap-2 mb-2">
+              <Moon className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-semibold text-amber-900">Account Hibernated</p>
+                <p className="mt-1 text-amber-700 leading-relaxed">
+                  {canSelfReactivate
+                    ? `Your account has been hibernated due to inactivity. You can reactivate it yourself (${remainingReactivations} remaining this month) or contact HR.`
+                    : 'Your account has been hibernated due to inactivity. You have used all 3 self-reactivations this month. Please contact HR.'}
+                </p>
+              </div>
+            </div>
+            {reactivateError && (
+              <div className="bg-red-50 text-red-700 px-2 py-1.5 rounded mb-2 text-[10px]">{reactivateError}</div>
+            )}
+            <div className="flex gap-2 mt-1">
+              {canSelfReactivate && (
+                <button
+                  onClick={handleSelfReactivate}
+                  disabled={reactivating}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {reactivating ? (
+                    <><RefreshCw className="w-3 h-3 animate-spin" /> Reactivating...</>
+                  ) : (
+                    <><Unlock className="w-3 h-3" /> Reactivate My Account</>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={logout}
+                className={`${canSelfReactivate ? '' : 'flex-1 '}flex items-center justify-center gap-1.5 bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md text-xs font-medium hover:bg-slate-300 transition-colors`}
+              >
+                <LogOut className="w-3 h-3" /> Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Access Denied (non-hibernation) */}
+        {accessDenied && !isHibernated && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-xs flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div>
@@ -90,7 +148,7 @@ export default function Login() {
                 },
               }}
               routing="hash"
-              forceRedirectUrl="/dashboard"
+              forceRedirectUrl={sessionStorage.getItem('lastPath') || '/dashboard'}
             />
           </div>
         )}

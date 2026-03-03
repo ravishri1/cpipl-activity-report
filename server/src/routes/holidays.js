@@ -1,10 +1,12 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, conflict, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId, parseIntOr } = require('../utils/validate');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/holidays?year=2026 — List holidays for a year
 router.get('/', authenticate, asyncHandler(async (req, res) => {

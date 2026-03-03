@@ -1,11 +1,12 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 const LETTER_TYPES = ['offer', 'appointment', 'salary_revision', 'experience', 'relieving', 'custom'];
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }

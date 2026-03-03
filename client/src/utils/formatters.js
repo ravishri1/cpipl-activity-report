@@ -53,3 +53,22 @@ export function formatTime(timeStr) {
   const hour = h % 12 || 12;
   return `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
 }
+
+/**
+ * Convert a Google Drive URL to a direct image URL for use in <img> tags.
+ * Handles both old webViewLink format and new direct URLs.
+ * Returns the URL as-is if it's already a direct URL or non-Drive URL.
+ */
+export function driveImageUrl(url) {
+  if (!url) return null;
+  // Already a direct lh3 URL — return as-is
+  if (url.includes('lh3.googleusercontent.com')) return url;
+  // Drive webViewLink format: https://drive.google.com/file/d/{fileId}/view...
+  const match = url.match(/\/file\/d\/([^/]+)\//);
+  if (match) return `https://lh3.googleusercontent.com/d/${match[1]}`;
+  // Drive uc format: https://drive.google.com/uc?id={fileId}...
+  const ucMatch = url.match(/[?&]id=([^&]+)/);
+  if (ucMatch) return `https://lh3.googleusercontent.com/d/${ucMatch[1]}`;
+  // Not a Drive URL — return as-is (e.g. base64, Clerk avatar, etc.)
+  return url;
+}

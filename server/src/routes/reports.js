@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { requireFields } = require('../utils/validate');
@@ -7,6 +7,8 @@ const { getTodayDate, getYesterdayDate } = require('../utils/helpers');
 const { calculateAndAwardPoints } = require('../services/points/pointsEngine');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/reports/yesterday-plan — Get yesterday's planTomorrow for pre-fill
 router.get('/yesterday-plan', authenticate, asyncHandler(async (req, res) => {

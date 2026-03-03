@@ -1,10 +1,12 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { forbidden } = require('../utils/httpErrors');
 const { getTodayDate } = require('../utils/helpers');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // GET /api/dashboard?date=YYYY-MM-DD
 router.get('/', authenticate, asyncHandler(async (req, res) => {

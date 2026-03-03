@@ -1,10 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { authenticate, requireAdmin, requireManagerOrAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireManagerOrAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
+const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 
 const router = express.Router();
 
@@ -63,7 +64,7 @@ router.post('/:id/photo', authenticate, express.json({ limit: '2mb' }), asyncHan
 // ═══════════════════════════════════════════════
 
 // GET /api/users/directory — Employee directory (all active users, public fields)
-router.get('/directory', authenticate, asyncHandler(async (req, res) => {
+router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const where = { isActive: true };
   if (req.query.department && req.query.department !== 'all') where.department = req.query.department;
   if (req.query.company && req.query.company !== 'all') where.companyId = parseInt(req.query.company);
@@ -80,18 +81,24 @@ router.get('/directory', authenticate, asyncHandler(async (req, res) => {
     where,
     select: {
       id: true, name: true, email: true, department: true, designation: true, employeeId: true,
-      profilePhotoUrl: true, phone: true, dateOfJoining: true, role: true, location: true,
+      profilePhotoUrl: true, driveProfilePhotoUrl: true, phone: true, dateOfJoining: true, role: true, location: true,
       reportingManagerId: true, companyId: true,
       reportingManager: { select: { id: true, name: true, employeeId: true } },
       company: { select: { id: true, name: true, shortName: true } },
     },
     orderBy: { name: 'asc' },
   });
-  res.json(employees);
+
+  // Name privacy: non-admin users see only first name + last initial
+  if (!canSeeFullNames(req.user)) {
+    res.json(maskUserNames(employees, ['reportingManager']));
+  } else {
+    res.json(employees);
+  }
 }));
 
 // GET /api/users/departments — List unique departments
-router.get('/departments', authenticate, asyncHandler(async (req, res) => {
+router.get('/departments', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const departments = await req.prisma.user.findMany({
     where: { isActive: true }, select: { department: true }, distinct: ['department'], orderBy: { department: 'asc' },
   });
@@ -99,13 +106,15 @@ router.get('/departments', authenticate, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/users/org-chart — Org chart data (reporting hierarchy)
-router.get('/org-chart', authenticate, asyncHandler(async (req, res) => {
+router.get('/org-chart', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const users = await req.prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, reportingManagerId: true, role: true },
+    select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true, reportingManagerId: true, role: true },
     orderBy: { name: 'asc' },
   });
-  res.json(users);
+
+  // Name privacy: non-admin users see only first name + last initial
+  res.json(canSeeFullNames(req.user) ? users : maskUserNames(users));
 }));
 
 // GET /api/users/:id/profile — Full employee profile (self or admin/manager)
@@ -126,7 +135,7 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       id: true, name: true, email: true, role: true, department: true, isActive: true, createdAt: true,
       employeeId: true, designation: true, dateOfJoining: true, dateOfBirth: true,
       employmentType: true, phone: true, personalEmail: true, address: true,
-      emergencyContact: true, gender: true, bloodGroup: true, profilePhotoUrl: true, reportingManagerId: true,
+      emergencyContact: true, gender: true, bloodGroup: true, profilePhotoUrl: true, driveProfilePhotoUrl: true, reportingManagerId: true,
       maritalStatus: true, nationality: true, fatherName: true, spouseName: true,
       religion: true, placeOfBirth: true, permanentAddress: true,
       aadhaarNumber: true, panNumber: true, passportNumber: true, passportExpiry: true,
@@ -135,8 +144,8 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
       previousExperience: true, location: true, grade: true, shift: true, companyId: true,
       company: { select: { id: true, name: true, shortName: true } },
-      reportingManager: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
-      subordinates: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true } },
+      reportingManager: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true } },
+      subordinates: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true } },
       educations: { orderBy: { id: 'desc' } },
       familyMembers: { orderBy: { id: 'asc' } },
       previousEmployments: { orderBy: { id: 'desc' } },
@@ -144,7 +153,19 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
   });
   if (!user) throw notFound('User');
 
-  res.json(user);
+  // Name privacy: non-admin viewing someone else's profile sees masked names
+  const isSelfProfile = req.user.id === targetId;
+  if (!isSelfProfile && !canSeeFullNames(req.user)) {
+    res.json(maskUserName(user, ['reportingManager']));
+  } else if (canSeeFullNames(req.user)) {
+    res.json(user);
+  } else {
+    // Self-view: mask other people's names (manager, subordinates) but keep own name
+    const result = { ...user };
+    if (result.reportingManager) result.reportingManager = maskUserName(result.reportingManager);
+    if (result.subordinates) result.subordinates = maskUserNames(result.subordinates);
+    res.json(result);
+  }
 }));
 
 // PUT /api/users/:id/profile — Update employee profile (admin only, or self for limited fields)
@@ -191,7 +212,7 @@ router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       id: true, name: true, email: true, role: true, department: true,
       employeeId: true, designation: true, dateOfJoining: true,
       employmentType: true, phone: true, personalEmail: true,
-      gender: true, bloodGroup: true, profilePhotoUrl: true, reportingManagerId: true,
+      gender: true, bloodGroup: true, profilePhotoUrl: true, driveProfilePhotoUrl: true, reportingManagerId: true,
       maritalStatus: true, nationality: true, fatherName: true, spouseName: true,
       religion: true, placeOfBirth: true, permanentAddress: true, address: true,
       aadhaarNumber: true, panNumber: true, passportNumber: true, passportExpiry: true,
@@ -253,20 +274,23 @@ router.delete('/:id/documents/:docId', authenticate, requireAdmin, asyncHandler(
 // ═══════════════════════════════════════════════
 
 // GET /api/users - List users (admins see all, team_leads see own department)
-router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const where = {};
   if (req.user.role === 'team_lead') where.department = req.user.department;
 
   const users = await req.prisma.user.findMany({
     where,
-    select: { id: true, name: true, email: true, role: true, department: true, isActive: true, createdAt: true },
+    select: {
+      id: true, name: true, email: true, role: true, department: true,
+      isActive: true, isHibernated: true, lastActivityAt: true, createdAt: true,
+    },
     orderBy: { name: 'asc' },
   });
   res.json(users);
 }));
 
 // POST /api/users - Create user
-router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'email', 'password');
   const { name, email, password, role, department, companyId } = req.body;
 
@@ -287,7 +311,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/users/:id - Update user
-router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.put('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { name, email, role, department, isActive, password, companyId } = req.body;
   const data = {};
   if (name) data.name = normalizeName(name);
@@ -306,7 +330,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
 }));
 
 // DELETE /api/users/:id - Deactivate user (soft delete)
-router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.delete('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   await req.prisma.user.update({ where: { id: parseId(req.params.id) }, data: { isActive: false } });
   res.json({ message: 'User deactivated.' });
 }));
@@ -572,6 +596,45 @@ router.get('/:id/completion-score', authenticate, asyncHandler(async (req, res) 
   }
 
   res.json({ score, totalFields: fields.length, completedFields: completed.length, missing: missing.sort((a, b) => b.weight - a.weight), sections });
+}));
+
+// ═══════════════════════════════════════════════
+// Hibernation — Admin reactivation
+// ═══════════════════════════════════════════════
+
+// POST /api/users/:id/reactivate — Reactivate a hibernated account (admin only)
+router.post('/:id/reactivate', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const targetId = parseId(req.params.id);
+  const user = await req.prisma.user.findUnique({ where: { id: targetId }, select: { id: true, name: true, isHibernated: true } });
+  if (!user) throw notFound('User');
+  if (!user.isHibernated) throw badRequest('User is not hibernated.');
+
+  await req.prisma.user.update({
+    where: { id: targetId },
+    data: { isHibernated: false, lastActivityAt: new Date() },
+  });
+
+  // Notify the reactivated user
+  try {
+    const { notifyUsers } = require('../utils/notify');
+    await notifyUsers(req.prisma, {
+      userIds: [targetId],
+      type: 'info',
+      title: 'Account Reactivated',
+      message: 'Your account has been reactivated by HR. You can now log in and use the system normally.',
+      link: '/dashboard',
+    });
+  } catch (notifyErr) {
+    console.error('Failed to notify reactivated user:', notifyErr.message);
+  }
+
+  await logChanges(req.prisma, {
+    userId: targetId, changedBy: req.user.id, section: 'account',
+    changes: [{ field: 'isHibernated', oldValue: 'true', newValue: 'false' }],
+    action: 'update',
+  });
+
+  res.json({ message: `${user.name}'s account has been reactivated.` });
 }));
 
 module.exports = router;

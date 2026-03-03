@@ -1,11 +1,13 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { requireFields } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 const EXTRACTION_PROMPT = `You are an HR data extraction assistant. Extract employee information from the following resume/biodata text and return ONLY a valid JSON object.
 

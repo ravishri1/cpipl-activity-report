@@ -1,10 +1,11 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // ─── 1. GET / ─── List my notifications (newest first, last 50)
 router.get('/', asyncHandler(async (req, res) => {

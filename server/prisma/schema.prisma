@@ -15,6 +15,11 @@ model User {
   role               String   @default("member") // admin, team_lead, member
   department         String   @default("General")
   isActive           Boolean  @default(true)
+  employmentStatus   String   @default("active") // active, notice_period, separated, terminated, absconding
+  isHibernated              Boolean  @default(false)
+  lastActivityAt            DateTime?
+  selfReactivationCount     Int      @default(0)    // resets monthly, max 3 self-unlocks
+  selfReactivationMonth     String?                 // "YYYY-MM" to track reset
   googleId           String?  @unique
   importedFromGoogle Boolean  @default(false)
   totalPoints        Int      @default(0) // cached leaderboard score
@@ -35,7 +40,9 @@ model User {
   emergencyContact2  String?                   // JSON: {"name","fatherName","phone","relation"} (2nd ref)
   gender             String?                   // male, female, other
   bloodGroup         String?
-  profilePhotoUrl    String?
+  profilePhotoUrl      String?
+  driveProfilePhotoUrl String?              // Google Drive URL for profile photo (preferred over base64)
+  driveFolderId        String?              // Google Drive folder ID for this employee
   reportingManagerId Int?
 
   // ── Extended Profile (greytHR-style) ──
@@ -119,9 +126,12 @@ model User {
   assignedTickets    Ticket[]           @relation("TicketAssignee")
   ticketComments     TicketComment[]
   otpRequests        OtpVerification[]
+  driveFiles         DriveFile[]
 
   @@index([department])
   @@index([isActive])
+  @@index([employmentStatus])
+  @@index([isHibernated])
   @@index([companyId])
   @@index([reportingManagerId])
   @@index([role])
@@ -1100,4 +1110,26 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+}
+
+// ─── Google Drive File Management ───
+model DriveFile {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  driveFileId   String    @unique
+  driveFolderId String
+  fileName      String
+  mimeType      String
+  fileSize      Int       @default(0)
+  driveUrl      String
+  thumbnailUrl  String?
+  category      String    @default("other")    // photo, document, receipt, id_proof, education, other
+  description   String?
+  uploadedAt    DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([category])
+  @@index([userId, category])
 }

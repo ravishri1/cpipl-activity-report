@@ -35,11 +35,35 @@ router.post('/clerk-sync', authenticate, asyncHandler(async (req, res) => {
         googleId: clerkId,
         importedFromGoogle: isInternal,
         isActive: true,
+        lastActivityAt: new Date(),
       },
     });
   }
 
+  // Three-tier employment status check
+  const empStatus = user.employmentStatus || 'active';
+  if (empStatus === 'terminated' || empStatus === 'absconding') {
+    throw forbidden('Account is suspended. Contact HR for assistance.');
+  }
   if (!user.isActive) throw forbidden('Account is deactivated. Contact admin.');
+
+  // Hibernation check — inactive accounts locked until self or HR reactivates
+  if (user.isHibernated) {
+    // Check self-reactivation remaining
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    let usedCount = user.selfReactivationCount || 0;
+    if (user.selfReactivationMonth !== currentMonth) usedCount = 0;
+    const canSelfReactivate = usedCount < 3;
+
+    return res.status(403).json({
+      error: canSelfReactivate
+        ? 'Your account has been hibernated due to inactivity. You can reactivate it yourself or contact HR.'
+        : 'Your account has been hibernated due to inactivity. You have used all 3 self-reactivations this month. Please contact HR.',
+      code: 'HIBERNATED',
+      canSelfReactivate,
+      remainingReactivations: Math.max(0, 3 - usedCount),
+    });
+  }
 
   // Update googleId (Clerk ID) if not set
   if (!user.googleId || user.googleId !== clerkId) {
@@ -49,6 +73,8 @@ router.post('/clerk-sync', authenticate, asyncHandler(async (req, res) => {
     });
   }
 
+  const isSeparated = empStatus === 'separated';
+
   res.json({
     user: {
       id: user.id,
@@ -56,7 +82,11 @@ router.post('/clerk-sync', authenticate, asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       department: user.department,
+      companyId: user.companyId,
+      employmentStatus: empStatus,
+      isSeparated,
       isInternal,
+      driveProfilePhotoUrl: user.driveProfilePhotoUrl || null,
     },
   });
 }));
@@ -66,10 +96,51 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
   if (!req.user.id) throw notFound('User');
   const user = await req.prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, email: true, role: true, department: true },
+    select: { id: true, name: true, email: true, role: true, department: true, companyId: true, employmentStatus: true },
   });
   if (!user) throw notFound('User');
   res.json(user);
+}));
+
+/**
+ * POST /api/auth/self-reactivate
+ * Allows a hibernated user to reactivate their own account (max 3 times/month).
+ * Uses Clerk token for identity but bypasses the normal hibernation block.
+ */
+router.post('/self-reactivate', authenticate, asyncHandler(async (req, res) => {
+  // Auth middleware allows hibernated users through for this route (sets req.user.isHibernated)
+  const email = req.user?.email || req.body.email;
+  if (!email) throw badRequest('Email required.');
+
+  const user = await req.prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, isHibernated: true, selfReactivationCount: true, selfReactivationMonth: true },
+  });
+  if (!user) throw notFound('User');
+  if (!user.isHibernated) throw badRequest('Account is not hibernated.');
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  let count = user.selfReactivationCount || 0;
+  if (user.selfReactivationMonth !== currentMonth) count = 0;
+
+  if (count >= 3) {
+    throw badRequest('You have used all 3 self-reactivations this month. Please contact HR.');
+  }
+
+  await req.prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isHibernated: false,
+      lastActivityAt: new Date(),
+      selfReactivationCount: count + 1,
+      selfReactivationMonth: currentMonth,
+    },
+  });
+
+  res.json({
+    message: 'Account reactivated successfully.',
+    remainingReactivations: 3 - (count + 1),
+  });
 }));
 
 module.exports = router;

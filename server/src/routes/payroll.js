@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
@@ -10,7 +10,7 @@ router.use(authenticate);
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
 
 // GET /salary/:userId — Get salary structure (admin or self)
-router.get('/salary/:userId', asyncHandler(async (req, res) => {
+router.get('/salary/:userId', requireActiveEmployee, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   if (!isAdminRole(req.user) && req.user.id !== userId) throw forbidden('Access denied');
 
@@ -23,7 +23,7 @@ router.get('/salary/:userId', asyncHandler(async (req, res) => {
 }));
 
 // PUT /salary/:userId — Set/update salary (admin)
-router.put('/salary/:userId', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   const d = req.body;
 
@@ -72,7 +72,7 @@ router.put('/salary/:userId', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // GET /salary/:userId/revisions — Revision history (admin or self)
-router.get('/salary/:userId/revisions', asyncHandler(async (req, res) => {
+router.get('/salary/:userId/revisions', requireActiveEmployee, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   if (!isAdminRole(req.user) && req.user.id !== userId) throw forbidden('Access denied');
 
@@ -85,7 +85,7 @@ router.get('/salary/:userId/revisions', asyncHandler(async (req, res) => {
 }));
 
 // POST /generate — Generate payslips for a month (admin)
-router.post('/generate', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.body;
   if (!month) throw badRequest('Month is required (format: YYYY-MM)');
 
@@ -154,7 +154,7 @@ router.post('/generate', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // GET /payslips?month= — All payslips for a month (admin)
-router.get('/payslips', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.query;
   const where = month ? { month } : {};
   const payslips = await req.prisma.payslip.findMany({
@@ -169,13 +169,16 @@ router.get('/payslips', requireAdmin, asyncHandler(async (req, res) => {
 router.get('/my-payslips', asyncHandler(async (req, res) => {
   const payslips = await req.prisma.payslip.findMany({
     where: { userId: req.user.id, status: 'published' },
+    include: {
+      user: { select: { id: true, name: true, email: true, employeeId: true, designation: true, department: true } },
+    },
     orderBy: { month: 'desc' },
   });
   res.json(payslips);
 }));
 
 // GET /payslip/:id — Single payslip detail (admin or self)
-router.get('/payslip/:id', asyncHandler(async (req, res) => {
+router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const payslip = await req.prisma.payslip.findUnique({
     where: { id },
@@ -189,7 +192,7 @@ router.get('/payslip/:id', asyncHandler(async (req, res) => {
 }));
 
 // PUT /payslip/:id/publish — Publish single payslip (admin)
-router.put('/payslip/:id/publish', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/payslip/:id/publish', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const payslip = await req.prisma.payslip.update({
     where: { id },
@@ -199,7 +202,7 @@ router.put('/payslip/:id/publish', requireAdmin, asyncHandler(async (req, res) =
 }));
 
 // POST /payslips/publish-all — Publish all payslips for a month (admin)
-router.post('/payslips/publish-all', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/payslips/publish-all', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.body;
   if (!month) throw badRequest('Month is required');
   const result = await req.prisma.payslip.updateMany({
@@ -210,7 +213,7 @@ router.post('/payslips/publish-all', requireAdmin, asyncHandler(async (req, res)
 }));
 
 // GET /pay-register?month= — Pay register summary (admin)
-router.get('/pay-register', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.query;
   if (!month) throw badRequest('Month is required');
 

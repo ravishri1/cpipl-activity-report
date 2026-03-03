@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
@@ -7,6 +7,7 @@ const { notifyUsers } = require('../utils/notify');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 const VALID_CATEGORIES = ['travel', 'food', 'medical', 'office', 'other'];
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid'];

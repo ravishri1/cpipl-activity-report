@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
-import { Shield } from 'lucide-react';
+import { Shield, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AppLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isSeparated } = useAuth();
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -18,6 +20,18 @@ export default function AppLayout({ children }) {
         {/* Main content area */}
         <div className="flex-1 flex flex-col min-w-0">
           <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+
+          {/* Separated employee banner */}
+          {isSeparated && (
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+              <div className="max-w-7xl mx-auto flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <p className="text-xs text-amber-700 font-medium">
+                  Your employment has ended. You have limited access to view payslips, raise tickets, and submit suggestions.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Page content */}
           <main className="flex-1 p-4 lg:p-6 overflow-auto">

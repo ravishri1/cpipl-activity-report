@@ -344,22 +344,22 @@ function PayslipDetail({ payslip, onBack }) {
             <InfoItem
               icon={User}
               label="Employee Name"
-              value={payslip.employeeName || payslip.employee?.name || '-'}
+              value={payslip.employeeName || payslip.user?.name || '-'}
             />
             <InfoItem
               icon={Hash}
               label="Employee ID"
-              value={payslip.employeeCode || payslip.employee?.employeeId || '-'}
+              value={payslip.employeeCode || payslip.user?.employeeId || '-'}
             />
             <InfoItem
               icon={Briefcase}
               label="Department"
-              value={payslip.department || payslip.employee?.department || '-'}
+              value={payslip.user?.department || '-'}
             />
             <InfoItem
               icon={Briefcase}
               label="Designation"
-              value={payslip.designation || payslip.employee?.designation || '-'}
+              value={payslip.user?.designation || '-'}
             />
           </div>
         </div>

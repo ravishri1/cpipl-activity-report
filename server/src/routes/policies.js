@@ -1,11 +1,13 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
 const { notifyAllExcept } = require('../utils/notify');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 function slugify(text) {
   return text.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/-+/g, '-');
@@ -16,7 +18,7 @@ function slugify(text) {
 // ══════════════════════════════════════════
 
 // GET / — List active policies (for employees)
-router.get('/', authenticate, asyncHandler(async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const where = { isActive: true };
   if (req.query.company) {
     where.OR = [{ companyId: null }, { companyId: parseInt(req.query.company) }];
@@ -47,8 +49,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   })));
 }));
 
-// GET /:slug — Get full policy content
-router.get('/:slug', authenticate, asyncHandler(async (req, res) => {
+// GET /:slug — Get full policy content (with version change info for employee)
+router.get('/:slug', asyncHandler(async (req, res) => {
   const policy = await req.prisma.policy.findUnique({
     where: { slug: req.params.slug },
     include: {
@@ -58,15 +60,56 @@ router.get('/:slug', authenticate, asyncHandler(async (req, res) => {
   });
   if (!policy) throw notFound('Policy');
 
+  // Current version acceptance
   const acceptance = await req.prisma.policyAcceptance.findUnique({
     where: { policyId_userId_version: { policyId: policy.id, userId: req.user.id, version: policy.version } },
   });
 
-  res.json({ ...policy, acceptance });
+  // Find the latest version the user has accepted (may be older than current)
+  const latestAcceptance = await req.prisma.policyAcceptance.findFirst({
+    where: { policyId: policy.id, userId: req.user.id },
+    orderBy: { version: 'desc' },
+    select: { version: true, acceptedAt: true },
+  });
+
+  // If the user accepted an older version, fetch changelogs between their version and current
+  let versionChanges = [];
+  if (latestAcceptance && latestAcceptance.version < policy.version) {
+    versionChanges = await req.prisma.policyVersion.findMany({
+      where: {
+        policyId: policy.id,
+        version: { gt: latestAcceptance.version, lte: policy.version },
+      },
+      orderBy: { version: 'desc' },
+      select: { version: true, changeLog: true, createdAt: true },
+    });
+  } else if (!latestAcceptance && policy.version > 1) {
+    // Never accepted — show all version changelogs
+    versionChanges = await req.prisma.policyVersion.findMany({
+      where: { policyId: policy.id },
+      orderBy: { version: 'desc' },
+      select: { version: true, changeLog: true, createdAt: true },
+    });
+  }
+
+  // Get the last updated date from policyVersion
+  const latestVersion = await req.prisma.policyVersion.findFirst({
+    where: { policyId: policy.id, version: policy.version },
+    select: { createdAt: true },
+  });
+
+  res.json({
+    ...policy,
+    acceptance,
+    lastAcceptedVersion: latestAcceptance?.version || null,
+    lastAcceptedAt: latestAcceptance?.acceptedAt || null,
+    versionChanges,
+    lastUpdatedAt: latestVersion?.createdAt || policy.updatedAt || policy.createdAt,
+  });
 }));
 
 // POST /:id/accept — Employee accepts a policy
-router.post('/:id/accept', authenticate, asyncHandler(async (req, res) => {
+router.post('/:id/accept', asyncHandler(async (req, res) => {
   const policyId = parseId(req.params.id);
   const policy = await req.prisma.policy.findUnique({ where: { id: policyId } });
   if (!policy) throw notFound('Policy');
@@ -81,7 +124,7 @@ router.post('/:id/accept', authenticate, asyncHandler(async (req, res) => {
 }));
 
 // GET /:id/my-acceptance — Check if current user accepted
-router.get('/:id/my-acceptance', authenticate, asyncHandler(async (req, res) => {
+router.get('/:id/my-acceptance', asyncHandler(async (req, res) => {
   const policyId = parseId(req.params.id);
   const policy = await req.prisma.policy.findUnique({ where: { id: policyId } });
   if (!policy) throw notFound('Policy');
@@ -97,7 +140,7 @@ router.get('/:id/my-acceptance', authenticate, asyncHandler(async (req, res) => 
 // ══════════════════════════════════════════
 
 // GET /admin/all — List all policies (including inactive)
-router.get('/admin/all', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/admin/all', requireAdmin, asyncHandler(async (req, res) => {
   const policies = await req.prisma.policy.findMany({
     include: {
       company: { select: { id: true, name: true, shortName: true } },
@@ -117,7 +160,7 @@ router.get('/admin/all', authenticate, requireAdmin, asyncHandler(async (req, re
 }));
 
 // POST /admin/create — Create new policy
-router.post('/admin/create', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/admin/create', requireAdmin, asyncHandler(async (req, res) => {
   const { title, category, content, summary, effectiveDate, isMandatory, companyId, sections } = req.body;
   if (!title || !content) throw badRequest('Title and content required.');
 
@@ -158,7 +201,7 @@ router.post('/admin/create', authenticate, requireAdmin, asyncHandler(async (req
 }));
 
 // PUT /admin/:id — Update policy
-router.put('/admin/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.put('/admin/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const policy = await req.prisma.policy.findUnique({ where: { id } });
   if (!policy) throw notFound('Policy');
@@ -186,7 +229,7 @@ router.put('/admin/:id', authenticate, requireAdmin, asyncHandler(async (req, re
 }));
 
 // PUT /admin/:id/sections — Update policy sections
-router.put('/admin/:id/sections', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.put('/admin/:id/sections', requireAdmin, asyncHandler(async (req, res) => {
   const policyId = parseId(req.params.id);
   const { sections } = req.body;
   if (!Array.isArray(sections)) throw badRequest('Sections array required.');
@@ -203,7 +246,7 @@ router.put('/admin/:id/sections', authenticate, requireAdmin, asyncHandler(async
 }));
 
 // PUT /admin/:id/score — Set protection score
-router.put('/admin/:id/score', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.put('/admin/:id/score', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { protectionScore, scoreBreakdown } = req.body;
 
@@ -218,7 +261,7 @@ router.put('/admin/:id/score', authenticate, requireAdmin, asyncHandler(async (r
 }));
 
 // GET /admin/:id/acceptances — Who accepted a policy
-router.get('/admin/:id/acceptances', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/admin/:id/acceptances', requireAdmin, asyncHandler(async (req, res) => {
   const policyId = parseId(req.params.id);
   const policy = await req.prisma.policy.findUnique({ where: { id: policyId } });
   if (!policy) throw notFound('Policy');
@@ -239,7 +282,7 @@ router.get('/admin/:id/acceptances', authenticate, requireAdmin, asyncHandler(as
 }));
 
 // GET /admin/scorecard — Policy scorecard overview
-router.get('/admin/scorecard', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/admin/scorecard', requireAdmin, asyncHandler(async (req, res) => {
   const policies = await req.prisma.policy.findMany({
     where: { isActive: true },
     select: {
@@ -276,7 +319,7 @@ router.get('/admin/scorecard', authenticate, requireAdmin, asyncHandler(async (r
 }));
 
 // GET /admin/pending — Employees with pending policy acceptances
-router.get('/admin/pending', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.get('/admin/pending', requireAdmin, asyncHandler(async (req, res) => {
   const mandatoryPolicies = await req.prisma.policy.findMany({
     where: { isActive: true, isMandatory: true },
     select: { id: true, title: true, version: true },
@@ -303,6 +346,177 @@ router.get('/admin/pending', authenticate, requireAdmin, asyncHandler(async (req
   }).filter(e => e.pendingCount > 0);
 
   res.json(pendingList);
+}));
+
+// ══════════════════════════════════════════
+// VERSION HISTORY & COMPARISON
+// ══════════════════════════════════════════
+
+// GET /admin/:id/versions — Version history for a policy
+router.get('/admin/:id/versions', requireAdmin, asyncHandler(async (req, res) => {
+  const policyId = parseId(req.params.id);
+  const policy = await req.prisma.policy.findUnique({
+    where: { id: policyId },
+    select: { id: true, title: true, version: true },
+  });
+  if (!policy) throw notFound('Policy');
+
+  const versions = await req.prisma.policyVersion.findMany({
+    where: { policyId },
+    orderBy: { version: 'desc' },
+  });
+
+  const userIds = [...new Set(versions.map(v => v.changedBy).filter(Boolean))];
+  const users = userIds.length > 0
+    ? await req.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+    : [];
+  const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
+
+  res.json({
+    policy: { id: policy.id, title: policy.title, currentVersion: policy.version },
+    versions: versions.map(v => ({
+      ...v,
+      changedByName: userMap[v.changedBy] || 'Unknown',
+    })),
+  });
+}));
+
+// GET /admin/:id/compare — Compare two versions of a policy
+router.get('/admin/:id/compare', requireAdmin, asyncHandler(async (req, res) => {
+  const policyId = parseId(req.params.id);
+  const v1 = parseInt(req.query.v1);
+  const v2 = parseInt(req.query.v2);
+  if (!v1 || !v2) throw badRequest('Both v1 and v2 query params required');
+
+  const [version1, version2] = await Promise.all([
+    req.prisma.policyVersion.findUnique({ where: { policyId_version: { policyId, version: v1 } } }),
+    req.prisma.policyVersion.findUnique({ where: { policyId_version: { policyId, version: v2 } } }),
+  ]);
+
+  if (!version1) throw notFound(`Version ${v1}`);
+  if (!version2) throw notFound(`Version ${v2}`);
+
+  const userIds = [...new Set([version1.changedBy, version2.changedBy].filter(Boolean))];
+  const users = userIds.length > 0
+    ? await req.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+    : [];
+  const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
+
+  res.json({
+    v1: { ...version1, changedByName: userMap[version1.changedBy] || 'Unknown' },
+    v2: { ...version2, changedByName: userMap[version2.changedBy] || 'Unknown' },
+  });
+}));
+
+// ══════════════════════════════════════════
+// CONFLICT DETECTION & IMPACT ANALYSIS
+// ══════════════════════════════════════════
+
+// GET /admin/conflicts — Detect policy conflicts
+router.get('/admin/conflicts', requireAdmin, asyncHandler(async (req, res) => {
+  const policies = await req.prisma.policy.findMany({
+    where: { isActive: true },
+    select: { id: true, title: true, category: true, content: true, companyId: true, isMandatory: true, summary: true },
+  });
+
+  const conflicts = [];
+  const byCategory = {};
+  policies.forEach(p => {
+    if (!byCategory[p.category]) byCategory[p.category] = [];
+    byCategory[p.category].push(p);
+  });
+
+  for (const [, group] of Object.entries(byCategory)) {
+    if (group.length < 2) continue;
+
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i];
+        const b = group[j];
+        const reasons = [];
+
+        if (a.companyId === b.companyId) {
+          reasons.push('Same category and company scope');
+        }
+        if ((a.companyId && !b.companyId) || (!a.companyId && b.companyId)) {
+          reasons.push('Global vs company-specific overlap');
+        }
+        if (a.isMandatory !== b.isMandatory) {
+          reasons.push('Mandatory vs optional conflict');
+        }
+
+        const textA = (a.content + ' ' + (a.summary || '')).toLowerCase();
+        const textB = (b.content + ' ' + (b.summary || '')).toLowerCase();
+        const contradictions = [
+          ['mandatory', 'optional'], ['prohibited', 'allowed'], ['required', 'voluntary'],
+          ['must not', 'may'], ['unlimited', 'limited'], ['paid', 'unpaid'],
+        ];
+        for (const [t1, t2] of contradictions) {
+          if ((textA.includes(t1) && textB.includes(t2)) || (textA.includes(t2) && textB.includes(t1))) {
+            reasons.push(`Contradicting terms: "${t1}" vs "${t2}"`);
+          }
+        }
+
+        if (reasons.length > 0) {
+          conflicts.push({
+            policyA: { id: a.id, title: a.title, category: a.category, companyId: a.companyId },
+            policyB: { id: b.id, title: b.title, category: b.category, companyId: b.companyId },
+            severity: reasons.length >= 3 ? 'high' : reasons.length >= 2 ? 'medium' : 'low',
+            reasons,
+          });
+        }
+      }
+    }
+  }
+
+  res.json({ conflicts, totalConflicts: conflicts.length });
+}));
+
+// GET /admin/:id/impact — Impact analysis for a policy
+router.get('/admin/:id/impact', requireAdmin, asyncHandler(async (req, res) => {
+  const policyId = parseId(req.params.id);
+  const policy = await req.prisma.policy.findUnique({
+    where: { id: policyId },
+    select: { id: true, title: true, version: true, companyId: true, isMandatory: true },
+  });
+  if (!policy) throw notFound('Policy');
+
+  const employeeWhere = { isActive: true };
+  if (policy.companyId) employeeWhere.companyId = policy.companyId;
+
+  const employees = await req.prisma.user.findMany({
+    where: employeeWhere,
+    select: { id: true, department: true },
+  });
+
+  const acceptances = await req.prisma.policyAcceptance.findMany({
+    where: { policyId, version: policy.version },
+    select: { userId: true },
+  });
+  const acceptedIds = new Set(acceptances.map(a => a.userId));
+
+  const departments = {};
+  let acceptedCount = 0;
+  employees.forEach(emp => {
+    const dept = emp.department || 'Unassigned';
+    if (!departments[dept]) departments[dept] = { total: 0, accepted: 0 };
+    departments[dept].total++;
+    if (acceptedIds.has(emp.id)) {
+      departments[dept].accepted++;
+      acceptedCount++;
+    }
+  });
+
+  res.json({
+    policyId: policy.id, title: policy.title, version: policy.version,
+    isMandatory: policy.isMandatory, totalAffected: employees.length,
+    accepted: acceptedCount, pending: employees.length - acceptedCount,
+    acceptanceRate: employees.length > 0 ? Math.round((acceptedCount / employees.length) * 100) : 0,
+    departments: Object.entries(departments).map(([name, data]) => ({
+      name, total: data.total, accepted: data.accepted,
+      rate: data.total > 0 ? Math.round((data.accepted / data.total) * 100) : 0,
+    })),
+  });
 }));
 
 module.exports = router;

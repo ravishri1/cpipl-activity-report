@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 import Login from './components/auth/Login';
 
 // ── Lazy-loaded components (code-splitting) ──────────────────────────
@@ -44,6 +45,8 @@ const SuggestionBox = lazy(() => import('./components/suggestions/SuggestionBox'
 const SuggestionManager = lazy(() => import('./components/admin/SuggestionManager'));
 const MyTraining = lazy(() => import('./components/training/MyTraining'));
 const TrainingManager = lazy(() => import('./components/admin/TrainingManager'));
+const MyFiles = lazy(() => import('./components/files/MyFiles'));
+const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -66,8 +69,36 @@ function AdminRoute({ children }) {
   return isAdmin ? children : <Navigate to="/dashboard" />;
 }
 
+function SeparatedRoute({ children }) {
+  const { isSeparated } = useAuth();
+  if (isSeparated) return <Navigate to="/payslips" replace />;
+  return children;
+}
+
+function SeparatedFallback() {
+  const { isSeparated } = useAuth();
+  return <Navigate to={isSeparated ? '/payslips' : '/dashboard'} replace />;
+}
+
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Persist the current authenticated path so we can return to it after refresh/login
+  useEffect(() => {
+    if (user && location.pathname !== '/login' && location.pathname !== '/') {
+      sessionStorage.setItem('lastPath', location.pathname);
+    }
+  }, [user, location.pathname]);
+
+  // Show spinner while auth state is being resolved — prevents redirect flash
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
@@ -80,59 +111,69 @@ function AppRoutes() {
         element={
           user ? (
             <AppLayout>
+              <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  {/* Overview */}
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  {/* Overview — restricted for separated employees */}
+                  <Route path="/dashboard" element={<SeparatedRoute><Dashboard /></SeparatedRoute>} />
 
-                  {/* My Work */}
-                  <Route path="/submit-report" element={<ReportForm />} />
-                  <Route path="/reports" element={<ReportHistory />} />
-                  <Route path="/attendance" element={<MyAttendance />} />
-                  <Route path="/leave" element={<MyLeave />} />
-                  <Route path="/expenses" element={<MyExpenses />} />
+                  {/* My Work — restricted for separated employees */}
+                  <Route path="/submit-report" element={<SeparatedRoute><ReportForm /></SeparatedRoute>} />
+                  <Route path="/reports" element={<SeparatedRoute><ReportHistory /></SeparatedRoute>} />
+                  <Route path="/attendance" element={<SeparatedRoute><MyAttendance /></SeparatedRoute>} />
+                  <Route path="/leave" element={<SeparatedRoute><MyLeave /></SeparatedRoute>} />
+                  <Route path="/expenses" element={<SeparatedRoute><MyExpenses /></SeparatedRoute>} />
+                  <Route path="/policies" element={<SeparatedRoute><PolicyAcceptance /></SeparatedRoute>} />
+                  <Route path="/announcements" element={<SeparatedRoute><Announcements /></SeparatedRoute>} />
+                  <Route path="/my-assets" element={<SeparatedRoute><MyAssets /></SeparatedRoute>} />
+                  <Route path="/surveys" element={<SeparatedRoute><MySurveys /></SeparatedRoute>} />
+                  <Route path="/wiki" element={<SeparatedRoute><WikiPage /></SeparatedRoute>} />
+                  <Route path="/training" element={<SeparatedRoute><MyTraining /></SeparatedRoute>} />
+
+                  {/* Allowed for separated employees */}
                   <Route path="/payslips" element={<MyPayslips />} />
-                  <Route path="/policies" element={<PolicyAcceptance />} />
-                  <Route path="/announcements" element={<Announcements />} />
-                  <Route path="/my-assets" element={<MyAssets />} />
-                  <Route path="/surveys" element={<MySurveys />} />
                   <Route path="/my-tickets" element={<MyTickets />} />
-                  <Route path="/wiki" element={<WikiPage />} />
                   <Route path="/suggestions" element={<SuggestionBox />} />
-                  <Route path="/training" element={<MyTraining />} />
+                  <Route path="/my-files" element={<MyFiles />} />
 
-                  {/* Team */}
-                  <Route path="/directory" element={<EmployeeDirectory />} />
-                  <Route path="/employee/:id" element={<EmployeeProfile />} />
-                  <Route path="/leaderboard" element={<Leaderboard />} />
+                  {/* Team Lead — My Team Overview */}
+                  <Route path="/my-team" element={<SeparatedRoute><AdminRoute><TeamOverview /></AdminRoute></SeparatedRoute>} />
 
-                  {/* Admin */}
-                  <Route path="/admin/team" element={<AdminRoute><TeamManagement /></AdminRoute>} />
-                  <Route path="/admin/attendance" element={<AdminRoute><TeamAttendance /></AdminRoute>} />
-                  <Route path="/admin/leave-requests" element={<AdminRoute><LeaveApproval /></AdminRoute>} />
-                  <Route path="/admin/expense-claims" element={<AdminRoute><ExpenseApproval /></AdminRoute>} />
-                  <Route path="/admin/payroll" element={<AdminRoute><PayrollDashboard /></AdminRoute>} />
-                  <Route path="/admin/salary-setup" element={<AdminRoute><SalaryStructure /></AdminRoute>} />
-                  <Route path="/admin/holidays" element={<AdminRoute><HolidayManager /></AdminRoute>} />
-                  <Route path="/admin/import" element={<AdminRoute><EmployeeImport /></AdminRoute>} />
-                  <Route path="/admin/policies" element={<AdminRoute><PolicyManager /></AdminRoute>} />
-                  <Route path="/admin/policy-scorecard" element={<AdminRoute><PolicyScorecard /></AdminRoute>} />
-                  <Route path="/admin/assets" element={<AdminRoute><AssetManager /></AdminRoute>} />
-                  <Route path="/admin/letters" element={<AdminRoute><LetterManager /></AdminRoute>} />
-                  <Route path="/admin/onboarding" element={<AdminRoute><OnboardingManager /></AdminRoute>} />
-                  <Route path="/admin/separations" element={<AdminRoute><SeparationManager /></AdminRoute>} />
-                  <Route path="/admin/reports" element={<AdminRoute><HRReports /></AdminRoute>} />
-                  <Route path="/admin/ai-extract" element={<AdminRoute><ResumeExtractor /></AdminRoute>} />
-                  <Route path="/admin/surveys" element={<AdminRoute><SurveyManager /></AdminRoute>} />
-                  <Route path="/admin/tickets" element={<AdminRoute><TicketManager /></AdminRoute>} />
-                  <Route path="/admin/training" element={<AdminRoute><TrainingManager /></AdminRoute>} />
-                  <Route path="/admin/suggestions" element={<AdminRoute><SuggestionManager /></AdminRoute>} />
-                  <Route path="/admin/settings" element={<AdminRoute><Settings /></AdminRoute>} />
+                  {/* Team — restricted for separated employees */}
+                  <Route path="/directory" element={<SeparatedRoute><EmployeeDirectory /></SeparatedRoute>} />
+                  <Route path="/employee/:id" element={<SeparatedRoute><EmployeeProfile /></SeparatedRoute>} />
+                  <Route path="/leaderboard" element={<SeparatedRoute><Leaderboard /></SeparatedRoute>} />
 
-                  {/* Fallback */}
-                  <Route path="*" element={<Navigate to="/dashboard" />} />
+                  {/* Admin / Team Lead shared routes */}
+                  <Route path="/admin/attendance" element={<SeparatedRoute><AdminRoute><TeamAttendance /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />
+
+                  {/* Admin-only routes */}
+                  <Route path="/admin/team" element={<SeparatedRoute><AdminRoute><TeamManagement /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/payroll" element={<SeparatedRoute><AdminRoute><PayrollDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/import" element={<SeparatedRoute><AdminRoute><EmployeeImport /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/ai-extract" element={<SeparatedRoute><AdminRoute><ResumeExtractor /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/surveys" element={<SeparatedRoute><AdminRoute><SurveyManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/tickets" element={<SeparatedRoute><AdminRoute><TicketManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/training" element={<SeparatedRoute><AdminRoute><TrainingManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/suggestions" element={<SeparatedRoute><AdminRoute><SuggestionManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/settings" element={<SeparatedRoute><AdminRoute><Settings /></AdminRoute></SeparatedRoute>} />
+
+                  {/* Fallback — separated users go to payslips, others to dashboard */}
+                  <Route path="*" element={<SeparatedFallback />} />
                 </Routes>
               </Suspense>
+              </ErrorBoundary>
             </AppLayout>
           ) : (
             <Navigate to="/login" />

@@ -110,7 +110,7 @@ export default function OnboardingManager() {
       setChecklistLoading(true);
       setError('');
       const res = await api.get(`/lifecycle/onboarding/${userId}`);
-      setChecklist(Array.isArray(res.data) ? res.data : res.data.tasks || []);
+      setChecklist(Array.isArray(res.data) ? res.data : res.data.checklist || res.data.tasks || []);
     } catch (err) {
       if (err.response?.status === 404) {
         setChecklist([]);
@@ -209,8 +209,8 @@ export default function OnboardingManager() {
   const stats = useMemo(() => {
     const total = newJoinees.length;
     const completionRates = newJoinees.map((j) => {
-      const t = j.totalTasks || j.onboardingTotal || 0;
-      const c = j.completedTasks || j.onboardingCompleted || 0;
+      const t = j.totalTasks || j.onboardingTotal || j.onboardingProgress?.total || 0;
+      const c = j.completedTasks || j.onboardingCompleted || j.onboardingProgress?.completed || 0;
       return t > 0 ? (c / t) * 100 : 0;
     });
     const avgCompletion = total > 0 ? Math.round(completionRates.reduce((a, b) => a + b, 0) / total) : 0;
@@ -227,7 +227,7 @@ export default function OnboardingManager() {
     ).slice(0, 20);
   }, [allUsers, searchQuery]);
 
-  const completedCount = checklist.filter((t) => t.completed || t.completedAt).length;
+  const completedCount = checklist.filter((t) => t.isCompleted || t.completed || t.completedAt).length;
   const totalCount = checklist.length;
 
   return (
@@ -299,8 +299,8 @@ export default function OnboardingManager() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {newJoinees.map((joinee) => {
-                const t = joinee.totalTasks || joinee.onboardingTotal || 0;
-                const c = joinee.completedTasks || joinee.onboardingCompleted || 0;
+                const t = joinee.totalTasks || joinee.onboardingTotal || joinee.onboardingProgress?.total || 0;
+                const c = joinee.completedTasks || joinee.onboardingCompleted || joinee.onboardingProgress?.completed || 0;
                 const isSelected = selectedUserId === joinee.id || selectedUserId === joinee.userId;
                 const uid = joinee.userId || joinee.id;
                 return (
@@ -553,7 +553,7 @@ export default function OnboardingManager() {
                   const config = CATEGORY_CONFIG[category];
                   const CategoryIcon = config.icon;
                   const isExpanded = expandedCategories[category] !== false;
-                  const catCompleted = tasks.filter((t) => t.completed || t.completedAt).length;
+                  const catCompleted = tasks.filter((t) => t.isCompleted || t.completed || t.completedAt).length;
 
                   return (
                     <div key={category} className={`border ${config.border} rounded-lg overflow-hidden`}>
@@ -588,7 +588,7 @@ export default function OnboardingManager() {
                       {isExpanded && (
                         <div className="divide-y divide-slate-100">
                           {tasks.map((task) => {
-                            const isDone = task.completed || !!task.completedAt;
+                            const isDone = task.isCompleted || task.completed || !!task.completedAt;
                             const overdue = isOverdue(task.dueDate, isDone);
                             return (
                               <div

@@ -1,11 +1,12 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(requireActiveEmployee);
 
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
 
@@ -139,6 +140,11 @@ router.post('/separation', requireAdmin, asyncHandler(async (req, res) => {
     },
   });
 
+  // Auto-sync employmentStatus on creation (absconding → immediate block)
+  if (type === 'absconding') {
+    await req.prisma.user.update({ where: { id: userId }, data: { employmentStatus: 'absconding', isActive: false } });
+  }
+
   res.status(201).json({
     ...separation, pendingAssets,
     assetWarning: pendingAssets > 0
@@ -210,6 +216,32 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
   if (fnfPaidOn !== undefined) updateData.fnfPaidOn = fnfPaidOn;
 
   const updated = await req.prisma.separation.update({ where: { id }, data: updateData });
+
+  // ── Auto-sync User.employmentStatus based on separation status changes ──
+  if (status) {
+    const userUpdate = {};
+    if (status === 'notice_period') {
+      userUpdate.employmentStatus = 'notice_period';
+    } else if (status === 'completed') {
+      if (existing.type === 'termination') {
+        userUpdate.employmentStatus = 'terminated';
+        userUpdate.isActive = false;
+      } else if (existing.type === 'absconding') {
+        userUpdate.employmentStatus = 'absconding';
+        userUpdate.isActive = false;
+      } else {
+        // resignation / retirement → limited access
+        userUpdate.employmentStatus = 'separated';
+      }
+    } else if (status === 'cancelled') {
+      userUpdate.employmentStatus = 'active';
+    }
+
+    if (Object.keys(userUpdate).length > 0) {
+      await req.prisma.user.update({ where: { id: existing.userId }, data: userUpdate });
+    }
+  }
+
   res.json(updated);
 }));
 

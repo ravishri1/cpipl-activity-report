@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const {
@@ -11,6 +11,8 @@ const {
 } = require('../services/attendance/attendanceService');
 
 const router = express.Router();
+router.use(authenticate);
+router.use(requireActiveEmployee);
 
 // POST /api/attendance/check-in — Record check-in
 router.post('/check-in', authenticate, asyncHandler(async (req, res) => {

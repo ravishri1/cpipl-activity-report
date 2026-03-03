@@ -70,9 +70,44 @@ async function authenticate(req, res, next) {
       return next();
     }
 
+    // Three-tier access control based on employmentStatus
+    const empStatus = dbUser.employmentStatus || 'active';
+
+    // Tier 3: Terminated / Absconding → completely blocked
+    if (empStatus === 'terminated' || empStatus === 'absconding') {
+      return res.status(403).json({ error: 'Account is suspended. Contact HR for assistance.' });
+    }
+
+    // Legacy isActive check (for manually deactivated accounts)
     if (!dbUser.isActive) {
       return res.status(403).json({ error: 'Account is deactivated. Contact admin.' });
     }
+
+    // Hibernation check — inactive accounts locked until self/HR reactivates
+    // Allow self-reactivation and clerk-sync endpoints through
+    if (dbUser.isHibernated) {
+      const url = req.originalUrl || req.url;
+      if (url.includes('/self-reactivate') || url.includes('/clerk-sync')) {
+        // Let the endpoint handle hibernation logic itself
+        req.user = {
+          id: dbUser.id,
+          email: dbUser.email,
+          role: dbUser.role,
+          name: dbUser.name,
+          department: dbUser.department,
+          isHibernated: true,
+        };
+        req.clerkUser = clerkUser;
+        return next();
+      }
+      return res.status(403).json({
+        error: 'Your account has been hibernated due to inactivity. Please contact HR to reactivate.',
+        code: 'HIBERNATED',
+      });
+    }
+
+    // Tier 2: Separated → limited access (set flag for route-level checks)
+    const isSeparated = empStatus === 'separated';
 
     req.user = {
       id: dbUser.id,
@@ -80,8 +115,20 @@ async function authenticate(req, res, next) {
       role: dbUser.role,
       name: dbUser.name,
       department: dbUser.department,
+      companyId: dbUser.companyId,
+      employmentStatus: empStatus,
+      isSeparated,
     };
     req.clerkUser = clerkUser;
+
+    // Fire-and-forget: update last activity timestamp (throttled — only if >1hr old)
+    if (!dbUser.lastActivityAt || (Date.now() - new Date(dbUser.lastActivityAt).getTime()) > 3600000) {
+      req.prisma.user.update({
+        where: { id: dbUser.id },
+        data: { lastActivityAt: new Date() },
+      }).catch(() => {}); // Silently ignore failures
+    }
+
     next();
   } catch (err) {
     console.error('Auth middleware error:', err.message);
@@ -102,4 +149,16 @@ function requireManagerOrAdmin(req, res, next) {
   return res.status(403).json({ error: 'Manager or admin access required.' });
 }
 
-module.exports = { authenticate, authenticateToken: authenticate, requireAdmin, requireManagerOrAdmin };
+/**
+ * Blocks separated employees from accessing restricted features.
+ * Separated users (resigned/retired) can only access: payslips, tickets, suggestions.
+ * Place this AFTER authenticate on routes that should be restricted.
+ */
+function requireActiveEmployee(req, res, next) {
+  if (req.user.isSeparated) {
+    return res.status(403).json({ error: 'This feature is not available. Your employment has ended — limited access only.' });
+  }
+  next();
+}
+
+module.exports = { authenticate, authenticateToken: authenticate, requireAdmin, requireManagerOrAdmin, requireActiveEmployee };
