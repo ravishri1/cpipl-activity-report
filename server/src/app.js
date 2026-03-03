@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
+const { initializeOllama } = require('./services/ollama/init');
 
 const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
@@ -44,6 +45,13 @@ if (!global.__prisma) {
   global.__prisma = new PrismaClient();
 }
 prisma = global.__prisma;
+
+// Initialize Ollama (free, local AI inference)
+if (process.env.NODE_ENV !== 'test') {
+  initializeOllama().catch(err => {
+    console.error('[App] Ollama initialization warning (non-critical):', err.message);
+  });
+}
 
 // Middleware
 app.use(cors());
@@ -101,13 +109,30 @@ app.use('/api/files', fileRoutes);
 app.use(errorHandler);
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    clerkConfigured: !!process.env.CLERK_SECRET_KEY,
-    dbConfigured: !!process.env.DATABASE_URL,
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    const ollama = require('./services/ollama');
+    const ollamaAvailable = await ollama.ollamaClient.isAvailable();
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      clerkConfigured: !!process.env.CLERK_SECRET_KEY,
+      dbConfigured: !!process.env.DATABASE_URL,
+      ollamaConfigured: process.env.OLLAMA_ENABLED !== 'false',
+      ollamaAvailable,
+    });
+  } catch (error) {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      clerkConfigured: !!process.env.CLERK_SECRET_KEY,
+      dbConfigured: !!process.env.DATABASE_URL,
+      ollamaConfigured: process.env.OLLAMA_ENABLED !== 'false',
+      ollamaAvailable: false,
+      ollamaError: error.message,
+    });
+  }
 });
 
 
