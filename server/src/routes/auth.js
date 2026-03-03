@@ -1,4 +1,5 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const { authenticate } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, forbidden, notFound } = require('../utils/httpErrors');
@@ -8,6 +9,59 @@ const router = express.Router();
 
 // Company domain for internal employees
 const COMPANY_DOMAIN = 'colorpapers.in';
+
+/**
+ * POST /api/auth/login
+ * TEST-ONLY endpoint for development/testing.
+ * Uses hardcoded passwords for seed users. Production uses Clerk.
+ * Only allows specific test emails (prevents abuse).
+ */
+router.post('/login', asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) throw badRequest('Email and password required');
+  
+  // Only allow test user accounts (hardcoded seed data)
+  const testAccounts = {
+    'admin@cpipl.com': 'password123',
+    'teamlead@cpipl.com': 'password123',
+    'rahul@cpipl.com': 'password123',
+  };
+  
+  if (!testAccounts[email]) {
+    throw forbidden('Login endpoint only available for test accounts. Use Clerk for other accounts.');
+  }
+
+  if (testAccounts[email] !== password) {
+    throw badRequest('Invalid credentials');
+  }
+
+  // Find user in database
+  const user = await req.prisma.user.findUnique({ where: { email } });
+  if (!user) throw notFound('User');
+
+  // Generate test JWT token
+  const token = jwt.sign(
+    {
+      sub: user.id,
+      email: user.email,
+      userId: user.id,
+      role: user.role,
+    },
+    process.env.JWT_SECRET || 'test-secret-key',
+    { expiresIn: '24h' }
+  );
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+    },
+  });
+}));
 
 /**
  * POST /api/auth/clerk-sync

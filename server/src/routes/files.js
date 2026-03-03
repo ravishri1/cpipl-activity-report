@@ -309,6 +309,10 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
       const folderId = await ensureEmployeeFolder(drive, user, req.prisma);
       const result = await uploadFile(drive, folderId, fileName, mimeType, buffer);
 
+      if (!result || !result.fileId) {
+        throw new Error(`Upload returned invalid result: ${JSON.stringify(result)}`);
+      }
+
       // Create DriveFile record
       await req.prisma.driveFile.create({
         data: {
@@ -326,16 +330,22 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
       });
 
       // Update user's Drive profile photo with direct image URL
-      await req.prisma.user.update({
+      const directUrl = getDirectImageUrl(result.fileId);
+      console.log(`[BULK-PHOTOS] Updating user ${user.id} (${user.name}) with photo URL: ${directUrl}`);
+      
+      const updateResult = await req.prisma.user.update({
         where: { id: user.id },
-        data: { driveProfilePhotoUrl: getDirectImageUrl(result.fileId) },
+        data: { driveProfilePhotoUrl: directUrl },
       });
+      
+      console.log(`[BULK-PHOTOS] Update complete. driveProfilePhotoUrl is now: ${updateResult.driveProfilePhotoUrl}`);
 
       summary.uploaded++;
 
       // Throttle: 200ms delay between uploads to respect Drive API quotas
       await new Promise(resolve => setTimeout(resolve, 200));
     } catch (err) {
+      console.error(`[BULK-PHOTOS] Error processing "${fileName}":`, err);
       summary.errors.push(`Failed to upload "${fileName}": ${err.message}`);
     }
   }

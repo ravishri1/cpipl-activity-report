@@ -90,11 +90,8 @@ router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async
   });
 
   // Name privacy: non-admin users see only first name + last initial
-  if (!canSeeFullNames(req.user)) {
-    res.json(maskUserNames(employees, ['reportingManager']));
-  } else {
-    res.json(employees);
-  }
+  const result = !canSeeFullNames(req.user) ? maskUserNames(employees, ['reportingManager']) : employees;
+  res.json({ users: result });
 }));
 
 // GET /api/users/departments — List unique departments

@@ -1,0 +1,8 @@
+
+════════════════════════════════════════════════════════
+   BULK PHOTO UPLOAD ENDPOINT - TEST SUITE
+════════════════════════════════════════════════════════
+
+[36m[INFO][0m TEST 1: Admin login
+[32m[SUCCESS][0m TEST 1: ✓ Logged in as admin@cpipl.com
+[36m[INFO][0m TEST 2: Fetch employees for testing
