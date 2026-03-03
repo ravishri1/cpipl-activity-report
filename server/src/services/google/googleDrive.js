@@ -18,6 +18,9 @@ function friendlyDriveError(err) {
   if (code === 401 || msg.includes('invalid_grant') || msg.includes('UNAUTHENTICATED')) {
     return 'Google Drive authentication failed. Check the service account key.';
   }
+  if (msg.includes('storage quota') || msg.includes('storageQuotaExceeded')) {
+    return 'Google Drive storage quota exceeded. Set GOOGLE_ADMIN_EMAIL in .env for domain-wide delegation.';
+  }
   if (code === 403 || msg.includes('insufficientPermissions')) {
     return 'Google Drive permission denied. The service account may not have access.';
   }
@@ -32,11 +35,12 @@ function friendlyDriveError(err) {
 
 /**
  * Get an authenticated Google Drive v3 client using service account.
- * SA acts as itself (no domain impersonation for Drive).
+ * Uses domain-wide delegation to impersonate the admin user (for storage quota).
  */
 async function getDriveClient() {
   try {
-    const auth = await getServiceAccountClient(null, DRIVE_SCOPES);
+    const adminEmail = process.env.GOOGLE_ADMIN_EMAIL;
+    const auth = await getServiceAccountClient(adminEmail || null, DRIVE_SCOPES);
     return google.drive({ version: 'v3', auth });
   } catch (err) {
     throw new Error(friendlyDriveError(err));
