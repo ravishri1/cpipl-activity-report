@@ -6,12 +6,41 @@ const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive'];
 const ROOT_FOLDER_NAME = process.env.DRIVE_ROOT_FOLDER_NAME || 'CPIPL HR Files';
 
 /**
+ * Translate Google API errors into user-friendly messages.
+ */
+function friendlyDriveError(err) {
+  const msg = err.message || '';
+  const code = err.response?.data?.error?.code || err.code;
+
+  if (msg.includes('API has not been used') || msg.includes('SERVICE_DISABLED')) {
+    return 'Google Drive API is not enabled. Ask your admin to enable it at console.cloud.google.com.';
+  }
+  if (code === 401 || msg.includes('invalid_grant') || msg.includes('UNAUTHENTICATED')) {
+    return 'Google Drive authentication failed. Check the service account key.';
+  }
+  if (code === 403 || msg.includes('insufficientPermissions')) {
+    return 'Google Drive permission denied. The service account may not have access.';
+  }
+  if (code === 404) {
+    return 'Google Drive folder or file not found.';
+  }
+  if (msg.includes('ENOTFOUND') || msg.includes('ETIMEDOUT')) {
+    return 'Cannot connect to Google Drive. Check your internet connection.';
+  }
+  return `Google Drive error: ${msg.slice(0, 150)}`;
+}
+
+/**
  * Get an authenticated Google Drive v3 client using service account.
  * SA acts as itself (no domain impersonation for Drive).
  */
 async function getDriveClient() {
-  const auth = await getServiceAccountClient(null, DRIVE_SCOPES);
-  return google.drive({ version: 'v3', auth });
+  try {
+    const auth = await getServiceAccountClient(null, DRIVE_SCOPES);
+    return google.drive({ version: 'v3', auth });
+  } catch (err) {
+    throw new Error(friendlyDriveError(err));
+  }
 }
 
 /**
@@ -19,27 +48,31 @@ async function getDriveClient() {
  * @returns {string} folderId
  */
 async function getOrCreateRootFolder(drive) {
-  // Search for existing folder
-  const res = await drive.files.list({
-    q: `name='${ROOT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-  });
+  try {
+    // Search for existing folder
+    const res = await drive.files.list({
+      q: `name='${ROOT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
 
-  if (res.data.files && res.data.files.length > 0) {
-    return res.data.files[0].id;
+    if (res.data.files && res.data.files.length > 0) {
+      return res.data.files[0].id;
+    }
+
+    // Create it
+    const folder = await drive.files.create({
+      requestBody: {
+        name: ROOT_FOLDER_NAME,
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+      fields: 'id',
+    });
+
+    return folder.data.id;
+  } catch (err) {
+    throw new Error(friendlyDriveError(err));
   }
-
-  // Create it
-  const folder = await drive.files.create({
-    requestBody: {
-      name: ROOT_FOLDER_NAME,
-      mimeType: 'application/vnd.google-apps.folder',
-    },
-    fields: 'id',
-  });
-
-  return folder.data.id;
 }
 
 /**
@@ -82,34 +115,38 @@ async function getOrCreateEmployeeFolder(drive, rootFolderId, employeeName, empl
  * @returns {{ fileId: string, webViewLink: string, webContentLink: string, thumbnailLink: string }}
  */
 async function uploadFile(drive, folderId, fileName, mimeType, buffer) {
-  const fileMetadata = {
-    name: fileName,
-    parents: [folderId],
-  };
+  try {
+    const fileMetadata = {
+      name: fileName,
+      parents: [folderId],
+    };
 
-  const media = {
-    mimeType,
-    body: Readable.from(buffer),
-  };
+    const media = {
+      mimeType,
+      body: Readable.from(buffer),
+    };
 
-  const file = await drive.files.create({
-    requestBody: fileMetadata,
-    media,
-    fields: 'id, name, mimeType, size, webViewLink, webContentLink, thumbnailLink',
-  });
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      media,
+      fields: 'id, name, mimeType, size, webViewLink, webContentLink, thumbnailLink',
+    });
 
-  // Make file publicly readable via link
-  await drive.permissions.create({
-    fileId: file.data.id,
-    requestBody: { role: 'reader', type: 'anyone' },
-  });
+    // Make file publicly readable via link
+    await drive.permissions.create({
+      fileId: file.data.id,
+      requestBody: { role: 'reader', type: 'anyone' },
+    });
 
-  return {
-    fileId: file.data.id,
-    webViewLink: file.data.webViewLink,
-    webContentLink: file.data.webContentLink,
-    thumbnailLink: file.data.thumbnailLink,
-  };
+    return {
+      fileId: file.data.id,
+      webViewLink: file.data.webViewLink,
+      webContentLink: file.data.webContentLink,
+      thumbnailLink: file.data.thumbnailLink,
+    };
+  } catch (err) {
+    throw new Error(friendlyDriveError(err));
+  }
 }
 
 /**
