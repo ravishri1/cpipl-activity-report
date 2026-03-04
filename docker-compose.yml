@@ -1,0 +1,178 @@
+version: '3.8'
+
+################################################################################
+# Docker Compose Configuration for CPIPL HR Procurement Module
+# Includes: Backend API, Frontend UI, Database
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose down           # Stop all services
+#   docker-compose logs -f        # View logs
+#   docker-compose ps             # Show running services
+#
+# Access:
+#   Frontend: http://localhost:3000
+#   Backend:  http://localhost:5000
+#   Database: ./data/dev.db (SQLite)
+################################################################################
+
+services:
+  ############################################################################
+  # Backend Service
+  ############################################################################
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile.backend
+    container_name: procurement-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./data/dev.db
+      - PORT=5000
+      - LOG_LEVEL=debug
+      # Optionally override with .env file
+      # See: https://docs.docker.com/compose/env-file/
+    volumes:
+      # Mount source code for live reload (development)
+      - ./server/src:/app/src
+      - ./server/prisma:/app/prisma
+      # Mount data directory for persistent database
+      - ./server/data:/app/data
+    depends_on:
+      - # No explicit dependencies - using SQLite
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - procurement
+    restart: unless-stopped
+
+  ############################################################################
+  # Frontend Service
+  ############################################################################
+  frontend:
+    build:
+      context: .
+      dockerfile: client/Dockerfile.frontend
+    container_name: procurement-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      # Mount source code for live reload (development)
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+      # Nginx logs
+      - ./nginx-logs:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - procurement
+    restart: unless-stopped
+
+  ############################################################################
+  # Optional: Development Database Browser (Prisma Studio)
+  # Uncomment to enable
+  ############################################################################
+  # prisma-studio:
+  #   image: node:18-alpine
+  #   container_name: procurement-prisma-studio
+  #   working_dir: /app
+  #   command: npx prisma studio
+  #   ports:
+  #     - "5555:5555"
+  #   volumes:
+  #     - ./server:/app
+  #   environment:
+  #     - DATABASE_URL=file:./data/dev.db
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - procurement
+
+  ############################################################################
+  # Optional: Mailhog - Email Testing Service
+  # Uncomment to enable local email testing
+  # Access at: http://localhost:1025 (SMTP) and http://localhost:8025 (UI)
+  ############################################################################
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   container_name: procurement-mailhog
+  #   ports:
+  #     - "1025:1025"  # SMTP
+  #     - "8025:8025"  # Web UI
+  #   networks:
+  #     - procurement
+
+################################################################################
+# Volumes
+################################################################################
+volumes:
+  # Database persistence
+  procurement-db:
+    driver: local
+
+  # Nginx logs
+  nginx-logs:
+    driver: local
+
+################################################################################
+# Networks
+################################################################################
+networks:
+  procurement:
+    driver: bridge
+
+################################################################################
+# Overall Configuration
+################################################################################
+
+# Environment File Support
+# Create a .env file in the project root with:
+# NODE_ENV=development
+# DATABASE_URL=file:./data/dev.db
+# PORT=5000
+# Compose will automatically load these variables
+
+# Network Topology:
+# ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+# │  Frontend   │────▶│   Backend    │────▶│  Database   │
+# │  (Nginx)    │     │  (Node.js)   │     │  (SQLite)   │
+# │  :3000      │     │   :5000      │     │  ./data/dev │
+# └─────────────┘     └──────────────┘     └─────────────┘
+#      ▲
+#      │
+#    User Browser (http://localhost:3000)
+
+# Service Health:
+# - Backend: /api/health endpoint
+# - Frontend: HTTP 200 on root path
+# - Database: Implicit (accessed by backend)
+
+# Logs:
+# View all logs: docker-compose logs -f
+# View specific service: docker-compose logs -f backend
+# View last 100 lines: docker-compose logs --tail=100
+
+# Development Workflow:
+# 1. docker-compose up -d
+# 2. Code changes automatically reload (via volume mounts)
+# 3. docker-compose logs -f to monitor
+# 4. docker-compose down to stop
+#
+# Production Deployment:
+# Use the deploy.sh script which pulls pre-built images from registry
+# This compose file is for local development only

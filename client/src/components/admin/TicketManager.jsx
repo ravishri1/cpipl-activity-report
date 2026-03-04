@@ -626,7 +626,7 @@ export default function TicketManager() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-0">
       {/* Toast Stack */}
       <div className="fixed top-4 right-4 z-[60] space-y-2">
         {toasts.map((t) => (
@@ -635,7 +635,7 @@ export default function TicketManager() {
       </div>
 
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <Ticket className="w-7 h-7 text-blue-600" />

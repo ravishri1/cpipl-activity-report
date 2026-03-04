@@ -1,0 +1,253 @@
+name: Full Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * *'  # Run daily at 2 AM UTC
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate commit messages
+      run: |
+        commits=$(git log --format=%B origin/main..HEAD)
+        if echo "$commits" | grep -qiE '(wip|work in progress|debug|temp|temporary)'; then
+          echo "Commit messages contain WIP or debug markers"
+          exit 1
+        fi
+    
+    - name: Check file size limits
+      run: |
+        find . -type f -size +100M -not -path './node_modules/*' -not -path './.git/*' | while read file; do
+          echo "File too large: $file"
+          exit 1
+        done
+
+  backend-full:
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    services:
+      sqlite:
+        image: nouchka/sqlite3
+        options: >-
+          --health-cmd="sqlite3 /tmp/test.db '.tables'" 
+          --health-interval=10s 
+          --health-timeout=5s 
+          --health-retries=5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 18.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: 'server/package-lock.json'
+    
+    - name: Install backend dependencies
+      run: cd server && npm ci
+    
+    - name: Run Prisma migrations
+      run: cd server && npx prisma migrate deploy
+      env:
+        DATABASE_URL: "file:/tmp/test.db"
+    
+    - name: Run backend tests with coverage
+      run: cd server && npm test -- --coverage --maxWorkers=2
+      continue-on-error: true
+    
+    - name: Upload backend coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./server/coverage/coverage-final.json
+        flags: backend
+
+  frontend-full:
+    needs: validate
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 18.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: 'client/package-lock.json'
+    
+    - name: Install frontend dependencies
+      run: cd client && npm ci
+    
+    - name: Run frontend tests with coverage
+      run: cd client && npm test -- --coverage --watchAll=false --maxWorkers=2
+      continue-on-error: true
+    
+    - name: Build frontend
+      run: cd client && npm run build
+    
+    - name: Upload frontend coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./client/coverage/coverage-final.json
+        flags: frontend
+
+  e2e-full:
+    needs: [backend-full, frontend-full]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 18.x
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: Install backend dependencies
+      run: cd server && npm ci
+    
+    - name: Install frontend dependencies
+      run: cd client && npm ci
+    
+    - name: Build frontend
+      run: cd client && npm run build
+    
+    - name: Start backend
+      run: cd server && npm run dev > backend.log 2>&1 &
+      timeout-minutes: 2
+    
+    - name: Start frontend
+      run: cd client && npm run preview > frontend.log 2>&1 &
+      timeout-minutes: 2
+    
+    - name: Wait for services
+      run: |
+        echo "Waiting for backend..."
+        for i in {1..60}; do
+          curl -f http://localhost:5000/health && break || sleep 1
+        done
+        echo "Waiting for frontend..."
+        for i in {1..60}; do
+          curl -f http://localhost:4173 && break || sleep 1
+        done
+    
+    - name: Run E2E tests
+      run: cd client && npm run e2e -- --reporter spec
+      timeout-minutes: 15
+      continue-on-error: true
+    
+    - name: Upload E2E videos
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-videos
+        path: client/cypress/videos/
+        retention-days: 7
+    
+    - name: Upload E2E screenshots
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-screenshots
+        path: client/cypress/screenshots/
+        retention-days: 7
+    
+    - name: Upload logs
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: service-logs
+        path: |
+          server/backend.log
+          client/frontend.log
+        retention-days: 7
+
+  report:
+    needs: [backend-full, frontend-full, e2e-full]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Generate test report
+      run: |
+        echo "# Test Results Summary" > test-report.md
+        echo "" >> test-report.md
+        echo "## Backend Tests" >> test-report.md
+        echo "Status: ${{ needs.backend-full.result }}" >> test-report.md
+        echo "" >> test-report.md
+        echo "## Frontend Tests" >> test-report.md
+        echo "Status: ${{ needs.frontend-full.result }}" >> test-report.md
+        echo "" >> test-report.md
+        echo "## E2E Tests" >> test-report.md
+        echo "Status: ${{ needs.e2e-full.result }}" >> test-report.md
+    
+    - name: Upload test report
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-report
+        path: test-report.md
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('test-report.md', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: report
+          });
+
+  notify:
+    needs: [backend-full, frontend-full, e2e-full]
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Notify Slack on failure
+      if: secrets.SLACK_WEBHOOK
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+        payload: |
+          {
+            "text": "CI Pipeline Failed",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*CI Pipeline Failed* 🔴\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                }
+              }
+            ]
+          }
+    
+    - name: Create issue for failures
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `[CI] Test failure on ${new Date().toISOString().split('T')[0]}`,
+            body: `Tests failed in workflow run #${context.runNumber}\n\nSee [workflow logs](${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+          });

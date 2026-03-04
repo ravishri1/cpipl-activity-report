@@ -1,0 +1,42 @@
+[
+  {
+    "id": "vendor-1",
+    "name": "Tech Solutions India",
+    "email": "contact@techsolutions.com",
+    "phone": "9876543210",
+    "location": "Bangalore",
+    "category": "Technology",
+    "rating": 4.5,
+    "totalOrders": 15
+  },
+  {
+    "id": "vendor-2",
+    "name": "Office Supplies Co",
+    "email": "info@officesupplies.co.in",
+    "phone": "9123456789",
+    "location": "Mumbai",
+    "category": "Office",
+    "rating": 4.2,
+    "totalOrders": 8
+  },
+  {
+    "id": "vendor-3",
+    "name": "Industrial Equipment Ltd",
+    "email": "sales@industrialequip.com",
+    "phone": "8765432109",
+    "location": "Delhi",
+    "category": "Industrial",
+    "rating": 4.8,
+    "totalOrders": 22
+  },
+  {
+    "id": "vendor-4",
+    "name": "Furniture Mart",
+    "email": "orders@furnituremart.in",
+    "phone": "9234567890",
+    "location": "Pune",
+    "category": "Furniture",
+    "rating": 3.9,
+    "totalOrders": 5
+  }
+]

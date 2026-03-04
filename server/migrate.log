@@ -1,0 +1,15 @@
+[MIGRATE] Starting database migration...
+
+[MIGRATE] Running: "D:\Activity Report Software\server\node_modules\.bin\prisma.cmd" db push --skip-generate
+[MIGRATE] ⚠️  Command output: Command failed: "D:\Activity Report Software\server\node_modules\.bin\prisma.cmd" db push --skip-generate
+'"node"' is not recognized as an internal or external command,
+operable program or batch file.
+
+[MIGRATE] STDERR:
+'"node"' is not recognized as an internal or external command,
+operable program or batch file.
+
+
+[MIGRATE] Checking if database was created...
+[MIGRATE] Database exists: true, size: 20480 bytes
+[MIGRATE] ✅ Database was created despite command error!

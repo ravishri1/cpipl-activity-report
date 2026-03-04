@@ -26,6 +26,7 @@ const announcementRoutes = require('./routes/announcements');
 const letterRoutes = require('./routes/letters');
 const assetRoutes = require('./routes/assets');
 const lifecycleRoutes = require('./routes/lifecycle');
+const assetLifecycleRoutes = require('./routes/assetLifecycle');
 const overtimeRoutes = require('./routes/overtime');
 const analyticsRoutes = require('./routes/analytics');
 const surveyRoutes = require('./routes/surveys');
@@ -36,6 +37,8 @@ const suggestionRoutes = require('./routes/suggestions');
 const trainingRoutes = require('./routes/training');
 const notificationRoutes = require('./routes/notifications');
 const fileRoutes = require('./routes/files');
+const insuranceRoutes = require('./routes/insurance');
+const procurementRoutes = require('./routes/procurement');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -57,6 +60,7 @@ if (process.env.NODE_ENV !== 'test') {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ═══ Security: Block indexing, scraping, and caching ═══
 app.use((req, res, next) => {
@@ -67,6 +71,47 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
+
+// ═══ Performance: Caching Headers (Phase 1 Optimization) ═══
+app.use((req, res, next) => {
+  // Static assets: Cache for 1 year (immutable, content-hashed by Vite)
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot|svg)$/i)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    next();
+  }
+  // HTML: No-cache, always revalidate for latest version
+  else if (req.path.endsWith('.html') || req.path === '/') {
+    res.setHeader('Cache-Control', 'no-cache, public, must-revalidate, max-age=0');
+    next();
+  }
+  // API endpoints: 5-minute cache for GET requests (safe/idempotent)
+  else if (req.method === 'GET' && req.path.startsWith('/api/')) {
+    // Exclude sensitive endpoints from caching
+    const noCacheEndpoints = ['/api/auth', '/api/users/me', '/api/dashboard'];
+    if (noCacheEndpoints.some(ep => req.path.startsWith(ep))) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
+    }
+    next();
+  }
+  // Other requests: No cache by default
+  else {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    next();
+  }
+});
+
+// ═══ Performance: Enable GZIP compression ═══
+const compression = require('compression');
+app.use(compression({
+  filter: (req, res) => {
+    // Don't compress small responses
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+  level: 6, // Balance between CPU and compression ratio
+}));
 
 // Make prisma available to routes
 app.use((req, res, next) => {
@@ -96,6 +141,7 @@ app.use('/api/announcements', announcementRoutes);
 app.use('/api/letters', letterRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/lifecycle', lifecycleRoutes);
+app.use('/api/asset-lifecycle', assetLifecycleRoutes);
 app.use('/api/overtime', overtimeRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/surveys', surveyRoutes);
@@ -106,6 +152,8 @@ app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/insurance', insuranceRoutes);
+app.use('/api/procurement', procurementRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

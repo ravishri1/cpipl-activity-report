@@ -65,8 +65,8 @@ export default function HolidayManager() {
   const upcoming = holidays.filter((h) => h.date >= new Date().toISOString().split('T')[0]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-0">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <CalendarDays className="w-6 h-6 text-blue-600" />
           Holiday Calendar

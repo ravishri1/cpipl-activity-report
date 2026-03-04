@@ -43,9 +43,16 @@ const MyTickets = lazy(() => import('./components/helpdesk/MyTickets'));
 const WikiPage = lazy(() => import('./components/wiki/WikiPage'));
 const SuggestionBox = lazy(() => import('./components/suggestions/SuggestionBox'));
 const SuggestionManager = lazy(() => import('./components/admin/SuggestionManager'));
-const MyTraining = lazy(() => import('./components/training/MyTraining'));
-const TrainingManager = lazy(() => import('./components/admin/TrainingManager'));
+const MyTrainingAssignments = lazy(() => import('./components/training/MyTrainingAssignments'));
+const TrainingLibrary = lazy(() => import('./components/training/TrainingLibrary'));
+const ContributeToModule = lazy(() => import('./components/training/ContributeToModule'));
+const TrainingManager = lazy(() => import('./components/training/TrainingManager'));
+const MyPointsDashboard = lazy(() => import('./components/training/MyPointsDashboard'));
+const TrainingLeaderboard = lazy(() => import('./components/training/Leaderboard'));
 const MyFiles = lazy(() => import('./components/files/MyFiles'));
+const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCard'));
+const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
+const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTimeline'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 
@@ -127,9 +134,15 @@ function AppRoutes() {
                   <Route path="/policies" element={<SeparatedRoute><PolicyAcceptance /></SeparatedRoute>} />
                   <Route path="/announcements" element={<SeparatedRoute><Announcements /></SeparatedRoute>} />
                   <Route path="/my-assets" element={<SeparatedRoute><MyAssets /></SeparatedRoute>} />
+                  <Route path="/my-repairs" element={<SeparatedRoute><AssetRepairTimeline /></SeparatedRoute>} />
                   <Route path="/surveys" element={<SeparatedRoute><MySurveys /></SeparatedRoute>} />
                   <Route path="/wiki" element={<SeparatedRoute><WikiPage /></SeparatedRoute>} />
-                  <Route path="/training" element={<SeparatedRoute><MyTraining /></SeparatedRoute>} />
+                  <Route path="/training/my-assignments" element={<SeparatedRoute><MyTrainingAssignments /></SeparatedRoute>} />
+                  <Route path="/training/library" element={<SeparatedRoute><TrainingLibrary /></SeparatedRoute>} />
+                  <Route path="/training/contribute" element={<SeparatedRoute><ContributeToModule /></SeparatedRoute>} />
+                  <Route path="/training/my-points" element={<SeparatedRoute><MyPointsDashboard /></SeparatedRoute>} />
+                  <Route path="/training/leaderboard" element={<SeparatedRoute><TrainingLeaderboard /></SeparatedRoute>} />
+                  <Route path="/my-insurance" element={<SeparatedRoute><MyInsuranceCard /></SeparatedRoute>} />
 
                   {/* Allowed for separated employees */}
                   <Route path="/payslips" element={<MyPayslips />} />
@@ -146,6 +159,7 @@ function AppRoutes() {
                   <Route path="/leaderboard" element={<SeparatedRoute><Leaderboard /></SeparatedRoute>} />
 
                   {/* Admin / Team Lead shared routes */}
+                  <Route path="/training/manage" element={<SeparatedRoute><AdminRoute><TrainingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/attendance" element={<SeparatedRoute><AdminRoute><TeamAttendance /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />
@@ -160,6 +174,7 @@ function AppRoutes() {
                   <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />

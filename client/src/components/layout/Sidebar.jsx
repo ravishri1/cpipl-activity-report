@@ -37,6 +37,10 @@ import {
   BookOpen,
   UsersRound,
   FolderOpen,
+  Star,
+  Crown,
+  Wrench,
+  Heart,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -173,13 +177,19 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/expenses', label: 'Expenses', icon: Wallet },
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
         { to: '/my-assets', label: 'My Assets', icon: Package },
+        { to: '/my-repairs', label: 'My Repairs', icon: Wrench },
         { to: '/policies', label: 'Policies', icon: Shield },
         { to: '/surveys', label: 'Surveys', icon: ClipboardList },
         { to: '/my-tickets', label: 'My Tickets', icon: LifeBuoy },
-        { to: '/training', label: 'Training', icon: GraduationCap },
+        { to: '/training/my-assignments', label: 'My Training', icon: GraduationCap },
+        { to: '/training/library', label: 'Training Library', icon: BookOpen },
+        { to: '/training/contribute', label: 'Contribute Training', icon: Brain },
+        { to: '/training/my-points', label: 'My Points', icon: Star },
+        { to: '/training/leaderboard', label: 'Leaderboard', icon: Crown },
         { to: '/suggestions', label: 'Suggestions', icon: MessageSquare },
         { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
         { to: '/my-files', label: 'My Files', icon: FolderOpen },
+        { to: '/my-insurance', label: 'Insurance Card', icon: Heart },
       ],
     },
   ];
@@ -192,6 +202,7 @@ export default function Sidebar({ isOpen, onClose }) {
       teamLeadOnly: true,
       items: [
         { to: '/my-team', label: 'Team Overview', icon: UsersRound },
+        { to: '/training/manage', label: 'Team Training', icon: GraduationCap },
         { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
         { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
         { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
@@ -244,6 +255,7 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
+          { to: '/admin/insurance', label: 'Insurance Management', icon: Heart },
           { to: '/admin/letters', label: 'Letters', icon: Mail },
           { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
           { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },

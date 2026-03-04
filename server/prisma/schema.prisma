@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -130,6 +130,38 @@ model User {
   ticketComments     TicketComment[]
   otpRequests        OtpVerification[]
   driveFiles         DriveFile[]
+  trainingModulesCreated    TrainingModule[]              @relation("TrainingModulesCreated")
+  trainingAssignmentsGiven  TrainingAssignment[]          @relation("TrainingAssignmentsGiven")
+  trainingAssignmentsReceived TrainingAssignment[]        @relation("TrainingAssignmentsReceived")
+  trainingContributions     TrainingContribution[]        @relation("TrainingContributions")
+  contributionApprovals     TrainingContribution[]        @relation("ContributionApprovals")
+  insuranceCard     InsuranceCard?                        // Current/active insurance card
+  insuranceCardsUploaded InsuranceCard[]                 @relation("InsuranceCardsUploaded")  // Cards uploaded by this admin
+
+  // ── Asset Repair/Maintenance ──
+  repairsInitiated  AssetRepair[]                        @relation("RepairInitiator")       // Repairs initiated by this user
+  repairsCompleted  AssetRepair[]                        @relation("RepairCompleter")       // Repairs completed by this user
+
+  // ── Asset Lifecycle Management ──
+  locationIncharge           Location[]                   @relation("LocationIncharge")      // Locations this user manages
+  poCreated                  PurchaseOrder[]              @relation("POCreator")             // POs created by this user
+  poApproved                 PurchaseOrder[]              @relation("POApprover")            // POs approved by this user
+  assetAssigneeMaster        AssetAssignment[]            @relation("AssetAssignee")         // Assets assigned to this user
+  assetAssignmentsMade       AssetAssignment[]            @relation("AssignmentCreator")     // Assignments created by this user
+  assetAssignmentsReceived   AssetAssignment[]            @relation("AssignmentReturner")    // Assets returned to office by this user
+  assetMovementsMade         AssetMovement[]                                                 // Movements created by this user
+  assetConditionChecks       AssetConditionLog[]                                             // Condition checks done by this user
+  assetDisposalsApproved     AssetDisposal[]              @relation("DisposalApprover")      // Disposals approved by this user
+  assetDisposalsCreated      AssetDisposal[]              @relation("DisposalCreator")       // Disposals requested by this user
+  detachmentRequestsCreated  AssetDetachmentRequest[]     @relation("DetachmentRequester")   // Detachment requests by this employee
+  detachmentRequestsApproved AssetDetachmentRequest[]     @relation("DetachmentApprover")    // Requests approved by this user
+
+  // ── Procurement & Inventory Relations ──
+  procurementOrdersCreated    ProcurementOrder[]           @relation("ProcurementCreator")    // POs created by this user
+  procurementOrdersApproved   ProcurementOrder[]           @relation("ProcurementApprover")   // POs approved by this user
+  procurementApprovals        ProcurementApprovalWorkflow[] @relation("ApprovalWorkflowApprover") // Approvals given by this user
+  inventoryMovementsMade      InventoryMovement[]          @relation("InventoryMovement")     // Inventory movements logged by this user
+  employeeBudgets             EmployeeBudget[]             @relation("EmployeeBudget")        // Budget allocations for this employee
 
   @@index([department])
   @@index([isActive])
@@ -473,6 +505,11 @@ model Company {
   shiftDefinitions ShiftDefinition[]
   shifts        Shift[]
   surveys          Survey[]
+  
+  // Asset Lifecycle Management
+  vendors          Vendor[]
+  locations        Location[]
+  purchaseOrders   PurchaseOrder[]
 }
 
 // ═══════════════════════════════════════════════
@@ -757,6 +794,13 @@ model Asset {
   assignedTo     Int?
   assignedDate   String?                                 // "YYYY-MM-DD"
   returnDate     String?                                 // "YYYY-MM-DD"
+  
+  // ── Procurement Integration ──
+  procurementOrderId Int?                                // Links to ProcurementOrder
+  originalCost   Float?                                  // Purchase cost from PO
+  budgetCategory String?                                 // For budget tracking (department, team, etc)
+  inventoryItemId Int?                                   // Links to InventoryItem for tracking
+  
   notes          String?
   companyId      Int?
   location       String?                                  // "Miraroad", "Lucknow" — office location where asset is
@@ -764,9 +808,20 @@ model Asset {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  assignee       User?     @relation("AssetAssignment", fields: [assignedTo], references: [id])
-  company        Company?  @relation(fields: [companyId], references: [id])
-  handovers      AssetHandover[]
+  assignee          User?     @relation("AssetAssignment", fields: [assignedTo], references: [id])
+  company           Company?  @relation(fields: [companyId], references: [id])
+  handovers         AssetHandover[]
+  repairHistory     AssetRepair[]
+  
+  // Procurement & Inventory Relations
+  inventoryLinks    AssetInventoryLink[]
+  
+  // Lifecycle Management Relations
+  assignments       AssetAssignment[]
+  movements         AssetMovement[]
+  conditionLogs     AssetConditionLog[]
+  disposals         AssetDisposal[]
+  detachmentRequests AssetDetachmentRequest[]
 
   @@index([assignedTo])
   @@index([status])
@@ -1033,28 +1088,38 @@ model TrainingModule {
   title         String
   description   String?
   category      String    @default("general")              // general, compliance, technical, soft_skills, ai, onboarding
-  content       String                                     // markdown/html training material
-  duration      Int?                                       // estimated minutes
-  passingScore  Int       @default(70)                     // % to pass exam
+  content       String
+  duration      Int?
+  passingScore  Int       @default(70)
   isActive      Boolean   @default(true)
   isMandatory   Boolean   @default(false)
+  scope         String    @default("general")
+  departmentName String?
   createdBy     Int
+  publishedAt   DateTime?
+  completionPointsValue Int @default(25)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  exams         TrainingExam[]
-  attempts      TrainingAttempt[]
+  creator         User      @relation("TrainingModulesCreated", fields: [createdBy], references: [id])
+  exams           TrainingExam[]
+  attempts        TrainingAttempt[]
+  assignments     TrainingAssignment[]
+  contributions   TrainingContribution[]
 
   @@index([category])
   @@index([isActive])
+  @@index([scope])
+  @@index([departmentName])
+  @@index([createdBy])
 }
 
 model TrainingExam {
   id            Int       @id @default(autoincrement())
   moduleId      Int
-  questions     String                                     // JSON: [{question, options:[], correctAnswer, points}]
+  questions     String
   totalPoints   Int       @default(100)
-  timeLimit     Int?                                       // minutes, null = unlimited
+  timeLimit     Int?
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
@@ -1067,13 +1132,13 @@ model TrainingAttempt {
   id            Int       @id @default(autoincrement())
   moduleId      Int
   userId        Int
-  answers       String?                                    // JSON: [{questionIndex, selectedAnswer}]
-  score         Float     @default(0)                      // percentage scored
+  answers       String?
+  score         Float     @default(0)
   totalPoints   Int       @default(0)
   passed        Boolean   @default(false)
   startedAt     DateTime  @default(now())
   completedAt   DateTime?
-  timeSpent     Int?                                       // seconds
+  timeSpent     Int?
 
   module        TrainingModule @relation(fields: [moduleId], references: [id])
 
@@ -1081,6 +1146,64 @@ model TrainingAttempt {
   @@index([moduleId])
   @@index([userId, moduleId])
 }
+
+// ─── Training Assignment (Manager assigns to reportees) ───
+model TrainingAssignment {
+  id                      Int       @id @default(autoincrement())
+  moduleId                Int
+  assignedToId            Int
+  assignedById            Int
+  dueDate                 String?
+  completionDeadline      DateTime?
+  status                  String    @default("assigned")
+  completedAt             DateTime?
+  completionPointsEarned  Boolean   @default(false)
+  pointsAwarded           Int       @default(0)
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  module          TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  assignedTo      User      @relation("TrainingAssignmentsReceived", fields: [assignedToId], references: [id])
+  assignedBy      User      @relation("TrainingAssignmentsGiven", fields: [assignedById], references: [id])
+
+  @@unique([moduleId, assignedToId])
+  @@index([moduleId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ─── Training Contribution (Members add content to modules) ───
+model TrainingContribution {
+  id              Int       @id @default(autoincrement())
+  moduleId        Int
+  contributedBy   Int
+  title           String
+  content         String
+  type            String    @default("addition")
+  status          String    @default("pending")
+  approvedBy      Int?
+  approvalNotes   String?
+  pointsAwarded   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  module          TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  contributor     User      @relation("TrainingContributions", fields: [contributedBy], references: [id])
+  approver        User?     @relation("ContributionApprovals", fields: [approvedBy], references: [id])
+
+  @@index([moduleId])
+  @@index([contributedBy])
+  @@index([status])
+  @@index([type])
+}
+
+// ═══════════════════════════════════════════════
+// Points & Rewards System
+// ═══════════════════════════════════════════════
+
+
 
 // ═══════════════════════════════════════════════
 // Expense Approval History
@@ -1183,3 +1306,544 @@ model ShiftAssignment {
   @@index([status])
   @@index([effectiveFrom])
 }
+
+// ═══════════════════════════════════════════════
+// Asset Repair & Maintenance Tracking
+// ═══════════════════════════════════════════════
+
+model AssetRepair {
+  id                Int       @id @default(autoincrement())
+  assetId           Int
+  repairType        String                              // "maintenance", "repair", "inspection", "calibration"
+  status            String    @default("initiated")     // initiated, in_transit, in_progress, ready_for_pickup, completed, cancelled
+  sentOutDate       String                              // "YYYY-MM-DD" when asset left office
+  expectedReturnDate String                             // "YYYY-MM-DD" expected return date
+  actualReturnDate  String?                             // "YYYY-MM-DD" actual return date (null until completed)
+  daysOverdue       Int?      @default(0)               // calculated: max(0, today - expectedReturnDate)
+  vendor            String?                             // repair vendor/service center name
+  vendorPhone       String?                             // contact phone
+  vendorEmail       String?                             // contact email
+  vendorLocation    String?                             // where asset was sent (location/city)
+  estimatedCost     Float?                              // estimated repair cost
+  actualCost        Float?                              // actual repair cost
+  invoiceNumber     String?                             // vendor invoice/reference number
+  notes             String?                             // detailed notes about repair
+  issueDescription  String?                             // what was wrong with the asset
+  initiatedBy       Int                                 // user ID who marked asset for repair
+  completedBy       Int?                                // user ID who confirmed return
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  asset             Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  initiator         User      @relation("RepairInitiator", fields: [initiatedBy], references: [id])
+  completer         User?     @relation("RepairCompleter", fields: [completedBy], references: [id])
+  timeline          RepairTimeline[]
+
+  @@index([assetId])
+  @@index([status])
+  @@index([sentOutDate])
+  @@index([expectedReturnDate])
+  @@index([initiatedBy])
+}
+
+model RepairTimeline {
+  id          Int       @id @default(autoincrement())
+  repairId    Int
+  oldStatus   String                                    // previous status
+  newStatus   String                                    // new status
+  changedBy   Int                                       // user ID who made the change
+  notes       String?                                   // optional notes about the change
+  changedAt   DateTime  @default(now())
+
+  repair      AssetRepair @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  @@index([repairId])
+  @@index([changedAt])
+}
+
+// ─── Insurance Card Management ───
+model InsuranceCard {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique                          // One active insurance card per employee
+  cardType      String    @default("health")             // health, life, accidental, other
+  fileUrl       String                                     // URL to PDF or image (Vercel Blob or Drive)
+  fileName      String                                     // Original filename for download
+  mimeType      String                                     // application/pdf, image/png, image/jpeg
+  fileSize      Int       @default(0)                      // bytes
+  uploadedBy    Int                                        // Admin/HR who uploaded
+  uploadedAt    DateTime  @default(now())
+  effectiveFrom String?                                    // "YYYY-MM-DD" when card becomes effective
+  effectiveTo   String?                                    // "YYYY-MM-DD" when card expires
+  providerName  String?                                    // Insurance provider ("ICICI Prudential", etc.)
+  policyNumber  String?                                    // Insurance policy number
+  coverageAmount Float?                                    // Coverage amount in INR
+  notifiedAt    DateTime?                                  // When user was notified about new card
+  isViewed      Boolean   @default(false)                  // Has user viewed the card?
+  viewedAt      DateTime?                                  // When user first viewed the card
+  notes         String?                                    // Admin notes about the card
+  isActive      Boolean   @default(true)                   // Is this the current active card?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id])
+  uploader      User      @relation("InsuranceCardsUploaded", fields: [uploadedBy], references: [id])
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([uploadedAt])
+  @@index([effectiveFrom])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ASSET LIFECYCLE MANAGEMENT SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════════
+// Complete end-to-end asset tracking from purchase → assignment → repair/disposal
+// Phase 1 Models: Core lifecycle management
+
+// ─── Location / Warehouse Management ───
+model Location {
+  id              Int       @id @default(autoincrement())
+  name            String                                  // "Warehouse A", "Miraroad Office Floor 2", "Lucknow Office"
+  type            String    @default("warehouse")         // warehouse, office, desk, storage
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  inchargeUserId  Int?                                    // Person responsible for this location
+  companyId       Int?
+  latitude        Float?
+  longitude       Float?
+  capacity        Int?                                    // Total asset capacity (if warehouse)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company         Company?  @relation(fields: [companyId], references: [id])
+  incharge        User?     @relation("LocationIncharge", fields: [inchargeUserId], references: [id])
+  movementsFrom   AssetMovement[] @relation("AssetMovementFrom")
+  movementsTo     AssetMovement[] @relation("AssetMovementTo")
+
+  @@index([type])
+  @@index([isActive])
+  @@index([city])
+}
+
+// ─── Purchase Order (for asset procurement) ───
+model PurchaseOrder {
+  id              Int       @id @default(autoincrement())
+  poNumber        String    @unique                       // "PO-2026-001"
+  vendorId        Int
+  poDate          String                                  // "YYYY-MM-DD"
+  expectedDeliveryDate String?                            // "YYYY-MM-DD"
+  actualDeliveryDate String?                              // "YYYY-MM-DD"
+  items           String                                  // JSON: [{assetName, quantity, unitPrice, description}]
+  totalAmount     Float
+  gstAmount       Float?
+  finalAmount     Float
+  status          String    @default("pending")           // pending, approved, ordered, received, partial, rejected
+  poFile          String?                                 // URL to PDF of PO
+  grnNumber       String?                                 // Goods Received Note reference
+  grnDate         String?                                 // "YYYY-MM-DD"
+  notes           String?
+  createdBy       Int
+  approvedBy      Int?
+  approvedAt      DateTime?
+  companyId       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  vendor          Vendor    @relation(fields: [vendorId], references: [id])
+  creator         User      @relation("POCreator", fields: [createdBy], references: [id])
+  approver        User?     @relation("POApprover", fields: [approvedBy], references: [id])
+  company         Company?  @relation(fields: [companyId], references: [id])
+
+  @@index([poNumber])
+  @@index([vendorId])
+  @@index([status])
+  @@index([poDate])
+}
+
+// ─── Asset Assignment Tracking (enhanced) ───
+model AssetAssignment {
+  id              Int       @id @default(autoincrement())
+  assetId         Int
+  userId          Int
+  assignmentDate  String                                  // "YYYY-MM-DD"
+  returnDate      String?                                 // "YYYY-MM-DD" (null = still assigned)
+  assignmentReason String?                               // "New hire", "Replacement", "Upgrade"
+  status          String    @default("assigned")          // assigned, returned, pending_return
+  assignedBy      Int
+  returnedBy      Int?
+  condition       String?                                 // Condition when returned (good, damaged, etc.)
+  returnNotes     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assignee        User      @relation("AssetAssignee", fields: [userId], references: [id])
+  assigner        User      @relation("AssignmentCreator", fields: [assignedBy], references: [id])
+  returner        User?     @relation("AssignmentReturner", fields: [returnedBy], references: [id])
+
+  @@unique([assetId, userId, assignmentDate])
+  @@index([assetId])
+  @@index([userId])
+  @@index([status])
+  @@index([assignmentDate])
+}
+
+// ─── Asset Movement Tracking ───
+model AssetMovement {
+  id              Int       @id @default(autoincrement())
+  assetId         Int
+  fromLocation    Int?                                    // null = incoming stock
+  toLocation      Int
+  movementType    String    @default("transfer")          // transfer, stock_in, stock_out, assignment, return, repair_out, repair_in
+  movementDate    String                                  // "YYYY-MM-DD"
+  movementTime    String?                                 // "HH:MM:SS"
+  reason          String?                                 // "Repair", "Office transfer", "Employee relocation"
+  movedBy         Int
+  quantity        Int       @default(1)
+  barcode         String?                                 // QR/Barcode for tracking
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  from            Location? @relation("AssetMovementFrom", fields: [fromLocation], references: [id])
+  to              Location  @relation("AssetMovementTo", fields: [toLocation], references: [id])
+  movedByUser     User      @relation(fields: [movedBy], references: [id])
+
+  @@index([assetId])
+  @@index([movementDate])
+  @@index([movementType])
+  @@index([toLocation])
+}
+
+// ─── Asset Condition Logging ───
+model AssetConditionLog {
+  id              Int       @id @default(autoincrement())
+  assetId         Int
+  previousCondition String
+  newCondition    String                                  // new, good, fair, damaged, non_working, beyond_repair
+  checkedBy       Int
+  checkDate       String                                  // "YYYY-MM-DD"
+  notes           String?
+  photosUrl       String?                                 // JSON array of photo URLs if damages
+  requiresRepair  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  checker         User      @relation(fields: [checkedBy], references: [id])
+
+  @@index([assetId])
+  @@index([checkDate])
+  @@index([newCondition])
+}
+
+// ─── Asset Disposal / Scrapping ───
+model AssetDisposal {
+  id              Int       @id @default(autoincrement())
+  assetId         Int
+  disposalType    String                                  // scrap, salvage, donation, resale, return_to_vendor
+  disposalReason  String?
+  disposalDate    String                                  // "YYYY-MM-DD"
+  approvalStatus  String    @default("pending")           // pending, approved, rejected, completed
+  approvedBy      Int?
+  approvalDate    DateTime?
+  recoveryValue   Float?                                  // Amount recovered from resale/salvage
+  recoveryVendor  String?                                 // Vendor who took the asset
+  notes           String?
+  certificateUrl  String?                                 // URL to disposal certificate if required
+  createdBy       Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  approver        User?     @relation("DisposalApprover", fields: [approvedBy], references: [id])
+  creator         User      @relation("DisposalCreator", fields: [createdBy], references: [id])
+
+  @@index([assetId])
+  @@index([disposalDate])
+  @@index([disposalType])
+  @@index([approvalStatus])
+}
+
+// ─── Asset Detachment Request (Employee self-request) ───
+model AssetDetachmentRequest {
+  id              Int       @id @default(autoincrement())
+  assetId         Int
+  userId          Int
+  requestDate     String                                  // "YYYY-MM-DD"
+  reason          String                                  // "Damaged", "Lost", "Not in use", "Replacement needed"
+  description     String?
+  requestStatus   String    @default("pending")           // pending, approved, rejected
+  postApprovalAction String?                              // repair, scrap, return, custody (selected after approval)
+  approvedBy      Int?
+  approvalDate    DateTime?
+  approvalNotes   String?
+  actionCompletedDate String? // "YYYY-MM-DD" - when post-approval action (repair/scrap/custody) was completed
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  requester       User      @relation("DetachmentRequester", fields: [userId], references: [id])
+  approver        User?     @relation("DetachmentApprover", fields: [approvedBy], references: [id])
+
+  @@index([assetId])
+  @@index([userId])
+  @@index([requestStatus])
+  @@index([requestDate])
+  @@index([postApprovalAction])
+}
+
+// ─── Asset Enhancements (Update existing Asset model references) ───
+// Note: The Asset model at line ~760 already has basic fields.
+// Phase 2 will add: locationId (for current location), vendorId (original vendor),
+// purchaseOrderId (link to PO), depreciation tracking, and more advanced fields.
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TASK 19: HRMS/PROCUREMENT/INVENTORY INTEGRATION
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Procurement Management ───
+model ProcurementOrder {
+  id                  Int       @id @default(autoincrement())
+  orderNumber         String    @unique                   // PO-2026-0001
+  vendorId            Int
+  departmentId        String?                             // Department requesting
+  status              String    @default("draft")         // draft, submitted, pending_approval, approved, received, cancelled
+  totalAmount         Float
+  description         String?
+  notes               String?
+  createdDate         String                              // YYYY-MM-DD
+  deliveryDate        String?                             // YYYY-MM-DD - expected delivery
+  actualDeliveryDate  String?                             // YYYY-MM-DD - when actually received
+  approvalStatus      String    @default("pending")       // pending, approved, rejected
+  approvedBy          Int?
+  approvalDate        DateTime?
+  rejectionReason     String?
+  createdBy           Int
+  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  vendor              Vendor    @relation(fields: [vendorId], references: [id])
+  creator             User      @relation("ProcurementCreator", fields: [createdBy], references: [id])
+  approver            User?     @relation("ProcurementApprover", fields: [approvedBy], references: [id])
+  approvalWorkflows   ProcurementApprovalWorkflow[]
+  inventoryItems     InventoryItem[]
+  assetInventoryLinks AssetInventoryLink[]
+  lineItems           ProcurementLineItem[]
+
+  @@index([status])
+  @@index([createdDate])
+  @@index([vendorId])
+  @@index([approvalStatus])
+  @@index([departmentId])
+}
+
+// ─── Procurement Line Items ───
+model ProcurementLineItem {
+  id                  Int       @id @default(autoincrement())
+  procurementId       Int
+  itemCode            String                              // SKU/Item code
+  itemName            String
+  quantity            Int
+  unitPrice           Float
+  totalPrice          Float     @default(0)               // quantity * unitPrice
+  category            String    // electronics, furniture, office_supplies, etc
+  deliveryStatus      String    @default("pending")       // pending, partial, delivered
+  quantityDelivered   Int       @default(0)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  procurement         ProcurementOrder @relation(fields: [procurementId], references: [id], onDelete: Cascade)
+
+  @@index([procurementId])
+  @@index([itemCode])
+  @@index([deliveryStatus])
+}
+
+// ─── Procurement Approval Workflow ───
+model ProcurementApprovalWorkflow {
+  id                  Int       @id @default(autoincrement())
+  procurementId       Int
+  approverRole        String                              // admin, manager, finance_head, cfo
+  requiredApprovals   Int       @default(1)               // how many at this level
+  currentApprovalCount Int      @default(0)
+  approvalStatus      String    @default("pending")       // pending, approved, rejected, cancelled
+  approvedBy          Int?
+  approvalDate        DateTime?
+  rejectionReason     String?
+  approvalOrder       Int       @default(1)               // sequence of approval
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  procurement         ProcurementOrder @relation(fields: [procurementId], references: [id], onDelete: Cascade)
+  approver            User?     @relation("ApprovalWorkflowApprover", fields: [approvedBy], references: [id])
+
+  @@index([procurementId])
+  @@index([approverRole])
+  @@index([approvalStatus])
+}
+
+// ─── Vendor Management ───
+model Vendor {
+  id                  Int       @id @default(autoincrement())
+  vendorCode          String    @unique                   // VND-001
+  vendorName          String
+  contactPerson       String?
+  email               String?
+  phone               String?
+  address             String?
+  gstNumber           String?
+  panNumber           String?
+  bankDetails         String?                             // JSON: {accountNumber, ifscCode, bankName}
+  status              String    @default("active")        // active, inactive, blacklisted
+  category            String?                             // electronics, office_supplies, furniture, etc
+  rating              Float?    @default(0)               // 0-5 star rating
+  totalTransactions   Int       @default(0)
+  lastTransactionDate String?                             // YYYY-MM-DD
+  notes               String?
+  companyId           Int?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  company             Company?  @relation(fields: [companyId], references: [id])
+  procurementOrders   ProcurementOrder[]
+  purchaseOrders      PurchaseOrder[]
+
+  @@index([status])
+  @@index([category])
+  @@index([vendorCode])
+}
+
+// ─── Inventory Management ───
+model InventoryItem {
+  id                  Int       @id @default(autoincrement())
+  itemCode            String    @unique                   // SKU code
+  itemName            String
+  category            String                              // electronics, furniture, office_supplies, etc
+  unitPrice           Float
+  quantityOnHand      Int       @default(0)               // Current stock level
+  reorderLevel        Int       @default(10)              // Alert when stock drops below
+  reorderQuantity     Int       @default(20)              // Order quantity when restocking
+  storageLocationId   Int?
+  supplier            String?
+  description         String?
+  hsn_sac_code        String?                             // Tax classification
+  lastRestockDate     String?                             // YYYY-MM-DD
+  lastCountDate       String?                             // YYYY-MM-DD of physical count
+  status              String    @default("active")        // active, inactive, discontinued
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  storageLocation     InventoryLocation? @relation(fields: [storageLocationId], references: [id])
+  procurementOrders   ProcurementOrder[]
+  assetInventoryLinks AssetInventoryLink[]
+  inventoryMovements  InventoryMovement[]
+
+  @@index([itemCode])
+  @@index([category])
+  @@index([storageLocationId])
+  @@index([status])
+}
+
+// ─── Inventory Location ───
+model InventoryLocation {
+  id                  Int       @id @default(autoincrement())
+  locationCode        String    @unique                   // LOC-001
+  locationName        String                              // Warehouse A, Office Floor 2, etc
+  description         String?
+  capacity            Int?                                // Max items that can be stored
+  currentUtilization  Int       @default(0)
+  locationType        String    @default("warehouse")     // warehouse, office, storage_room, etc
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  inventoryItems      InventoryItem[]
+
+  @@index([locationType])
+  @@index([isActive])
+}
+
+// ─── Asset & Inventory Link ───
+model AssetInventoryLink {
+  id                  Int       @id @default(autoincrement())
+  assetId             Int
+  inventoryItemId     Int
+  procurementId       Int?
+  quantityReceived    Int
+  dateReceived        String                              // YYYY-MM-DD
+  cost                Float                               // Unit cost at purchase
+  totalCost           Float     @default(0)               // quantity * cost
+  serialNumber        String?                             // For trackable items
+  warrantyExpiry      String?                             // YYYY-MM-DD
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  inventoryItem       InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  procurement         ProcurementOrder? @relation(fields: [procurementId], references: [id])
+
+  @@index([assetId])
+  @@index([inventoryItemId])
+  @@index([procurementId])
+  @@unique([assetId, inventoryItemId])
+}
+
+// ─── Inventory Movement Tracking ───
+model InventoryMovement {
+  id                  Int       @id @default(autoincrement())
+  inventoryItemId     Int
+  movementType        String                              // received, used, transferred, damaged, lost, adjusted
+  quantity            Int                                 // Positive for inbound, negative for outbound
+  fromLocation        Int?                                // LocationId - if transfer
+  toLocation          Int?                                // LocationId - if transfer
+  relatedAssetId      Int?                                // Asset involved if any
+  reason              String?
+  reference           String?                             // PO number, or other reference
+  movedBy             Int
+  movementDate        String                              // YYYY-MM-DD
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  inventoryItem       InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  movedByUser         User      @relation("InventoryMovement", fields: [movedBy], references: [id])
+
+  @@index([inventoryItemId])
+  @@index([movementType])
+  @@index([movementDate])
+  @@index([movedBy])
+}
+
+// ─── Employee Budget Tracking ───
+model EmployeeBudget {
+  id                  Int       @id @default(autoincrement())
+  employeeId          Int
+  year                Int                                 // Financial year
+  assetBudget         Float     @default(0)               // Total asset budget allocated
+  totalSpent          Float     @default(0)               // Amount spent on assets
+  remainingBudget     Float     @default(0)               // assetBudget - totalSpent
+  budgetCategory      String?                             // Department budget pool
+  notes               String?
+  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+
+  employee            User      @relation("EmployeeBudget", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year])
+  @@index([employeeId])
+  @@index([year])
+}
+
+// ─── Update Asset Model with Procurement Fields ───
+// Note: Asset model should include these fields (add to existing Asset model):
+// - procurementOrderId: Int?
+// - originalCost: Float?
+// - budgetCategory: String?
+// - inventoryItemId: Int? 
+// - inventoryLinks: AssetInventoryLink[]

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import AssetRepairTimeline from './AssetRepairTimeline';
 import {
   Laptop,
   Smartphone,
@@ -35,6 +36,7 @@ import {
   Filter,
   Download,
   RefreshCw,
+  Wrench,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ const TABS = [
   { key: 'all', label: 'All Assets' },
   { key: 'free', label: 'Free Assets' },
   { key: 'warranty', label: 'Warranty Expiring' },
+  { key: 'in_repair', label: 'In Repair' },
   { key: 'employee', label: 'By Employee' },
 ];
 
@@ -303,6 +306,7 @@ export default function AssetManager() {
   const [assets, setAssets] = useState([]);
   const [freeAssets, setFreeAssets] = useState([]);
   const [warrantyAssets, setWarrantyAssets] = useState([]);
+  const [repairAssets, setRepairAssets] = useState([]);
   const [employeeAssets, setEmployeeAssets] = useState([]);
   const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
@@ -329,6 +333,8 @@ export default function AssetManager() {
   const [assignTarget, setAssignTarget] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyAsset, setHistoryAsset] = useState(null);
+  const [showRepairModal, setShowRepairModal] = useState(false);
+  const [repairTarget, setRepairTarget] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
 
   // ─── Form State ──────────────────────────────────────────────────────────
@@ -348,8 +354,22 @@ export default function AssetManager() {
     companyId: '',
     status: 'available',
   };
+
+  const emptyRepairForm = {
+    repairType: 'repair',
+    sentOutDate: new Date().toISOString().split('T')[0],
+    expectedReturnDate: '',
+    vendor: '',
+    vendorPhone: '',
+    vendorEmail: '',
+    vendorLocation: '',
+    estimatedCost: '',
+    issueDescription: '',
+    notes: '',
+  };
   const [form, setForm] = useState(emptyForm);
   const [assignForm, setAssignForm] = useState({ userId: '', assignedDate: '' });
+  const [repairForm, setRepairForm] = useState(emptyRepairForm);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -433,6 +453,18 @@ export default function AssetManager() {
     }
   }, []);
 
+  const fetchRepairAssets = useCallback(async () => {
+    try {
+      setTabLoading(true);
+      const res = await api.get('/assets/in-repair');
+      setRepairAssets(res.data);
+    } catch (err) {
+      console.error('Failed to fetch repair assets:', err);
+    } finally {
+      setTabLoading(false);
+    }
+  }, []);
+
   const fetchEmployeeAssets = useCallback(async (userId) => {
     if (!userId) {
       setEmployeeAssets([]);
@@ -481,8 +513,9 @@ export default function AssetManager() {
   useEffect(() => {
     if (activeTab === 'free') fetchFreeAssets();
     if (activeTab === 'warranty') fetchWarrantyAssets(warrantyDays);
+    if (activeTab === 'in_repair') fetchRepairAssets();
     if (activeTab === 'employee' && selectedEmployee) fetchEmployeeAssets(selectedEmployee);
-  }, [activeTab]);
+  }, [activeTab, fetchRepairAssets, fetchFreeAssets, fetchWarrantyAssets, fetchEmployeeAssets]);
 
   useEffect(() => {
     if (activeTab === 'warranty') fetchWarrantyAssets(warrantyDays);
@@ -506,6 +539,8 @@ export default function AssetManager() {
         return applyLocationFilter(freeAssets);
       case 'warranty':
         return applyLocationFilter(warrantyAssets);
+      case 'in_repair':
+        return applyLocationFilter(repairAssets);
       case 'employee':
         return applyLocationFilter(employeeAssets);
       default:
@@ -521,8 +556,9 @@ export default function AssetManager() {
     await Promise.all([fetchAssets(), fetchSummary()]);
     if (activeTab === 'free') await fetchFreeAssets();
     if (activeTab === 'warranty') await fetchWarrantyAssets(warrantyDays);
+    if (activeTab === 'in_repair') await fetchRepairAssets();
     if (activeTab === 'employee' && selectedEmployee) await fetchEmployeeAssets(selectedEmployee);
-  }, [activeTab, warrantyDays, selectedEmployee, fetchAssets, fetchSummary, fetchFreeAssets, fetchWarrantyAssets, fetchEmployeeAssets]);
+  }, [activeTab, warrantyDays, selectedEmployee, fetchAssets, fetchSummary, fetchFreeAssets, fetchWarrantyAssets, fetchRepairAssets, fetchEmployeeAssets]);
 
   // ─── Asset CRUD ──────────────────────────────────────────────────────────
 
@@ -621,6 +657,53 @@ export default function AssetManager() {
         setConfirmAction(null);
       },
     });
+  };
+
+  // ─── Repair/Maintenance ───────────────────────────────────────────────────
+
+  const handleSendForRepair = (asset) => {
+    setRepairTarget(asset);
+    setRepairForm(emptyRepairForm);
+    setFormError('');
+    setShowRepairModal(true);
+  };
+
+  const updateRepairForm = (field, value) => {
+    setRepairForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleRepairSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    
+    if (!repairForm.repairType || !repairForm.sentOutDate || !repairForm.expectedReturnDate) {
+      setFormError('Please fill in repair type, sent date, and expected return date.');
+      return;
+    }
+
+    setFormLoading(true);
+    try {
+      await api.post(`/assets/${repairTarget.id}/repairs/initiate`, {
+        repairType: repairForm.repairType,
+        sentOutDate: repairForm.sentOutDate,
+        expectedReturnDate: repairForm.expectedReturnDate,
+        vendor: repairForm.vendor || null,
+        vendorPhone: repairForm.vendorPhone || null,
+        vendorEmail: repairForm.vendorEmail || null,
+        vendorLocation: repairForm.vendorLocation || null,
+        estimatedCost: repairForm.estimatedCost ? parseFloat(repairForm.estimatedCost) : null,
+        issueDescription: repairForm.issueDescription || null,
+        notes: repairForm.notes || null,
+      });
+      addToast(`Asset sent for repair successfully`);
+      setShowRepairModal(false);
+      setRepairTarget(null);
+      await refreshAll();
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Failed to send asset for repair.');
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   // ─── Assign ──────────────────────────────────────────────────────────────
@@ -734,9 +817,9 @@ export default function AssetManager() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-0">
       {/* ─── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Package className="w-6 h-6 text-blue-600" />
           IT Asset Management
@@ -931,6 +1014,24 @@ export default function AssetManager() {
         </div>
       )}
 
+      {/* ─── In Repair Filter Bar ───────────────────────────────────────── */}
+      {activeTab === 'in_repair' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Wrench className="w-4 h-4 text-orange-500" />
+              <span className="font-medium">Assets currently in repair or maintenance</span>
+            </div>
+            <FilterSelect
+              value={filterLocation}
+              onChange={setFilterLocation}
+              options={LOCATION_OPTIONS.map((l) => ({ value: l, label: l }))}
+              allLabel="All Locations"
+            />
+          </div>
+        </div>
+      )}
+
       {/* ─── Employee Selector ───────────────────────────────────────────── */}
       {activeTab === 'employee' && (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -982,8 +1083,14 @@ export default function AssetManager() {
         </div>
       )}
 
+      {/* ─── Asset Repair Timeline (In Repair Tab) ───────────────────────── */}
+      {activeTab === 'in_repair' && (
+        <AssetRepairTimeline />
+      )}
+
       {/* ─── Asset Table ─────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      {activeTab !== 'in_repair' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {tabLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
@@ -1116,6 +1223,14 @@ export default function AssetManager() {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
+                          {/* Send for Repair (all assets) */}
+                          <button
+                            onClick={() => handleSendForRepair(asset)}
+                            title="Send for Repair"
+                            className="p-1.5 rounded-md text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                          >
+                            <Wrench className="w-4 h-4" />
+                          </button>
                           {/* Assign (only if available) */}
                           {asset.status === 'available' && (
                             <button
@@ -1185,6 +1300,7 @@ export default function AssetManager() {
           </div>
         )}
       </div>
+      )}
 
       {/* ─── Add/Edit Asset Modal ────────────────────────────────────────── */}
       {showAssetModal && (
@@ -1611,6 +1727,176 @@ export default function AssetManager() {
               </div>
             )}
           </div>
+        </Modal>
+      )}
+
+      {/* ─── Repair Modal ────────────────────────────────────────────────── */}
+      {showRepairModal && repairTarget && (
+        <Modal
+          title={`Send for Repair: ${repairTarget.name}`}
+          onClose={() => {
+            setShowRepairModal(false);
+            setRepairTarget(null);
+            setFormError('');
+          }}
+          wide
+        >
+          <form onSubmit={handleRepairSubmit} className="space-y-4">
+            {formError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {formError}
+              </div>
+            )}
+
+            {/* Repair Type */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Repair Type *</label>
+              <select
+                value={repairForm.repairType}
+                onChange={(e) => updateRepairForm('repairType', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="repair">Repair</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="inspection">Inspection</option>
+                <option value="calibration">Calibration</option>
+              </select>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Sent Out Date *</label>
+                <input
+                  type="date"
+                  value={repairForm.sentOutDate}
+                  onChange={(e) => updateRepairForm('sentOutDate', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Expected Return Date *</label>
+                <input
+                  type="date"
+                  value={repairForm.expectedReturnDate}
+                  onChange={(e) => updateRepairForm('expectedReturnDate', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Vendor Info */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Vendor Name</label>
+              <input
+                type="text"
+                value={repairForm.vendor}
+                onChange={(e) => updateRepairForm('vendor', e.target.value)}
+                placeholder="e.g., Tech Repair Center"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+
+            {/* Vendor Contact */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Phone</label>
+                <input
+                  type="tel"
+                  value={repairForm.vendorPhone}
+                  onChange={(e) => updateRepairForm('vendorPhone', e.target.value)}
+                  placeholder="Phone number"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={repairForm.vendorEmail}
+                  onChange={(e) => updateRepairForm('vendorEmail', e.target.value)}
+                  placeholder="Email address"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Vendor Location */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
+              <input
+                type="text"
+                value={repairForm.vendorLocation}
+                onChange={(e) => updateRepairForm('vendorLocation', e.target.value)}
+                placeholder="City / Address"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+
+            {/* Cost & Description */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Estimated Cost (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={repairForm.estimatedCost}
+                  onChange={(e) => updateRepairForm('estimatedCost', e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Issue Description</label>
+                <input
+                  type="text"
+                  value={repairForm.issueDescription}
+                  onChange={(e) => updateRepairForm('issueDescription', e.target.value)}
+                  placeholder="Brief description"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
+              <textarea
+                value={repairForm.notes}
+                onChange={(e) => updateRepairForm('notes', e.target.value)}
+                placeholder="Additional notes"
+                rows="3"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRepairModal(false);
+                  setRepairTarget(null);
+                  setFormError('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={formLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {formLoading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Wrench className="w-4 h-4" />
+                )}
+                Send for Repair
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

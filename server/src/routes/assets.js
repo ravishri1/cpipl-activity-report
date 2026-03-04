@@ -89,6 +89,27 @@ router.get('/warranty-expiring', requireAdmin, asyncHandler(async (req, res) => 
   res.json(assets);
 }));
 
+// ─── 4a. GET /in-repair ─── Assets currently in maintenance with repair details (admin)
+router.get('/in-repair', requireAdmin, asyncHandler(async (req, res) => {
+  const assets = await req.prisma.asset.findMany({
+    where: { status: 'maintenance' },
+    include: {
+      assignee: { select: { id: true, name: true, email: true, department: true } },
+      repairHistory: {
+        where: { status: { notIn: ['completed', 'cancelled'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          initiator: { select: { id: true, name: true } },
+          completer: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(assets);
+}));
+
 // ─── 5. GET /exit-pending/:userId ─── Assets pending return for exiting employee (admin)
 router.get('/exit-pending/:userId', requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
@@ -316,6 +337,249 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
 
   const updated = await req.prisma.asset.update({ where: { id }, data: { status: 'retired' } });
   res.json({ message: 'Asset retired successfully.', asset: updated });
+}));
+
+// ═══════════════════════════════════════════════
+// Asset Repair & Maintenance Endpoints
+// ═══════════════════════════════════════════════
+
+// ─── 15. POST /repairs/:assetId/initiate ─── Mark asset for repair (admin)
+router.post('/repairs/:assetId/initiate', requireAdmin, asyncHandler(async (req, res) => {
+  const assetId = parseId(req.params.assetId);
+  const { repairType, expectedReturnDate, vendor, vendorLocation, issueDescription, vendorPhone, vendorEmail, estimatedCost, notes } = req.body;
+
+  requireFields(req.body, 'repairType', 'expectedReturnDate', 'vendor', 'vendorLocation', 'issueDescription');
+  requireEnum(repairType, ['maintenance', 'repair', 'inspection', 'calibration'], 'repairType');
+
+  const asset = await req.prisma.asset.findUnique({ where: { id: assetId } });
+  if (!asset) throw notFound('Asset');
+  if (asset.status !== 'assigned') throw badRequest('Asset must be in "assigned" status to send for repair');
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (expectedReturnDate <= today) throw badRequest('Expected return date must be in the future');
+
+  const repair = await req.prisma.assetRepair.create({
+    data: {
+      assetId,
+      repairType,
+      sentOutDate: today,
+      expectedReturnDate,
+      vendor,
+      vendorLocation,
+      issueDescription,
+      vendorPhone: vendorPhone || null,
+      vendorEmail: vendorEmail || null,
+      estimatedCost: estimatedCost ? parseFloat(estimatedCost) : null,
+      notes: notes || null,
+      initiatedBy: req.user.id,
+      status: 'initiated',
+    },
+    include: { initiator: { select: { id: true, name: true, email: true } } },
+  });
+
+  // Update asset status to maintenance
+  await req.prisma.asset.update({
+    where: { id: assetId },
+    data: { status: 'maintenance' },
+  });
+
+  res.status(201).json(repair);
+}));
+
+// ─── 16. GET /repairs/:assetId ─── Get active repair for an asset
+router.get('/repairs/:assetId', asyncHandler(async (req, res) => {
+  const assetId = parseId(req.params.assetId);
+  const repair = await req.prisma.assetRepair.findFirst({
+    where: { assetId, status: { not: 'completed' } },
+    include: {
+      initiator: { select: { id: true, name: true, email: true } },
+      completer: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!repair) throw notFound('Active repair');
+  res.json(repair);
+}));
+
+// ─── 17. GET /repairs ─── List all repairs (admin, with filters)
+router.get('/repairs', requireAdmin, asyncHandler(async (req, res) => {
+  const { status, assetId, initiatedBy, overdue } = req.query;
+  const where = {};
+  if (status) where.status = status;
+  if (assetId) where.assetId = parseInt(assetId);
+  if (initiatedBy) where.initiatedBy = parseInt(initiatedBy);
+
+  const repairs = await req.prisma.assetRepair.findMany({
+    where,
+    include: {
+      asset: { select: { id: true, name: true, serialNumber: true } },
+      initiator: { select: { id: true, name: true, email: true } },
+      completer: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: [{ expectedReturnDate: 'asc' }, { createdAt: 'desc' }],
+  });
+
+  // Filter overdue if requested
+  if (overdue === 'true') {
+    const today = new Date().toISOString().slice(0, 10);
+    return res.json(repairs.filter(r => r.status !== 'completed' && r.expectedReturnDate < today));
+  }
+
+  res.json(repairs);
+}));
+
+// ─── 18. PUT /repairs/:repairId/update-status ─── Update repair status
+router.put('/repairs/:repairId/update-status', requireAdmin, asyncHandler(async (req, res) => {
+  const repairId = parseId(req.params.repairId);
+  const { newStatus, notes } = req.body;
+
+  requireFields(req.body, 'newStatus');
+  requireEnum(newStatus, ['initiated', 'in_transit', 'in_progress', 'ready_for_pickup', 'completed', 'cancelled'], 'newStatus');
+
+  const repair = await req.prisma.assetRepair.findUnique({ where: { id: repairId } });
+  if (!repair) throw notFound('Repair');
+
+  // Create timeline entry
+  await req.prisma.repairTimeline.create({
+    data: {
+      repairId,
+      oldStatus: repair.status,
+      newStatus,
+      changedBy: req.user.id,
+      notes: notes || null,
+    },
+  });
+
+  const updated = await req.prisma.assetRepair.update({
+    where: { id: repairId },
+    data: { status: newStatus },
+    include: {
+      asset: { select: { id: true, name: true } },
+      initiator: { select: { id: true, name: true } },
+    },
+  });
+
+  res.json(updated);
+}));
+
+// ─── 19. GET /repairs/overdue ─── List overdue repairs (admin)
+router.get('/repairs/overdue', requireAdmin, asyncHandler(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const repairs = await req.prisma.assetRepair.findMany({
+    where: {
+      status: { not: 'completed' },
+      expectedReturnDate: { lt: today },
+    },
+    include: {
+      asset: { select: { id: true, name: true, serialNumber: true } },
+      initiator: { select: { id: true, name: true } },
+    },
+    orderBy: { expectedReturnDate: 'asc' },
+  });
+
+  res.json(repairs.map(r => ({
+    ...r,
+    daysOverdue: Math.floor((new Date(today) - new Date(r.expectedReturnDate)) / (1000 * 60 * 60 * 24)),
+  })));
+}));
+
+// ─── 20. POST /repairs/:repairId/complete ─── Complete repair and return asset
+router.post('/repairs/:repairId/complete', requireAdmin, asyncHandler(async (req, res) => {
+  const repairId = parseId(req.params.repairId);
+  const { actualReturnDate, actualCost, condition } = req.body;
+
+  requireFields(req.body, 'actualReturnDate');
+
+  const repair = await req.prisma.assetRepair.findUnique({ where: { id: repairId } });
+  if (!repair) throw notFound('Repair');
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (actualReturnDate > today) throw badRequest('Actual return date cannot be in the future');
+
+  // Create timeline entry
+  await req.prisma.repairTimeline.create({
+    data: {
+      repairId,
+      oldStatus: repair.status,
+      newStatus: 'completed',
+      changedBy: req.user.id,
+      notes: actualCost ? `Completed - Actual cost: ₹${actualCost}` : 'Completed',
+    },
+  });
+
+  // Update repair
+  const completed = await req.prisma.assetRepair.update({
+    where: { id: repairId },
+    data: {
+      actualReturnDate,
+      actualCost: actualCost ? parseFloat(actualCost) : null,
+      completedBy: req.user.id,
+      status: 'completed',
+    },
+  });
+
+  // Create handover record
+  const asset = await req.prisma.asset.findUnique({ where: { id: repair.assetId } });
+  if (asset?.assignedTo) {
+    await req.prisma.assetHandover.create({
+      data: {
+        assetId: repair.assetId,
+        fromUserId: req.user.id,
+        toUserId: asset.assignedTo,
+        handoverType: 'repair_return',
+      },
+    });
+  }
+
+  // Update asset status back to available
+  await req.prisma.asset.update({
+    where: { id: repair.assetId },
+    data: { status: 'available' },
+  });
+
+  res.json({ message: 'Repair completed and asset returned.', repair: completed });
+}));
+
+// ─── 21. GET /repairs/:assetId/timeline ─── Get repair history for an asset
+router.get('/repairs/:assetId/timeline', asyncHandler(async (req, res) => {
+  const assetId = parseId(req.params.assetId);
+  const repairs = await req.prisma.assetRepair.findMany({
+    where: { assetId },
+    include: { timeline: { orderBy: { changedAt: 'desc' } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(repairs);
+}));
+
+// ─── 22. PUT /repairs/:repairId/edit ─── Update repair details (before completion)
+router.put('/repairs/:repairId/edit', requireAdmin, asyncHandler(async (req, res) => {
+  const repairId = parseId(req.params.repairId);
+  const { vendor, vendorPhone, vendorEmail, vendorLocation, expectedReturnDate, notes, estimatedCost } = req.body;
+
+  const repair = await req.prisma.assetRepair.findUnique({ where: { id: repairId } });
+  if (!repair) throw notFound('Repair');
+  if (repair.status === 'completed') throw badRequest('Cannot edit a completed repair');
+
+  const data = {};
+  if (vendor !== undefined) data.vendor = vendor;
+  if (vendorPhone !== undefined) data.vendorPhone = vendorPhone || null;
+  if (vendorEmail !== undefined) data.vendorEmail = vendorEmail || null;
+  if (vendorLocation !== undefined) data.vendorLocation = vendorLocation;
+  if (expectedReturnDate !== undefined) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (expectedReturnDate <= today) throw badRequest('Expected return date must be in the future');
+    data.expectedReturnDate = expectedReturnDate;
+  }
+  if (notes !== undefined) data.notes = notes || null;
+  if (estimatedCost !== undefined) data.estimatedCost = estimatedCost ? parseFloat(estimatedCost) : null;
+
+  const updated = await req.prisma.assetRepair.update({
+    where: { id: repairId },
+    data,
+    include: { asset: { select: { id: true, name: true } } },
+  });
+
+  res.json(updated);
 }));
 
 module.exports = router;

@@ -1,0 +1,73 @@
+Employee ID,Employee Name,Leave Type,Year,Total Allocated,Used,Balance,Carry Forward Available,Max Carry Forward
+COLOR001,Ravi Pardeep Shrivastav,Casual Leave,2026,12.00,3.00,9.00,No,0
+COLOR001,Ravi Pardeep Shrivastav,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR001,Ravi Pardeep Shrivastav,Earned Leave,2026,15.00,1.00,14.00,Yes,30.00
+COLOR003,Himanshu Srivastava,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR003,Himanshu Srivastava,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR003,Himanshu Srivastava,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR005,Dayanand Vishnu Halde,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR005,Dayanand Vishnu Halde,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR005,Dayanand Vishnu Halde,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR026,Shailesh Vinod Naik,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR026,Shailesh Vinod Naik,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR026,Shailesh Vinod Naik,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR034,Pranali Nandu Patil,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR034,Pranali Nandu Patil,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR034,Pranali Nandu Patil,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR044,Rajat Kumar Shrivastava,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR044,Rajat Kumar Shrivastava,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR044,Rajat Kumar Shrivastava,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR047,Jyoti Vasant Naik,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR047,Jyoti Vasant Naik,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR047,Jyoti Vasant Naik,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR057,Nandan Sanjay Maurya,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR057,Nandan Sanjay Maurya,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR057,Nandan Sanjay Maurya,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR022,Rahul Dixit,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR022,Rahul Dixit,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR022,Rahul Dixit,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR064,Anuj Arya,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR064,Anuj Arya,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR064,Anuj Arya,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR076,Dilip Yadav,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR076,Dilip Yadav,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR076,Dilip Yadav,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR115,Aman Saini,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR115,Aman Saini,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR115,Aman Saini,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR117,Lahiri Noopur,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR117,Lahiri Noopur,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR117,Lahiri Noopur,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR120,Ashishkumar Ashok Tavasalkar,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR120,Ashishkumar Ashok Tavasalkar,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR120,Ashishkumar Ashok Tavasalkar,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR146,Mehul Rikame,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR146,Mehul Rikame,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR146,Mehul Rikame,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR167,Sameer Manik Patil,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR167,Sameer Manik Patil,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR167,Sameer Manik Patil,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR170,Shaunak Sharad Kadam,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR170,Shaunak Sharad Kadam,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR170,Shaunak Sharad Kadam,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR171,Avinash Vinayak Kadam,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR171,Avinash Vinayak Kadam,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR171,Avinash Vinayak Kadam,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR176,Ankit Singh Anil,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR176,Ankit Singh Anil,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR176,Ankit Singh Anil,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR182,Yadav Ritesh Vinod,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR182,Yadav Ritesh Vinod,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR182,Yadav Ritesh Vinod,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR185,Dilip Kumar,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR185,Dilip Kumar,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR185,Dilip Kumar,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR191,Akshat Shailesh Mehta,Casual Leave,2026,12.00,0,12.00,No,0
+COLOR191,Akshat Shailesh Mehta,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR191,Akshat Shailesh Mehta,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR188,Shubhanshu Prasad,Earned Leave,2026,15.00,0,15.00,Yes,30.00
+COLOR188,Shubhanshu Prasad,Sick Leave,2026,6.00,0,6.00,No,0
+COLOR188,Shubhanshu Prasad,Casual Leave,2026,12.00,0,12.00,No,0
+CPIPL-024,Pravin Shinde,Casual Leave,2026,12.00,0,12.00,No,0
+CPIPL-024,Pravin Shinde,Sick Leave,2026,6.00,0,6.00,No,0
+CPIPL-024,Pravin Shinde,Earned Leave,2026,15.00,0,15.00,Yes,30.00

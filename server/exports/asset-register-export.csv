@@ -1,0 +1,5 @@
+Asset ID,Asset Name,Asset Type,Serial Number,Asset Tag,Category,Purchase Date,Value (₹),Warranty Expiry,Warranty Vendor,Condition,Status,Assigned to Employee ID,Assigned to Name,Assignment Date,Return Date,Location,Mandatory Return,Notes
+1,Dell Latitude 5540 Laptop,laptop,DL5540-2025-8874,CPIPL-AST-001,personal,2025-06-15,72000.00,2027-06-15,Dell India,good,assigned,COLOR001,Ravi Pardeep Shrivastav,2025-06-15,,Miraroad,Yes,"i7 16GB RAM, 512GB SSD"
+2,Samsung Galaxy A55,phone,SM-A556E-90124,CPIPL-AST-002,personal,2025-08-01,28000.00,2026-08-01,Samsung,good,assigned,COLOR001,Ravi Pardeep Shrivastav,2025-08-01,,Miraroad,Yes,Company phone for official calls
+3,Employee ID Card,id_card,,CPIPL-AST-003,personal,2025-06-10,200.00,,,good,assigned,COLOR001,Ravi Pardeep Shrivastav,2025-06-10,,Miraroad,Yes,With RFID access
+4,Logitech MX Master 3S Mouse,mouse,LOG-MX3S-44521,CPIPL-AST-004,personal,2025-07-20,8500.00,2027-07-20,Logitech,new,assigned,COLOR001,Ravi Pardeep Shrivastav,2025-07-20,,Miraroad,Yes,Wireless ergonomic mouse

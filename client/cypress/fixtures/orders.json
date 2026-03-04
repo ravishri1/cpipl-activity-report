@@ -1,0 +1,65 @@
+[
+  {
+    "id": "order-1",
+    "vendorId": "vendor-1",
+    "vendorName": "Tech Solutions India",
+    "status": "submitted",
+    "orderDate": "2026-03-01",
+    "deliveryDate": "2026-03-15",
+    "totalAmount": 125000,
+    "lineItems": [
+      { "id": "li-1", "itemName": "Laptops", "quantity": 5, "rate": 75000, "unit": "pcs", "total": 375000 },
+      { "id": "li-2", "itemName": "Monitors", "quantity": 10, "rate": 25000, "unit": "pcs", "total": 250000 }
+    ],
+    "createdBy": "admin@cpipl.com",
+    "notes": "Urgent requirement for Q1 project"
+  },
+  {
+    "id": "order-2",
+    "vendorId": "vendor-2",
+    "vendorName": "Office Supplies Co",
+    "status": "approved",
+    "orderDate": "2026-02-28",
+    "deliveryDate": "2026-03-10",
+    "totalAmount": 45000,
+    "lineItems": [
+      { "id": "li-3", "itemName": "A4 Paper Ream", "quantity": 50, "rate": 400, "unit": "reams", "total": 20000 },
+      { "id": "li-4", "itemName": "Pens (Box)", "quantity": 25, "rate": 1000, "unit": "boxes", "total": 25000 }
+    ],
+    "createdBy": "admin@cpipl.com",
+    "approvedBy": "admin@cpipl.com",
+    "approvalDate": "2026-03-02",
+    "approvalNotes": "Approved. Standard office supplies."
+  },
+  {
+    "id": "order-3",
+    "vendorId": "vendor-3",
+    "vendorName": "Industrial Equipment Ltd",
+    "status": "rejected",
+    "orderDate": "2026-02-25",
+    "deliveryDate": "2026-03-20",
+    "totalAmount": 250000,
+    "lineItems": [
+      { "id": "li-5", "itemName": "Heavy Machinery", "quantity": 1, "rate": 250000, "unit": "unit", "total": 250000 }
+    ],
+    "createdBy": "admin@cpipl.com",
+    "rejectedBy": "admin@cpipl.com",
+    "rejectionDate": "2026-02-27",
+    "rejectionReason": "Budget allocation for this quarter exhausted. Revisit in Q2."
+  },
+  {
+    "id": "order-4",
+    "vendorId": "vendor-4",
+    "vendorName": "Furniture Mart",
+    "status": "submitted",
+    "orderDate": "2026-03-03",
+    "deliveryDate": "2026-03-25",
+    "totalAmount": 180000,
+    "lineItems": [
+      { "id": "li-6", "itemName": "Office Chairs", "quantity": 20, "rate": 5000, "unit": "pcs", "total": 100000 },
+      { "id": "li-7", "itemName": "Conference Table", "quantity": 2, "rate": 40000, "unit": "pcs", "total": 80000 }
+    ],
+    "createdBy": "admin@cpipl.com",
+    "notes": "For new office setup"
+  }
+]

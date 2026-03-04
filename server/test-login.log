@@ -1,0 +1,13 @@
+[2026-03-04T18:23:02.354Z] [TEST] Testing login endpoint...
+
+[2026-03-04T18:23:02.376Z] [TEST] POST /api/auth/login
+[2026-03-04T18:23:02.380Z] [TEST] Body: {"email":"admin@cpipl.com","password":"password123"}
+[2026-03-04T18:23:02.382Z] [TEST] Sending request...
+
+[2026-03-04T18:23:02.405Z] [TEST] Status: 500
+[2026-03-04T18:23:02.412Z] [TEST] Headers: {"x-powered-by":"Express","access-control-allow-origin":"*","x-robots-tag":"noindex, nofollow, noarchive, nosnippet, noimageindex","x-content-type-options":"nosniff","x-frame-options":"DENY","referrer-policy":"no-referrer","permissions-policy":"camera=(), microphone=(), geolocation=()","cache-control":"no-cache, no-store, must-revalidate","content-type":"application/json; charset=utf-8","content-length":"25","etag":"W/\"19-xxlHKFIsmkYO/S0NGnfSi/QLql4\"","vary":"Accept-Encoding","date":"Wed, 04 Mar 2026 18:23:02 GMT","connection":"keep-alive","keep-alive":"timeout=5"}
+[2026-03-04T18:23:02.418Z] [TEST] Response body:
+
+[2026-03-04T18:23:02.422Z] {"error":"Server error."}
+[2026-03-04T18:23:02.432Z] 
+[TEST] Test complete

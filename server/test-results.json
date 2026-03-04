@@ -1,0 +1,8 @@
+[2026-03-04T19:03:17.913Z] Test started!
+[2026-03-04T19:03:17.969Z] Node version: v22.16.0
+[2026-03-04T19:03:17.979Z] Working directory: D:\Activity Report Software\server
+[2026-03-04T19:03:17.993Z] Making request to 127.0.0.1:49376/api/procurement/vendors
+[2026-03-04T19:03:18.021Z] Response status: 200
+[2026-03-04T19:03:18.025Z] Response complete. Data length: 66
+[2026-03-04T19:03:18.028Z] Response data: {"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0}}
+[2026-03-04T19:03:18.030Z] Test finished!

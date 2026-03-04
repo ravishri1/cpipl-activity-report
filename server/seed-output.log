@@ -1,0 +1,18 @@
+[SEED] Starting database initialization...
+
+[SEED] Testing database connection...
+[SEED] ✅ Database connection successful
+
+[SEED] ℹ️  User table does not exist yet, creating...
+
+[SEED] Creating admin user...
+
+ERROR: [SEED] ❌ Error: 
+Invalid `prisma.user.create()` invocation in
+D:\Activity Report Software\server\run-seed.js:30:36
+
+  27 console.log('[SEED] Creating admin user...\n');
+  28 
+  29 // Create a user to initialize the database
+→ 30 const user = await prisma.user.create(
+The table `main.User` does not exist in the current database.

@@ -1,0 +1,67 @@
+# Git
+.git
+.gitignore
+
+# Node modules (will be reinstalled in container)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Development files
+.env.development
+.env.test
+.env.local
+.DS_Store
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build artifacts (will be rebuilt)
+dist
+build
+
+# Tests (will run in CI, not production)
+__tests__
+*.test.jsx
+*.test.js
+*.spec.jsx
+*.spec.js
+jest.config.js
+cypress
+
+# Test coverage
+coverage
+
+# Documentation
+README.md
+DOCS.md
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Package manager lock files (will use from context)
+yarn.lock
+
+# Development server files
+.vite
+
+# Node Version
+.nvmrc
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+
+# Logs
+logs
+*.log

@@ -17,8 +17,32 @@ const COMPANY_DOMAIN = 'colorpapers.in';
  * Only allows specific test emails (prevents abuse).
  */
 router.post('/login', asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) throw badRequest('Email and password required');
+  console.log('[AUTH] Login request received');
+  console.log('[AUTH] req.body:', req.body);
+  
+  // Handle case where JSON is sent as form-urlencoded
+  let body = req.body;
+  if (Object.keys(body).length === 1 && body[Object.keys(body)[0]] === '') {
+    // The key is the JSON string, try to parse it
+    const jsonStr = Object.keys(body)[0];
+    try {
+      let parsed = JSON.parse(jsonStr);
+      // If still a string (due to double-encoding), parse again
+      if (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      body = parsed;
+    } catch (e) {
+      console.log('[AUTH] Failed to parse JSON from form field:', e.message);
+    }
+  }
+  
+  const { email, password } = body;
+  
+  if (!email || !password) {
+    console.log('[AUTH] Missing email or password. email:', email, 'password:', password);
+    throw badRequest('Email and password required');
+  }
   
   // Only allow test user accounts (hardcoded seed data)
   const testAccounts = {

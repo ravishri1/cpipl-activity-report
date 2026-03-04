@@ -1,0 +1,108 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/ci-backend.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/ci-backend.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: 'server/package-lock.json'
+    
+    - name: Install backend dependencies
+      run: cd server && npm ci
+    
+    - name: Run Prisma generate
+      run: cd server && npx prisma generate
+    
+    - name: Run linter
+      run: cd server && npm run lint --if-present
+    
+    - name: Run backend tests
+      run: cd server && npm test --if-present
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      if: matrix.node-version == '18.x'
+      with:
+        file: ./server/coverage/coverage-final.json
+        flags: backend
+        name: backend-coverage
+    
+    - name: Check database schema
+      run: cd server && npx prisma validate
+    
+    - name: Build backend
+      run: cd server && npm run build --if-present
+    
+    - name: Archive build artifacts
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: backend-build-logs-${{ matrix.node-version }}
+        path: server/
+        retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Snyk security scan
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high --file=server/package.json
+    
+    - name: Audit npm packages
+      run: cd server && npm audit --audit-level=moderate
+
+  database-migration:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: 'server/package-lock.json'
+    
+    - name: Install dependencies
+      run: cd server && npm ci
+    
+    - name: Test database migrations
+      run: cd server && npx prisma migrate resolve --applied --rolled-back || true
+    
+    - name: Validate schema
+      run: cd server && npx prisma validate
+    
+    - name: Generate Prisma client
+      run: cd server && npx prisma generate

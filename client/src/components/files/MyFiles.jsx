@@ -1,288 +1,235 @@
-import { useState, useCallback, useRef } from 'react';
-import api from '../../utils/api';
+import { useState } from 'react';
+import api from '../../services/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
+import { formatDate, formatINR } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
-import {
-  FolderOpen,
-  Upload,
-  Trash2,
-  FileText,
-  Image,
-  File,
-  Loader2,
-  ExternalLink,
-  Filter,
-} from 'lucide-react';
-
-const CATEGORIES = [
-  { key: 'all', label: 'All Files' },
-  { key: 'document', label: 'Documents' },
-  { key: 'receipt', label: 'Receipts' },
-  { key: 'id_proof', label: 'ID Proofs' },
-  { key: 'education', label: 'Education' },
-  { key: 'photo', label: 'Photos' },
-  { key: 'other', label: 'Other' },
-];
-
-function detectCategory(filename) {
-  const lower = filename.toLowerCase();
-  if (/receipt|invoice|bill/i.test(lower)) return 'receipt';
-  if (/aadhaar|pan|passport|license|id/i.test(lower)) return 'id_proof';
-  if (/degree|marksheet|certificate|diploma/i.test(lower)) return 'education';
-  if (/\.(jpg|jpeg|png|webp|gif)$/i.test(lower)) return 'photo';
-  return 'document';
-}
-
-function getFileIcon(mimeType) {
-  if (mimeType?.startsWith('image/')) return <Image className="w-5 h-5 text-emerald-500" />;
-  if (mimeType?.includes('pdf')) return <FileText className="w-5 h-5 text-red-500" />;
-  return <File className="w-5 h-5 text-blue-500" />;
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
+import StatusBadge from '../shared/StatusBadge';
+import { Download, Trash2, FolderOpen, Upload } from 'lucide-react';
 
 const CATEGORY_COLORS = {
-  photo: 'bg-emerald-100 text-emerald-700',
-  document: 'bg-blue-100 text-blue-700',
-  receipt: 'bg-amber-100 text-amber-700',
-  id_proof: 'bg-purple-100 text-purple-700',
-  education: 'bg-indigo-100 text-indigo-700',
-  other: 'bg-gray-100 text-gray-600',
+  photo: 'bg-blue-50 border-blue-200 text-blue-700',
+  document: 'bg-gray-50 border-gray-200 text-gray-700',
+  receipt: 'bg-green-50 border-green-200 text-green-700',
+  id_proof: 'bg-red-50 border-red-200 text-red-700',
+  education: 'bg-purple-50 border-purple-200 text-purple-700',
+  other: 'bg-yellow-50 border-yellow-200 text-yellow-700',
+};
+
+const CATEGORY_LABELS = {
+  photo: 'Photo',
+  document: 'Document',
+  receipt: 'Receipt',
+  id_proof: 'ID Proof',
+  education: 'Education',
+  other: 'Other',
 };
 
 export default function MyFiles() {
-  const [category, setCategory] = useState('all');
+  const [category, setCategory] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const fileRef = useRef(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
 
-  const url = `/files/my${category !== 'all' ? `?category=${category}` : ''}`;
+  const url = `/api/files/my${category ? `?category=${category}` : ''}`;
   const { data: files, loading, error, refetch } = useFetch(url, []);
-  const { execute, loading: uploading, error: uploadErr, success } = useApi();
+  const { execute: deleteFile, loading: deleting } = useApi();
+  const { execute: uploadFile, loading: uploading, error: uploadError, success } = useApi();
 
-  // ── Upload handler ──
-  const handleUpload = useCallback(async (file) => {
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) {
-      alert('File too large. Maximum size is 15 MB.');
-      return;
-    }
+  const categories = ['All', 'Documents', 'Receipts', 'ID Proofs', 'Education', 'Photos', 'Other'];
+  const categoryValues = [null, 'document', 'receipt', 'id_proof', 'education', 'photo', 'other'];
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('category', detectCategory(file.name));
-
-    await execute(
-      () => api.post('/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }),
-      'File uploaded successfully!'
-    );
-    refetch();
-  }, [execute, refetch]);
-
-  // ── Drag & drop ──
-  const handleDragOver = useCallback((e) => {
+  const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e) => {
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-  }, []);
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    handleFileUpload(droppedFiles);
+  };
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const f = e.dataTransfer?.files?.[0];
-    if (f) handleUpload(f);
-  }, [handleUpload]);
+  const handleFileUpload = async (uploadedFiles) => {
+    // Validate files
+    for (const file of uploadedFiles) {
+      if (file.size > 15 * 1024 * 1024) {
+        alert(`File "${file.name}" is too large (max 15MB)`);
+        return;
+      }
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        alert(`File "${file.name}" is not supported (images and PDF only)`);
+        return;
+      }
+    }
 
-  // ── Delete handler ──
-  const handleDelete = useCallback(async (fileId, fileName) => {
-    if (!confirm(`Delete "${fileName}"? This will also remove it from Google Drive.`)) return;
-    await execute(() => api.delete(`/files/${fileId}`), 'File deleted.');
+    // Upload files
+    const formData = new FormData();
+    uploadedFiles.forEach((file) => formData.append('file', file));
+
+    await execute(
+      () => api.post('/api/files/upload', formData),
+      'File(s) uploaded successfully!'
+    );
     refetch();
-  }, [execute, refetch]);
+  };
 
-  // ── Render ──
+  const handleDelete = async (fileId, fileName) => {
+    if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+
+    await deleteFile(
+      () => api.delete(`/api/files/${fileId}`),
+      'File deleted successfully'
+    );
+    refetch();
+  };
+
   if (loading) return <LoadingSpinner />;
+  if (error) return <AlertMessage type="error" message={error} />;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-            <FolderOpen className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">My Files</h1>
-            <p className="text-sm text-gray-500">
-              Your documents stored in Google Drive
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          Upload File
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => { handleUpload(e.target.files?.[0]); e.target.value = ''; }}
-        />
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <FolderOpen className="w-8 h-8 text-blue-600" />
+          My Files
+        </h1>
+        <p className="text-gray-600 mt-2">Upload and organize your documents, photos, and receipts</p>
       </div>
 
-      {/* Messages */}
-      {(success || uploadErr || error) && (
-        <div className="mb-4">
-          {success && <AlertMessage type="success" message={success} />}
-          {(uploadErr || error) && <AlertMessage type="error" message={uploadErr || error} />}
-        </div>
-      )}
+      {success && <AlertMessage type="success" message={success} />}
+      {uploadError && <AlertMessage type="error" message={uploadError} />}
 
-      {/* Drag & Drop Zone */}
+      {/* Upload Zone */}
       <div
+        className={`border-2 border-dashed rounded-lg p-8 text-center mb-8 cursor-pointer transition ${
+          isDragging
+            ? 'border-blue-500 bg-blue-50'
+            : 'border-gray-300 bg-gray-50 hover:border-blue-400'
+        }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center mb-6 cursor-pointer transition-all ${
-          isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-        }`}
+        onClick={() => document.getElementById('fileInput')?.click()}
       >
-        {uploading ? (
-          <div className="flex items-center justify-center gap-2 text-blue-600">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm font-medium">Uploading to Google Drive...</span>
-          </div>
-        ) : (
-          <>
-            <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 font-medium">
-              Drag & drop a file here, or click to browse
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Max 15 MB — Documents, images, PDFs, etc.
-            </p>
-          </>
-        )}
+        <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+        <p className="text-lg font-semibold text-gray-700">Drag files here to upload</p>
+        <p className="text-sm text-gray-500 mt-1">or click to browse (Max 15MB per file)</p>
+        <p className="text-xs text-gray-400 mt-2">Supported: Images (JPEG, PNG, WebP) and PDF</p>
+        <input
+          id="fileInput"
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFileUpload(Array.from(e.target.files))}
+          accept="image/*,.pdf"
+        />
       </div>
 
-      {/* Category Filter Tabs */}
-      <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1">
-        <Filter className="w-4 h-4 text-gray-400 mr-1 flex-shrink-0" />
-        {CATEGORIES.map((cat) => (
+      {uploading && (
+        <div className="flex items-center justify-center gap-3 mb-6 p-4 bg-blue-50 rounded-lg">
+          <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+          <span className="text-blue-700">Uploading file(s)...</span>
+        </div>
+      )}
+
+      {/* Category Filter */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {categories.map((cat, idx) => (
           <button
-            key={cat.key}
-            onClick={() => setCategory(cat.key)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-colors ${
-              category === cat.key
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            key={cat}
+            onClick={() => setCategory(categoryValues[idx])}
+            className={`px-4 py-2 rounded-full font-medium transition ${
+              category === categoryValues[idx]
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >
-            {cat.label}
+            {cat}
           </button>
         ))}
       </div>
 
-      {/* Files List */}
+      {/* File Grid */}
       {files.length === 0 ? (
         <EmptyState
           icon="📁"
-          title={category !== 'all' ? `No ${CATEGORIES.find(c => c.key === category)?.label || 'files'}` : 'No files uploaded yet'}
-          subtitle="Upload your first file using the button above or drag and drop"
+          title="No files yet"
+          subtitle="Upload files using the upload area above"
         />
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {files.map((file) => (
             <div
               key={file.id}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+              className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition"
             >
-              {/* Icon */}
-              <div className="flex-shrink-0">
-                {file.thumbnailUrl ? (
-                  <img
-                    src={file.thumbnailUrl}
-                    alt=""
-                    className="w-10 h-10 rounded-lg object-cover border border-gray-200"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                    {getFileIcon(file.mimeType)}
-                  </div>
-                )}
-              </div>
+              {/* Thumbnail */}
+              {file.thumbnailUrl && (
+                <img
+                  src={file.thumbnailUrl}
+                  alt={file.fileName}
+                  className="w-full h-40 object-cover bg-gray-100"
+                />
+              )}
 
-              {/* Details */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">
-                  {file.fileName}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize ${
-                    CATEGORY_COLORS[file.category] || CATEGORY_COLORS.other
-                  }`}>
-                    {file.category?.replace('_', ' ')}
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {formatFileSize(file.fileSize)}
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    {new Date(file.uploadedAt).toLocaleDateString('en-IN', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })}
+              {/* File Info */}
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 truncate mb-2">{file.fileName}</h3>
+
+                {/* Category Badge */}
+                <div className="mb-3">
+                  <span
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
+                      CATEGORY_COLORS[file.category] || CATEGORY_COLORS.other
+                    }`}
+                  >
+                    {CATEGORY_LABELS[file.category] || 'Other'}
                   </span>
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <a
-                  href={file.driveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Open in Google Drive"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-                <button
-                  onClick={() => handleDelete(file.id, file.fileName)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete file"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {/* Metadata */}
+                <div className="text-sm text-gray-600 mb-3 space-y-1">
+                  <p>Size: {(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                  <p>Uploaded: {formatDate(file.uploadedAt)}</p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <a
+                    href={file.driveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition text-sm font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </a>
+                  <button
+                    onClick={() => handleDelete(file.id, file.fileName)}
+                    disabled={deleting}
+                    className="px-3 py-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Footer count */}
+      {/* File Count Footer */}
       {files.length > 0 && (
-        <p className="text-xs text-gray-400 mt-3 text-right">
-          {files.length} file{files.length !== 1 ? 's' : ''}
-        </p>
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-center text-sm text-gray-600">
+          {files.length} file{files.length !== 1 ? 's' : ''} in {category ? CATEGORY_LABELS[category] : 'all categories'}
+        </div>
       )}
     </div>
   );

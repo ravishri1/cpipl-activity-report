@@ -1,0 +1,42 @@
+Employee ID,Employee Name,Designation,Department,Location,Grade/Level,Email,Phone,Reporting Manager ID,Reporting Manager Name,Reporting Manager Designation,Number of Subordinates,Employment Status,Date of Joining
+COLOR001,Ravi Pardeep Shrivastav,CEO,Leadership,Mumbai,,me@colorpapers.in,9022825551,,,,1,active,2012-08-07
+COLOR003,Himanshu Srivastava,,Leadership,LUCKNOW,,himanshu.srivastava@colorpapers.in,9208227295,,,,0,active,2016-04-30
+COLOR005,Dayanand Vishnu Halde,,Leadership,Mumbai,,dayanand.halde@colorpapers.in,9920585486,,,,0,active,2019-08-29
+COLOR022,Rahul Dixit,,Logistics & Fulfillment,LUCKNOW,,rahul.dixit@colorpapers.in,6394415791,,,,0,active,2019-11-15
+COLOR026,Shailesh Vinod Naik,,Product Listing & Design,Mumbai,,shailesh.naik@colorpapers.in,8976598365,,,,0,active,2020-09-20
+COLOR034,Pranali Nandu Patil,,Customer Support,Mumbai,,pranali.patil@colorpapers.in,9664516616,,,,0,active,2021-02-04
+COLOR041,Priya Sharma,Design Intern,Product Listing & Design,,,priya.sharma@colorpapers.in,9876543210,COLOR001,Ravi Pardeep Shrivastav,CEO,0,active,2026-03-03
+COLOR044,Rajat Kumar Shrivastava,,Procurement,LUCKNOW,,rajat.shrivastava@colorpapers.in,8934014360,,,,0,active,2021-08-31
+COLOR047,Jyoti Vasant Naik,,Tech & Development,Mumbai,,jyoti.naik@colorpapers.in,9326384489,,,,0,active,2021-11-24
+COLOR057,Nandan Sanjay Maurya,,Product Listing & Design,Mumbai,,nandan.maurya@colorpapers.in,8087645958,,,,0,active,2022-01-23
+COLOR064,Anuj Arya,,Procurement,LUCKNOW,,anuj.arya@colorpapers.in,7754916330,,,,0,active,2022-01-31
+COLOR076,Dilip Yadav,,Procurement,LUCKNOW,,dilip.yadav@colorpapers.in,8178115077,,,,0,active,2022-06-30
+COLOR115,Aman Saini,,Logistics & Fulfillment,LUCKNOW,,aman.saini@colorpapers.in,9695182866,,,,0,active,2023-04-30
+COLOR117,Lahiri Noopur,,Logistics & Fulfillment,LUCKNOW,,noopur.lahiri@colorpapers.in,9956515902,,,,0,active,2023-06-05
+COLOR120,Ashishkumar Ashok Tavasalkar,,HR & Office,Mumbai,,ashish.tavasalkar@colorpapers.in,9967884372,,,,0,active,2023-12-03
+COLOR146,Mehul Rikame,,Product Listing & Design,Mumbai,,mehul.rikame@colorpapers.in,8975926481,,,,0,active,2024-09-30
+COLOR167,Sameer Manik Patil,,Logistics & Fulfillment,Mumbai,,sameer.patil@colorpapers.in,7400200521,,,,0,active,2025-05-16
+COLOR170,Shaunak Sharad Kadam,,Accounts & Finance,Mumbai,,shaunak.kadam@colorpapers.in,9867396579,,,,0,active,2025-05-21
+COLOR171,Avinash Vinayak Kadam,,Accounts & Finance,Mumbai,,avinash.kadam@colorpapers.in,8268915948,,,,0,active,2025-06-06
+COLOR176,Ankit Singh Anil,,Product Listing & Design,Mumbai,,ankit.singh@colorpapers.in,8369998014,,,,0,active,2025-09-01
+COLOR182,Yadav Ritesh Vinod,,Product Listing & Design,Mumbai,,ritesh.yadav@colorpapers.in,7718994310,,,,0,active,2025-09-15
+COLOR184,Rahul Yadav,,General,LUCKNOW,,order.lucknow@colorpapers.in,9214651751,,,,0,active,2024-11-30
+COLOR185,Dilip Kumar,,Logistics & Fulfillment,LUCKNOW,,dilip.gautam@colorpapers.in,9870979299,,,,0,active,2024-11-30
+COLOR188,Shubhanshu Prasad,,Customer Support,Mumbai,,shubhanshu.prasad@colorpapers.in,6394147117,,,,0,active,2025-09-21
+COLOR190,Manish Jaya Mendon,,General,Mumbai,,manishmendon33@gmail.com,9172618739,,,,0,active,2025-10-02
+COLOR191,Akshat Shailesh Mehta,,Data & Analytics,Mumbai,,akshat.mehta@colorpapers.in,9833817725,,,,0,active,2025-09-30
+COLOR193,Pratiksha Pankaj Manjrekar,,General,Mumbai,,pratikshapm1612@gmail.com,8591250227,,,,0,active,2026-01-26
+COLOR194,Shalini Chaurasia,,General,Mumbai,,shalinichaurasia67@gmail.com,8355918178,,,,0,active,2026-01-26
+CPIPL-024,Pravin Shinde,,Tech & Development,,,pravin.shinde@colorpapers.in,,,,,0,active,
+,Kavita Das,,Operations,,,kavita@cpipl.com,,,,,0,active,
+,Arjun Nair,,Marketing,,,arjun@cpipl.com,,,,,0,active,
+,Pooja Reddy,,Sales,,,pooja@cpipl.com,,,,,0,active,
+,Ravi Verma,,Engineering,,,ravi@cpipl.com,,,,,0,active,
+,Neha Joshi,,HR,,,neha@cpipl.com,,,,,0,active,
+,Vikram Singh,,Operations,,,vikram@cpipl.com,,,,,0,active,
+,Sneha Gupta,,Marketing,,,sneha@cpipl.com,,,,,0,active,
+,Amit Kumar,,Sales,,,amit@cpipl.com,,,,,0,active,
+,Priya Patel,,Engineering,,,priya@cpipl.com,,,,,0,active,
+,Team Lead,,Management,,,teamlead@cpipl.com,,,,,0,active,
+,Admin,,Management,,,admin@cpipl.com,,,,,0,active,
+,Rahul Sharma,,Engineering,,,rahul@cpipl.com,,,,,0,active,
