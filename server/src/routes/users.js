@@ -6,6 +6,7 @@ const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErro
 const { requireFields, parseId } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
+const { processProfilePhoto } = require('../services/photoProcessor');
 
 const router = express.Router();
 
@@ -32,7 +33,9 @@ async function logChanges(prisma, { userId, changedBy, section, changes, action 
 // ═══════════════════════════════════════════════
 
 // POST /api/users/:id/photo — Upload profile photo as base64 (self or admin)
-router.post('/:id/photo', authenticate, express.json({ limit: '2mb' }), asyncHandler(async (req, res) => {
+// Photo is automatically processed: background whitened, cropped to headshot,
+// enhanced; male profiles also get glasses/cap removed via AI.
+router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
   const isAdmin = req.user.role === 'admin';
@@ -40,13 +43,30 @@ router.post('/:id/photo', authenticate, express.json({ limit: '2mb' }), asyncHan
 
   const { photo } = req.body;
   if (!photo || !photo.startsWith('data:image/')) throw badRequest('Invalid image data.');
-  if (photo.length > 500000) throw badRequest('Image too large. It will be auto-compressed on upload.');
+  // No manual size check — sharp compresses the output to well under 500 KB
 
-  const existing = await req.prisma.user.findUnique({ where: { id: targetId }, select: { profilePhotoUrl: true } });
+  // Look up existing photo + gender for conditional AI processing
+  const existing = await req.prisma.user.findUnique({
+    where:  { id: targetId },
+    select: { profilePhotoUrl: true, gender: true },
+  });
+
+  // Decode base64 data URL → buffer
+  const commaIdx = photo.indexOf(',');
+  const inputMime = photo.slice(5, photo.indexOf(';'));          // "data:image/jpeg;base64,…"
+  const inputBuf  = Buffer.from(photo.slice(commaIdx + 1), 'base64');
+
+  // Run through AI + sharp pipeline
+  const { buffer: processed, mimeType: outMime } = await processProfilePhoto(
+    inputBuf, inputMime, { gender: existing?.gender ?? null }
+  );
+
+  // Re-encode to base64 data URL for storage
+  const processedPhoto = `data:${outMime};base64,${processed.toString('base64')}`;
 
   const user = await req.prisma.user.update({
     where: { id: targetId },
-    data: { profilePhotoUrl: photo },
+    data:  { profilePhotoUrl: processedPhoto },
     select: { id: true, profilePhotoUrl: true },
   });
 

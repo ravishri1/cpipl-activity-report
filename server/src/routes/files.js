@@ -9,6 +9,7 @@ const {
   uploadFile, deleteFile, ensureEmployeeFolder, getDirectImageUrl,
 } = require('../services/google/googleDrive');
 const { extractInvoiceData, extractMultipleInvoices } = require('../services/invoiceExtractor');
+const { processProfilePhoto } = require('../services/photoProcessor');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -293,7 +294,7 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
 
     const user = await req.prisma.user.findFirst({
       where: { employeeId },
-      select: { id: true, name: true, employeeId: true, driveFolderId: true },
+      select: { id: true, name: true, employeeId: true, driveFolderId: true, gender: true },
     });
 
     if (!user) {
@@ -303,11 +304,17 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
     }
 
     try {
-      const buffer = entry.getData();
-      const mimeType = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      const rawBuffer = entry.getData();
+      const rawMime   = fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+      // Process photo: white background, headshot crop, AI cleanup
+      const { buffer, mimeType } = await processProfilePhoto(
+        rawBuffer, rawMime, { gender: user.gender ?? null }
+      );
+      const uploadName = fileName.replace(/\.(png)$/i, '.jpg'); // always JPEG after processing
 
       const folderId = await ensureEmployeeFolder(drive, user, req.prisma);
-      const result = await uploadFile(drive, folderId, fileName, mimeType, buffer);
+      const result = await uploadFile(drive, folderId, uploadName, mimeType, buffer);
 
       if (!result || !result.fileId) {
         throw new Error(`Upload returned invalid result: ${JSON.stringify(result)}`);
@@ -319,10 +326,10 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
           userId: user.id,
           driveFileId: result.fileId,
           driveFolderId: folderId,
-          fileName,
+          fileName:  uploadName,
           mimeType,
-          fileSize: buffer.length,
-          driveUrl: result.webViewLink,
+          fileSize:  buffer.length,
+          driveUrl:  result.webViewLink,
           thumbnailUrl: result.thumbnailLink || null,
           category: 'photo',
           description: 'Profile photo (bulk upload)',
@@ -365,23 +372,30 @@ router.post('/upload-profile-photo', upload.single('photo'), asyncHandler(async 
 
   const user = await req.prisma.user.findUnique({
     where: { id: targetUserId },
-    select: { id: true, name: true, employeeId: true, driveFolderId: true },
+    select: { id: true, name: true, employeeId: true, driveFolderId: true, gender: true },
   });
   if (!user) throw notFound('User');
 
+  // Process photo: white background, headshot crop, AI cleanup (glasses/cap for males)
+  const { buffer: processedBuf, mimeType: processedMime } = await processProfilePhoto(
+    req.file.buffer, req.file.mimetype, { gender: user.gender ?? null }
+  );
+  // Always upload as JPEG after processing
+  const uploadName = req.file.originalname.replace(/\.(png|webp|gif|bmp)$/i, '.jpg');
+
   const drive = await getDriveClient();
   const folderId = await ensureEmployeeFolder(drive, user, req.prisma);
-  const result = await uploadFile(drive, folderId, req.file.originalname, req.file.mimetype, req.file.buffer);
+  const result = await uploadFile(drive, folderId, uploadName, processedMime, processedBuf);
 
   const driveFile = await req.prisma.driveFile.create({
     data: {
       userId: targetUserId,
       driveFileId: result.fileId,
       driveFolderId: folderId,
-      fileName: req.file.originalname,
-      mimeType: req.file.mimetype,
-      fileSize: req.file.size,
-      driveUrl: result.webViewLink,
+      fileName:  uploadName,
+      mimeType:  processedMime,
+      fileSize:  processedBuf.length,
+      driveUrl:  result.webViewLink,
       thumbnailUrl: result.thumbnailLink || null,
       category: 'photo',
       description: 'Profile photo',

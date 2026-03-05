@@ -39,6 +39,17 @@ const REQUESTY_BASE = 'https://router.requesty.ai/v1/chat/completions';
 // Model naming on Requesty: "provider/model-id"  (e.g. google/gemini-2.0-flash-001)
 // All models in the list must support the capabilities required by the task type.
 
+// ─── Image editing model list ─────────────────────────────────────────────────
+//
+// Models that can accept an image input and return a modified image as output.
+// Used for profile photo processing (background removal, cleanup, inpainting).
+// Tried in order; if no image is returned the caller falls back to sharp-only.
+//
+const IMAGE_EDIT_MODELS = [
+  'google/gemini-2.0-flash-exp',           // Gemini experimental — supports image output
+  'google/gemini-2.0-flash-001',           // standard multimodal fallback
+];
+
 const TASK_MODELS = {
   /**
    * vision_extraction — reading images / PDFs for structured data.
@@ -213,6 +224,55 @@ async function callGeminiDirect(messages, prisma) {
   return result.response.text();
 }
 
+// ─── Image response extractor ─────────────────────────────────────────────────
+
+/**
+ * Parse an OpenAI-compatible chat completion response and extract image data.
+ * Handles multiple possible formats returned by different model providers.
+ *
+ * @param {object} data  - Parsed JSON response from /v1/chat/completions
+ * @returns {{ buffer: Buffer, mimeType: string } | null}
+ */
+function extractImageFromResponse(data) {
+  const message = data.choices?.[0]?.message;
+  if (!message) return null;
+
+  // Format 1: content is an array of parts (OpenAI-style multimodal output)
+  if (Array.isArray(message.content)) {
+    for (const part of message.content) {
+      if (part.type === 'image_url' && part.image_url?.url?.startsWith('data:')) {
+        const url = part.image_url.url;
+        const comma = url.indexOf(',');
+        const header = url.slice(0, comma);
+        const b64 = url.slice(comma + 1);
+        const mimeType = header.replace('data:', '').replace(';base64', '');
+        return { buffer: Buffer.from(b64, 'base64'), mimeType };
+      }
+      // Gemini inline_data format via OpenAI-compat wrapper
+      if (part.type === 'image' && part.source?.data) {
+        return {
+          buffer: Buffer.from(part.source.data, 'base64'),
+          mimeType: part.source.media_type || 'image/png',
+        };
+      }
+    }
+  }
+
+  // Format 2: Gemini native parts wrapper
+  if (Array.isArray(message.parts)) {
+    for (const part of message.parts) {
+      if (part.inlineData?.data) {
+        return {
+          buffer: Buffer.from(part.inlineData.data, 'base64'),
+          mimeType: part.inlineData.mimeType || 'image/png',
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -300,6 +360,76 @@ async function callAIVision(prompt, buffer, mimeType, opts = {}) {
 }
 
 /**
+ * Convenience wrapper: image-editing AI call.
+ * Sends an image + text prompt; expects the model to return a modified image.
+ *
+ * Only uses Requesty (REQUESTY_API_KEY required) — no Gemini-direct fallback
+ * because the SDK doesn't expose image-output capability via a simple path.
+ *
+ * @param {string} prompt    - Editing instructions.
+ * @param {Buffer} buffer    - Input image buffer.
+ * @param {string} mimeType  - MIME type of input image.
+ * @param {object} [opts]
+ * @param {boolean} [opts.silent] - Suppress console logs.
+ * @returns {Promise<{ buffer: Buffer, mimeType: string }>}
+ * @throws {Error} if no model returned an image (caller should fall back)
+ */
+async function callAIImageEdit(prompt, buffer, mimeType, { silent } = {}) {
+  if (!process.env.REQUESTY_API_KEY) {
+    throw new Error('REQUESTY_API_KEY required for AI image editing.');
+  }
+
+  const base64  = buffer.toString('base64');
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  let lastError;
+  for (const model of IMAGE_EDIT_MODELS) {
+    try {
+      const response = await fetch(REQUESTY_BASE, {
+        method:  'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.REQUESTY_API_KEY}`,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{
+            role:    'user',
+            content: [
+              { type: 'text',      text:      prompt },
+              { type: 'image_url', image_url: { url: dataUrl } },
+            ],
+          }],
+          // Request image output modality (Gemini image-gen models)
+          modalities: ['text', 'image'],
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => response.statusText);
+        throw new Error(`HTTP ${response.status}: ${errBody}`);
+      }
+
+      const data        = await response.json();
+      const imageResult = extractImageFromResponse(data);
+
+      if (!imageResult) {
+        throw new Error('Model returned no image in response');
+      }
+
+      if (!silent) console.log(`[aiRouter] ✓ image_edit → ${model}`);
+      return imageResult;
+
+    } catch (err) {
+      if (!silent) console.warn(`[aiRouter] ✗ image_edit ${model}: ${err.message}`);
+      lastError = err;
+    }
+  }
+
+  throw new Error(`AI image editing failed: ${lastError?.message ?? 'all models failed'}`);
+}
+
+/**
  * Return the model list for a given task type (for admin UI / inspection).
  * @param {string} taskType
  * @returns {string[]}
@@ -318,4 +448,4 @@ function getAllTaskModels() {
   );
 }
 
-module.exports = { callAI, callAIText, callAIVision, getTaskModels, getAllTaskModels };
+module.exports = { callAI, callAIText, callAIVision, callAIImageEdit, getTaskModels, getAllTaskModels };

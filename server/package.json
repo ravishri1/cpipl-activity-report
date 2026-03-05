@@ -33,6 +33,7 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
     "pdf2json": "^4.0.2",
+    "sharp": "^0.34.5",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
