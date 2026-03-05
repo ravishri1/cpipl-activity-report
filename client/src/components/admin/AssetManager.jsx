@@ -683,7 +683,7 @@ export default function AssetManager() {
 
     setFormLoading(true);
     try {
-      await api.post(`/assets/${repairTarget.id}/repairs/initiate`, {
+      await api.post(`/assets/repairs/${repairTarget.id}/initiate`, {
         repairType: repairForm.repairType,
         sentOutDate: repairForm.sentOutDate,
         expectedReturnDate: repairForm.expectedReturnDate,

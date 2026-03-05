@@ -294,7 +294,7 @@ export default function AssetRepairTimeline() {
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
   // Fetch all repairs
-  const { data: repairs, loading, error, refetch } = useFetch('/api/assets/repairs', []);
+  const { data: repairs, loading, error, refetch } = useFetch('/assets/repairs', []);
   const { execute: updateStatus, loading: updatingStatus } = useApi();
   const { execute: completeRepair, loading: completing } = useApi();
 
@@ -321,7 +321,7 @@ export default function AssetRepairTimeline() {
 
   const handleStatusChange = async (repairId, newStatus) => {
     await updateStatus(
-      () => api.put(`/api/assets/repairs/${repairId}/update-status`, { newStatus }),
+      () => api.put(`/assets/repairs/${repairId}/update-status`, { newStatus }),
       'Status updated'
     );
     refetch();
@@ -330,7 +330,7 @@ export default function AssetRepairTimeline() {
   const handleComplete = async (repairId) => {
     const actualReturnDate = new Date().toISOString().slice(0, 10);
     await completeRepair(
-      () => api.post(`/api/assets/repairs/${repairId}/complete`, { actualReturnDate }),
+      () => api.post(`/assets/repairs/${repairId}/complete`, { actualReturnDate }),
       'Repair completed'
     );
     setSelectedRepair(null);
