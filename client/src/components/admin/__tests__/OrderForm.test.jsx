@@ -226,7 +226,7 @@ describe('OrderForm Component', () => {
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith(
-        '/api/procurement/orders',
+        '/procurement/orders',
         expect.objectContaining({
           vendorId: 1,
           status: 'draft',

@@ -146,7 +146,7 @@ describe('OrderApprovalQueue Component', () => {
       if (approveButtons.length > 0) {
         fireEvent.click(approveButtons[0]);
         expect(api.post).toHaveBeenCalledWith(
-          '/api/procurement/orders/1/approve',
+          '/procurement/orders/1/approve',
           expect.objectContaining({ approvalDate: expect.any(String) })
         );
       }

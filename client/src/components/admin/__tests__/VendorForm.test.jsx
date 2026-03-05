@@ -106,7 +106,7 @@ describe('VendorForm Component', () => {
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith(
-        '/api/procurement/vendors',
+        '/procurement/vendors',
         expect.objectContaining({
           vendorName: 'New Vendor',
           email: 'vendor@test.com',
@@ -248,7 +248,7 @@ describe('VendorForm Component', () => {
 
     await waitFor(() => {
       expect(api.put).toHaveBeenCalledWith(
-        '/api/procurement/vendors/1',
+        '/procurement/vendors/1',
         expect.objectContaining({ vendorName: 'Updated Corp' })
       );
     });
