@@ -1,21 +1,31 @@
 import { useState } from 'react';
-import { CheckCircle, Clock, AlertCircle, DollarSign, Wrench } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, DollarSign, Wrench, XCircle } from 'lucide-react';
 import api from '../../services/api';
 import { useApi } from '../../hooks/useApi';
-import AlertMessage from '../shared/AlertMessage';
 
+// Match urgency values from healthScoring.js generateRecommendations()
 const URGENCY_LEVELS = {
-  immediate: { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', badge: 'bg-red-100', icon: AlertCircle },
-  urgent: { color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100', icon: Clock },
-  planned: { color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100', icon: Wrench },
-  routine: { color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100', icon: CheckCircle }
+  critical: { color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200',    badge: 'bg-red-100',    icon: AlertCircle },
+  high:     { color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100', icon: Clock },
+  medium:   { color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',   badge: 'bg-blue-100',   icon: Wrench },
+  low:      { color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200',  badge: 'bg-green-100',  icon: CheckCircle },
+};
+
+// Map action keys → display labels
+const ACTION_LABELS = {
+  repair:                 'Repair Required',
+  preventive_maintenance: 'Preventive Maintenance',
+  inspection:             'Inspection',
+  replacement_evaluation: 'Evaluate Replacement',
+  follow_up_vendor:       'Follow Up with Vendor',
 };
 
 const ACTION_ICONS = {
-  immediate_inspection: AlertCircle,
+  repair:                 Wrench,
   preventive_maintenance: Wrench,
-  condition_monitoring: Clock,
-  parts_replacement: DollarSign
+  inspection:             AlertCircle,
+  replacement_evaluation: DollarSign,
+  follow_up_vendor:       Clock,
 };
 
 function RecommendationsPanel({ recommendations, onRefetch }) {
@@ -26,8 +36,8 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
     setUpdatingId(recommendationId);
     try {
       await execute(
-        () => api.put(`/api/predictions/recommendation/${recommendationId}`, { status: newStatus }),
-        `Recommendation marked as ${newStatus}`
+        () => api.put(`/api/predictions/recommendations/${recommendationId}/status`, { status: newStatus }),
+        `Recommendation marked as ${newStatus.replace('_', ' ')}`
       );
       onRefetch?.();
     } finally {
@@ -35,18 +45,21 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
     }
   };
 
-  // Group by urgency
-  const byUrgency = recommendations.reduce((acc, rec) => {
-    acc[rec.urgency] = (acc[rec.urgency] || []).concat(rec);
-    return acc;
-  }, {});
+  // Group by urgency (critical first)
+  const urgencyOrder = ['critical', 'high', 'medium', 'low'];
+  const byUrgency = {};
+  for (const rec of recommendations) {
+    const u = rec.urgency || 'low';
+    if (!byUrgency[u]) byUrgency[u] = [];
+    byUrgency[u].push(rec);
+  }
 
   // Count by status
   const statusCounts = {
-    pending: recommendations.filter(r => r.status === 'pending').length,
-    approved: recommendations.filter(r => r.status === 'approved').length,
+    pending:     recommendations.filter(r => r.status === 'pending').length,
     in_progress: recommendations.filter(r => r.status === 'in_progress').length,
-    completed: recommendations.filter(r => r.status === 'completed').length
+    completed:   recommendations.filter(r => r.status === 'completed').length,
+    dismissed:   recommendations.filter(r => r.status === 'dismissed').length,
   };
 
   return (
@@ -57,7 +70,7 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Maintenance Recommendations</h2>
             <p className="text-sm text-slate-600 mt-1">
-              {statusCounts.pending} pending • {statusCounts.approved} approved • {statusCounts.in_progress} in progress • {statusCounts.completed} completed
+              {statusCounts.pending} pending • {statusCounts.in_progress} in progress • {statusCounts.completed} completed • {statusCounts.dismissed} dismissed
             </p>
           </div>
         </div>
@@ -82,8 +95,9 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
             <p className="text-sm text-slate-500">No maintenance recommendations at this time</p>
           </div>
         ) : (
-          Object.entries(byUrgency).map(([urgency, recs]) => {
-            const urgencyConfig = URGENCY_LEVELS[urgency];
+          urgencyOrder.filter(u => byUrgency[u]?.length > 0).map(urgency => {
+            const recs = byUrgency[urgency];
+            const urgencyConfig = URGENCY_LEVELS[urgency] || URGENCY_LEVELS.low;
             const UrgencyIcon = urgencyConfig.icon;
 
             return (
@@ -99,7 +113,8 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
                 {/* Recommendations */}
                 {recs.map((rec) => {
                   const ActionIcon = ACTION_ICONS[rec.action] || Wrench;
-                  
+                  const actionLabel = ACTION_LABELS[rec.action] || rec.action?.replace(/_/g, ' ') || 'Maintenance';
+
                   return (
                     <div key={rec.id} className={`p-4 hover:bg-slate-50 transition-colors ${updatingId === rec.id ? 'opacity-50' : ''}`}>
                       <div className="flex justify-between items-start gap-4">
@@ -107,32 +122,39 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <ActionIcon className="w-5 h-5 text-slate-700" />
-                            <h3 className="font-semibold text-slate-900">{rec.title}</h3>
+                            <h3 className="font-semibold text-slate-900 capitalize">{actionLabel}</h3>
                             <span className={`px-2 py-1 rounded text-xs font-semibold ${urgencyConfig.badge} ${urgencyConfig.color}`}>
                               {urgency.toUpperCase()}
                             </span>
                           </div>
 
-                          <p className="text-sm text-slate-600 mb-3">{rec.description}</p>
+                          <p className="text-sm text-slate-600 mb-3">{rec.reasoning}</p>
 
                           {/* Asset & Details */}
                           <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                             <div>
                               <p className="text-xs text-slate-600 font-semibold">Asset</p>
-                              <p className="text-slate-900">{rec.assetName}</p>
+                              <p className="text-slate-900">{rec.asset?.name || '—'}</p>
+                              {rec.asset?.type && (
+                                <p className="text-xs text-slate-500">{rec.asset.type}</p>
+                              )}
                             </div>
                             <div>
                               <p className="text-xs text-slate-600 font-semibold">Estimated Cost</p>
-                              <p className="text-slate-900 font-medium">₹{rec.estimatedCost?.toLocaleString() || 'N/A'}</p>
+                              <p className="text-slate-900 font-medium">
+                                {rec.estimatedCost != null ? `₹${rec.estimatedCost.toLocaleString()}` : 'N/A'}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-600 font-semibold">Expected Duration</p>
-                              <p className="text-slate-900">{rec.estimatedDays} days</p>
+                              <p className="text-xs text-slate-600 font-semibold">Failure Risk Reduction</p>
+                              <p className="text-slate-900">
+                                {rec.failureRiskReduction != null ? `${rec.failureRiskReduction}%` : 'N/A'}
+                              </p>
                             </div>
                             <div>
-                              <p className="text-xs text-slate-600 font-semibold">ROI</p>
-                              <p className={`font-medium ${rec.roi > 0 ? 'text-green-600' : 'text-slate-900'}`}>
-                                {rec.roi ? `${Math.round(rec.roi)}%` : 'N/A'}
+                              <p className="text-xs text-slate-600 font-semibold">Confidence</p>
+                              <p className="text-slate-900">
+                                {rec.confidenceScore != null ? `${rec.confidenceScore}%` : 'N/A'}
                               </p>
                             </div>
                           </div>
@@ -140,28 +162,23 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
                           {/* Status Badge */}
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              rec.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              rec.status === 'completed'   ? 'bg-green-100 text-green-700' :
                               rec.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                              rec.status === 'approved' ? 'bg-purple-100 text-purple-700' :
-                              'bg-slate-100 text-slate-700'
+                              rec.status === 'dismissed'   ? 'bg-slate-100 text-slate-500' :
+                              'bg-yellow-100 text-yellow-700'
                             }`}>
-                              {rec.status.replace('_', ' ').toUpperCase()}
+                              {(rec.status || 'pending').replace('_', ' ').toUpperCase()}
                             </span>
-                            <span className="text-xs text-slate-600">{rec.createdAt}</span>
+                            {rec.priority != null && (
+                              <span className="text-xs text-slate-500">Priority: {rec.priority}</span>
+                            )}
                           </div>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2 shrink-0">
                           {rec.status === 'pending' && (
                             <>
-                              <button
-                                onClick={() => handleStatusChange(rec.id, 'approved')}
-                                disabled={updatingId === rec.id}
-                                className="px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                              >
-                                Approve
-                              </button>
                               <button
                                 onClick={() => handleStatusChange(rec.id, 'in_progress')}
                                 disabled={updatingId === rec.id}
@@ -169,17 +186,14 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
                               >
                                 Start
                               </button>
+                              <button
+                                onClick={() => handleStatusChange(rec.id, 'dismissed')}
+                                disabled={updatingId === rec.id}
+                                className="px-3 py-2 text-sm font-medium bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors disabled:opacity-50"
+                              >
+                                Dismiss
+                              </button>
                             </>
-                          )}
-
-                          {rec.status === 'approved' && (
-                            <button
-                              onClick={() => handleStatusChange(rec.id, 'in_progress')}
-                              disabled={updatingId === rec.id}
-                              className="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-                            >
-                              Start
-                            </button>
                           )}
 
                           {rec.status === 'in_progress' && (
@@ -194,7 +208,13 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
 
                           {rec.status === 'completed' && (
                             <span className="px-3 py-2 text-sm font-medium text-green-700 bg-green-50 rounded text-center">
-                              ✓ Completed
+                              ✓ Done
+                            </span>
+                          )}
+
+                          {rec.status === 'dismissed' && (
+                            <span className="px-3 py-2 text-sm font-medium text-slate-500 bg-slate-50 rounded text-center">
+                              Dismissed
                             </span>
                           )}
                         </div>
