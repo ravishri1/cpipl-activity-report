@@ -270,4 +270,113 @@ async function sendWarrantyExpiryAlert(adminEmail, adminName, expiringAssets) {
   return sendEmail(adminEmail, subject, html);
 }
 
-module.exports = { sendEmail, sendReminderEmail, sendEscalationEmail, sendSummaryToLead, sendOverdueRepairAlert, sendWarrantyExpiryAlert };
+async function sendBirthdayAnniversaryAlert(adminEmail, adminName, birthdays, anniversaries) {
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const totalCount = birthdays.length + anniversaries.length;
+  const subject = `🎉 ${totalCount} Celebration${totalCount !== 1 ? 's' : ''} Today — ${today}`;
+
+  function milestoneBadge(years) {
+    const map = { 1: '🥇', 5: '⭐', 10: '🏆', 15: '💎', 20: '👑', 25: '🌟' };
+    return map[years] || '';
+  }
+
+  const birthdayRows = birthdays.map((u) => `
+    <tr>
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;">
+        <div style="font-weight:700;color:#1e293b;">${u.name}</div>
+        <div style="font-size:12px;color:#64748b;">${u.designation || u.department || ''}</div>
+      </td>
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;color:#475569;font-size:14px;">${u.department || '—'}</td>
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;text-align:center;">
+        <span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;">
+          🎂 Turning ${u.age}
+        </span>
+      </td>
+    </tr>`).join('');
+
+  const anniversaryRows = anniversaries.map((u) => {
+    const badge  = milestoneBadge(u.years);
+    const isMile = badge !== '';
+    return `
+    <tr style="background:${isMile ? '#f0fdf4' : '#fff'};">
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;">
+        <div style="font-weight:700;color:#1e293b;">${u.name}</div>
+        <div style="font-size:12px;color:#64748b;">${u.designation || u.department || ''}</div>
+      </td>
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;color:#475569;font-size:14px;">${u.department || '—'}</td>
+      <td style="padding:12px 10px;border-bottom:1px solid #f0f4f8;text-align:center;">
+        <span style="background:${isMile ? '#dcfce7' : '#ede9fe'};color:${isMile ? '#166534' : '#5b21b6'};
+                     padding:3px 10px;border-radius:999px;font-size:13px;font-weight:700;">
+          🏅 ${badge} ${u.years} Year${u.years !== 1 ? 's' : ''}
+        </span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const tableHeader = `
+    <thead>
+      <tr style="background:#f8fafc;">
+        <th style="padding:10px;text-align:left;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Employee</th>
+        <th style="padding:10px;text-align:left;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Department</th>
+        <th style="padding:10px;text-align:center;font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Milestone</th>
+      </tr>
+    </thead>`;
+
+  const birthdaySection = birthdays.length === 0 ? '' : `
+    <h3 style="color:#92400e;font-size:15px;margin:20px 0 8px;">🎂 Birthdays (${birthdays.length})</h3>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:4px;">
+      ${tableHeader}<tbody>${birthdayRows}</tbody>
+    </table>`;
+
+  const anniversarySection = anniversaries.length === 0 ? '' : `
+    <h3 style="color:#5b21b6;font-size:15px;margin:20px 0 8px;">🏅 Work Anniversaries (${anniversaries.length})</h3>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:4px;">
+      ${tableHeader}<tbody>${anniversaryRows}</tbody>
+    </table>`;
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#6366f1 0%,#ec4899 100%);color:white;
+                  padding:28px 24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:38px;margin-bottom:6px;">🎉</div>
+        <h1 style="margin:0;font-size:22px;font-weight:800;">Celebrations Today!</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:14px;">${today}</p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 4px;">
+          Dear <strong>${adminName}</strong>, here are today's team celebrations:
+        </p>
+
+        ${birthdaySection}
+        ${anniversarySection}
+
+        <p style="color:#94a3b8;font-size:12px;margin:20px 0 0;">
+          A personal message goes a long way. Don't forget to congratulate them! 🌟
+        </p>
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:14px;padding:10px 22px;background:#6366f1;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Team Directory
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; People &amp; Culture
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
+module.exports = {
+  sendEmail,
+  sendReminderEmail,
+  sendEscalationEmail,
+  sendSummaryToLead,
+  sendOverdueRepairAlert,
+  sendWarrantyExpiryAlert,
+  sendBirthdayAnniversaryAlert,
+};

@@ -5,6 +5,7 @@ const { fetchAndStoreChatActivity } = require('./google/googleChat');
 const { runHibernationCheck } = require('./hibernation');
 const { runOverdueRepairCheck } = require('./notifications/repairAlertService');
 const { runWarrantyExpiryCheck } = require('./notifications/warrantyAlertService');
+const { runBirthdayAnniversaryCheck } = require('./notifications/birthdayAnniversaryService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -104,6 +105,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Warranty expiry check scheduled: 30 8 * * 1-6 (08:30 Mon-Sat)');
+
+  // Birthday & work anniversary check: 8:00 AM daily (Mon-Sat)
+  // Finds active employees whose birthday or work-joining anniversary is today
+  cron.schedule('0 8 * * 1-6', async () => {
+    console.log(`[CRON] Birthday/anniversary check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runBirthdayAnniversaryCheck(prisma);
+      console.log(`[CRON] Birthday/anniversary check complete: ${count} celebration(s) found today.`);
+    } catch (err) {
+      console.error('[CRON] Birthday/anniversary check failed:', err);
+    }
+  });
+  console.log('  -> Birthday/anniversary check scheduled: 0 8 * * 1-6 (08:00 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
