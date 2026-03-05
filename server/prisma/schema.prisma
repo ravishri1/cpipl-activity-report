@@ -812,6 +812,7 @@ model Asset {
   company           Company?  @relation(fields: [companyId], references: [id])
   handovers         AssetHandover[]
   repairHistory     AssetRepair[]
+  vendorMetrics     VendorMetrics[] @relation("VendorMetrics")
   
   // Procurement & Inventory Relations
   inventoryLinks    AssetInventoryLink[]
@@ -1338,6 +1339,7 @@ model AssetRepair {
   initiator         User      @relation("RepairInitiator", fields: [initiatedBy], references: [id])
   completer         User?     @relation("RepairCompleter", fields: [completedBy], references: [id])
   timeline          RepairTimeline[]
+  metrics           VendorMetrics?                      // Phase 3: Performance tracking
 
   @@index([assetId])
   @@index([status])
@@ -1713,6 +1715,8 @@ model Vendor {
   company             Company?  @relation(fields: [companyId], references: [id])
   procurementOrders   ProcurementOrder[]
   purchaseOrders      PurchaseOrder[]
+  vendorMetrics       VendorMetrics[] @relation("VendorMetrics")
+  performanceScore    VendorPerformanceScore? @relation("VendorPerformanceScore")
 
   @@index([status])
   @@index([category])
@@ -1838,6 +1842,101 @@ model EmployeeBudget {
   @@unique([employeeId, year])
   @@index([employeeId])
   @@index([year])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PHASE 3 TRACK 1: VENDOR INTELLIGENCE & PERFORMANCE ANALYTICS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── Vendor Performance Metrics (Track vendor performance per asset) ───
+model VendorMetrics {
+  id                    Int       @id @default(autoincrement())
+  repairId              Int       @unique              // Links to specific repair
+  vendorId              Int
+  assetId               Int
+  
+  // ── Turnaround Time Metrics ──
+  daysInRepair          Int                           // actualReturnDate - sentOutDate
+  daysInProgress        Int?                          // Actual repair duration
+  daysOverdue           Int       @default(0)         // If late, how many days past expected
+  
+  // ── Cost Metrics ──
+  estimatedCost         Float?
+  actualCost            Float?
+  costVariance          Float?                        // actualCost - estimatedCost
+  costOverrunPercent    Float?    @default(0)         // (costVariance / estimatedCost) * 100
+  
+  // ── Quality & Service Metrics ──
+  repairSuccessful      Boolean   @default(true)      // Did asset work after repair?
+  reworkRequired        Boolean   @default(false)     // Had to go back for rework?
+  customerSatisfaction  Int?                          // 1-5 rating
+  communicationScore    Int?                          // 1-5 rating
+  qualityScore          Int?                          // 1-5 rating
+  overallServiceRating  Float?                        // Average of above scores
+  
+  // ── Notes & Issues ──
+  issues                String?                       // Any issues encountered
+  positiveNotes         String?                       // What went well
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  repair                AssetRepair @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  vendor                Vendor    @relation("VendorMetrics", fields: [vendorId], references: [id])
+  asset                 Asset     @relation("VendorMetrics", fields: [assetId], references: [id], onDelete: Cascade)
+  
+  @@index([vendorId])
+  @@index([assetId])
+  @@index([repairId])
+  @@index([daysOverdue])
+  @@index([costOverrunPercent])
+}
+
+// ─── Vendor Performance Score (Aggregated metrics for vendor) ───
+model VendorPerformanceScore {
+  id                      Int       @id @default(autoincrement())
+  vendorId                Int       @unique
+  
+  // ── Repair Statistics ──
+  totalRepairs            Int       @default(0)        // Total repairs handled
+  successfulRepairs       Int       @default(0)        // Repairs that worked first time
+  successRate             Float     @default(0)        // successfulRepairs / totalRepairs * 100
+  reworkCount             Int       @default(0)        // Repairs requiring rework
+  
+  // ── Turnaround Time Analytics ──
+  avgDaysInRepair         Float     @default(0)        // Average repair duration
+  onTimeDeliveryRate      Float     @default(0)        // Repairs completed on time %
+  avgDaysOverdue          Float     @default(0)        // If late, average days late
+  lateDeliveryCount       Int       @default(0)        // Total late deliveries
+  
+  // ── Cost Analytics ──
+  avgEstimatedCost        Float     @default(0)
+  avgActualCost           Float     @default(0)
+  avgCostVariance         Float     @default(0)        // actualCost - estimatedCost
+  costAccuracyPercent     Float     @default(0)        // How close to estimate
+  costOverrunRate         Float     @default(0)        // % of repairs that went over budget
+  
+  // ── Quality Metrics ──
+  avgCommunicationScore   Float     @default(0)        // 1-5 average
+  avgQualityScore         Float     @default(0)        // 1-5 average
+  avgSatisfactionScore    Float     @default(0)        // 1-5 average
+  overallVendorRating     Float     @default(0)        // Composite score 0-100
+  
+  // ── Trust Score (1-100) ──
+  trustScore              Float     @default(0)        // Weighted score based on all metrics
+  vendorTier              String    @default("bronze") // bronze, silver, gold, platinum
+  
+  // ── Status ──
+  lastUpdated             DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  vendor                  Vendor    @relation("VendorPerformanceScore", fields: [vendorId], references: [id], onDelete: Cascade)
+  
+  @@index([vendorId])
+  @@index([trustScore])
+  @@index([vendorTier])
+  @@index([successRate])
+  @@index([onTimeDeliveryRate])
 }
 
 // ─── Update Asset Model with Procurement Fields ───
