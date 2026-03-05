@@ -59,7 +59,10 @@ export function AuthProvider({ children }) {
           } : {}),
         });
       } else if (err.response?.status === 401) {
-        setSyncError('Authentication failed. Please sign out and sign in again.');
+        const detail = err.response?.data?.detail;
+        setSyncError(detail
+          ? `Authentication failed: ${detail}`
+          : 'Authentication failed. Please sign out and sign in again.');
       } else if (err.code === 'ECONNABORTED' || !err.response) {
         setSyncError('Server is not responding. Please refresh the page.');
       } else {
