@@ -227,6 +227,7 @@ function PredictiveMaintenanceDashboard() {
                 healthScore={assetDetails.healthScore}
                 riskLevel={assetDetails.riskLevel}
                 trend={assetDetails.trend}
+                breakdown={assetDetails.scoreBreakdown}
               />
 
               {/* Failure Risk Card */}

@@ -13,7 +13,7 @@ const TREND_ICONS = {
   declining: { Icon: TrendingDown, color: 'text-red-600' }
 };
 
-function HealthScoreCard({ assetId, healthScore, riskLevel, trend }) {
+function HealthScoreCard({ assetId, healthScore, riskLevel, trend, breakdown }) {
   const riskConfig = RISK_LEVELS[riskLevel] || RISK_LEVELS.medium;
   const trendConfig = TREND_ICONS[trend] || TREND_ICONS.stable;
   const TrendIcon = trendConfig.Icon;
@@ -66,24 +66,27 @@ function HealthScoreCard({ assetId, healthScore, riskLevel, trend }) {
         <p className="text-xs font-semibold text-slate-600 uppercase">Score Components</p>
         <div className="space-y-2">
           {[
-            { label: 'Asset Age', value: 85 },
-            { label: 'Repair History', value: 72 },
-            { label: 'Usage Intensity', value: 68 },
-            { label: 'Vendor Performance', value: 91 }
+            { label: 'Asset Age',      value: breakdown?.ageScore ?? null },
+            { label: 'Condition',      value: breakdown?.conditionScore ?? null },
+            { label: 'Repair History', value: breakdown?.repairHistoryScore ?? null },
+            { label: 'Warranty',       value: breakdown?.warrantyScore ?? null },
           ].map((component, idx) => (
             <div key={idx}>
               <div className="flex justify-between text-xs mb-1">
                 <span className="text-slate-600">{component.label}</span>
-                <span className="font-semibold text-slate-900">{component.value}</span>
+                <span className="font-semibold text-slate-900">
+                  {component.value !== null ? component.value : '—'}
+                </span>
               </div>
               <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all ${
-                    component.value >= 80 ? 'bg-green-500' :
-                    component.value >= 60 ? 'bg-yellow-500' :
+                    component.value === null ? 'bg-slate-300' :
+                    component.value >= 80    ? 'bg-green-500' :
+                    component.value >= 60    ? 'bg-yellow-500' :
                     'bg-orange-500'
                   }`}
-                  style={{ width: `${component.value}%` }}
+                  style={{ width: component.value !== null ? `${component.value}%` : '0%' }}
                 />
               </div>
             </div>
