@@ -43,6 +43,8 @@ import {
   Heart,
   TrendingUp,
   Bug,
+  ShoppingCart,
+  Boxes,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -258,6 +260,9 @@ export default function Sidebar({ isOpen, onClose }) {
         items: [
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
           { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
+          { to: '/admin/procurement', label: 'Procurement', icon: ShoppingCart },
+          { to: '/admin/order-approvals', label: 'Order Approvals', icon: ClipboardCheck },
+          { to: '/admin/inventory', label: 'Inventory', icon: Boxes },
           { to: '/admin/predictive-maintenance', label: 'Predictive Maintenance', icon: Wrench },
           { to: '/admin/insurance', label: 'Insurance Management', icon: Heart },
           { to: '/admin/letters', label: 'Letters', icon: Mail },

@@ -20,12 +20,12 @@ export default function VendorAnalyticsDashboard() {
     loading: loadingVendors, 
     error: vendorError, 
     refetch: refetchVendors 
-  } = useFetch('/api/vendor-metrics/summary', { totalVendors: 0, scores: [] });
+  } = useFetch('/vendor-metrics/summary', { totalVendors: 0, scores: [] });
 
   // Fetch rankings with category filter
   const rankingsUrl = selectedCategory
-    ? `/api/vendor-metrics/rankings?category=${selectedCategory}`
-    : '/api/vendor-metrics/rankings';
+    ? `/vendor-metrics/rankings?category=${selectedCategory}`
+    : '/vendor-metrics/rankings';
   const { 
     data: rankingsData, 
     loading: loadingRankings, 
@@ -34,7 +34,7 @@ export default function VendorAnalyticsDashboard() {
 
   // Fetch selected vendor metrics
   const selectedVendorUrl = selectedVendorId 
-    ? `/api/vendor-metrics/vendor/${selectedVendorId}/metrics`
+    ? `/vendor-metrics/vendor/${selectedVendorId}/metrics`
     : null;
   const { 
     data: vendorMetrics, 
@@ -44,7 +44,7 @@ export default function VendorAnalyticsDashboard() {
 
   // Fetch selected vendor trends
   const selectedVendorTrendsUrl = selectedVendorId
-    ? `/api/vendor-metrics/vendor/${selectedVendorId}/trends?timeWindowDays=90`
+    ? `/vendor-metrics/vendor/${selectedVendorId}/trends?timeWindowDays=90`
     : null;
   const { 
     data: vendorTrends, 

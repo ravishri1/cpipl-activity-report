@@ -27,7 +27,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [showLineItemForm, setShowLineItemForm] = useState(false);
 
-  const { data: vendors = [], loading: vendorsLoading } = useFetch('/api/procurement/vendors', []);
+  const { data: vendors = [], loading: vendorsLoading } = useFetch('/procurement/vendors', []);
   const { execute, loading: saving, error, success } = useApi();
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
   const loadOrder = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/api/procurement/orders/${orderId}`);
+      const res = await api.get(`/procurement/orders/${orderId}`);
       setFormData({
         vendorId: res.data.vendorId,
         totalAmount: res.data.totalAmount,
@@ -160,7 +160,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
       status: 'draft',
     };
 
-    const endpoint = orderId ? `/api/procurement/orders/${orderId}` : '/api/procurement/orders';
+    const endpoint = orderId ? `/procurement/orders/${orderId}` : '/procurement/orders';
     const method = orderId ? 'put' : 'post';
 
     const result = await execute(
@@ -174,7 +174,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
         if (!item.id || item.id > Date.now() - 100000) {
           // New item (has temp ID)
           try {
-            await api.post(`/api/procurement/orders/${result.data.id}/line-items`, {
+            await api.post(`/procurement/orders/${result.data.id}/line-items`, {
               itemCode: item.itemCode,
               itemName: item.itemName,
               quantity: item.quantity,

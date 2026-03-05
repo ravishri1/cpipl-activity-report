@@ -55,22 +55,22 @@ export default function ProcurementManager() {
 
   // Fetch data
   const { data: orders = [], loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useFetch(
-    `/api/procurement/orders`,
+    `/procurement/orders`,
     []
   );
 
   const { data: vendors = [], loading: vendorsLoading, error: vendorsError, refetch: refetchVendors } = useFetch(
-    `/api/procurement/vendors`,
+    `/procurement/vendors`,
     []
   );
 
   const { data: inventory = [], loading: inventoryLoading, error: inventoryError, refetch: refetchInventory } = useFetch(
-    `/api/procurement/inventory`,
+    `/procurement/inventory`,
     []
   );
 
   const { data: lowStock = [], loading: lowStockLoading } = useFetch(
-    `/api/procurement/inventory/low-stock`,
+    `/procurement/inventory/low-stock`,
     []
   );
 
@@ -113,7 +113,7 @@ export default function ProcurementManager() {
 
   const handleSubmitOrder = async (orderId) => {
     await submitOrder(
-      () => api.post(`/api/procurement/orders/${orderId}/submit`, {}),
+      () => api.post(`/procurement/orders/${orderId}/submit`, {}),
       'Order submitted successfully'
     );
     refetchOrders();
@@ -122,7 +122,7 @@ export default function ProcurementManager() {
   const handleApproveOrder = async (orderId) => {
     await approveOrder(
       () =>
-        api.post(`/api/procurement/orders/${orderId}/approve`, {
+        api.post(`/procurement/orders/${orderId}/approve`, {
           approvalDate: new Date().toISOString().split('T')[0],
         }),
       'Order approved successfully'
@@ -133,7 +133,7 @@ export default function ProcurementManager() {
   const handleDeleteVendor = async (vendorId) => {
     if (window.confirm('Are you sure you want to delete this vendor?')) {
       await deleteVendor(
-        () => api.delete(`/api/procurement/vendors/${vendorId}`),
+        () => api.delete(`/procurement/vendors/${vendorId}`),
         'Vendor deleted successfully'
       );
       refetchVendors();

@@ -37,7 +37,7 @@ export default function VendorForm({ isOpen, onClose, vendorId, onSuccess }) {
   const loadVendor = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/api/procurement/vendors/${vendorId}`);
+      const res = await api.get(`/procurement/vendors/${vendorId}`);
       setFormData(res.data);
     } catch (err) {
       console.error('Failed to load vendor:', err);
@@ -62,7 +62,7 @@ export default function VendorForm({ isOpen, onClose, vendorId, onSuccess }) {
       return;
     }
 
-    const endpoint = vendorId ? `/api/procurement/vendors/${vendorId}` : '/api/procurement/vendors';
+    const endpoint = vendorId ? `/procurement/vendors/${vendorId}` : '/procurement/vendors';
     const method = vendorId ? 'put' : 'post';
 
     await execute(

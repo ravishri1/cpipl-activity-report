@@ -24,16 +24,16 @@ const formatDate = (dateStr) => {
 
 export default function InventoryAnalytics() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [viewMode, setViewMode] = useState('overview'); // overview, lowstock, trends
 
   const { data: inventory = [], loading: inventoryLoading, error: inventoryError, refetch: refetchInventory } = useFetch(
-    '/api/procurement/inventory',
+    '/procurement/inventory',
     []
   );
 
   const { data: lowStock = [], loading: lowStockLoading } = useFetch(
-    '/api/procurement/inventory/low-stock',
+    '/procurement/inventory/low-stock',
     []
   );
 

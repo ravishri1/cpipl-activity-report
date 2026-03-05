@@ -54,6 +54,9 @@ const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCar
 const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
 const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTimeline'));
 const VendorAnalyticsDashboard = lazy(() => import('./components/admin/VendorAnalyticsDashboard'));
+const ProcurementManager = lazy(() => import('./components/admin/ProcurementManager'));
+const OrderApprovalQueue = lazy(() => import('./components/admin/OrderApprovalQueue'));
+const InventoryAnalytics = lazy(() => import('./components/admin/InventoryAnalytics'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/predictive/PredictiveMaintenanceDashboard'));
@@ -178,6 +181,9 @@ function AppRoutes() {
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/vendor-analytics" element={<SeparatedRoute><AdminRoute><VendorAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/procurement" element={<SeparatedRoute><AdminRoute><ProcurementManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/order-approvals" element={<SeparatedRoute><AdminRoute><OrderApprovalQueue /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/inventory" element={<SeparatedRoute><AdminRoute><InventoryAnalytics /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />

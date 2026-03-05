@@ -29,7 +29,7 @@ export default function OrderApprovalQueue() {
   const [approvalNote, setApprovalNote] = useState({});
   const [rejectionReason, setRejectionReason] = useState({});
 
-  const { data: allOrders = [], loading, error, refetch } = useFetch('/api/procurement/orders', []);
+  const { data: allOrders = [], loading, error, refetch } = useFetch('/procurement/orders', []);
   const { execute: approve, loading: approving } = useApi();
   const { execute: reject, loading: rejecting } = useApi();
 
@@ -46,7 +46,7 @@ export default function OrderApprovalQueue() {
   const handleApprove = async (orderId) => {
     const approvalDate = new Date().toISOString().split('T')[0];
     await approve(
-      () => api.post(`/api/procurement/orders/${orderId}/approve`, { approvalDate }),
+      () => api.post(`/procurement/orders/${orderId}/approve`, { approvalDate }),
       'Order approved successfully'
     );
     setApprovalNote((prev) => {
@@ -65,7 +65,7 @@ export default function OrderApprovalQueue() {
 
     await reject(
       () =>
-        api.put(`/api/procurement/orders/${orderId}`, {
+        api.put(`/procurement/orders/${orderId}`, {
           status: 'rejected',
           rejectionReason: rejectionReason[orderId],
         }),
