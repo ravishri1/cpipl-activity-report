@@ -143,7 +143,7 @@ export default function ProcurementManager() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg shadow-lg p-6">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-b-lg shadow-lg p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ShoppingCart className="w-8 h-8" />

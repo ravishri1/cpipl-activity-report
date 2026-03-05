@@ -166,7 +166,7 @@ export default function ExpenseApproval() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-3">
         <div className="p-2.5 bg-violet-100 rounded-xl">
           <Receipt className="w-6 h-6 text-violet-600" />
         </div>

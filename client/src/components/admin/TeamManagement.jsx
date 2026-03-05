@@ -90,7 +90,7 @@ export default function TeamManagement() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Team Management</h1>
         <div className="flex items-center gap-3">
           {currentUser?.email === 'me@colorpapers.in' && (
