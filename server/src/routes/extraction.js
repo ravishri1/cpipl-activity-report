@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest } = require('../utils/httpErrors');
 const { requireFields } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
+const { callAIText } = require('../services/aiRouter');
 
 const router = express.Router();
 router.use(authenticate);
@@ -86,24 +87,24 @@ Resume/Biodata text:
 router.post('/resume', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'text');
 
-  const setting = await req.prisma.setting.findUnique({ where: { key: 'gemini_api_key' } });
-  if (!setting?.value) throw badRequest('Gemini API key not configured. Go to Admin → Settings to add it.');
-
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(setting.value);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-  let result;
+  // callAIText: tries cheapest text_extraction model first, auto-falls back
+  let rawText;
   try {
-    result = await model.generateContent(EXTRACTION_PROMPT + req.body.text.trim() + '\n---');
+    rawText = await callAIText(
+      'text_extraction',
+      EXTRACTION_PROMPT + req.body.text.trim() + '\n---',
+      { prisma: req.prisma }
+    );
   } catch (aiErr) {
-    throw badRequest(aiErr.message?.includes('API_KEY_INVALID')
-      ? 'Invalid Gemini API key. Check Settings.'
-      : 'AI extraction failed. Please try again.');
+    throw badRequest(
+      aiErr.message.includes('No AI provider')
+        ? 'No AI provider configured. Add REQUESTY_API_KEY to .env or set gemini_api_key in Admin → Settings.'
+        : 'AI extraction failed. Please try again.'
+    );
   }
 
   // Parse JSON from response (handle markdown code blocks)
-  let cleaned = result.response.text().trim();
+  let cleaned = rawText.trim();
   if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
   else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
   if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
@@ -117,16 +118,20 @@ router.post('/resume', authenticate, requireAdmin, asyncHandler(async (req, res)
   }
 
   // Apply normalization
-  if (extracted.name) extracted.name = normalizeName(extracted.name);
-  if (extracted.email) extracted.email = normalizeEmail(extracted.email);
+  if (extracted.name)          extracted.name          = normalizeName(extracted.name);
+  if (extracted.email)         extracted.email         = normalizeEmail(extracted.email);
   if (extracted.personalEmail) extracted.personalEmail = normalizeEmail(extracted.personalEmail);
-  if (extracted.fatherName) extracted.fatherName = normalizeName(extracted.fatherName);
-  if (extracted.spouseName) extracted.spouseName = normalizeName(extracted.spouseName);
+  if (extracted.fatherName)    extracted.fatherName    = normalizeName(extracted.fatherName);
+  if (extracted.spouseName)    extracted.spouseName    = normalizeName(extracted.spouseName);
 
-  if (extracted.education?.length) extracted.education = extracted.education.filter((e) => e && e.degree);
-  if (extracted.previousEmployment?.length) extracted.previousEmployment = extracted.previousEmployment.filter((e) => e && e.company);
+  if (extracted.education?.length)
+    extracted.education = extracted.education.filter((e) => e && e.degree);
+  if (extracted.previousEmployment?.length)
+    extracted.previousEmployment = extracted.previousEmployment.filter((e) => e && e.company);
   if (extracted.familyMembers?.length) {
-    extracted.familyMembers = extracted.familyMembers.filter((f) => f && f.name).map((f) => ({ ...f, name: normalizeName(f.name) }));
+    extracted.familyMembers = extracted.familyMembers
+      .filter((f) => f && f.name)
+      .map((f) => ({ ...f, name: normalizeName(f.name) }));
   }
 
   res.json(extracted);
