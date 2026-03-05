@@ -672,6 +672,89 @@ async function sendProbationEndAlert(adminEmail, adminName, employees) {
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendPassportExpiryAlert(adminEmail, adminName, employees) {
+  const count   = employees.length;
+  const subject = `🛂 ${count} Employee Passport${count !== 1 ? 's' : ''} Expiring Soon`;
+
+  // Urgency tiers
+  const critical = employees.filter((e) => e.daysUntilExpiry <= 14);
+  const warning  = employees.filter((e) => e.daysUntilExpiry > 14 && e.daysUntilExpiry <= 30);
+  const upcoming = employees.filter((e) => e.daysUntilExpiry > 30);
+
+  function buildRows(emps, color) {
+    return emps.map((emp) => `
+      <tr style="border-bottom:1px solid #f0f4f8;">
+        <td style="padding:10px 12px;font-weight:700;color:#1e293b;">${emp.name}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.department || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.designation || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.employeeId || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;font-family:monospace;">${emp.passportNumber || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.nationality || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.passportExpiry}</td>
+        <td style="padding:10px 12px;font-weight:bold;color:${color};font-size:13px;">
+          ${emp.daysUntilExpiry} day${emp.daysUntilExpiry !== 1 ? 's' : ''}
+        </td>
+      </tr>`).join('');
+  }
+
+  function buildSection(title, emps, color) {
+    if (!emps.length) return '';
+    const theadCols = ['Employee', 'Department', 'Designation', 'Emp ID', 'Passport No', 'Nationality', 'Expiry Date', 'Expires In'];
+    const thead = `<thead><tr style="background:#f8fafc;">${
+      theadCols.map((c) => `<th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;white-space:nowrap;">${c}</th>`).join('')
+    }</tr></thead>`;
+    return `
+      <h3 style="color:${color};font-size:14px;margin:20px 0 8px;">${title} (${emps.length})</h3>
+      <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                    border-radius:8px;font-size:14px;margin-bottom:4px;">
+        ${thead}<tbody>${buildRows(emps, color)}</tbody>
+      </table>`;
+  }
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#0f766e 0%,#0891b2 100%);color:white;
+                  padding:24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:36px;margin-bottom:6px;">🛂</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Passport Expiry Alert</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${count} employee passport${count !== 1 ? 's' : ''} expiring within the next 90 days
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 4px;">
+          Dear <strong>${adminName}</strong>, the following active employees have passports
+          expiring soon. Please coordinate passport renewal to avoid travel disruptions.
+        </p>
+
+        ${buildSection('🔴 Critical — Expires in ≤ 14 days',   critical, '#dc3545')}
+        ${buildSection('🟠 Warning — Expires in 15–30 days',   warning,  '#fd7e14')}
+        ${buildSection('🟡 Upcoming — Expires in 31–90 days',  upcoming, '#d97706')}
+
+        <div style="margin-top:16px;padding:12px 16px;background:#f0fdfa;border:1px solid #99f6e4;
+                    border-radius:8px;font-size:13px;color:#0f766e;">
+          <strong>Reminder:</strong> Passport renewal typically takes 2–4 weeks.
+          Employees travelling internationally should renew at least 6 months before expiry.
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#0f766e;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Employee Profiles
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Compliance &amp; Documentation
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -683,4 +766,5 @@ module.exports = {
   sendPayrollReminderAlert,
   sendPendingApprovalsAlert,
   sendProbationEndAlert,
+  sendPassportExpiryAlert,
 };

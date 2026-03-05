@@ -9,6 +9,7 @@ const { runBirthdayAnniversaryCheck } = require('./notifications/birthdayAnniver
 const { runPayrollReminderCheck } = require('./notifications/payrollReminderService');
 const { runPendingApprovalsCheck } = require('./notifications/pendingApprovalsService');
 const { runProbationEndCheck }     = require('./notifications/probationAlertService');
+const { runPassportExpiryCheck }   = require('./notifications/passportAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -160,6 +161,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Probation end check scheduled: 45 8 * * 1-6 (08:45 Mon-Sat)');
+
+  // Passport expiry check: 9:30 AM daily (Mon-Sat)
+  // Alerts at 90, 60, 30, and 14 days before an active employee's passport expires
+  cron.schedule('30 9 * * 1-6', async () => {
+    console.log(`[CRON] Passport expiry check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runPassportExpiryCheck(prisma);
+      console.log(`[CRON] Passport expiry check complete: ${count} passport milestone(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Passport expiry check failed:', err);
+    }
+  });
+  console.log('  -> Passport expiry check scheduled: 30 9 * * 1-6 (09:30 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
