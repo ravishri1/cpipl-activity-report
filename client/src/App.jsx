@@ -56,6 +56,7 @@ const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTim
 const VendorAnalyticsDashboard = lazy(() => import('./components/admin/VendorAnalyticsDashboard'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
+const PredictiveMaintenanceDashboard = lazy(() => import('./components/predictive/PredictiveMaintenanceDashboard'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -176,6 +177,7 @@ function AppRoutes() {
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/vendor-analytics" element={<SeparatedRoute><AdminRoute><VendorAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />

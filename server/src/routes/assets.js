@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
@@ -20,7 +20,7 @@ const VALID_STATUSES = ['available', 'assigned', 'maintenance', 'retired', 'lost
 const VALID_CATEGORIES = ['personal', 'office', 'infrastructure'];
 const VALID_CONDITIONS = ['new', 'good', 'fair', 'damaged', 'non_working'];
 
-// ─── 1. GET /my ─── My assigned assets (any authenticated user)
+// â”€â”€â”€ 1. GET /my â”€â”€â”€ My assigned assets (any authenticated user)
 router.get('/my', asyncHandler(async (req, res) => {
   const assets = await req.prisma.asset.findMany({
     where: { assignedTo: req.user.id, status: 'assigned' },
@@ -29,7 +29,7 @@ router.get('/my', asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
-// ─── 2. GET /summary ─── Asset summary with enhanced breakdown (admin)
+// â”€â”€â”€ 2. GET /summary â”€â”€â”€ Asset summary with enhanced breakdown (admin)
 router.get('/summary', requireAdmin, asyncHandler(async (req, res) => {
   const assets = await req.prisma.asset.findMany({
     include: { assignee: { select: { id: true, name: true } } },
@@ -60,7 +60,7 @@ router.get('/summary', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ totalCount, totalValue: Math.round(totalValue * 100) / 100, freeAssets, warrantyExpiring, byType, byStatus, byCategory, byCondition });
 }));
 
-// ─── 3. GET /free ─── List free/available assets (admin)
+// â”€â”€â”€ 3. GET /free â”€â”€â”€ List free/available assets (admin)
 router.get('/free', requireAdmin, asyncHandler(async (req, res) => {
   const { category, type } = req.query;
   const where = { status: 'available' };
@@ -75,7 +75,7 @@ router.get('/free', requireAdmin, asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
-// ─── 4. GET /warranty-expiring ─── Assets with warranty expiring soon (admin)
+// â”€â”€â”€ 4. GET /warranty-expiring â”€â”€â”€ Assets with warranty expiring soon (admin)
 router.get('/warranty-expiring', requireAdmin, asyncHandler(async (req, res) => {
   const days = parseInt(req.query.days) || 30;
   const today = new Date().toISOString().slice(0, 10);
@@ -89,7 +89,7 @@ router.get('/warranty-expiring', requireAdmin, asyncHandler(async (req, res) => 
   res.json(assets);
 }));
 
-// ─── 4a. GET /in-repair ─── Assets currently in maintenance with repair details (admin)
+// â”€â”€â”€ 4a. GET /in-repair â”€â”€â”€ Assets currently in maintenance with repair details (admin)
 router.get('/in-repair', requireAdmin, asyncHandler(async (req, res) => {
   const assets = await req.prisma.asset.findMany({
     where: { status: 'maintenance' },
@@ -110,7 +110,7 @@ router.get('/in-repair', requireAdmin, asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
-// ─── 5. GET /exit-pending/:userId ─── Assets pending return for exiting employee (admin)
+// â”€â”€â”€ 5. GET /exit-pending/:userId â”€â”€â”€ Assets pending return for exiting employee (admin)
 router.get('/exit-pending/:userId', requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   const assets = await req.prisma.asset.findMany({
@@ -125,14 +125,14 @@ router.get('/exit-pending/:userId', requireAdmin, asyncHandler(async (req, res) 
   });
 }));
 
-// ─── 6. GET /handover-history/:assetId ─── Get handover history for an asset (admin)
+// â”€â”€â”€ 6. GET /handover-history/:assetId â”€â”€â”€ Get handover history for an asset (admin)
 router.get('/handover-history/:assetId', requireAdmin, asyncHandler(async (req, res) => {
   const assetId = parseId(req.params.assetId);
   const handovers = await req.prisma.assetHandover.findMany({ where: { assetId }, orderBy: { createdAt: 'desc' } });
   res.json(handovers);
 }));
 
-// ─── 7. GET / ─── List all assets with enhanced filters (admin)
+// â”€â”€â”€ 7. GET / â”€â”€â”€ List all assets with enhanced filters (admin)
 router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   const { status, type, assignedTo, category, condition, search } = req.query;
   const where = {};
@@ -157,7 +157,7 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
-// ─── 8. POST / ─── Create asset with enhanced fields (admin)
+// â”€â”€â”€ 8. POST / â”€â”€â”€ Create asset with enhanced fields (admin)
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'type');
   const { name, type, serialNumber, assetTag, category, purchaseDate, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, isMandatoryReturn, assignedTo, location } = req.body;
@@ -188,7 +188,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   res.status(201).json(asset);
 }));
 
-// ─── 9. PUT /:id/assign ─── Assign/transfer asset to employee (admin)
+// â”€â”€â”€ 9. PUT /:id/assign â”€â”€â”€ Assign/transfer asset to employee (admin)
 router.put('/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { userId, assignedDate, notes } = req.body;
@@ -219,7 +219,7 @@ router.put('/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-// ─── 10. PUT /:id/return ─── Return asset (with handover record) (admin)
+// â”€â”€â”€ 10. PUT /:id/return â”€â”€â”€ Return asset (with handover record) (admin)
 router.put('/:id/return', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { condition, notes, handoverType } = req.body;
@@ -257,7 +257,7 @@ router.put('/:id/return', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-// ─── 11. PUT /:id/detach ─── Detach asset (admin)
+// â”€â”€â”€ 11. PUT /:id/detach â”€â”€â”€ Detach asset (admin)
 router.put('/:id/detach', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { notes } = req.body;
@@ -281,7 +281,7 @@ router.put('/:id/detach', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-// ─── 12. GET /employee/:userId ─── Assets for specific employee (admin)
+// â”€â”€â”€ 12. GET /employee/:userId â”€â”€â”€ Assets for specific employee (admin)
 router.get('/employee/:userId', requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   const assets = await req.prisma.asset.findMany({
@@ -291,7 +291,7 @@ router.get('/employee/:userId', requireAdmin, asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
-// ─── 13. PUT /:id ─── Update asset fields (admin)
+// â”€â”€â”€ 13. PUT /:id â”€â”€â”€ Update asset fields (admin)
 router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const asset = await req.prisma.asset.findUnique({ where: { id } });
@@ -328,7 +328,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-// ─── 14. DELETE /:id ─── Retire/permanently remove asset (admin)
+// â”€â”€â”€ 14. DELETE /:id â”€â”€â”€ Retire/permanently remove asset (admin)
 router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const asset = await req.prisma.asset.findUnique({ where: { id } });
@@ -339,11 +339,11 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: 'Asset retired successfully.', asset: updated });
 }));
 
-// ═══════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // Asset Repair & Maintenance Endpoints
-// ═══════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ─── 15. POST /repairs/:assetId/initiate ─── Mark asset for repair (admin)
+// â”€â”€â”€ 15. POST /repairs/:assetId/initiate â”€â”€â”€ Mark asset for repair (admin)
 router.post('/repairs/:assetId/initiate', requireAdmin, asyncHandler(async (req, res) => {
   const assetId = parseId(req.params.assetId);
   const { repairType, expectedReturnDate, vendor, vendorLocation, issueDescription, vendorPhone, vendorEmail, estimatedCost, notes } = req.body;
@@ -386,7 +386,29 @@ router.post('/repairs/:assetId/initiate', requireAdmin, asyncHandler(async (req,
   res.status(201).json(repair);
 }));
 
-// ─── 16. GET /repairs/:assetId ─── Get active repair for an asset
+
+// â”€â”€â”€ 19. GET /repairs/overdue â”€â”€â”€ List overdue repairs (admin)
+router.get('/repairs/overdue', requireAdmin, asyncHandler(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const repairs = await req.prisma.assetRepair.findMany({
+    where: {
+      status: { not: 'completed' },
+      expectedReturnDate: { lt: today },
+    },
+    include: {
+      asset: { select: { id: true, name: true, serialNumber: true } },
+      initiator: { select: { id: true, name: true } },
+    },
+    orderBy: { expectedReturnDate: 'asc' },
+  });
+
+  res.json(repairs.map(r => ({
+    ...r,
+    daysOverdue: Math.floor((new Date(today) - new Date(r.expectedReturnDate)) / (1000 * 60 * 60 * 24)),
+  })));
+}));
+
+// â”€â”€â”€ 16. GET /repairs/:assetId â”€â”€â”€ Get active repair for an asset
 router.get('/repairs/:assetId', asyncHandler(async (req, res) => {
   const assetId = parseId(req.params.assetId);
   const repair = await req.prisma.assetRepair.findFirst({
@@ -401,7 +423,7 @@ router.get('/repairs/:assetId', asyncHandler(async (req, res) => {
   res.json(repair);
 }));
 
-// ─── 17. GET /repairs ─── List all repairs (admin, with filters)
+// â”€â”€â”€ 17. GET /repairs â”€â”€â”€ List all repairs (admin, with filters)
 router.get('/repairs', requireAdmin, asyncHandler(async (req, res) => {
   const { status, assetId, initiatedBy, overdue } = req.query;
   const where = {};
@@ -428,7 +450,7 @@ router.get('/repairs', requireAdmin, asyncHandler(async (req, res) => {
   res.json(repairs);
 }));
 
-// ─── 18. PUT /repairs/:repairId/update-status ─── Update repair status
+// â”€â”€â”€ 18. PUT /repairs/:repairId/update-status â”€â”€â”€ Update repair status
 router.put('/repairs/:repairId/update-status', requireAdmin, asyncHandler(async (req, res) => {
   const repairId = parseId(req.params.repairId);
   const { newStatus, notes } = req.body;
@@ -462,28 +484,8 @@ router.put('/repairs/:repairId/update-status', requireAdmin, asyncHandler(async 
   res.json(updated);
 }));
 
-// ─── 19. GET /repairs/overdue ─── List overdue repairs (admin)
-router.get('/repairs/overdue', requireAdmin, asyncHandler(async (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const repairs = await req.prisma.assetRepair.findMany({
-    where: {
-      status: { not: 'completed' },
-      expectedReturnDate: { lt: today },
-    },
-    include: {
-      asset: { select: { id: true, name: true, serialNumber: true } },
-      initiator: { select: { id: true, name: true } },
-    },
-    orderBy: { expectedReturnDate: 'asc' },
-  });
 
-  res.json(repairs.map(r => ({
-    ...r,
-    daysOverdue: Math.floor((new Date(today) - new Date(r.expectedReturnDate)) / (1000 * 60 * 60 * 24)),
-  })));
-}));
-
-// ─── 20. POST /repairs/:repairId/complete ─── Complete repair and return asset
+// â”€â”€â”€ 20. POST /repairs/:repairId/complete â”€â”€â”€ Complete repair and return asset
 router.post('/repairs/:repairId/complete', requireAdmin, asyncHandler(async (req, res) => {
   const repairId = parseId(req.params.repairId);
   const { actualReturnDate, actualCost, condition } = req.body;
@@ -503,7 +505,7 @@ router.post('/repairs/:repairId/complete', requireAdmin, asyncHandler(async (req
       oldStatus: repair.status,
       newStatus: 'completed',
       changedBy: req.user.id,
-      notes: actualCost ? `Completed - Actual cost: ₹${actualCost}` : 'Completed',
+      notes: actualCost ? `Completed - Actual cost: â‚¹${actualCost}` : 'Completed',
     },
   });
 
@@ -540,7 +542,7 @@ router.post('/repairs/:repairId/complete', requireAdmin, asyncHandler(async (req
   res.json({ message: 'Repair completed and asset returned.', repair: completed });
 }));
 
-// ─── 21. GET /repairs/:assetId/timeline ─── Get repair history for an asset
+// â”€â”€â”€ 21. GET /repairs/:assetId/timeline â”€â”€â”€ Get repair history for an asset
 router.get('/repairs/:assetId/timeline', asyncHandler(async (req, res) => {
   const assetId = parseId(req.params.assetId);
   const repairs = await req.prisma.assetRepair.findMany({
@@ -551,7 +553,7 @@ router.get('/repairs/:assetId/timeline', asyncHandler(async (req, res) => {
   res.json(repairs);
 }));
 
-// ─── 22. PUT /repairs/:repairId/edit ─── Update repair details (before completion)
+// â”€â”€â”€ 22. PUT /repairs/:repairId/edit â”€â”€â”€ Update repair details (before completion)
 router.put('/repairs/:repairId/edit', requireAdmin, asyncHandler(async (req, res) => {
   const repairId = parseId(req.params.repairId);
   const { vendor, vendorPhone, vendorEmail, vendorLocation, expectedReturnDate, notes, estimatedCost } = req.body;
@@ -583,3 +585,4 @@ router.put('/repairs/:repairId/edit', requireAdmin, asyncHandler(async (req, res
 }));
 
 module.exports = router;
+
