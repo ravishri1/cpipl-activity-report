@@ -3,7 +3,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import { Clock, AlertCircle } from 'lucide-react';
 
 export default function EmployeeShiftInfo({ userId }) {
-  const { data: shiftData, loading } = useFetch(`/api/shifts/employee/${userId}/current`, null);
+  const { data: shiftData, loading } = useFetch(`/shifts/employee/${userId}/current`, null);
 
   if (loading) return <LoadingSpinner />;
 

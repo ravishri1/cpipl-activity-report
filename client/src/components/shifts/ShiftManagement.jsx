@@ -8,7 +8,7 @@ import AlertMessage from '../shared/AlertMessage';
 import { Clock, Plus, Edit2, Trash2, Users } from 'lucide-react';
 
 export default function ShiftManagement() {
-  const { data: shifts, loading, error, refetch } = useFetch('/api/shifts', []);
+  const { data: shifts, loading, error, refetch } = useFetch('/shifts', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
   
   const [editing, setEditing] = useState(null);
@@ -52,7 +52,7 @@ export default function ShiftManagement() {
       return;
     }
 
-    const endpoint = editing ? `/api/shifts/${editing}` : '/api/shifts';
+    const endpoint = editing ? `/shifts/${editing}` : '/shifts';
     const method = editing ? 'put' : 'post';
 
     await execute(
@@ -74,7 +74,7 @@ export default function ShiftManagement() {
 
     if (window.confirm('Are you sure you want to delete this shift?')) {
       await execute(
-        () => api.delete(`/api/shifts/${id}`),
+        () => api.delete(`/shifts/${id}`),
         'Shift deleted successfully'
       );
       refetch();

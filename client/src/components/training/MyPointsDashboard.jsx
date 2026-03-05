@@ -8,7 +8,7 @@ import EmptyState from '../shared/EmptyState';
 import { Trophy, Award, BookOpen, Star } from 'lucide-react';
 
 export default function MyPointsDashboard() {
-  const { data: pointData, loading, error } = useFetch('/api/training/my-points', {
+  const { data: pointData, loading, error } = useFetch('/training/my-points', {
     totalPoints: 0,
     completionPoints: 0,
     contributionPoints: 0,

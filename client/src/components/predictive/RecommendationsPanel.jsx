@@ -36,7 +36,7 @@ function RecommendationsPanel({ recommendations, onRefetch }) {
     setUpdatingId(recommendationId);
     try {
       await execute(
-        () => api.put(`/api/predictions/recommendations/${recommendationId}/status`, { status: newStatus }),
+        () => api.put(`/predictions/recommendations/${recommendationId}/status`, { status: newStatus }),
         `Recommendation marked as ${newStatus.replace('_', ' ')}`
       );
       onRefetch?.();

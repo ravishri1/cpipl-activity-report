@@ -7,9 +7,9 @@ import AlertMessage from '../shared/AlertMessage';
 import { Calendar, Trash2, Check } from 'lucide-react';
 
 export default function ShiftAssignment({ userId, userName }) {
-  const { data: shifts, loading: shiftsLoading } = useFetch('/api/shifts', []);
+  const { data: shifts, loading: shiftsLoading } = useFetch('/shifts', []);
   const { data: assignments, loading: assignLoading, error, refetch } = useFetch(
-    `/api/shifts/employee/${userId}`,
+    `/shifts/employee/${userId}`,
     []
   );
   const { execute, loading: saving, error: saveErr, success } = useApi();
@@ -30,7 +30,7 @@ export default function ShiftAssignment({ userId, userName }) {
 
     await execute(
       () =>
-        api.post('/api/shifts/assign', {
+        api.post('/shifts/assign', {
           userId: parseInt(userId),
           shiftId: parseInt(form.shiftId),
           effectiveFrom: form.effectiveFrom,
@@ -55,7 +55,7 @@ export default function ShiftAssignment({ userId, userName }) {
   const handleCancelAssignment = async (assignmentId) => {
     if (window.confirm('Cancel this shift assignment?')) {
       await execute(
-        () => api.delete(`/api/shifts/assignment/${assignmentId}`),
+        () => api.delete(`/shifts/assignment/${assignmentId}`),
         'Assignment cancelled'
       );
       refetch();

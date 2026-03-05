@@ -8,14 +8,14 @@ import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
 
 export default function MyInsuranceCard() {
-  const { data: card, loading, error, refetch } = useFetch('/api/insurance/my', null);
+  const { data: card, loading, error, refetch } = useFetch('/insurance/my', null);
   const [markingViewed, setMarkingViewed] = useState(false);
 
   // Mark as viewed when first loaded
   useEffect(() => {
     if (card && !card.isViewed && !markingViewed) {
       setMarkingViewed(true);
-      api.post('/api/insurance/mark-viewed')
+      api.post('/insurance/mark-viewed')
         .catch(err => console.error('Failed to mark card as viewed:', err))
         .finally(() => setMarkingViewed(false));
     }

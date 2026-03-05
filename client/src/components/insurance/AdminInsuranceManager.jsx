@@ -18,7 +18,7 @@ export default function AdminInsuranceManager() {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
 
   const { data: result, loading, error, refetch } = useFetch(
-    `/api/insurance?search=${searchQuery}&cardType=${cardTypeFilter}&isActive=${isActiveFilter}`,
+    `/insurance?search=${searchQuery}&cardType=${cardTypeFilter}&isActive=${isActiveFilter}`,
     { total: 0, cards: [] }
   );
 
@@ -31,7 +31,7 @@ export default function AdminInsuranceManager() {
     if (!window.confirm('Are you sure you want to delete this insurance card?')) return;
     
     await deleteCard(
-      () => api.delete(`/api/insurance/${cardId}`),
+      () => api.delete(`/insurance/${cardId}`),
       'Insurance card deleted'
     );
     refetch();
@@ -271,7 +271,7 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
     }
     setSearchingEmployees(true);
     try {
-      const res = await api.get(`/api/users/directory?search=${query}`);
+      const res = await api.get(`/users/directory?search=${query}`);
       setEmployees(res.data.users || []);
     } catch (err) {
       console.error('Failed to search employees:', err);
@@ -323,7 +323,7 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
     }
 
     await uploadCard(
-      () => api.post(`/api/insurance/upload/${formData.userId}`, {
+      () => api.post(`/insurance/upload/${formData.userId}`, {
         fileUrl: formData.fileUrl,
         fileName: formData.fileName,
         mimeType: formData.mimeType,

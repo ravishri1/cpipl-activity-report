@@ -23,13 +23,13 @@ const STATUS_ICONS = {
 };
 
 export default function MyTrainingAssignments() {
-  const { data: assignments, loading, error, refetch } = useFetch('/api/training/my-assignments', []);
+  const { data: assignments, loading, error, refetch } = useFetch('/training/my-assignments', []);
   const { execute: updateStatus, loading: updating } = useApi();
   const [expandedId, setExpandedId] = useState(null);
 
   const handleStatusChange = async (assignmentId, newStatus) => {
     await updateStatus(
-      () => api.put(`/api/training/assignments/${assignmentId}`, { status: newStatus }),
+      () => api.put(`/training/assignments/${assignmentId}`, { status: newStatus }),
       'Status updated!'
     );
     refetch();

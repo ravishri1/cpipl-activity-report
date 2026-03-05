@@ -31,9 +31,9 @@ function PredictiveMaintenanceDashboard() {
   const [selectedAsset, setSelectedAsset] = useState(null);
   
   // Fetch at-risk assets
-  const atRiskUrl = filterRiskLevel 
-    ? `/api/predictions/at-risk?riskLevel=${filterRiskLevel}&limit=50&sort=${sortBy}`
-    : `/api/predictions/at-risk?limit=50&sort=${sortBy}`;
+  const atRiskUrl = filterRiskLevel
+    ? `/predictions/at-risk?riskLevel=${filterRiskLevel}&limit=50&sort=${sortBy}`
+    : `/predictions/at-risk?limit=50&sort=${sortBy}`;
   
   const { 
     data: atRiskAssets = [], 
@@ -48,11 +48,11 @@ function PredictiveMaintenanceDashboard() {
     loading: loadingRecs, 
     error: errorRecs, 
     refetch: refetchRecs 
-  } = useFetch('/api/predictions/recommendations?status=pending&limit=20', []);
+  } = useFetch('/predictions/recommendations?status=pending&limit=20', []);
 
   // Get selected asset details
   const selectedAssetUrl = selectedAsset 
-    ? `/api/predictions/asset/${selectedAsset}/health`
+    ? `/predictions/asset/${selectedAsset}/health`
     : null;
   
   const { 
@@ -74,7 +74,7 @@ function PredictiveMaintenanceDashboard() {
   // Recalculate all predictions
   const handleRecalculateAll = async () => {
     await execute(
-      () => api.post('/api/predictions/recalculate-all'),
+      () => api.post('/predictions/recalculate-all'),
       'Predictions recalculation initiated'
     );
     setTimeout(() => {

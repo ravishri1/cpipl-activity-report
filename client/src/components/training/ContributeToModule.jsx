@@ -23,8 +23,8 @@ const STATUS_COLORS = {
 };
 
 export default function ContributeToModule() {
-  const { data: trainingModules, loading: loadingModules } = useFetch('/api/training/modules', []);
-  const { data: contributions, loading: loadingContribs, error: contribError, refetch } = useFetch('/api/training/contributions/pending', []);
+  const { data: trainingModules, loading: loadingModules } = useFetch('/training/modules', []);
+  const { data: contributions, loading: loadingContribs, error: contribError, refetch } = useFetch('/training/contributions/pending', []);
   const { execute, loading: submitting, error: submitErr, success } = useApi();
 
   const [showForm, setShowForm] = useState(false);
@@ -48,7 +48,7 @@ export default function ContributeToModule() {
     }
 
     await execute(
-      () => api.post('/api/training/contribute', {
+      () => api.post('/training/contribute', {
         moduleId: selectedModuleId,
         title: formData.title,
         content: formData.content,

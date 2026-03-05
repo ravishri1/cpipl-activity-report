@@ -26,7 +26,7 @@ const SCOPE_COLORS = {
 const CONTRIBUTION_TYPES = ['addition', 'correction', 'improvement', 'resource'];
 
 export default function TrainingLibrary() {
-  const { data: modules, loading, error, refetch } = useFetch('/api/training/modules', []);
+  const { data: modules, loading, error, refetch } = useFetch('/training/modules', []);
   const { execute, loading: assigning, error: assignErr, success } = useApi();
   
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -50,7 +50,7 @@ export default function TrainingLibrary() {
   // Handle assignment
   const handleAssignToMe = async (moduleId) => {
     await execute(
-      () => api.post('/api/training/assign', {
+      () => api.post('/training/assign', {
         moduleId,
         assignedToId: null, // System will assign to current user
         dueDate: null
@@ -68,7 +68,7 @@ export default function TrainingLibrary() {
     }
 
     await execute(
-      () => api.post('/api/training/contribute', {
+      () => api.post('/training/contribute', {
         moduleId: selectedModule.id,
         title: contributionForm.title,
         content: contributionForm.content,

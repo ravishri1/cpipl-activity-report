@@ -15,8 +15,8 @@ const STATUS_STYLES = {
 };
 
 export default function TrainingManager() {
-  const { data: teamProgress, loading: loadingTeam, error: teamError, refetch: refetchTeam } = useFetch('/api/training/team-progress', []);
-  const { data: trainingModules, loading: loadingModules } = useFetch('/api/training/modules', []);
+  const { data: teamProgress, loading: loadingTeam, error: teamError, refetch: refetchTeam } = useFetch('/training/team-progress', []);
+  const { data: trainingModules, loading: loadingModules } = useFetch('/training/modules', []);
   const { execute, loading: assigning, error: assignErr, success } = useApi();
 
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -75,7 +75,7 @@ export default function TrainingManager() {
 
     try {
       for (const assignment of assignments) {
-        await api.post('/api/training/assign', assignment);
+        await api.post('/training/assign', assignment);
       }
       setShowAssignModal(false);
       setSelectedEmployees(new Set());

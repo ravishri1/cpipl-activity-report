@@ -32,7 +32,7 @@ export default function MyFiles() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
 
-  const url = `/api/files/my${category ? `?category=${category}` : ''}`;
+  const url = `/files/my${category ? `?category=${category}` : ''}`;
   const { data: files, loading, error, refetch } = useFetch(url, []);
   const { execute: deleteFile, loading: deleting } = useApi();
   const { execute: uploadFile, loading: uploading, error: uploadError, success } = useApi();
@@ -74,7 +74,7 @@ export default function MyFiles() {
     uploadedFiles.forEach((file) => formData.append('file', file));
 
     await uploadFile(
-      () => api.post('/api/files/upload', formData),
+      () => api.post('/files/upload', formData),
       'File(s) uploaded successfully!'
     );
     refetch();
@@ -84,7 +84,7 @@ export default function MyFiles() {
     if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
 
     await deleteFile(
-      () => api.delete(`/api/files/${fileId}`),
+      () => api.delete(`/files/${fileId}`),
       'File deleted successfully'
     );
     refetch();

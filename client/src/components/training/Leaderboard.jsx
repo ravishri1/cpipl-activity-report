@@ -7,7 +7,7 @@ import EmptyState from '../shared/EmptyState';
 import { Medal, Crown, Star } from 'lucide-react';
 
 export default function Leaderboard() {
-  const { data: leaderboard, loading, error } = useFetch('/api/training/leaderboard', {
+  const { data: leaderboard, loading, error } = useFetch('/training/leaderboard', {
     leaders: [],
     yourRank: null,
     yourTotalPoints: 0,

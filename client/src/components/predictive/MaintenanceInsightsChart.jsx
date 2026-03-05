@@ -10,7 +10,7 @@ function MaintenanceInsightsChart({ assetId, healthHistory = [] }) {
   const { 
     data: trendData = null, 
     loading 
-  } = useFetch(`/api/predictions/insights/${assetId}/trend?months=${timeRange}`, null);
+  } = useFetch(`/predictions/insights/${assetId}/trend?months=${timeRange}`, null);
 
   // Use trendData.data array if available, otherwise fall back to passed healthHistory
   const history = trendData?.data || healthHistory || [];
