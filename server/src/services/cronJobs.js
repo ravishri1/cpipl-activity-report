@@ -7,6 +7,7 @@ const { runOverdueRepairCheck } = require('./notifications/repairAlertService');
 const { runWarrantyExpiryCheck } = require('./notifications/warrantyAlertService');
 const { runBirthdayAnniversaryCheck } = require('./notifications/birthdayAnniversaryService');
 const { runPayrollReminderCheck } = require('./notifications/payrollReminderService');
+const { runPendingApprovalsCheck } = require('./notifications/pendingApprovalsService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -132,6 +133,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Payroll reminder scheduled: 0 8 25 * * (25th of each month at 08:00)');
+
+  // Pending approvals digest: 9:15 AM daily (Mon-Sat)
+  // Sends consolidated action-digest of all pending LeaveRequests + ExpenseClaims to admins
+  cron.schedule('15 9 * * 1-6', async () => {
+    console.log(`[CRON] Pending approvals check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runPendingApprovalsCheck(prisma);
+      console.log(`[CRON] Pending approvals check complete: ${count} pending item(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Pending approvals check failed:', err);
+    }
+  });
+  console.log('  -> Pending approvals check scheduled: 15 9 * * 1-6 (09:15 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

@@ -466,6 +466,127 @@ async function sendPayrollReminderAlert(adminEmail, adminName, summary) {
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendPendingApprovalsAlert(adminEmail, adminName, leaves, expenses) {
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  const total = leaves.length + expenses.length;
+  const subject = `📋 ${total} Pending Approval${total !== 1 ? 's' : ''} Awaiting Action — ${today}`;
+
+  // ── Leave urgency config ────────────────────────────────────────────────
+  function leaveUrgency(daysUntilStart) {
+    if (daysUntilStart <= 3) return { emoji: '🔴', label: 'Urgent',  color: '#dc3545', bg: '#fde8e8' };
+    if (daysUntilStart <= 7) return { emoji: '🟠', label: 'Soon',    color: '#fd7e14', bg: '#fff3e0' };
+    return                          { emoji: '🟡', label: 'Normal',  color: '#d97706', bg: '#fffde7' };
+  }
+
+  // ── Expense age config ──────────────────────────────────────────────────
+  function expenseAge(daysPending) {
+    if (daysPending >= 7) return { emoji: '🔴', label: 'Overdue', color: '#dc3545', bg: '#fde8e8' };
+    if (daysPending >= 4) return { emoji: '🟠', label: 'Aging',   color: '#fd7e14', bg: '#fff3e0' };
+    return                       { emoji: '🟡', label: 'Recent',  color: '#d97706', bg: '#fffde7' };
+  }
+
+  // ── Leave rows ──────────────────────────────────────────────────────────
+  const leaveRows = leaves.map((lr) => {
+    const { emoji, label, color, bg } = leaveUrgency(lr.daysUntilStart);
+    return `
+      <tr style="border-bottom:1px solid #f0f4f8;">
+        <td style="padding:10px 12px;font-weight:600;color:#1e293b;">${lr.user.name}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${lr.user.department || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${lr.leaveType.name}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${lr.startDate} → ${lr.endDate}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${lr.days} day${lr.days !== 1 ? 's' : ''}</td>
+        <td style="padding:10px 12px;text-align:center;">
+          <span style="background:${bg};color:${color};padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;">
+            ${emoji} ${label}
+          </span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // ── Expense rows ────────────────────────────────────────────────────────
+  const expenseRows = expenses.map((ec) => {
+    const { emoji, label, color, bg } = expenseAge(ec.daysPending);
+    const amt = `₹${Number(ec.amount).toLocaleString('en-IN')}`;
+    return `
+      <tr style="border-bottom:1px solid #f0f4f8;">
+        <td style="padding:10px 12px;font-weight:600;color:#1e293b;">${ec.user.name}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${ec.user.department || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${ec.title}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;text-transform:capitalize;">${ec.category}</td>
+        <td style="padding:10px 12px;font-weight:700;color:#1e293b;font-size:13px;">${amt}</td>
+        <td style="padding:10px 12px;text-align:center;">
+          <span style="background:${bg};color:${color};padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;">
+            ${emoji} ${ec.daysPending}d old
+          </span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const tableHead6 = (cols) => `
+    <thead>
+      <tr style="background:#f8fafc;">
+        ${cols.map((c) => `<th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;
+           font-weight:600;text-transform:uppercase;white-space:nowrap;">${c}</th>`).join('')}
+      </tr>
+    </thead>`;
+
+  const leaveSection = leaves.length === 0 ? '' : `
+    <h3 style="color:#1e293b;font-size:14px;margin:20px 0 8px;">🌴 Pending Leave Requests (${leaves.length})</h3>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                  border-radius:8px;font-size:14px;margin-bottom:4px;">
+      ${tableHead6(['Employee', 'Department', 'Leave Type', 'Duration', 'Days', 'Urgency'])}
+      <tbody>${leaveRows}</tbody>
+    </table>`;
+
+  const expenseSection = expenses.length === 0 ? '' : `
+    <h3 style="color:#1e293b;font-size:14px;margin:20px 0 8px;">💸 Pending Expense Claims (${expenses.length})</h3>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                  border-radius:8px;font-size:14px;margin-bottom:4px;">
+      ${tableHead6(['Employee', 'Department', 'Title', 'Category', 'Amount', 'Age'])}
+      <tbody>${expenseRows}</tbody>
+    </table>`;
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:white;
+                  padding:22px 24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:32px;margin-bottom:6px;">📋</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Pending Approvals Digest</h1>
+        <p style="margin:6px 0 0;opacity:0.8;font-size:13px;">${today} &middot; ${total} item${total !== 1 ? 's' : ''} awaiting action</p>
+      </div>
+
+      <div style="padding:20px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 4px;">
+          Dear <strong>${adminName}</strong>, the following requests need your review:
+        </p>
+
+        ${leaveSection}
+        ${expenseSection}
+
+        <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
+          <a href="${appUrl}/admin/leave"
+             style="display:inline-block;padding:9px 18px;background:#10b981;color:white;
+                    text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+            Review Leaves
+          </a>
+          <a href="${appUrl}/admin/expenses"
+             style="display:inline-block;padding:9px 18px;background:#6366f1;color:white;
+                    text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+            Review Expenses
+          </a>
+        </div>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Leave &amp; Expense Management
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -475,4 +596,5 @@ module.exports = {
   sendWarrantyExpiryAlert,
   sendBirthdayAnniversaryAlert,
   sendPayrollReminderAlert,
+  sendPendingApprovalsAlert,
 };
