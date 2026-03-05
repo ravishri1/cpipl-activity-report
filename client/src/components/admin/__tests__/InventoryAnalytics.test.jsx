@@ -1,8 +1,8 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import InventoryAnalytics from '../InventoryAnalytics';
-import * as api from '../../../services/api';
+import * as api from '../../../utils/api';
 
-jest.mock('../../../services/api');
+jest.mock('../../../utils/api');
 jest.mock('../../shared/LoadingSpinner', () => {
   return function DummySpinner() {
     return <div data-testid="loading-spinner">Loading...</div>;

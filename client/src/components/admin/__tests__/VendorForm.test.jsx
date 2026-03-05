@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import VendorForm from '../VendorForm';
-import * as api from '../../../services/api';
+import * as api from '../../../utils/api';
 
-jest.mock('../../../services/api');
+jest.mock('../../../utils/api');
 jest.mock('../../shared/AlertMessage', () => {
   return function DummyAlert({ message, type }) {
     return <div data-testid={`alert-${type}`}>{message}</div>;

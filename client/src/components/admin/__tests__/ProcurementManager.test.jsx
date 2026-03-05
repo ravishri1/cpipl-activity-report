@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProcurementManager from '../ProcurementManager';
-import * as api from '../../../services/api';
+import * as api from '../../../utils/api';
 
 // Mock the API
-jest.mock('../../../services/api');
+jest.mock('../../../utils/api');
 
 // Mock child components
 jest.mock('../../shared/LoadingSpinner', () => {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';

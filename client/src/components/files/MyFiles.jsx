@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import { formatDate, formatINR } from '../../utils/formatters';
@@ -73,7 +73,7 @@ export default function MyFiles() {
     const formData = new FormData();
     uploadedFiles.forEach((file) => formData.append('file', file));
 
-    await execute(
+    await uploadFile(
       () => api.post('/api/files/upload', formData),
       'File(s) uploaded successfully!'
     );

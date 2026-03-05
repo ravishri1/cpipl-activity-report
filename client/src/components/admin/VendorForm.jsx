@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useApi } from '../../hooks/useApi';
 import AlertMessage from '../shared/AlertMessage';
 

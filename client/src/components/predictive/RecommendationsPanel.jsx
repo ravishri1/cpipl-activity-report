@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle, Clock, AlertCircle, DollarSign, Wrench, XCircle } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useApi } from '../../hooks/useApi';
 
 // Match urgency values from healthScoring.js generateRecommendations()

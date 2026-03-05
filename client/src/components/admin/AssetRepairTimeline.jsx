@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChevronRight, Clock, AlertTriangle, CheckCircle, XCircle, Wrench, Loader2 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import { formatDate, capitalize } from '../../utils/formatters';

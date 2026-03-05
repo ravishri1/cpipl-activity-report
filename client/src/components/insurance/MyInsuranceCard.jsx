@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Download, Eye, AlertCircle, FileText, Calendar } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';

@@ -12,7 +12,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
