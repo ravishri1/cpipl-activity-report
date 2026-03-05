@@ -41,6 +41,7 @@ const insuranceRoutes = require('./routes/insurance');
 const procurementRoutes = require('./routes/procurement');
 const vendorMetricsRoutes = require('./routes/vendorMetrics');
 const predictionsRoutes = require('./routes/predictions');
+const errorReportRoutes = require('./routes/errorReports');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -158,6 +159,7 @@ app.use('/api/insurance', insuranceRoutes);
 app.use('/api/procurement', procurementRoutes);
 app.use('/api/vendor-metrics', vendorMetricsRoutes);
 app.use('/api/predictions', predictionsRoutes);
+app.use('/api/error-reports', errorReportRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

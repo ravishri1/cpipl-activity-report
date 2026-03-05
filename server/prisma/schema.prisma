@@ -166,6 +166,10 @@ model User {
   // ── Predictive Maintenance Relations ──
   maintenanceRecommendationApprovals MaintenanceRecommendation[] @relation("MaintenanceApprover") // Recommendations approved by this user
 
+  // ── Error Reporting ──
+  errorReports               ErrorReport[]                @relation("ErrorReporter")
+  errorReportsResolved       ErrorReport[]                @relation("ErrorResolver")
+
   @@index([department])
   @@index([isActive])
   @@index([employmentStatus])
@@ -2037,4 +2041,53 @@ model MaintenanceRecommendation {
   @@index([urgency])
   @@index([priority])
   @@index([status])
+}
+
+// ─── Error Reporting ─────────────────────────────────────────────────────────
+// Captures frontend JS errors and failed API calls; gives admin
+// an AI-powered "Fix It" action to diagnose and resolve issues.
+
+model ErrorReport {
+  id           Int      @id @default(autoincrement())
+
+  // Deduplication: SHA-256 of (errorType + "|" + path + "|" + errorMessage)
+  // Duplicate submissions increment occurrenceCount; no new record is created.
+  fingerprint      String   @unique
+  occurrenceCount  Int      @default(1)   // how many times this exact error was reported
+  lastOccurredAt   DateTime @default(now())
+  affectedUsers    String?  // JSON array of { userId, userEmail, userName, reportedAt }
+
+  // First reporter (null if unauthenticated)
+  userId       Int?
+  userEmail    String?
+  userName     String?
+
+  // Where / what
+  errorType    String   @default("client") // "client" | "api"
+  path         String                      // URL path where the error occurred
+  method       String?                     // HTTP method for API errors
+  statusCode   Int?                        // HTTP status code (for API errors)
+  errorMessage String                      // Primary error message
+
+  // Debug details
+  stackTrace   String?                     // JS stack trace or server stack
+  context      String?                     // JSON string of extra context (props, params, body)
+  componentStack String?                   // React component stack (for JS errors)
+
+  // Resolution
+  status       String   @default("new")    // "new" | "reviewing" | "fixed" | "dismissed"
+  aiAnalysis   String?                     // AI diagnosis result (JSON string)
+  resolution   String?                     // How it was resolved (human note or AI fix result)
+  resolvedAt   DateTime?
+  resolvedBy   Int?
+
+  createdAt    DateTime @default(now())
+
+  reporter     User?    @relation("ErrorReporter", fields: [userId], references: [id], onDelete: SetNull)
+  resolver     User?    @relation("ErrorResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([userId])
+  @@index([errorType])
+  @@index([createdAt])
 }

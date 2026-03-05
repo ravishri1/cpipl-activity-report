@@ -57,6 +57,7 @@ const VendorAnalyticsDashboard = lazy(() => import('./components/admin/VendorAna
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/predictive/PredictiveMaintenanceDashboard'));
+const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -188,6 +189,7 @@ function AppRoutes() {
                   <Route path="/admin/tickets" element={<SeparatedRoute><AdminRoute><TicketManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/training" element={<SeparatedRoute><AdminRoute><TrainingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/suggestions" element={<SeparatedRoute><AdminRoute><SuggestionManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/error-reports" element={<SeparatedRoute><AdminRoute><ErrorReportsPanel /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/settings" element={<SeparatedRoute><AdminRoute><Settings /></AdminRoute></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}

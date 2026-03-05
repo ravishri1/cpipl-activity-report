@@ -100,3 +100,19 @@ export const REPAIR_TYPE_STYLES = {
 };
 
 export const REPAIR_TYPES = ['repair', 'maintenance', 'inspection', 'calibration'];
+
+// ═══ Error Reports ═══
+export const ERROR_REPORT_STATUS_STYLES = {
+  new:        'bg-red-100 text-red-700 border-red-200',
+  reviewing:  'bg-amber-100 text-amber-700 border-amber-200',
+  fixed:      'bg-green-100 text-green-700 border-green-200',
+  dismissed:  'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+export const ERROR_SEVERITY_STYLES = {
+  critical: 'bg-red-100 text-red-700 border-red-200',
+  high:     'bg-orange-100 text-orange-700 border-orange-200',
+  medium:   'bg-amber-100 text-amber-700 border-amber-200',
+  low:      'bg-blue-100 text-blue-700 border-blue-200',
+  unknown:  'bg-slate-100 text-slate-500 border-slate-200',
+};

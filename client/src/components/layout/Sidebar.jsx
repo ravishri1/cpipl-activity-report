@@ -42,6 +42,7 @@ import {
   Wrench,
   Heart,
   TrendingUp,
+  Bug,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -267,6 +268,7 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/training', label: 'Training Manager', icon: GraduationCap },
           { to: '/admin/suggestions', label: 'Suggestions', icon: MessageSquare },
           { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
+          { to: '/admin/error-reports', label: 'Error Reports', icon: Bug },
           { to: '/admin/settings', label: 'Settings', icon: Settings },
         ],
       }
