@@ -1110,6 +1110,145 @@ async function sendTrainingDeadlineAlert(adminEmail, adminName, employeeGroups, 
   return sendEmail(adminEmail, subject, html);
 }
 
+// ---------------------------------------------------------------------------
+// Separation Last Working Day Alert
+// ---------------------------------------------------------------------------
+
+/**
+ * Send last-working-day milestone digest to one admin/team_lead.
+ *
+ * @param {string} adminEmail
+ * @param {string} adminName
+ * @param {Array<object & { daysUntilLastDay: number }>} separations
+ */
+async function sendSeparationAlert(adminEmail, adminName, separations) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const count  = separations.length;
+  const subject = `🚪 ${count} Employee${count !== 1 ? 's' : ''} Leaving Soon — Last Working Day Alert`;
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+
+  function urgencyStyle(days) {
+    if (days <= 1) return { bg: '#fff5f5', border: '#fca5a5', badge: '#dc3545', label: 'Tomorrow!' };
+    if (days <= 3) return { bg: '#fff7ed', border: '#fdba74', badge: '#fd7e14', label: `${days}d left` };
+    return           { bg: '#fefce8', border: '#fde68a', badge: '#d97706', label: `${days}d left` };
+  }
+
+  function separationTypeLabel(type) {
+    const MAP = {
+      resignation:  'Resignation',
+      termination:  'Termination',
+      absconding:   'Absconding',
+      retirement:   'Retirement',
+      contract_end: 'Contract End',
+    };
+    return MAP[type] || type;
+  }
+
+  function statusLabel(status) {
+    const MAP = {
+      initiated:     'Initiated',
+      notice_period: 'Notice Period',
+      fnf_pending:   'FnF Pending',
+    };
+    return MAP[status] || status;
+  }
+
+  // ── table rows ─────────────────────────────────────────────────────────────
+
+  const rows = separations.map((sep) => {
+    const s = urgencyStyle(sep.daysUntilLastDay);
+    return `
+      <tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:10px 12px;font-size:13px;color:#1e293b;font-weight:500;">${sep.user.name}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${sep.user.designation || '—'}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${sep.user.department || '—'}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${sep.user.employeeId || '—'}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${separationTypeLabel(sep.type)}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#64748b;">${statusLabel(sep.status)}</td>
+        <td style="padding:10px 12px;font-size:12px;color:#1e293b;font-weight:600;">${sep.lastWorkingDate}</td>
+        <td style="padding:10px 12px;text-align:center;">
+          <span style="padding:2px 8px;background:${s.badge};color:white;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;">
+            ${s.label}
+          </span>
+        </td>
+        <td style="padding:10px 12px;font-size:12px;">
+          ${sep.exitInterviewDone
+            ? '<span style="color:#16a34a;font-weight:600;">✔ Done</span>'
+            : '<span style="color:#dc2626;font-weight:600;">✘ Pending</span>'}
+        </td>
+        <td style="padding:10px 12px;font-size:12px;">
+          ${sep.allAssetsReturned
+            ? '<span style="color:#16a34a;font-weight:600;">✔ Returned</span>'
+            : '<span style="color:#dc2626;font-weight:600;">✘ Pending</span>'}
+        </td>
+      </tr>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#475569,#334155);padding:28px 24px;text-align:center;color:white;">
+        <div style="font-size:32px;margin-bottom:8px;">🚪</div>
+        <h2 style="margin:0;font-size:20px;font-weight:700;">Last Working Day Alert</h2>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${count} employee${count !== 1 ? 's' : ''} reaching last working day within 7 days
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 16px;">
+          Dear <strong>${adminName}</strong>, the following employees have their last working date
+          approaching. Please ensure exit interviews are completed, all assets are recovered,
+          and FnF calculations are prepared before their last day.
+        </p>
+
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;min-width:700px;">
+            <thead>
+              <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Employee</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Designation</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Department</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Emp ID</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Type</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Status</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Last Day</th>
+                <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Urgency</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Exit Interview</th>
+                <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Assets</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:16px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;
+                    border-radius:8px;font-size:13px;color:#475569;">
+          <strong>Checklist before last day:</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;">
+            <li>Conduct exit interview (if not done)</li>
+            <li>Recover all company assets (laptop, ID card, access cards)</li>
+            <li>Revoke system access and email on last day</li>
+            <li>Prepare Full &amp; Final settlement calculation</li>
+            <li>Issue experience / relieving letter</li>
+          </ul>
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#475569;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Separations
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Separation &amp; Exit Management
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -1125,4 +1264,5 @@ module.exports = {
   sendInsuranceExpiryAlert,
   sendOnboardingOverdueAlert,
   sendTrainingDeadlineAlert,
+  sendSeparationAlert,
 };

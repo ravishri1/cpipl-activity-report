@@ -13,6 +13,7 @@ const { runPassportExpiryCheck }   = require('./notifications/passportAlertServi
 const { runInsuranceExpiryCheck }  = require('./notifications/insuranceAlertService');
 const { runOnboardingOverdueCheck } = require('./notifications/onboardingOverdueService');
 const { runTrainingDeadlineCheck }  = require('./notifications/trainingDeadlineService');
+const { runSeparationAlert }        = require('./notifications/separationAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -216,6 +217,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Training deadline check scheduled: 15 10 * * 1-6 (10:15 Mon-Sat)');
+
+  // Separation last-working-day alert: 10:30 AM daily (Mon-Sat)
+  // Alerts at 7, 3, and 1 day before an employee's lastWorkingDate
+  cron.schedule('30 10 * * 1-6', async () => {
+    console.log(`[CRON] Separation alert triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runSeparationAlert(prisma);
+      console.log(`[CRON] Separation alert complete: ${count} last-working-day milestone(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Separation alert failed:', err);
+    }
+  });
+  console.log('  -> Separation last-day alert scheduled: 30 10 * * 1-6 (10:30 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
