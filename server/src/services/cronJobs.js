@@ -6,6 +6,7 @@ const { runHibernationCheck } = require('./hibernation');
 const { runOverdueRepairCheck } = require('./notifications/repairAlertService');
 const { runWarrantyExpiryCheck } = require('./notifications/warrantyAlertService');
 const { runBirthdayAnniversaryCheck } = require('./notifications/birthdayAnniversaryService');
+const { runPayrollReminderCheck } = require('./notifications/payrollReminderService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -118,6 +119,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Birthday/anniversary check scheduled: 0 8 * * 1-6 (08:00 Mon-Sat)');
+
+  // Payroll processing reminder: 8:00 AM on the 25th of every month
+  // Checks if all active/notice-period employees have payslips generated for the current month
+  cron.schedule('0 8 25 * *', async () => {
+    console.log(`[CRON] Payroll reminder check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const missing = await runPayrollReminderCheck(prisma);
+      console.log(`[CRON] Payroll reminder check complete: ${missing} payslip(s) still pending.`);
+    } catch (err) {
+      console.error('[CRON] Payroll reminder check failed:', err);
+    }
+  });
+  console.log('  -> Payroll reminder scheduled: 0 8 25 * * (25th of each month at 08:00)');
 }
 
 module.exports = { initCronJobs };

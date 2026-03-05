@@ -371,6 +371,101 @@ async function sendBirthdayAnniversaryAlert(adminEmail, adminName, birthdays, an
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendPayrollReminderAlert(adminEmail, adminName, summary) {
+  const { label, totalEligible, processed, missing, missingEmployees } = summary;
+  const pct     = Math.round((processed / totalEligible) * 100);
+  const subject = `💰 Payroll Reminder: ${missing} Payslip${missing !== 1 ? 's' : ''} Pending — ${label}`;
+
+  // Progress bar fill
+  const barFill = Math.max(4, pct); // min 4% so bar is visible
+  const barColor = pct === 100 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#dc3545';
+
+  // Group missing employees by department
+  const byDept = missingEmployees.reduce((acc, e) => {
+    const dept = e.department || 'General';
+    if (!acc[dept]) acc[dept] = [];
+    acc[dept].push(e);
+    return acc;
+  }, {});
+
+  const deptSections = Object.entries(byDept).map(([dept, emps]) => {
+    const rows = emps.map((e) => `
+      <tr style="border-bottom:1px solid #f0f4f8;">
+        <td style="padding:9px 12px;font-weight:600;color:#1e293b;">${e.name}</td>
+        <td style="padding:9px 12px;color:#64748b;font-size:13px;">${e.employeeId || '—'}</td>
+        <td style="padding:9px 12px;color:#64748b;font-size:13px;">${e.designation || '—'}</td>
+      </tr>`).join('');
+    return `
+      <tr><td colspan="3" style="padding:8px 12px;background:#f8fafc;font-size:12px;font-weight:700;
+              color:#475569;text-transform:uppercase;letter-spacing:.5px;">${dept}</td></tr>
+      ${rows}`;
+  }).join('');
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#f8fafc;">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1d4ed8 0%,#0ea5e9 100%);color:white;
+                  padding:24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:36px;margin-bottom:6px;">💰</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Payroll Processing Reminder</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:14px;">${label}</p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 16px;">
+          Dear <strong>${adminName}</strong>, ${missing} employee${missing !== 1 ? 's' : ''} still
+          ${missing !== 1 ? "don't" : "doesn't"} have a payslip generated for <strong>${label}</strong>.
+        </p>
+
+        <!-- Progress summary -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:13px;color:#64748b;">Payroll completion</span>
+            <span style="font-size:13px;font-weight:700;color:${barColor};">${processed} / ${totalEligible} (${pct}%)</span>
+          </div>
+          <div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden;">
+            <div style="background:${barColor};width:${barFill}%;height:100%;border-radius:999px;"></div>
+          </div>
+          <div style="display:flex;gap:20px;margin-top:12px;font-size:12px;">
+            <span style="color:#16a34a;">✅ Generated: <strong>${processed}</strong></span>
+            <span style="color:#dc3545;">⏳ Pending: <strong>${missing}</strong></span>
+          </div>
+        </div>
+
+        <!-- Missing employees table -->
+        <h3 style="color:#1e293b;font-size:14px;margin:0 0 8px;">⏳ Pending Payslips</h3>
+        <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                      border-radius:8px;font-size:14px;margin-bottom:16px;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Employee</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">ID</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Designation</th>
+            </tr>
+          </thead>
+          <tbody>${deptSections}</tbody>
+        </table>
+
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 14px;">
+          Please generate and publish all payslips before month-end to ensure timely disbursement.
+        </p>
+        <a href="${appUrl}/admin/payroll"
+           style="display:inline-block;padding:10px 22px;background:#1d4ed8;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          Open Payroll Dashboard
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Payroll &amp; Finance
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -379,4 +474,5 @@ module.exports = {
   sendOverdueRepairAlert,
   sendWarrantyExpiryAlert,
   sendBirthdayAnniversaryAlert,
+  sendPayrollReminderAlert,
 };
