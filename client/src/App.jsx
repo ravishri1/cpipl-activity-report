@@ -53,6 +53,7 @@ const MyFiles = lazy(() => import('./components/files/MyFiles'));
 const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCard'));
 const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
 const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTimeline'));
+const VendorAnalyticsDashboard = lazy(() => import('./components/admin/VendorAnalyticsDashboard'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 
@@ -174,6 +175,7 @@ function AppRoutes() {
                   <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/vendor-analytics" element={<SeparatedRoute><AdminRoute><VendorAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />

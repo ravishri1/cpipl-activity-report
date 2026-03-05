@@ -41,8 +41,10 @@ import {
   Crown,
   Wrench,
   Heart,
+  TrendingUp,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user, isStrictAdmin, isTeamLead, isSeparated } = useAuth();
@@ -255,6 +257,7 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
+          { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
           { to: '/admin/insurance', label: 'Insurance Management', icon: Heart },
           { to: '/admin/letters', label: 'Letters', icon: Mail },
           { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
