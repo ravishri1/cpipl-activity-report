@@ -1,4 +1,4 @@
 @echo off
-cd /D "D:\Activity Report Software\server"
-npx prisma migrate dev --name add_training_assignments_contributions
+cd /d "D:\Activity Report Software\server"
+npx prisma migrate dev --name add_predictive_maintenance
 pause

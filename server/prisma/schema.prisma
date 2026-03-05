@@ -163,6 +163,9 @@ model User {
   inventoryMovementsMade      InventoryMovement[]          @relation("InventoryMovement")     // Inventory movements logged by this user
   employeeBudgets             EmployeeBudget[]             @relation("EmployeeBudget")        // Budget allocations for this employee
 
+  // ── Predictive Maintenance Relations ──
+  maintenanceRecommendationApprovals MaintenanceRecommendation[] @relation("MaintenanceApprover") // Recommendations approved by this user
+
   @@index([department])
   @@index([isActive])
   @@index([employmentStatus])
@@ -823,6 +826,11 @@ model Asset {
   conditionLogs     AssetConditionLog[]
   disposals         AssetDisposal[]
   detachmentRequests AssetDetachmentRequest[]
+  
+  // Predictive Maintenance Relations
+  healthScore       AssetHealthScore?
+  predictions       PredictionResult?
+  recommendations   MaintenanceRecommendation[]
 
   @@index([assignedTo])
   @@index([status])
@@ -1939,10 +1947,94 @@ model VendorPerformanceScore {
   @@index([onTimeDeliveryRate])
 }
 
-// ─── Update Asset Model with Procurement Fields ───
-// Note: Asset model should include these fields (add to existing Asset model):
-// - procurementOrderId: Int?
-// - originalCost: Float?
-// - budgetCategory: String?
-// - inventoryItemId: Int? 
-// - inventoryLinks: AssetInventoryLink[]
+// ═══════════════════════════════════════════════
+// Predictive Maintenance & ML Integration
+// ═══════════════════════════════════════════════
+
+model AssetHealthScore {
+  id                    Int       @id @default(autoincrement())
+  assetId               Int       @unique
+  
+  // Health Components (0-100 each)
+  ageScore              Float     @default(0)            // Based on asset age
+  usageIntensityScore   Float     @default(0)            // Based on repair frequency
+  repairHistoryScore    Float     @default(0)            // Based on repair quality
+  turnaroundScore       Float     @default(0)            // Based on vendor performance
+  
+  // Aggregate Scores
+  overallHealthScore    Float     @default(0)            // 0-100 weighted average
+  riskLevel             String    @default("low")        // low/medium/high/critical
+  healthTrend           String    @default("stable")     // improving/stable/declining
+  lastUpdated           DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  asset                 Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  @@index([assetId])
+  @@index([overallHealthScore])
+  @@index([riskLevel])
+}
+
+model PredictionResult {
+  id                    Int       @id @default(autoincrement())
+  assetId               Int       @unique
+  
+  // Failure Prediction (0-100 probability)
+  failureProb30Days     Float     @default(0)            // Next 30 days
+  failureProb60Days     Float     @default(0)            // Next 60 days
+  failureProb90Days     Float     @default(0)            // Next 90 days
+  
+  // Confidence & Reasoning
+  confidenceScore       Float     @default(0)            // 0-100
+  primaryRiskFactors    String    @default("[]")         // JSON array of top 3 risk factors
+  riskDescription       String?                          // Human-readable explanation
+  
+  // Prediction Metadata
+  modelVersion          String    @default("v1.0")       // e.g., "v1.0"
+  predictionDate        DateTime  @default(now())
+  lastRecalculated      DateTime  @updatedAt
+  
+  asset                 Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  @@index([assetId])
+  @@index([failureProb30Days])
+  @@index([predictionDate])
+}
+
+model MaintenanceRecommendation {
+  id                    Int       @id @default(autoincrement())
+  assetId               Int
+  
+  // Recommendation Details
+  action                String                          // "preventive_maintenance", "inspection", "parts_replacement", etc.
+  urgency               String    @default("medium")    // "low", "medium", "high", "critical"
+  priority              Int       @default(50)          // 1-100 for ranking
+  
+  // Impact Metrics
+  estimatedCost         Float?
+  estimatedDowntime     Int?                            // hours
+  failureRiskReduction  Float?                          // % reduction if action taken
+  estimatedROI          Float?                          // cost savings / action cost
+  
+  // Recommendation Reasoning
+  reasoning             String?                         // Why this recommendation
+  confidenceScore       Float     @default(0)           // 0-100
+  suggestedVendor       String?                         // Recommended vendor if applicable
+  
+  // Status Tracking
+  status                String    @default("pending")   // pending/approved/in_progress/completed
+  approvedBy            Int?
+  approvedAt            DateTime?
+  completedAt           DateTime?
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  asset                 Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  approver              User?     @relation("MaintenanceApprover", fields: [approvedBy], references: [id])
+  
+  @@index([assetId])
+  @@index([urgency])
+  @@index([priority])
+  @@index([status])
+}
