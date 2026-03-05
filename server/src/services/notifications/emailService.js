@@ -126,4 +126,68 @@ async function sendSummaryToLead(leadEmail, date, summary) {
   return sendEmail(leadEmail, subject, html);
 }
 
-module.exports = { sendEmail, sendReminderEmail, sendEscalationEmail, sendSummaryToLead };
+async function sendOverdueRepairAlert(adminEmail, adminName, overdueRepairs) {
+  const count   = overdueRepairs.length;
+  const subject = `⚠️ ${count} Overdue Asset Repair${count !== 1 ? 's' : ''} Require Attention`;
+
+  // Sort worst-overdue first
+  const sorted = [...overdueRepairs].sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+  const repairRows = sorted.map((r) => {
+    const urgentColor = r.daysOverdue >= 7 ? '#dc3545' : '#fd7e14';
+    return `
+      <tr style="border-bottom:1px solid #e9ecef;">
+        <td style="padding:10px;font-weight:600;">${r.asset.name}</td>
+        <td style="padding:10px;color:#666;">${r.asset.assetTag || '—'}</td>
+        <td style="padding:10px;color:#666;text-transform:capitalize;">${r.repairType}</td>
+        <td style="padding:10px;color:#666;">${r.vendor || 'Unknown'}</td>
+        <td style="padding:10px;color:#666;">${r.expectedReturnDate}</td>
+        <td style="padding:10px;font-weight:bold;color:${urgentColor};">
+          ${r.daysOverdue} day${r.daysOverdue !== 1 ? 's' : ''}
+        </td>
+      </tr>`;
+  }).join('');
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+      <div style="background:#fd7e14;color:white;padding:20px;text-align:center;">
+        <h2 style="margin:0;">⚠️ Overdue Asset Repairs</h2>
+        <p style="margin:6px 0 0;">${count} asset${count !== 1 ? 's' : ''} not yet returned by expected date</p>
+      </div>
+      <div style="padding:20px;">
+        <p>Dear <strong>${adminName}</strong>,</p>
+        <p>The following assets sent for repair or maintenance have <strong>not been returned</strong> by their expected return date:</p>
+
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <thead>
+            <tr style="background:#f8f9fa;text-align:left;">
+              <th style="padding:10px;">Asset</th>
+              <th style="padding:10px;">Tag</th>
+              <th style="padding:10px;">Repair Type</th>
+              <th style="padding:10px;">Vendor</th>
+              <th style="padding:10px;">Expected Return</th>
+              <th style="padding:10px;">Overdue By</th>
+            </tr>
+          </thead>
+          <tbody>${repairRows}</tbody>
+        </table>
+
+        <p>Please follow up with the respective vendors and update the repair status in the system.</p>
+
+        <a href="${appUrl}/admin/assets"
+           style="display:inline-block;padding:10px 22px;background:#fd7e14;color:white;
+                  text-decoration:none;border-radius:6px;font-weight:600;margin-top:8px;">
+          View Asset Repairs
+        </a>
+      </div>
+      <div style="padding:10px;background:#e9ecef;text-align:center;color:#666;font-size:12px;">
+        Color Papers HR System &middot; Asset Management
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
+module.exports = { sendEmail, sendReminderEmail, sendEscalationEmail, sendSummaryToLead, sendOverdueRepairAlert };

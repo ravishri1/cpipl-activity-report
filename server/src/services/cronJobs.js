@@ -3,6 +3,7 @@ const { runFirstReminder, runEscalation } = require('./notifications/reminderSer
 const { fetchAndStoreEmailActivity } = require('./google/googleWorkspace');
 const { fetchAndStoreChatActivity } = require('./google/googleChat');
 const { runHibernationCheck } = require('./hibernation');
+const { runOverdueRepairCheck } = require('./notifications/repairAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -76,6 +77,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Hibernation check scheduled: 0 2 * * * (02:00 daily)');
+
+  // Overdue repair check: 9:00 AM daily (Mon-Sat)
+  // Finds active AssetRepairs past their expectedReturnDate, updates daysOverdue, emails admins
+  cron.schedule('0 9 * * 1-6', async () => {
+    console.log(`[CRON] Overdue repair check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runOverdueRepairCheck(prisma);
+      console.log(`[CRON] Overdue repair check complete: ${count} overdue repair(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Overdue repair check failed:', err);
+    }
+  });
+  console.log('  -> Overdue repair check scheduled: 0 9 * * 1-6 (09:00 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
