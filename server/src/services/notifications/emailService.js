@@ -962,6 +962,154 @@ async function sendOnboardingOverdueAlert(adminEmail, adminName, employeeGroups,
   return sendEmail(adminEmail, subject, html);
 }
 
+// ---------------------------------------------------------------------------
+// Training Assignment Deadline Alert
+// ---------------------------------------------------------------------------
+
+/**
+ * Send overdue training assignment digest to one admin/team_lead.
+ *
+ * @param {string} adminEmail
+ * @param {string} adminName
+ * @param {Array<{ user: object, assignments: Array<object & { daysOverdue: number }> }>} employeeGroups
+ * @param {number} totalAssignments
+ */
+async function sendTrainingDeadlineAlert(adminEmail, adminName, employeeGroups, totalAssignments) {
+  const appUrl   = process.env.APP_URL || 'http://localhost:3000';
+  const empCount = employeeGroups.length;
+  const subject  = `🎓 ${totalAssignments} Overdue Training Assignment${totalAssignments !== 1 ? 's' : ''} — ${empCount} Employee${empCount !== 1 ? 's' : ''}`;
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+
+  function overdueStyle(days) {
+    if (days > 7)  return { bg: '#fff5f5', border: '#fca5a5', badge: '#dc3545', label: 'Critical' };
+    if (days >= 4) return { bg: '#fff7ed', border: '#fdba74', badge: '#fd7e14', label: 'Warning'  };
+    return           { bg: '#fefce8', border: '#fde68a', badge: '#d97706', label: 'Recent'   };
+  }
+
+  function categoryLabel(cat) {
+    const MAP = {
+      general:          'General',
+      compliance:       'Compliance',
+      safety:           'Safety',
+      technical:        'Technical',
+      soft_skills:      'Soft Skills',
+      onboarding:       'Onboarding',
+      leadership:       'Leadership',
+      product:          'Product',
+    };
+    return MAP[cat] || cat;
+  }
+
+  function statusLabel(status) {
+    const MAP = {
+      assigned:    'Assigned',
+      in_progress: 'In Progress',
+      failed:      'Failed',
+      expired:     'Expired',
+    };
+    return MAP[status] || status;
+  }
+
+  // ── per-employee sections ──────────────────────────────────────────────────
+
+  const employeeSections = employeeGroups.map(({ user, assignments }) => {
+    const worstDays   = Math.max(...assignments.map((a) => a.daysOverdue));
+    const headerStyle = overdueStyle(worstDays);
+
+    const assignmentRows = assignments
+      .sort((a, b) => b.daysOverdue - a.daysOverdue)
+      .map((a) => {
+        const s = overdueStyle(a.daysOverdue);
+        return `
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:8px 10px;font-size:13px;color:#1e293b;">
+              ${a.module.title}
+              ${a.module.isMandatory ? '<span style="margin-left:5px;padding:1px 5px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:10px;font-weight:600;">MANDATORY</span>' : ''}
+            </td>
+            <td style="padding:8px 10px;font-size:12px;color:#64748b;">${categoryLabel(a.module.category)}</td>
+            <td style="padding:8px 10px;font-size:12px;color:#64748b;">${a.dueDate}</td>
+            <td style="padding:8px 10px;font-size:12px;color:#64748b;">${statusLabel(a.status)}</td>
+            <td style="padding:8px 10px;text-align:center;">
+              <span style="padding:2px 8px;background:${s.badge};color:white;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;">
+                ${a.daysOverdue}d ${s.label}
+              </span>
+            </td>
+          </tr>`;
+      })
+      .join('');
+
+    return `
+      <div style="margin-bottom:20px;border:1px solid ${headerStyle.border};border-radius:10px;overflow:hidden;">
+        <div style="padding:10px 14px;background:${headerStyle.bg};border-bottom:1px solid ${headerStyle.border};
+                    display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <strong style="font-size:14px;color:#1e293b;">${user.name}</strong>
+            <span style="margin-left:8px;font-size:12px;color:#64748b;">${user.designation || '—'} &bull; ${user.department || '—'}</span>
+          </div>
+          <div style="font-size:12px;color:#64748b;">
+            EMP: <strong>${user.employeeId || '—'}</strong>
+            &nbsp;|&nbsp;
+            <span style="color:${headerStyle.badge};font-weight:600;">
+              ${assignments.length} task${assignments.length !== 1 ? 's' : ''} overdue
+            </span>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Module</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Category</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Due Date</th>
+              <th style="padding:7px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Status</th>
+              <th style="padding:7px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Overdue</th>
+            </tr>
+          </thead>
+          <tbody>${assignmentRows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#d97706,#f59e0b);padding:28px 24px;text-align:center;color:white;">
+        <div style="font-size:32px;margin-bottom:8px;">🎓</div>
+        <h2 style="margin:0;font-size:20px;font-weight:700;">Training Deadline Alert</h2>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${totalAssignments} assignment${totalAssignments !== 1 ? 's' : ''} past due across ${empCount} employee${empCount !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 16px;">
+          Dear <strong>${adminName}</strong>, the following training assignments are past their due dates
+          and have not been completed. Please follow up with the respective employees to ensure timely
+          completion, especially for mandatory modules.
+        </p>
+
+        ${employeeSections}
+
+        <div style="margin-top:4px;padding:12px 16px;background:#fffbeb;border:1px solid #fde68a;
+                    border-radius:8px;font-size:13px;color:#92400e;">
+          <strong>Tip:</strong> Navigate to an employee's profile &rarr; Training tab to reassign modules,
+          extend deadlines, or mark modules as completed where applicable.
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#d97706;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Employee Profiles
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Training &amp; Development
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -976,4 +1124,5 @@ module.exports = {
   sendPassportExpiryAlert,
   sendInsuranceExpiryAlert,
   sendOnboardingOverdueAlert,
+  sendTrainingDeadlineAlert,
 };
