@@ -849,6 +849,119 @@ async function sendInsuranceExpiryAlert(adminEmail, adminName, cards) {
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendOnboardingOverdueAlert(adminEmail, adminName, employeeGroups, totalTasks) {
+  const empCount = employeeGroups.length;
+  const subject  = `📋 ${totalTasks} Overdue Onboarding Task${totalTasks !== 1 ? 's' : ''} — ${empCount} Employee${empCount !== 1 ? 's' : ''}`;
+
+  function overdueStyle(days) {
+    if (days > 7) return { emoji: '🔴', color: '#dc3545', bg: '#fde8e8', label: 'Critical' };
+    if (days >= 4) return { emoji: '🟠', color: '#fd7e14', bg: '#fff3e0', label: 'Warning' };
+    return              { emoji: '🟡', color: '#d97706', bg: '#fffde7', label: 'Recent' };
+  }
+
+  function categoryLabel(cat) {
+    const map = {
+      documents:      'Documents',
+      it_setup:       'IT Setup',
+      hr_formalities: 'HR Formalities',
+      training:       'Training',
+    };
+    return map[cat] || cat || '—';
+  }
+
+  const employeeSections = employeeGroups.map(({ user, tasks }) => {
+    const maxOverdue = Math.max(...tasks.map((t) => t.daysOverdue));
+    const { emoji, color } = overdueStyle(maxOverdue);
+
+    const taskRows = tasks.map((t) => {
+      const { emoji: te, color: tc, bg, label } = overdueStyle(t.daysOverdue);
+      return `
+        <tr style="border-bottom:1px solid #f8f8f8;">
+          <td style="padding:8px 12px;color:#1e293b;font-size:13px;">${t.task}</td>
+          <td style="padding:8px 12px;color:#475569;font-size:12px;">${categoryLabel(t.category)}</td>
+          <td style="padding:8px 12px;color:#475569;font-size:12px;">${t.assignedTo || '—'}</td>
+          <td style="padding:8px 12px;color:#475569;font-size:12px;">${t.dueDate}</td>
+          <td style="padding:8px 12px;text-align:center;">
+            <span style="background:${bg};color:${tc};padding:2px 8px;border-radius:999px;
+                         font-size:11px;font-weight:700;white-space:nowrap;">
+              ${te} ${t.daysOverdue}d late
+            </span>
+          </td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:20px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <div style="background:#f8fafc;padding:10px 14px;border-bottom:1px solid #e2e8f0;
+                    display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-weight:700;color:#1e293b;font-size:14px;">${emoji} ${user.name}</span>
+            <span style="color:#64748b;font-size:12px;margin-left:10px;">
+              ${user.department || '—'} &middot; ${user.employeeId || '—'}
+            </span>
+          </div>
+          <span style="font-size:12px;color:${color};font-weight:700;">
+            ${tasks.length} task${tasks.length !== 1 ? 's' : ''} overdue
+          </span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#fafafa;">
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Task</th>
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Category</th>
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Assigned To</th>
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Due Date</th>
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${taskRows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);color:white;
+                  padding:24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:36px;margin-bottom:6px;">📋</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Overdue Onboarding Tasks</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${totalTasks} task${totalTasks !== 1 ? 's' : ''} past due across ${empCount} employee${empCount !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 16px;">
+          Dear <strong>${adminName}</strong>, the following onboarding checklist items are past their
+          due dates and have not been completed. Please follow up with the respective employees or
+          assignees to close out these items.
+        </p>
+
+        ${employeeSections}
+
+        <div style="margin-top:4px;padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;
+                    border-radius:8px;font-size:13px;color:#1e40af;">
+          <strong>Tip:</strong> Navigate to an employee's profile &rarr; Onboarding tab to mark
+          tasks complete or adjust due dates as needed.
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#1e40af;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Employee Profiles
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Onboarding &amp; Lifecycle
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -862,4 +975,5 @@ module.exports = {
   sendProbationEndAlert,
   sendPassportExpiryAlert,
   sendInsuranceExpiryAlert,
+  sendOnboardingOverdueAlert,
 };

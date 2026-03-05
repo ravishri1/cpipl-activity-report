@@ -11,6 +11,7 @@ const { runPendingApprovalsCheck } = require('./notifications/pendingApprovalsSe
 const { runProbationEndCheck }     = require('./notifications/probationAlertService');
 const { runPassportExpiryCheck }   = require('./notifications/passportAlertService');
 const { runInsuranceExpiryCheck }  = require('./notifications/insuranceAlertService');
+const { runOnboardingOverdueCheck } = require('./notifications/onboardingOverdueService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -188,6 +189,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Insurance expiry check scheduled: 45 9 * * 1-6 (09:45 Mon-Sat)');
+
+  // Onboarding overdue check: 10:00 AM daily (Mon-Sat)
+  // Finds incomplete onboarding tasks past their dueDate for active employees
+  cron.schedule('0 10 * * 1-6', async () => {
+    console.log(`[CRON] Onboarding overdue check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runOnboardingOverdueCheck(prisma);
+      console.log(`[CRON] Onboarding overdue check complete: ${count} overdue task(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Onboarding overdue check failed:', err);
+    }
+  });
+  console.log('  -> Onboarding overdue check scheduled: 0 10 * * 1-6 (10:00 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
