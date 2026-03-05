@@ -10,6 +10,7 @@ const { runPayrollReminderCheck } = require('./notifications/payrollReminderServ
 const { runPendingApprovalsCheck } = require('./notifications/pendingApprovalsService');
 const { runProbationEndCheck }     = require('./notifications/probationAlertService');
 const { runPassportExpiryCheck }   = require('./notifications/passportAlertService');
+const { runInsuranceExpiryCheck }  = require('./notifications/insuranceAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -174,6 +175,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Passport expiry check scheduled: 30 9 * * 1-6 (09:30 Mon-Sat)');
+
+  // Insurance card expiry check: 9:45 AM daily (Mon-Sat)
+  // Alerts at 60, 30, 14, and 7 days before an active insurance card's effectiveTo date
+  cron.schedule('45 9 * * 1-6', async () => {
+    console.log(`[CRON] Insurance expiry check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runInsuranceExpiryCheck(prisma);
+      console.log(`[CRON] Insurance expiry check complete: ${count} insurance expiry milestone(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Insurance expiry check failed:', err);
+    }
+  });
+  console.log('  -> Insurance expiry check scheduled: 45 9 * * 1-6 (09:45 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

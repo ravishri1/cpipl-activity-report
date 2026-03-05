@@ -755,6 +755,100 @@ async function sendPassportExpiryAlert(adminEmail, adminName, employees) {
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendInsuranceExpiryAlert(adminEmail, adminName, cards) {
+  const count   = cards.length;
+  const subject = `🏥 ${count} Employee Insurance Card${count !== 1 ? 's' : ''} Expiring Soon`;
+
+  // Urgency tiers
+  const critical = cards.filter((c) => c.daysUntilExpiry <= 14);
+  const warning  = cards.filter((c) => c.daysUntilExpiry > 14 && c.daysUntilExpiry <= 30);
+  const upcoming = cards.filter((c) => c.daysUntilExpiry > 30);
+
+  function cardTypeLabel(t) {
+    const map = { health: 'Health', life: 'Life', accidental: 'Accidental', other: 'Other' };
+    return map[t] || t || '—';
+  }
+
+  function buildRows(items, color) {
+    return items.map((c) => {
+      const amt = c.coverageAmount
+        ? `₹${Number(c.coverageAmount).toLocaleString('en-IN')}`
+        : '—';
+      return `
+        <tr style="border-bottom:1px solid #f0f4f8;">
+          <td style="padding:10px 12px;font-weight:700;color:#1e293b;">${c.user.name}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${c.user.department || '—'}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${c.user.employeeId || '—'}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${cardTypeLabel(c.cardType)}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${c.providerName || '—'}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;font-family:monospace;">${c.policyNumber || '—'}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${amt}</td>
+          <td style="padding:10px 12px;color:#475569;font-size:13px;">${c.effectiveTo}</td>
+          <td style="padding:10px 12px;font-weight:bold;color:${color};font-size:13px;">
+            ${c.daysUntilExpiry} day${c.daysUntilExpiry !== 1 ? 's' : ''}
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function buildSection(title, items, color) {
+    if (!items.length) return '';
+    const cols = ['Employee', 'Department', 'Emp ID', 'Type', 'Provider', 'Policy No', 'Coverage', 'Expiry Date', 'Expires In'];
+    const thead = `<thead><tr style="background:#f8fafc;">${
+      cols.map((c) => `<th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;white-space:nowrap;">${c}</th>`).join('')
+    }</tr></thead>`;
+    return `
+      <h3 style="color:${color};font-size:14px;margin:20px 0 8px;">${title} (${items.length})</h3>
+      <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                    border-radius:8px;font-size:14px;margin-bottom:4px;overflow-x:auto;">
+        ${thead}<tbody>${buildRows(items, color)}</tbody>
+      </table>`;
+  }
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#be185d 0%,#9d174d 100%);color:white;
+                  padding:24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:36px;margin-bottom:6px;">🏥</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Insurance Card Expiry Alert</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${count} employee insurance card${count !== 1 ? 's' : ''} expiring within the next 60 days
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 4px;">
+          Dear <strong>${adminName}</strong>, the following active employees have insurance cards
+          approaching expiry. Please initiate renewal or re-issuance to ensure uninterrupted coverage.
+        </p>
+
+        ${buildSection('🔴 Critical — Expires in ≤ 14 days',   critical, '#dc3545')}
+        ${buildSection('🟠 Warning — Expires in 15–30 days',   warning,  '#fd7e14')}
+        ${buildSection('🟡 Upcoming — Expires in 31–60 days',  upcoming, '#d97706')}
+
+        <div style="margin-top:16px;padding:12px 16px;background:#fdf2f8;border:1px solid #f9a8d4;
+                    border-radius:8px;font-size:13px;color:#9d174d;">
+          <strong>Action Required:</strong> Contact the insurance provider to renew or re-issue cards
+          before expiry. Upload the new card to the employee's profile once received.
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#be185d;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Employee Profiles
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; Insurance &amp; Benefits
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -767,4 +861,5 @@ module.exports = {
   sendPendingApprovalsAlert,
   sendProbationEndAlert,
   sendPassportExpiryAlert,
+  sendInsuranceExpiryAlert,
 };
