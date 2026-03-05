@@ -190,4 +190,84 @@ async function sendOverdueRepairAlert(adminEmail, adminName, overdueRepairs) {
   return sendEmail(adminEmail, subject, html);
 }
 
-module.exports = { sendEmail, sendReminderEmail, sendEscalationEmail, sendSummaryToLead, sendOverdueRepairAlert };
+async function sendWarrantyExpiryAlert(adminEmail, adminName, expiringAssets) {
+  const count = expiringAssets.length;
+  const subject = `🔔 ${count} Asset Warrant${count !== 1 ? 'ies' : 'y'} Expiring Soon`;
+
+  // Urgency tiers
+  const critical  = expiringAssets.filter((a) => a.daysUntilExpiry <= 7);
+  const warning   = expiringAssets.filter((a) => a.daysUntilExpiry > 7 && a.daysUntilExpiry <= 14);
+  const upcoming  = expiringAssets.filter((a) => a.daysUntilExpiry > 14);
+
+  function buildRows(assets, color) {
+    return assets.map((a) => {
+      const holder = a.currentHolder ? a.currentHolder.name : 'Unassigned';
+      const badge  = a.daysUntilExpiry === 1
+        ? '1 day'
+        : `${a.daysUntilExpiry} days`;
+      return `
+        <tr style="border-bottom:1px solid #e9ecef;">
+          <td style="padding:10px;font-weight:600;">${a.name}</td>
+          <td style="padding:10px;color:#666;">${a.assetTag || '—'}</td>
+          <td style="padding:10px;color:#666;text-transform:capitalize;">${a.type}</td>
+          <td style="padding:10px;color:#666;">${a.warrantyVendor || '—'}</td>
+          <td style="padding:10px;color:#666;">${a.warrantyExpiry}</td>
+          <td style="padding:10px;color:#666;">${holder}</td>
+          <td style="padding:10px;font-weight:bold;color:${color};">${badge}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function buildSection(title, assets, headerBg, color) {
+    if (!assets.length) return '';
+    return `
+      <h3 style="color:${color};margin:20px 0 8px;">${title} (${assets.length})</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f8f9fa;text-align:left;">
+            <th style="padding:10px;">Asset</th>
+            <th style="padding:10px;">Tag</th>
+            <th style="padding:10px;">Type</th>
+            <th style="padding:10px;">Warranty Vendor</th>
+            <th style="padding:10px;">Expiry Date</th>
+            <th style="padding:10px;">Assigned To</th>
+            <th style="padding:10px;">Expires In</th>
+          </tr>
+        </thead>
+        <tbody>${buildRows(assets, color)}</tbody>
+      </table>`;
+  }
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:750px;margin:0 auto;">
+      <div style="background:#0d6efd;color:white;padding:20px;text-align:center;">
+        <h2 style="margin:0;">🔔 Warranty Expiry Alert</h2>
+        <p style="margin:6px 0 0;">${count} asset warrant${count !== 1 ? 'ies' : 'y'} requiring action</p>
+      </div>
+      <div style="padding:20px;">
+        <p>Dear <strong>${adminName}</strong>,</p>
+        <p>The following assets have warranties expiring soon. Please arrange renewals or replacement plans as needed.</p>
+
+        ${buildSection('🔴 Critical — Expires in ≤ 7 days',  critical, '#fde8e8', '#dc3545')}
+        ${buildSection('🟠 Warning — Expires in 8–14 days', warning,  '#fff3e0', '#fd7e14')}
+        ${buildSection('🟡 Upcoming — Expires in 15–30 days', upcoming, '#fffde7', '#d97706')}
+
+        <p style="margin-top:16px;">Renew warranties before expiry to avoid gaps in coverage.</p>
+
+        <a href="${appUrl}/admin/assets"
+           style="display:inline-block;padding:10px 22px;background:#0d6efd;color:white;
+                  text-decoration:none;border-radius:6px;font-weight:600;margin-top:8px;">
+          View Assets
+        </a>
+      </div>
+      <div style="padding:10px;background:#e9ecef;text-align:center;color:#666;font-size:12px;">
+        Color Papers HR System &middot; Asset Management
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
+module.exports = { sendEmail, sendReminderEmail, sendEscalationEmail, sendSummaryToLead, sendOverdueRepairAlert, sendWarrantyExpiryAlert };

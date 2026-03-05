@@ -4,6 +4,7 @@ const { fetchAndStoreEmailActivity } = require('./google/googleWorkspace');
 const { fetchAndStoreChatActivity } = require('./google/googleChat');
 const { runHibernationCheck } = require('./hibernation');
 const { runOverdueRepairCheck } = require('./notifications/repairAlertService');
+const { runWarrantyExpiryCheck } = require('./notifications/warrantyAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -90,6 +91,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Overdue repair check scheduled: 0 9 * * 1-6 (09:00 Mon-Sat)');
+
+  // Warranty expiry check: 8:30 AM daily (Mon-Sat)
+  // Alerts at 30, 14, 7, 1 day(s) before each asset's warrantyExpiry date
+  cron.schedule('30 8 * * 1-6', async () => {
+    console.log(`[CRON] Warranty expiry check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runWarrantyExpiryCheck(prisma);
+      console.log(`[CRON] Warranty expiry check complete: ${count} asset(s) at expiry milestone today.`);
+    } catch (err) {
+      console.error('[CRON] Warranty expiry check failed:', err);
+    }
+  });
+  console.log('  -> Warranty expiry check scheduled: 30 8 * * 1-6 (08:30 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };
