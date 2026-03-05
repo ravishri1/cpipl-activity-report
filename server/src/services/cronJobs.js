@@ -8,6 +8,7 @@ const { runWarrantyExpiryCheck } = require('./notifications/warrantyAlertService
 const { runBirthdayAnniversaryCheck } = require('./notifications/birthdayAnniversaryService');
 const { runPayrollReminderCheck } = require('./notifications/payrollReminderService');
 const { runPendingApprovalsCheck } = require('./notifications/pendingApprovalsService');
+const { runProbationEndCheck }     = require('./notifications/probationAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -146,6 +147,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Pending approvals check scheduled: 15 9 * * 1-6 (09:15 Mon-Sat)');
+
+  // Probation end date check: 8:45 AM daily (Mon-Sat)
+  // Alerts at 14 and 7 days before an active employee's probationEndDate
+  cron.schedule('45 8 * * 1-6', async () => {
+    console.log(`[CRON] Probation end check triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runProbationEndCheck(prisma);
+      console.log(`[CRON] Probation end check complete: ${count} probation milestone(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Probation end check failed:', err);
+    }
+  });
+  console.log('  -> Probation end check scheduled: 45 8 * * 1-6 (08:45 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

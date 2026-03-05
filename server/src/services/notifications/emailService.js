@@ -587,6 +587,91 @@ async function sendPendingApprovalsAlert(adminEmail, adminName, leaves, expenses
   return sendEmail(adminEmail, subject, html);
 }
 
+async function sendProbationEndAlert(adminEmail, adminName, employees) {
+  const count   = employees.length;
+  const subject = `⏰ ${count} Employee Probation Period${count !== 1 ? 's' : ''} Ending Soon`;
+
+  function tier(daysUntilEnd) {
+    if (daysUntilEnd <= 7)  return { emoji: '🔴', label: 'Final Review',  color: '#dc3545', bg: '#fde8e8' };
+    return                          { emoji: '🟠', label: 'Prepare Eval', color: '#fd7e14', bg: '#fff3e0' };
+  }
+
+  const rows = employees.map((emp) => {
+    const { emoji, label, color, bg } = tier(emp.daysUntilEnd);
+    return `
+      <tr style="border-bottom:1px solid #f0f4f8;">
+        <td style="padding:10px 12px;font-weight:700;color:#1e293b;">${emp.name}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.department || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.designation || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.employeeId || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.dateOfJoining || '—'}</td>
+        <td style="padding:10px 12px;color:#475569;font-size:13px;">${emp.probationEndDate}</td>
+        <td style="padding:10px 12px;text-align:center;">
+          <span style="background:${bg};color:${color};padding:2px 10px;border-radius:999px;
+                       font-size:12px;font-weight:700;white-space:nowrap;">
+            ${emoji} ${emp.daysUntilEnd} day${emp.daysUntilEnd !== 1 ? 's' : ''} — ${label}
+          </span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#f8fafc;">
+      <div style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);color:white;
+                  padding:24px;text-align:center;border-radius:0 0 20px 20px;">
+        <div style="font-size:36px;margin-bottom:6px;">⏰</div>
+        <h1 style="margin:0;font-size:20px;font-weight:800;">Probation Period Ending Soon</h1>
+        <p style="margin:6px 0 0;opacity:0.85;font-size:13px;">
+          ${count} employee${count !== 1 ? 's' : ''} approaching end of probation
+        </p>
+      </div>
+
+      <div style="padding:24px;">
+        <p style="color:#475569;font-size:14px;margin:0 0 16px;">
+          Dear <strong>${adminName}</strong>, the following employees have their probation period
+          ending within the next 14 days. Please schedule evaluations and decide on
+          <strong>confirmation, extension, or termination</strong> before the end date.
+        </p>
+
+        <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;
+                      border-radius:8px;font-size:14px;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Employee</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Department</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Designation</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Emp ID</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Joined</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Probation Ends</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+
+        <div style="margin-top:16px;padding:12px 16px;background:#fef3c7;border:1px solid #fde68a;
+                    border-radius:8px;font-size:13px;color:#92400e;">
+          <strong>Action Required:</strong> Notify the employee of the decision at least 2–3 days
+          before probation end to allow for proper documentation and onboarding/offboarding if needed.
+        </div>
+
+        <a href="${appUrl}/admin/team"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#7c3aed;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Employee Profiles
+        </a>
+      </div>
+
+      <div style="padding:12px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;">
+        Color Papers HR System &middot; People &amp; Culture
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -597,4 +682,5 @@ module.exports = {
   sendBirthdayAnniversaryAlert,
   sendPayrollReminderAlert,
   sendPendingApprovalsAlert,
+  sendProbationEndAlert,
 };
