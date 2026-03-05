@@ -5,7 +5,7 @@ import api from '../../utils/api';
 import {
   Users, CheckCircle, XCircle, AlertTriangle, Clock, RefreshCw, Mail,
   ClipboardEdit, ThumbsUp, Heart, LogIn, LogOut, CalendarOff,
-  ClipboardCheck, CalendarDays, Briefcase,
+  ClipboardCheck, CalendarDays, Briefcase, Wrench, TrendingUp,
 } from 'lucide-react';
 import AppreciationModal from '../leaderboard/AppreciationModal';
 
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [leaveBalances, setLeaveBalances] = useState([]);
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [assetHealth, setAssetHealth] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -73,11 +74,22 @@ export default function Dashboard() {
     }
   };
 
+  const fetchAssetHealth = async () => {
+    try {
+      const res = await api.get('/predictions/dashboard/summary');
+      setAssetHealth(res.data);
+    } catch (err) {
+      // Non-critical — silently ignore if no assets or endpoint unavailable
+      console.error('Asset health fetch error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchHRData();
     if (isAdmin) {
       fetchDashboard();
       fetchPendingLeaves();
+      fetchAssetHealth();
     } else {
       fetchMyReport();
     }
@@ -412,6 +424,89 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Asset Health Banner (admin only) */}
+      {assetHealth && (
+        <Link
+          to="/admin/predictive-maintenance"
+          className="block bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all group"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            {/* Left: icon + label */}
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${assetHealth.riskDistribution?.critical > 0 ? 'bg-red-50' : assetHealth.riskDistribution?.high > 0 ? 'bg-orange-50' : 'bg-green-50'}`}>
+                <Wrench className={`w-5 h-5 ${assetHealth.riskDistribution?.critical > 0 ? 'text-red-600' : assetHealth.riskDistribution?.high > 0 ? 'text-orange-500' : 'text-green-600'}`} />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700">Asset Health</h3>
+                <p className="text-xs text-slate-500">ML predictive maintenance</p>
+              </div>
+            </div>
+
+            {/* Right: stats row */}
+            <div className="flex items-center gap-5 flex-wrap">
+              {assetHealth.riskDistribution?.critical > 0 && (
+                <div className="text-center">
+                  <p className="text-xl font-bold text-red-600">{assetHealth.riskDistribution.critical}</p>
+                  <p className="text-[11px] text-slate-500">Critical</p>
+                </div>
+              )}
+              {assetHealth.riskDistribution?.high > 0 && (
+                <div className="text-center">
+                  <p className="text-xl font-bold text-orange-500">{assetHealth.riskDistribution.high}</p>
+                  <p className="text-[11px] text-slate-500">High Risk</p>
+                </div>
+              )}
+              {assetHealth.riskDistribution?.medium > 0 && (
+                <div className="text-center">
+                  <p className="text-xl font-bold text-yellow-600">{assetHealth.riskDistribution.medium}</p>
+                  <p className="text-[11px] text-slate-500">Medium</p>
+                </div>
+              )}
+              <div className="text-center border-l border-slate-200 pl-5">
+                <p className="text-xl font-bold text-indigo-600">{assetHealth.avgHealthScore}</p>
+                <p className="text-[11px] text-slate-500">Avg Score</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-bold text-slate-700">{assetHealth.totalAssets}</p>
+                <p className="text-[11px] text-slate-500">Assets</p>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-indigo-600 font-medium group-hover:underline ml-2">
+                <TrendingUp className="w-3.5 h-3.5" />
+                View All
+              </div>
+            </div>
+          </div>
+
+          {/* Critical asset chips */}
+          {assetHealth.criticalAssets?.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex gap-2 flex-wrap items-center">
+              <span className="text-[11px] text-slate-500 font-medium">Urgent:</span>
+              {assetHealth.criticalAssets.slice(0, 4).map(a => (
+                <span
+                  key={a.id}
+                  className={`px-2 py-0.5 text-[11px] rounded-full border font-medium ${a.riskLevel === 'critical' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}
+                >
+                  {a.name}
+                </span>
+              ))}
+              {assetHealth.criticalAssets.length > 4 && (
+                <span className="px-2 py-0.5 bg-slate-50 text-slate-500 text-[11px] rounded-full border border-slate-200">
+                  +{assetHealth.criticalAssets.length - 4} more
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* All-healthy state */}
+          {assetHealth.atRiskCount === 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="text-xs text-green-600 font-medium">All {assetHealth.totalAssets} assets operating within healthy parameters</span>
+            </div>
+          )}
+        </Link>
+      )}
 
       {/* Report Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
