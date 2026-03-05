@@ -40,7 +40,7 @@ async function extractWithRequesty(buffer, mimeType) {
       'Content-Type':  'application/json',
     },
     body: JSON.stringify({
-      model:    'google/gemini-2.0-flash',
+      model:    'google/gemini-2.0-flash-001',
       messages: [{
         role:    'user',
         content: [
