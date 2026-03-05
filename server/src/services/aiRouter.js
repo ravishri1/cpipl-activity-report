@@ -338,6 +338,68 @@ async function callAIText(taskType, prompt, opts = {}) {
 }
 
 /**
+ * Like callAI() but also returns the model name that succeeded.
+ * Useful when callers need to record which model was used (e.g. error-report attribution).
+ *
+ * @param {string}  taskType          - One of the keys in TASK_MODELS above.
+ * @param {Array}   messages          - OpenAI-format messages array.
+ * @param {object}  [opts]
+ * @param {object}  [opts.prisma]     - Prisma client (required for Gemini-direct fallback).
+ * @param {boolean} [opts.silent]     - Suppress console logs (default: false).
+ * @returns {Promise<{ text: string, model: string }>}
+ */
+async function callAIWithModel(taskType, messages, { prisma, silent } = {}) {
+  const models = TASK_MODELS[taskType];
+  if (!models) {
+    throw new Error(`aiRouter: unknown task type "${taskType}". ` +
+      `Valid types: ${Object.keys(TASK_MODELS).join(', ')}`);
+  }
+
+  // ── Provider 1: Requesty.ai (cost-ordered, auto-fallback) ────────────────
+  if (process.env.REQUESTY_API_KEY) {
+    let lastError;
+    for (const model of models) {
+      try {
+        const text = await callRequesty(model, messages);
+        if (!silent) console.log(`[aiRouter] ✓ ${taskType} → ${model}`);
+        return { text, model };
+      } catch (err) {
+        if (!silent) console.warn(`[aiRouter] ✗ ${model}: ${err.message}`);
+        lastError = err;
+      }
+    }
+    if (!silent) {
+      console.warn(`[aiRouter] All ${models.length} requesty models failed for "${taskType}". ` +
+        (prisma ? 'Trying Gemini direct…' : 'No Gemini fallback (prisma not provided).'));
+    }
+  }
+
+  // ── Provider 2: Gemini direct SDK (last resort) ───────────────────────────
+  if (prisma) {
+    const text = await callGeminiDirect(messages, prisma);
+    if (!silent) console.log(`[aiRouter] ✓ ${taskType} → gemini-direct (fallback)`);
+    return { text, model: 'gemini-direct' };
+  }
+
+  throw new Error(
+    'No AI provider available. ' +
+    'Add REQUESTY_API_KEY to .env or set gemini_api_key in Admin → Settings.'
+  );
+}
+
+/**
+ * Convenience wrapper: text-only AI call that also returns the model name.
+ *
+ * @param {string} taskType  - Task type key (see TASK_MODELS).
+ * @param {string} prompt    - Single user prompt string.
+ * @param {object} [opts]    - Same options as callAIWithModel().
+ * @returns {Promise<{ text: string, model: string }>}
+ */
+async function callAITextWithModel(taskType, prompt, opts = {}) {
+  return callAIWithModel(taskType, [{ role: 'user', content: prompt }], opts);
+}
+
+/**
  * Convenience wrapper: vision (image or PDF) AI call.
  * Automatically uses the 'vision_extraction' task type and cheapest vision-capable model.
  *
@@ -448,4 +510,4 @@ function getAllTaskModels() {
   );
 }
 
-module.exports = { callAI, callAIText, callAIVision, callAIImageEdit, getTaskModels, getAllTaskModels };
+module.exports = { callAI, callAIText, callAIVision, callAIImageEdit, callAIWithModel, callAITextWithModel, getTaskModels, getAllTaskModels };

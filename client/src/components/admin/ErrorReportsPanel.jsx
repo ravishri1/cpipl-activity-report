@@ -49,12 +49,20 @@ function StatCard({ label, value, icon, color }) {
 
 // ─── Analysis card (inside detail panel) ─────────────────────────────────────
 
-function AnalysisCard({ analysis }) {
+function AnalysisCard({ analysis, aiModel }) {
   if (!analysis) return null;
   return (
     <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200 space-y-3 text-sm">
-      <div className="flex items-center gap-2 font-semibold text-blue-800">
-        <Zap className="w-4 h-4" /> AI Diagnosis
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 font-semibold text-blue-800">
+          <Zap className="w-4 h-4" /> AI Diagnosis
+        </div>
+        {aiModel && (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-medium whitespace-nowrap">
+            <Zap className="w-3 h-3" />
+            <code className="font-mono">{aiModel}</code>
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
@@ -98,6 +106,7 @@ function DetailPanel({ report, onClose, onUpdated }) {
   const [analysis, setAnalysis] = useState(
     report.aiAnalysis ? (() => { try { return JSON.parse(report.aiAnalysis); } catch { return null; } })() : null
   );
+  const [aiModel,   setAiModel]   = useState(report.aiModel || null);
   const [resolution, setResolution] = useState(report.resolution || '');
   const [fixResult, setFixResult] = useState(null);
 
@@ -105,6 +114,7 @@ function DetailPanel({ report, onClose, onUpdated }) {
     await execute(async () => {
       const res = await api.post(`/error-reports/${report.id}/analyze`);
       setAnalysis(res.data.analysis);
+      if (res.data.model) setAiModel(res.data.model);
       return res;
     }, 'Analysis complete!');
     onUpdated();
@@ -116,6 +126,7 @@ function DetailPanel({ report, onClose, onUpdated }) {
       setAnalysis(res.data.analysis);
       setFixResult(res.data.fixResult);
       setResolution(res.data.resolution);
+      if (res.data.model) setAiModel(res.data.model);
       return res;
     }, 'Fix applied!');
     onUpdated();
@@ -231,7 +242,7 @@ function DetailPanel({ report, onClose, onUpdated }) {
           )}
 
           {/* AI Analysis */}
-          <AnalysisCard analysis={analysis} />
+          <AnalysisCard analysis={analysis} aiModel={aiModel} />
 
           {/* Fix result */}
           {fixResult && (

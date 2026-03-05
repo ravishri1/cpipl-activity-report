@@ -2077,6 +2077,7 @@ model ErrorReport {
   // Resolution
   status       String   @default("new")    // "new" | "reviewing" | "fixed" | "dismissed"
   aiAnalysis   String?                     // AI diagnosis result (JSON string)
+  aiModel      String?                     // Which AI model performed the analysis/fix
   resolution   String?                     // How it was resolved (human note or AI fix result)
   resolvedAt   DateTime?
   resolvedBy   Int?

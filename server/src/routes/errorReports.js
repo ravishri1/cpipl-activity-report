@@ -22,7 +22,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
-const { callAIText } = require('../services/aiRouter');
+const { callAITextWithModel } = require('../services/aiRouter');
 
 const router = express.Router();
 router.use(authenticate);
@@ -225,7 +225,7 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
       select: {
         id: true, userId: true, userEmail: true, userName: true,
         errorType: true, path: true, method: true, statusCode: true,
-        errorMessage: true, status: true, aiAnalysis: true,
+        errorMessage: true, status: true, aiAnalysis: true, aiModel: true,
         resolution: true, resolvedAt: true, createdAt: true,
         occurrenceCount: true, lastOccurredAt: true,
         resolver: { select: { id: true, name: true } },
@@ -258,8 +258,10 @@ router.post('/:id/analyze', requireAdmin, asyncHandler(async (req, res) => {
   if (!report) throw notFound('Error report');
 
   let analysis;
+  let usedModel = null;
   try {
-    const raw = await callAIText('classification', buildAnalysisPrompt(report), { prisma: req.prisma });
+    const { text: raw, model } = await callAITextWithModel('code_analysis', buildAnalysisPrompt(report), { prisma: req.prisma });
+    usedModel = model;
     let cleaned = raw.trim();
     if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
     else if (cleaned.startsWith('```'))  cleaned = cleaned.slice(3);
@@ -271,10 +273,10 @@ router.post('/:id/analyze', requireAdmin, asyncHandler(async (req, res) => {
 
   await req.prisma.errorReport.update({
     where: { id },
-    data: { status: 'reviewing', aiAnalysis: JSON.stringify(analysis) },
+    data: { status: 'reviewing', aiAnalysis: JSON.stringify(analysis), aiModel: usedModel },
   });
 
-  res.json({ analysis });
+  res.json({ analysis, model: usedModel });
 }));
 
 // POST /api/error-reports/:id/fix — Admin: AI auto-fix attempt
@@ -286,13 +288,15 @@ router.post('/:id/fix', requireAdmin, asyncHandler(async (req, res) => {
 
   // Re-use stored AI analysis or run a fresh one
   let analysis;
+  let usedModel = report.aiModel || null; // inherit model from previous analysis if available
   if (report.aiAnalysis) {
     try { analysis = JSON.parse(report.aiAnalysis); } catch { analysis = null; }
   }
 
   if (!analysis) {
     try {
-      const raw = await callAIText('classification', buildAnalysisPrompt(report), { prisma: req.prisma });
+      const { text: raw, model } = await callAITextWithModel('code_analysis', buildAnalysisPrompt(report), { prisma: req.prisma });
+      usedModel = model;
       let cleaned = raw.trim();
       if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
       else if (cleaned.startsWith('```'))  cleaned = cleaned.slice(3);
@@ -321,13 +325,14 @@ router.post('/:id/fix', requireAdmin, asyncHandler(async (req, res) => {
     data: {
       status:     'fixed',
       aiAnalysis: JSON.stringify(analysis),
+      aiModel:    usedModel,
       resolution,
       resolvedAt: new Date(),
       resolvedBy: req.user.id,
     },
   });
 
-  res.json({ analysis, fixResult, resolution });
+  res.json({ analysis, fixResult, resolution, model: usedModel });
 }));
 
 // PUT /api/error-reports/:id/status — Admin: manually update status / add note
