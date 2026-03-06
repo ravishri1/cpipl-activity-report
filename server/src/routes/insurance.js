@@ -20,9 +20,9 @@ router.get('/my', asyncHandler(async (req, res) => {
   });
 
   if (!card) {
-    return res.status(404).json({ 
-      message: 'No insurance card uploaded yet',
-      card: null 
+    return res.status(404).json({
+      error: 'No insurance card uploaded yet',
+      card: null
     });
   }
 
@@ -55,9 +55,9 @@ router.get('/:userId', requireAdmin, asyncHandler(async (req, res) => {
   });
 
   if (!card) {
-    return res.status(404).json({ 
-      message: `No insurance card found for employee ID ${userId}`,
-      card: null 
+    return res.status(404).json({
+      error: `No insurance card found for employee ID ${userId}`,
+      card: null
     });
   }
 

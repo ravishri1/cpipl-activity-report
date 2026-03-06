@@ -23,7 +23,7 @@ export default function MyInsuranceCard() {
 
   if (loading) return <LoadingSpinner />;
   
-  if (error && error.includes('404')) {
+  if (error && error.includes('No insurance card')) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <EmptyState 

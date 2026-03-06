@@ -186,10 +186,10 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
           shiftAssignments: {
             where: {
               status: 'active',
-              effectiveFrom: { lte: new Date() },
+              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
               OR: [
                 { effectiveTo: null },
-                { effectiveTo: { gte: new Date() } }
+                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
               ]
             },
             take: 1,
@@ -223,10 +223,10 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
           shiftAssignments: {
             where: {
               status: 'active',
-              effectiveFrom: { lte: new Date() },
+              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
               OR: [
                 { effectiveTo: null },
-                { effectiveTo: { gte: new Date() } }
+                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
               ]
             },
             take: 1,
@@ -261,10 +261,10 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
           shiftAssignments: {
             where: {
               status: 'active',
-              effectiveFrom: { lte: new Date() },
+              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
               OR: [
                 { effectiveTo: null },
-                { effectiveTo: { gte: new Date() } }
+                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
               ]
             },
             take: 1,
@@ -323,10 +323,10 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
           shiftAssignments: {
             where: {
               status: 'active',
-              effectiveFrom: { lte: new Date() },
+              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
               OR: [
                 { effectiveTo: null },
-                { effectiveTo: { gte: new Date() } }
+                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
               ]
             },
             take: 1,
