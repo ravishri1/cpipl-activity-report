@@ -150,14 +150,14 @@ function BranchHolidaysTab() {
       )}
 
       {/* Holiday table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-hidden">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin" />
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-16 z-10">
               <tr className="bg-slate-50 text-left">
                 <th className="px-4 py-2.5 font-medium text-slate-600">Date</th>
                 <th className="px-4 py-2.5 font-medium text-slate-600">Day</th>
@@ -322,14 +322,14 @@ function GlobalHolidaysTab() {
       )}
 
       {/* Holiday table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-hidden">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-16 z-10">
               <tr className="bg-slate-50 text-left">
                 <th className="px-4 py-2.5 font-medium text-slate-600">Date</th>
                 <th className="px-4 py-2.5 font-medium text-slate-600">Day</th>

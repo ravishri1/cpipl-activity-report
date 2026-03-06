@@ -355,7 +355,7 @@ export default function SeparationManager() {
       </div>
 
       {/* Separations Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="text-lg font-semibold text-slate-800">Separations</h2>
         </div>
@@ -372,7 +372,7 @@ export default function SeparationManager() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-16 z-10">
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="text-left px-5 py-3 font-medium text-slate-600">Employee</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Type</th>

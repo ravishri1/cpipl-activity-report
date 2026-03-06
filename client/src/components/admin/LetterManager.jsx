@@ -606,10 +606,10 @@ export default function LetterManager() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-16 z-10">
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Template Name</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600">Type</th>
@@ -887,7 +887,7 @@ export default function LetterManager() {
 
       {/* Previously generated letters */}
       {selectedEmployee && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-hidden">
           <div className="px-6 py-4 border-b border-slate-200">
             <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <FileText className="w-5 h-5 text-slate-500" />
@@ -913,7 +913,7 @@ export default function LetterManager() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-16 z-10">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Letter</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Type</th>
