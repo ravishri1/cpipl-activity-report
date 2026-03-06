@@ -165,6 +165,7 @@ router.post('/clerk-sync', authenticate, asyncHandler(async (req, res) => {
       isSeparated,
       isInternal,
       driveProfilePhotoUrl: user.driveProfilePhotoUrl || null,
+      sectionPermissions: user.sectionPermissions || [],
     },
   });
 }));

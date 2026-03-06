@@ -10,7 +10,7 @@ import {
   GraduationCap, Users, FileText, ChevronRight, Plus, Pencil,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
   Camera, Loader2, History, ChevronLeft, FolderOpen, Upload,
-  Trash2, ExternalLink, Image as ImageIcon, File,
+  Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck,
 } from 'lucide-react';
 
 const TABS = [
@@ -38,7 +38,7 @@ export default function EmployeeProfile() {
   const [completionScore, setCompletionScore] = useState(null);
 
   const isSelf = currentUser?.id === parseInt(id);
-  const canEdit = isAdmin && currentUser?.role === 'admin';
+  const canEdit = isAdmin && (currentUser?.role === 'admin' || currentUser?.role === 'sub_admin');
 
   // Upload profile photo to Google Drive (no base64 in DB)
   const handlePhotoUpload = async (e) => {
@@ -204,7 +204,12 @@ export default function EmployeeProfile() {
             </div>
             <p className="text-sm text-slate-500 mt-0.5">{profile.designation || 'Employee'} · {profile.department}</p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              <span className="capitalize text-[11px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">{profile.role?.replace('_', ' ')}</span>
+              <span className={`capitalize text-[11px] px-2 py-0.5 rounded font-medium ${
+                profile.role === 'admin' ? 'bg-purple-50 text-purple-700' :
+                profile.role === 'sub_admin' ? 'bg-indigo-50 text-indigo-700' :
+                profile.role === 'team_lead' ? 'bg-blue-50 text-blue-600' :
+                'bg-slate-100 text-slate-600'
+              }`}>{profile.role?.replace(/_/g, ' ')}</span>
               <span className="capitalize text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded">{profile.employmentType?.replace('_', ' ')}</span>
               {profile.location && <span className="text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded flex items-center gap-0.5"><MapPin className="w-3 h-3" />{profile.location}</span>}
               {profile.employeeType && (
@@ -339,7 +344,10 @@ export default function EmployeeProfile() {
         {/* Tab header */}
         <div className="border-b border-slate-200 overflow-x-auto">
           <div className="flex min-w-max">
-            {TABS.map(({ key, label, icon: Icon }) => (
+            {(canEdit && !isSelf && profile?.role !== 'admin' && (currentUser?.role === 'admin' || profile?.role !== 'sub_admin')
+              ? [...TABS, { key: 'permissions', label: 'Permissions', icon: ShieldCheck }]
+              : TABS
+            ).map(({ key, label, icon: Icon }) => (
               <button key={key} onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
                   ${activeTab === key ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
@@ -374,6 +382,9 @@ export default function EmployeeProfile() {
           )}
           {activeTab === 'history' && (
             <ChangeHistoryTab userId={id} />
+          )}
+          {activeTab === 'permissions' && canEdit && !isSelf && profile?.role !== 'admin' && (currentUser?.role === 'admin' || profile?.role !== 'sub_admin') && (
+            <PermissionsTab userId={id} />
           )}
         </div>
       </div>
@@ -1399,4 +1410,273 @@ function calcYears(dateStr) {
   const years = Math.floor((now - from) / (365.25 * 24 * 60 * 60 * 1000));
   const months = Math.floor(((now - from) % (365.25 * 24 * 60 * 60 * 1000)) / (30.44 * 24 * 60 * 60 * 1000));
   return `${years} yr${years !== 1 ? 's' : ''} ${months} mo${months !== 1 ? 's' : ''}`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PERMISSIONS TAB
+   ═══════════════════════════════════════════════════════════ */
+const PERMISSION_SECTIONS = [
+  {
+    label: 'Overview',
+    items: [
+      { to: '/dashboard', label: 'Dashboard' },
+      { to: '/announcements', label: 'Announcements' },
+    ],
+  },
+  {
+    label: 'My Work',
+    items: [
+      { to: '/submit-report', label: 'Submit Report' },
+      { to: '/reports', label: 'My Reports' },
+      { to: '/attendance', label: 'Attendance' },
+      { to: '/leave', label: 'Leave' },
+      { to: '/expenses', label: 'Expenses' },
+      { to: '/payslips', label: 'My Payslips' },
+      { to: '/my-assets', label: 'My Assets' },
+      { to: '/my-repairs', label: 'My Repairs' },
+      { to: '/policies', label: 'Policies' },
+      { to: '/surveys', label: 'Surveys' },
+      { to: '/my-tickets', label: 'Support Tickets' },
+      { to: '/training', label: 'Training' },
+      { to: '/suggestions', label: 'Suggestions' },
+      { to: '/wiki', label: 'Knowledge Base' },
+      { to: '/my-files', label: 'My Files' },
+      { to: '/my-insurance', label: 'My Insurance' },
+    ],
+  },
+  {
+    label: 'My Team (Team Leads)',
+    items: [
+      { to: '/my-team', label: 'My Team' },
+      { to: '/training/manage', label: 'Manage Training' },
+    ],
+  },
+  {
+    label: 'Team',
+    items: [
+      { to: '/directory', label: 'Directory' },
+      { to: '/leaderboard', label: 'Leaderboard' },
+    ],
+  },
+  {
+    label: 'People (Admin)',
+    items: [
+      { to: '/admin/team', label: 'Team Management' },
+      { to: '/admin/branches', label: 'Branches' },
+      { to: '/admin/confirmations', label: 'Confirmations' },
+      { to: '/admin/onboarding', label: 'Onboarding' },
+      { to: '/admin/separations', label: 'Separations' },
+      { to: '/admin/import', label: 'Import' },
+      { to: '/admin/ai-extract', label: 'AI Extract' },
+    ],
+  },
+  {
+    label: 'Time & Pay (Admin)',
+    items: [
+      { to: '/admin/attendance', label: 'Attendance' },
+      { to: '/admin/shifts', label: 'Shifts' },
+      { to: '/admin/leave-requests', label: 'Leave Requests' },
+      { to: '/admin/holidays', label: 'Holidays' },
+      { to: '/admin/payroll', label: 'Payroll' },
+      { to: '/admin/salary-setup', label: 'Salary Setup' },
+      { to: '/admin/expense-claims', label: 'Expense Claims' },
+    ],
+  },
+  {
+    label: 'Organization (Admin)',
+    items: [
+      { to: '/admin/assets', label: 'Assets' },
+      { to: '/admin/vendor-analytics', label: 'Vendor Analytics' },
+      { to: '/admin/procurement', label: 'Procurement' },
+      { to: '/admin/order-approvals', label: 'Order Approvals' },
+      { to: '/admin/inventory', label: 'Inventory' },
+      { to: '/admin/predictive-maintenance', label: 'Predictive Maintenance' },
+      { to: '/admin/insurance', label: 'Insurance' },
+      { to: '/admin/contracts', label: 'Contracts' },
+      { to: '/admin/letters', label: 'Letters' },
+      { to: '/admin/policies', label: 'Policies (Admin)' },
+      { to: '/admin/policy-scorecard', label: 'Policy Scorecard' },
+      { to: '/admin/surveys', label: 'Surveys (Admin)' },
+      { to: '/admin/tickets', label: 'Tickets (Admin)' },
+      { to: '/admin/training', label: 'Training (Admin)' },
+      { to: '/admin/suggestions', label: 'Suggestions (Admin)' },
+      { to: '/admin/reports', label: 'Reports' },
+      { to: '/admin/error-reports', label: 'Error Reports' },
+      { to: '/admin/settings', label: 'Settings' },
+    ],
+  },
+];
+
+function PermissionsTab({ userId }) {
+  const [denied, setDenied] = useState([]);
+  const [loadingPerms, setLoadingPerms] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [permError, setPermError] = useState(null);
+  const [permSuccess, setPermSuccess] = useState(false);
+
+  useEffect(() => {
+    setLoadingPerms(true);
+    api.get(`/api/users/${userId}/section-permissions`)
+      .then(res => setDenied(res.data.deniedSections || []))
+      .catch(err => setPermError(err.response?.data?.error || 'Failed to load permissions'))
+      .finally(() => setLoadingPerms(false));
+  }, [userId]);
+
+  const toggleSection = (routes) => {
+    const allDenied = routes.every(r => denied.includes(r));
+    if (allDenied) {
+      setDenied(prev => prev.filter(p => !routes.includes(p)));
+    } else {
+      setDenied(prev => [...new Set([...prev, ...routes])]);
+    }
+  };
+
+  const toggleItem = (route) => {
+    setDenied(prev =>
+      prev.includes(route) ? prev.filter(r => r !== route) : [...prev, route]
+    );
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setPermError(null);
+    setPermSuccess(false);
+    try {
+      await api.put(`/api/users/${userId}/section-permissions`, { deniedSections: denied });
+      setPermSuccess(true);
+      setTimeout(() => setPermSuccess(false), 3000);
+    } catch (err) {
+      setPermError(err.response?.data?.error || 'Failed to save permissions');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loadingPerms) {
+    return <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-blue-500" />
+            Section Permissions
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Checked items are <span className="text-red-500 font-medium">hidden</span> from this user's navigation. Leave all unchecked for full access.
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          {saving ? 'Saving…' : 'Save Permissions'}
+        </button>
+      </div>
+
+      {permError && (
+        <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{permError}</div>
+      )}
+      {permSuccess && (
+        <div className="mb-3 p-2.5 bg-green-50 border border-green-200 rounded-lg text-xs text-green-600 flex items-center gap-1.5">
+          <BadgeCheck className="w-3.5 h-3.5" /> Permissions saved successfully.
+        </div>
+      )}
+
+      {/* Section grid */}
+      <div className="space-y-3">
+        {PERMISSION_SECTIONS.map((section) => {
+          const sectionRoutes = section.items.map(i => i.to);
+          const allBlocked = sectionRoutes.every(r => denied.includes(r));
+          const someBlocked = sectionRoutes.some(r => denied.includes(r));
+
+          return (
+            <div key={section.label} className="border border-slate-200 rounded-lg overflow-hidden">
+              {/* Section header — click to toggle entire section */}
+              <div
+                className={`flex items-center justify-between px-3 py-2 cursor-pointer select-none transition-colors
+                  ${allBlocked ? 'bg-red-50 hover:bg-red-100' : someBlocked ? 'bg-amber-50 hover:bg-amber-100' : 'bg-slate-50 hover:bg-slate-100'}`}
+                onClick={() => toggleSection(sectionRoutes)}
+              >
+                <span className="text-xs font-semibold text-slate-600">{section.label}</span>
+                <div className="flex items-center gap-2">
+                  {allBlocked && <span className="text-[10px] text-red-500 font-medium">All hidden</span>}
+                  {someBlocked && !allBlocked && <span className="text-[10px] text-amber-600 font-medium">Partial</span>}
+                  <input
+                    type="checkbox"
+                    readOnly
+                    checked={allBlocked}
+                    className="w-3.5 h-3.5 accent-red-500 pointer-events-none"
+                  />
+                </div>
+              </div>
+
+              {/* Section items grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 divide-x divide-y divide-slate-100">
+                {section.items.map((item) => {
+                  const isDenied = denied.includes(item.to);
+                  return (
+                    <label
+                      key={item.to}
+                      className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50 transition-colors
+                        ${isDenied ? 'bg-red-50/70' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isDenied}
+                        onChange={() => toggleItem(item.to)}
+                        className="w-3.5 h-3.5 accent-red-500 flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className={`text-xs font-medium truncate ${isDenied ? 'text-red-600 line-through' : 'text-slate-700'}`}>
+                          {item.label}
+                        </p>
+                        <p className="text-[9px] text-slate-400 truncate font-mono">{item.to}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary of denied sections */}
+      {denied.length > 0 && (
+        <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+          <p className="text-xs font-semibold text-red-600 mb-1.5">
+            {denied.length} section{denied.length !== 1 ? 's' : ''} currently hidden from this user:
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {denied.map(route => (
+              <span
+                key={route}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200"
+              >
+                <span className="font-mono">{route}</span>
+                <button
+                  onClick={() => toggleItem(route)}
+                  className="text-red-400 hover:text-red-700 leading-none font-bold"
+                  title="Remove restriction"
+                >×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {denied.length === 0 && (
+        <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200 text-xs text-green-700 flex items-center gap-1.5">
+          <BadgeCheck className="w-3.5 h-3.5" />
+          Full access — no sections are currently restricted for this user.
+        </div>
+      )}
+    </div>
+  );
 }

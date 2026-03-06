@@ -136,7 +136,7 @@ router.delete('/:fileId', asyncHandler(async (req, res) => {
   if (!driveFile) throw notFound('File');
 
   // Only owner or admin can delete
-  if (req.user.role !== 'admin' && req.user.role !== 'team_lead' && driveFile.userId !== req.user.id) {
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.role !== 'team_lead' && driveFile.userId !== req.user.id) {
     throw forbidden();
   }
 
@@ -366,7 +366,7 @@ router.post('/upload-profile-photo', upload.single('photo'), asyncHandler(async 
   if (!req.file.mimetype.startsWith('image/')) throw badRequest('Only image files are allowed.');
 
   // Admin can upload for another user
-  const targetUserId = (req.user.role === 'admin' || req.user.role === 'team_lead')
+  const targetUserId = (req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead')
     ? (req.body.userId ? parseId(req.body.userId) : req.user.id)
     : req.user.id;
 

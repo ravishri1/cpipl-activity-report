@@ -29,9 +29,12 @@ export default function OrderApprovalQueue() {
   const [approvalNote, setApprovalNote] = useState({});
   const [rejectionReason, setRejectionReason] = useState({});
 
-  const { data: allOrders = [], loading, error, refetch } = useFetch('/procurement/orders', []);
+  const { data: allOrdersRaw = [], loading, error, refetch } = useFetch('/procurement/orders', []);
   const { execute: approve, loading: approving } = useApi();
   const { execute: reject, loading: rejecting } = useApi();
+
+  // Normalize paginated response (API returns { data: [...], pagination: {...} })
+  const allOrders = Array.isArray(allOrdersRaw) ? allOrdersRaw : (allOrdersRaw?.data ?? []);
 
   // Filter only submitted orders
   const pendingOrders = allOrders.filter((o) => o.status === 'submitted');

@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveEmployee);
 
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // Valid types and statuses
 const VALID_TYPES = [

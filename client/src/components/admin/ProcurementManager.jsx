@@ -54,20 +54,25 @@ export default function ProcurementManager() {
   const [editingId, setEditingId] = useState(null);
 
   // Fetch data
-  const { data: orders = [], loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useFetch(
+  const { data: ordersRaw = [], loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useFetch(
     `/procurement/orders`,
     []
   );
 
-  const { data: vendors = [], loading: vendorsLoading, error: vendorsError, refetch: refetchVendors } = useFetch(
+  const { data: vendorsRaw = [], loading: vendorsLoading, error: vendorsError, refetch: refetchVendors } = useFetch(
     `/procurement/vendors`,
     []
   );
 
-  const { data: inventory = [], loading: inventoryLoading, error: inventoryError, refetch: refetchInventory } = useFetch(
+  const { data: inventoryRaw = [], loading: inventoryLoading, error: inventoryError, refetch: refetchInventory } = useFetch(
     `/procurement/inventory`,
     []
   );
+
+  // Normalize paginated responses (API returns { data: [...], pagination: {...} })
+  const orders = Array.isArray(ordersRaw) ? ordersRaw : (ordersRaw?.data ?? []);
+  const vendors = Array.isArray(vendorsRaw) ? vendorsRaw : (vendorsRaw?.data ?? []);
+  const inventory = Array.isArray(inventoryRaw) ? inventoryRaw : (inventoryRaw?.data ?? []);
 
   const { data: lowStock = [], loading: lowStockLoading } = useFetch(
     `/procurement/inventory/low-stock`,

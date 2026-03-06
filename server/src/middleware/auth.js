@@ -181,14 +181,14 @@ async function authenticate(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user.role !== 'admin' && req.user.role !== 'team_lead') {
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.role !== 'team_lead') {
     return res.status(403).json({ error: 'Admin or Team Lead access required.' });
   }
   next();
 }
 
 function requireManagerOrAdmin(req, res, next) {
-  if (req.user.role === 'admin') return next();
+  if (req.user.role === 'admin' || req.user.role === 'sub_admin') return next();
   if (req.user.role === 'team_lead' && req.user.department) return next();
   return res.status(403).json({ error: 'Manager or admin access required.' });
 }

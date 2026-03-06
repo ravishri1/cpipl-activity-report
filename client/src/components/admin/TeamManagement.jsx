@@ -149,6 +149,7 @@ export default function TeamManagement() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="member">Member</option>
                 <option value="team_lead">Team Lead</option>
+                <option value="sub_admin">Sub Admin</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -209,9 +210,10 @@ export default function TeamManagement() {
                 <td className="px-5 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                    user.role === 'sub_admin' ? 'bg-indigo-100 text-indigo-700' :
                     user.role === 'team_lead' ? 'bg-blue-100 text-blue-700' :
                     'bg-slate-100 text-slate-700'
-                  }`}>{user.role}</span>
+                  }`}>{user.role === 'sub_admin' ? 'Sub Admin' : user.role}</span>
                 </td>
                 <td className="px-5 py-3 text-sm text-slate-600">{user.department}</td>
                 <td className="px-5 py-3">

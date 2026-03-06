@@ -58,6 +58,11 @@ router.get('/import-users', authenticate, requireActiveEmployee, requireAdmin, a
   if (req.user.email !== 'me@colorpapers.in') throw forbidden('Only the primary admin can import Google Workspace users.');
   const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
   if (!domain) throw badRequest('GOOGLE_WORKSPACE_DOMAIN not configured in .env');
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
+  if (!adminEmail) throw badRequest('GOOGLE_ADMIN_EMAIL not configured in .env');
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY && !process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH) {
+    throw badRequest('Google service account key not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH in .env');
+  }
 
   const googleUsers = await fetchGoogleWorkspaceUsers(domain);
   const existingEmails = new Set(
@@ -69,6 +74,11 @@ router.get('/import-users', authenticate, requireActiveEmployee, requireAdmin, a
 // POST /api/google/import-users — Create selected users
 router.post('/import-users', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   if (req.user.email !== 'me@colorpapers.in') throw forbidden('Only the primary admin can import Google Workspace users.');
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
+  if (!adminEmail) throw badRequest('GOOGLE_ADMIN_EMAIL not configured in .env');
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_KEY && !process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH) {
+    throw badRequest('Google service account key not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_PATH in .env');
+  }
   const { users } = req.body;
   if (!users || !Array.isArray(users) || users.length === 0) throw badRequest('No users provided.');
 

@@ -1,0 +1,13 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-shiny-meadow-ai9ssvlk.c-4.us-east-1.aws.neon.tech"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[GEPERM: operation not permitted, rename 'D:\Activity Report Software\server\node_
+modules\.prisma\client\query_engine-windows.dll.node.tmp40060' -> 'D:\Activity R
+eport Software\server\node_modules\.prisma\client\query_engine-windows.dll.node'
+
+EXIT_CODE=0 

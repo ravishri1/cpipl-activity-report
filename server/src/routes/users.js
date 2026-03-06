@@ -45,7 +45,7 @@ async function logChanges(prisma, { userId, changedBy, section, changes, action 
 router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sub_admin';
   if (!isSelf && !isAdmin) throw forbidden('You can only upload your own photo.');
 
   const { photo } = req.body;
@@ -145,7 +145,7 @@ router.get('/org-chart', authenticate, requireActiveEmployee, asyncHandler(async
 router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead';
   if (!isSelf && !isAdminOrLead) throw forbidden('You can only view your own profile or profiles in your team.');
 
   if (req.user.role === 'team_lead' && !isSelf) {
@@ -169,6 +169,7 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       previousExperience: true, location: true, grade: true, shift: true, companyId: true,
       employeeType: true, branchId: true, costCenterId: true,
       confirmationStatus: true, confirmedAt: true, benefitsUnlocked: true, officialEmailDisabled: true,
+      sectionPermissions: true,
       company: { select: { id: true, name: true, shortName: true } },
       branch: { select: { id: true, name: true, state: true, city: true } },
       costCenter: { select: { id: true, name: true, shortName: true } },
@@ -200,7 +201,7 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
 router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sub_admin';
   if (!isSelf && !isAdmin) throw forbidden();
 
   const data = {};
@@ -270,7 +271,7 @@ router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
 router.get('/:id/documents', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sub_admin';
   if (!isSelf && !isAdmin) throw forbidden();
 
   const documents = await req.prisma.employeeDocument.findMany({
@@ -474,13 +475,59 @@ router.put('/:id/workspace-done', authenticate, requireAdmin, asyncHandler(async
 }));
 
 // ═══════════════════════════════════════════════
+// Section Permissions (per-user sidebar visibility)
+// ═══════════════════════════════════════════════
+
+// GET /api/users/:id/section-permissions — get denied sections for a user (admin only)
+router.get('/:id/section-permissions', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const user = await req.prisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, sectionPermissions: true },
+  });
+  if (!user) throw notFound('User');
+  res.json({ userId: user.id, name: user.name, deniedSections: user.sectionPermissions || [] });
+}));
+
+// PUT /api/users/:id/section-permissions — update denied sections for a user (admin only)
+// Body: { deniedSections: ["/admin/payroll", "/payslips", ...] }
+router.put('/:id/section-permissions', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  // Prevent admins from restricting themselves (the user making the request)
+  if (id === req.user.id) throw badRequest('You cannot modify your own section permissions.');
+
+  const { deniedSections } = req.body;
+  if (!Array.isArray(deniedSections)) throw badRequest('deniedSections must be an array of route paths.');
+
+  // Basic validation: each entry must be a string path
+  const invalid = deniedSections.filter((s) => typeof s !== 'string' || !s.startsWith('/'));
+  if (invalid.length > 0) throw badRequest(`Invalid section paths: ${invalid.join(', ')}`);
+
+  const targetUser = await req.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+  if (!targetUser) throw notFound('User');
+
+  // Only root admin can modify permissions of other admin-level users (admin or sub_admin)
+  if ((targetUser.role === 'admin' || targetUser.role === 'sub_admin') && req.user.role !== 'admin') {
+    throw forbidden('Only root admin can modify permissions for admin-level users.');
+  }
+
+  await req.prisma.user.update({
+    where: { id },
+    data: { sectionPermissions: deniedSections },
+  });
+
+  res.json({ message: 'Section permissions updated.', deniedSections });
+}));
+
+// ═══════════════════════════════════════════════
 // Education CRUD
 // ═══════════════════════════════════════════════
 
 // POST /api/users/:id/education — Add education record (admin or self)
 router.post('/:id/education', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   requireFields(req.body, 'degree', 'institution');
   const { degree, institution, university, specialization, yearOfPassing, percentage } = req.body;
@@ -500,7 +547,7 @@ router.post('/:id/education', authenticate, asyncHandler(async (req, res) => {
 // PUT /api/users/:id/education/:eduId — Edit education record (admin or self)
 router.put('/:id/education/:eduId', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   const eduId = parseId(req.params.eduId);
   const old = await req.prisma.education.findUnique({ where: { id: eduId } });
@@ -530,7 +577,7 @@ router.put('/:id/education/:eduId', authenticate, asyncHandler(async (req, res) 
 // POST /api/users/:id/family — Add family member (admin or self)
 router.post('/:id/family', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   requireFields(req.body, 'name', 'relationship');
   const { name, relationship, dateOfBirth, occupation, phone, isDependent, isNominee, nomineeShare } = req.body;
@@ -550,7 +597,7 @@ router.post('/:id/family', authenticate, asyncHandler(async (req, res) => {
 // PUT /api/users/:id/family/:fmId — Edit family member (admin or self)
 router.put('/:id/family/:fmId', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   const fmId = parseId(req.params.fmId);
   const old = await req.prisma.familyMember.findUnique({ where: { id: fmId } });
@@ -582,7 +629,7 @@ router.put('/:id/family/:fmId', authenticate, asyncHandler(async (req, res) => {
 // POST /api/users/:id/employment-history — Add previous employment (admin or self)
 router.post('/:id/employment-history', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   requireFields(req.body, 'company');
   const { company, designation, fromDate, toDate, ctc, reasonForLeaving } = req.body;
@@ -602,7 +649,7 @@ router.post('/:id/employment-history', authenticate, asyncHandler(async (req, re
 // PUT /api/users/:id/employment-history/:empId — Edit previous employment (admin or self)
 router.put('/:id/employment-history/:empId', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
-  if (req.user.id !== targetId && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== targetId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
   const empId = parseId(req.params.empId);
   const old = await req.prisma.previousEmployment.findUnique({ where: { id: empId } });
@@ -633,7 +680,7 @@ router.put('/:id/employment-history/:empId', authenticate, asyncHandler(async (r
 router.get('/:id/change-history', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead';
   if (!isSelf && !isAdminOrLead) throw forbidden();
 
   const page = parseInt(req.query.page) || 1;
@@ -669,7 +716,7 @@ router.get('/completion-summary', requireAdmin, asyncHandler(async (req, res) =>
       employeeId: true, dateOfJoining: true, reportingManagerId: true,
       aadhaarNumber: true, panNumber: true, personalEmail: true,
       bankAccountNumber: true, bankIfsc: true, emergencyContact: true,
-      _count: { select: { education: true, familyMembers: true } },
+      _count: { select: { educations: true, familyMembers: true } },
     },
   });
 
@@ -677,7 +724,7 @@ router.get('/completion-summary', requireAdmin, asyncHandler(async (req, res) =>
 
   const results = users.map(u => {
     const { score, missing } = computeProfileCompletion(u, {
-      education: u._count.education,
+      education: u._count.educations,
       family:    u._count.familyMembers,
     });
     return { id: u.id, name: u.name, department: u.department, designation: u.designation, score, missing };
@@ -693,7 +740,7 @@ router.get('/completion-summary', requireAdmin, asyncHandler(async (req, res) =>
 router.get('/:id/completion-score', authenticate, asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
-  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const isAdminOrLead = req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead';
   if (!isSelf && !isAdminOrLead) throw forbidden();
 
   const user = await req.prisma.user.findUnique({ where: { id: targetId } });

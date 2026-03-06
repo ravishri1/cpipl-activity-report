@@ -54,7 +54,7 @@ function BranchModal({ branch, onClose, onSaved }) {
       }
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save branch.');
+      setError(String(err.response?.data?.error || 'Failed to save branch.'));
       setSaving(false);
     }
   };
@@ -114,9 +114,9 @@ function BranchHolidaysPanel({ branch, onClose }) {
     setError(null);
     try {
       const res = await api.get(`/branches/${branch.id}/holidays?year=${year}`);
-      setHolidays(res.data);
+      setHolidays(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load holidays.');
+      setError(String(err.response?.data?.error || 'Failed to load holidays.'));
     } finally {
       setLoading(false);
     }
@@ -138,7 +138,7 @@ function BranchHolidaysPanel({ branch, onClose }) {
       setTimeout(() => setSuccess(null), 3000);
       fetchHolidays();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to add holiday.');
+      setError(String(err.response?.data?.error || 'Failed to add holiday.'));
     } finally {
       setAdding(false);
     }
@@ -152,7 +152,7 @@ function BranchHolidaysPanel({ branch, onClose }) {
       setSuccess('Holiday deleted.');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete holiday.');
+      setError(String(err.response?.data?.error || 'Failed to delete holiday.'));
     }
   };
 
@@ -285,9 +285,9 @@ export default function BranchManager() {
     setError(null);
     try {
       const res = await api.get('/branches');
-      setBranches(res.data);
+      setBranches(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load branches.');
+      setError(String(err.response?.data?.error || 'Failed to load branches.'));
     } finally {
       setLoading(false);
     }
@@ -307,12 +307,16 @@ export default function BranchManager() {
     const action = branch.isActive ? 'deactivate' : 're-activate';
     if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} branch "${branch.name}"?`)) return;
     try {
-      await api.delete(`/branches/${branch.id}`);
+      if (branch.isActive) {
+        await api.delete(`/branches/${branch.id}`);
+      } else {
+        await api.put(`/branches/${branch.id}`, { isActive: true });
+      }
       setSuccess(`Branch ${action}d.`);
       setTimeout(() => setSuccess(null), 3000);
       fetchBranches();
     } catch (err) {
-      setError(err.response?.data?.error || `Failed to ${action} branch.`);
+      setError(String(err.response?.data?.error || `Failed to ${action} branch.`));
       setTimeout(() => setError(null), 5000);
     }
   };

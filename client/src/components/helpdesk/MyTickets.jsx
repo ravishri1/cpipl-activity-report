@@ -22,11 +22,11 @@ import {
 // --- Constants ---
 
 const CATEGORIES = [
-  { value: 'IT', label: 'IT' },
-  { value: 'HR', label: 'HR' },
-  { value: 'Admin', label: 'Admin' },
-  { value: 'Facilities', label: 'Facilities' },
-  { value: 'Other', label: 'Other' },
+  { value: 'it', label: 'IT' },
+  { value: 'hr', label: 'HR' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'facilities', label: 'Facilities' },
+  { value: 'other', label: 'Other' },
 ];
 
 const PRIORITIES = [

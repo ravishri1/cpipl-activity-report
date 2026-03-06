@@ -13,7 +13,7 @@ const VALID_CATEGORIES = ['travel', 'contacts', 'food', 'emergency', 'office_inf
 const VALID_LOCATIONS = ['Miraroad', 'Lucknow'];
 
 function isAdminRole(user) {
-  return user.role === 'admin' || user.role === 'team_lead';
+  return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead';
 }
 
 // ─── 1. GET / ─── List all active wiki articles

@@ -8,7 +8,7 @@ const { notifyUsers } = require('../utils/notify');
 const router = express.Router();
 router.use(authenticate);
 
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // Valid enums
 const VALID_CATEGORIES = ['it', 'hr', 'admin', 'facilities', 'other'];

@@ -88,6 +88,7 @@ model User {
   officialEmailDisabled     Boolean  @default(false)
   workspaceSuspendPending   Boolean  @default(false)  // HR must manually suspend/delete Workspace account
   workspaceSuspendDoneAt    String?                   // "YYYY-MM-DD" when HR confirmed suspension done
+  sectionPermissions        Json?                     // Array of route paths to DENY: ["/admin/payroll", "/payslips"]
   branchId                  Int?
   branch                    Branch?  @relation(fields: [branchId], references: [id])
   costCenterId              Int?

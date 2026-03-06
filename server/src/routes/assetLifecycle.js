@@ -56,8 +56,8 @@ router.get('/assets/:assetId/condition-history', authenticate, asyncHandler(asyn
   const asset = await req.prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) throw notFound('Asset');
   
-  // Check access: user owns asset or is admin
-  if (req.user.role !== 'admin' && req.user.id !== asset.assignedTo) {
+  // Check access: user owns asset or is admin/sub_admin
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.id !== asset.assignedTo) {
     throw forbidden('Access denied');
   }
   
@@ -180,7 +180,7 @@ router.post('/assets/:assetId/request-detachment', authenticate, asyncHandler(as
   if (!asset) throw notFound('Asset');
   
   // Check if user is assigned the asset
-  if (asset.assignedTo !== req.user.id && req.user.role !== 'admin') {
+  if (asset.assignedTo !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'sub_admin') {
     throw forbidden('Can only request detachment for your assigned assets');
   }
   

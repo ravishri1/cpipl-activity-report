@@ -18,7 +18,7 @@ router.get(
     const { companyId } = req.query;
     
     // Non-admins can only see shifts for their company
-    if (req.user.role !== 'admin' && companyId && parseInt(companyId) !== req.user.companyId) {
+    if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && companyId && parseInt(companyId) !== req.user.companyId) {
       throw forbidden();
     }
 
@@ -251,7 +251,7 @@ router.get(
     const userId = parseId(req.params.userId);
 
     // Check authorization
-    if (req.user.role !== 'admin' && req.user.id !== userId) {
+    if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.id !== userId) {
       throw forbidden();
     }
 
@@ -275,7 +275,7 @@ router.get(
     const userId = parseId(req.params.userId);
 
     // Check authorization
-    if (req.user.role !== 'admin' && req.user.id !== userId) {
+    if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.id !== userId) {
       throw forbidden();
     }
 

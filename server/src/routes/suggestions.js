@@ -10,7 +10,7 @@ router.use(authenticate);
 const VALID_CATEGORIES = ['general', 'improvement', 'complaint', 'appreciation'];
 
 function isAdminRole(user) {
-  return user.role === 'admin' || user.role === 'team_lead';
+  return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead';
 }
 
 // ─── 1. POST / ─── Submit suggestion (anonymous to peers, admin sees userId)

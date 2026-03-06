@@ -92,7 +92,7 @@ router.get('/team-calendar', authenticate, asyncHandler(async (req, res) => {
   const { month, department } = req.query;
   if (!month) throw badRequest('Month is required (format: YYYY-MM)');
 
-  const isAdminUser = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const isAdminUser = req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead';
   const targetDept = isAdminUser && department ? department : req.user.department;
 
   const [year, mon] = month.split('-').map(Number);

@@ -158,18 +158,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const user = dbUser?.error ? null : dbUser;
-  const isAdmin = user?.role === 'admin' || user?.role === 'team_lead';
-  const isStrictAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'sub_admin' || user?.role === 'team_lead';
+  const isStrictAdmin = user?.role === 'admin' || user?.role === 'sub_admin';
   const isTeamLead = user?.role === 'team_lead';
   const isSeparated = user?.isSeparated || user?.employmentStatus === 'separated';
   const isHibernated = dbUser?.isHibernated || false;
   const canSelfReactivate = dbUser?.canSelfReactivate || false;
   const remainingReactivations = dbUser?.remainingReactivations ?? 0;
   const accessDenied = dbUser?.error || null;
+  // Section permissions: root admin is never restricted; sub_admin and others respect the deny list
+  const deniedSections = user?.role === 'admin'
+    ? []
+    : (Array.isArray(user?.sectionPermissions) ? user.sectionPermissions : []);
 
   return (
     <AuthContext.Provider value={{
       user, loading, isAdmin, isStrictAdmin, isTeamLead, isSeparated, isHibernated, canSelfReactivate, remainingReactivations, accessDenied, syncError,
+      deniedSections,
       logout, retrySync, selfReactivate, updateUserPhoto, refreshUserData, clerkUser, isSignedIn
     }}>
       {children}

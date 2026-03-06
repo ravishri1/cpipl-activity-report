@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveEmployee);
 
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // GET /admin/all — List ALL surveys (active + inactive) with response counts
 router.get('/admin/all', requireAdmin, asyncHandler(async (req, res) => {

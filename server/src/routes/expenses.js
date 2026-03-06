@@ -11,7 +11,7 @@ router.use(requireActiveEmployee);
 
 const VALID_CATEGORIES = ['travel', 'food', 'medical', 'office', 'other'];
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid'];
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 async function logExpenseAction(prisma, { expenseId, action, actionBy, notes }) {
   await prisma.expenseApprovalLog.create({
@@ -155,11 +155,11 @@ router.put('/:id/review', asyncHandler(async (req, res) => {
   if (expense.status !== 'pending') throw badRequest(`Cannot review expense with status "${expense.status}"`);
 
   const isReportingManager = expense.user.reportingManagerId === req.user.id;
-  const isLeadershipExpense = expense.user.role === 'team_lead' || expense.user.role === 'admin';
+  const isLeadershipExpense = expense.user.role === 'team_lead' || expense.user.role === 'admin' || expense.user.role === 'sub_admin';
   if (!isAdminRole(req.user) && !isReportingManager) {
     throw forbidden('You can only review expenses of your direct reports');
   }
-  if (isLeadershipExpense && req.user.role !== 'admin') {
+  if (isLeadershipExpense && req.user.role !== 'admin' && req.user.role !== 'sub_admin') {
     throw forbidden('Leadership expenses can only be approved by admin');
   }
 

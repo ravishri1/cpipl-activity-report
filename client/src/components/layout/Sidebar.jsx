@@ -52,7 +52,7 @@ import {
 import { useState } from 'react';
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { user, isStrictAdmin, isTeamLead, isSeparated } = useAuth();
+  const { user, isStrictAdmin, isTeamLead, isSeparated, deniedSections } = useAuth();
   const location = useLocation();
   const [expandedSections, setExpandedSections] = useState({
     overview: true,
@@ -339,6 +339,10 @@ export default function Sidebar({ isOpen, onClose }) {
         <nav className="flex-1 overflow-y-auto py-2 px-2">
           {navSections.map((section) => {
             const isExpanded = expandedSections[section.key];
+            // Filter out denied items for this user (section permissions)
+            const visibleItems = section.items.filter((item) => !deniedSections.includes(item.to));
+            // Hide entire section if all items are denied
+            if (visibleItems.length === 0) return null;
 
             return (
               <div key={section.key} className="mb-1">
@@ -358,7 +362,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 {/* Section items */}
                 {isExpanded && (
                   <div className="space-y-0.5">
-                    {section.items.map((item) => (
+                    {visibleItems.map((item) => (
                       <Link
                         key={item.to}
                         to={item.to}

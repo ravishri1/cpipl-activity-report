@@ -40,7 +40,7 @@ router.get('/vendor/:vendorId/metrics', asyncHandler(async (req, res) => {
 
   res.json({
     vendorId,
-    vendorName: vendor.name,
+    vendorName: vendor.vendorName,
     totalRepairs: metrics.length,
     metrics
   });
@@ -55,13 +55,12 @@ router.get('/summary', asyncHandler(async (req, res) => {
 
   if (!vendorId) {
     // Return all vendors' performance scores (admin only)
-    requireFields({ role: req.user.role }, 'admin_access');
-    if (req.user.role !== 'admin') throw forbidden();
+    if (req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
 
     const scores = await req.prisma.vendorPerformanceScore.findMany({
       include: {
         vendor: {
-          select: { id: true, name: true, category: true, status: true, vendorCode: true }
+          select: { id: true, vendorName: true, category: true, status: true, vendorCode: true }
         }
       },
       orderBy: { trustScore: 'desc' }
@@ -79,7 +78,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
     where: { vendorId: id },
     include: {
       vendor: {
-        select: { id: true, name: true, category: true, status: true, vendorCode: true, email: true, phone: true }
+        select: { id: true, vendorName: true, category: true, status: true, vendorCode: true, email: true, phone: true }
       }
     }
   });
@@ -100,7 +99,7 @@ router.get('/repair/:repairId/metrics', asyncHandler(async (req, res) => {
     where: { repairId },
     include: {
       repair: true,
-      vendor: { select: { id: true, name: true, category: true } },
+      vendor: { select: { id: true, vendorName: true, category: true } },
       asset: { select: { id: true, name: true, assetTag: true } }
     }
   });
@@ -192,7 +191,7 @@ router.get('/rankings', requireAdmin, asyncHandler(async (req, res) => {
     where,
     include: {
       vendor: {
-        select: { id: true, name: true, category: true, status: true, vendorCode: true }
+        select: { id: true, vendorName: true, category: true, status: true, vendorCode: true }
       }
     },
     orderBy: { trustScore: 'desc' },
@@ -237,7 +236,7 @@ router.get('/vendor/:vendorId/trends', asyncHandler(async (req, res) => {
 
   res.json({
     vendorId,
-    vendorName: vendor.name,
+    vendorName: vendor.vendorName,
     timeWindowDays: parseInt(timeWindowDays),
     trends
   });

@@ -201,7 +201,7 @@ export default function PolicyManager() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between -mx-6 -mt-6 mb-2">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Shield className="w-6 h-6 text-blue-600" />
           Policy Management

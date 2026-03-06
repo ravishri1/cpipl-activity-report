@@ -83,7 +83,7 @@ router.post('/:userId/extend', asyncHandler(async (req, res) => {
   }
 
   // Only admin or direct reporting manager may extend
-  const isAdmin = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'sub_admin' || req.user.role === 'team_lead';
   const isManager = employee.reportingManagerId === req.user.id;
   if (!isAdmin && !isManager) {
     throw forbidden('Only the reporting manager or an admin can extend confirmation');
@@ -206,7 +206,7 @@ router.get('/:userId/history', asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
 
   // Only self or admin may view
-  if (req.user.role !== 'admin' && req.user.role !== 'team_lead' && req.user.id !== userId) {
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.role !== 'team_lead' && req.user.id !== userId) {
     throw forbidden();
   }
 

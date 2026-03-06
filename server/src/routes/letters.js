@@ -9,7 +9,7 @@ router.use(authenticate);
 router.use(requireActiveEmployee);
 
 const LETTER_TYPES = ['offer', 'appointment', 'salary_revision', 'experience', 'relieving', 'custom'];
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // GET /templates — List active letter templates (admin only)
 router.get('/templates', requireAdmin, asyncHandler(async (req, res) => {

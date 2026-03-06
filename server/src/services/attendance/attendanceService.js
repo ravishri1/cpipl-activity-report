@@ -142,6 +142,8 @@ async function getTeamAttendance(date, department, prisma) {
   const userWhere = { isActive: true };
   if (department) userWhere.department = department;
 
+  const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD" string for String fields
+
   const users = await prisma.user.findMany({
     where: userWhere,
     select: {
@@ -153,10 +155,10 @@ async function getTeamAttendance(date, department, prisma) {
       shiftAssignments: {
         where: {
           status: 'active',
-          effectiveFrom: { lte: new Date() },
+          effectiveFrom: { lte: today },
           OR: [
             { effectiveTo: null },
-            { effectiveTo: { gte: new Date() } }
+            { effectiveTo: { gte: today } }
           ]
         },
         take: 1,

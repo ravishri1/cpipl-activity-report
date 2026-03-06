@@ -64,7 +64,7 @@ router.get('/orders', asyncHandler(async (req, res) => {
   const { status, vendorId, departmentId, page = 1, limit = 20 } = req.query;
   
   const where = {};
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin') {
     where.departmentId = req.user.department;
   }
   if (status) where.status = status;
@@ -130,7 +130,7 @@ router.get('/orders/:id', asyncHandler(async (req, res) => {
   if (!order) throw notFound('Procurement Order');
   
   // Check access: admin or creator
-  if (req.user.role !== 'admin' && req.user.id !== order.createdBy) {
+  if (req.user.role !== 'admin' && req.user.role !== 'sub_admin' && req.user.id !== order.createdBy) {
     throw forbidden();
   }
   
@@ -185,7 +185,7 @@ router.post('/orders/:id/submit', asyncHandler(async (req, res) => {
   });
   
   if (!order) throw notFound('Procurement Order');
-  if (req.user.id !== order.createdBy && req.user.role !== 'admin') throw forbidden();
+  if (req.user.id !== order.createdBy && req.user.role !== 'admin' && req.user.role !== 'sub_admin') throw forbidden();
   if (order.status !== 'draft') throw badRequest('Only draft orders can be submitted');
   if (!order.lineItems || order.lineItems.length === 0) {
     throw badRequest('Order must have at least one line item');
@@ -653,7 +653,7 @@ router.get('/budgets/:employeeId/:year', asyncHandler(async (req, res) => {
   const year = parseInt(req.params.year);
   
   // Check access
-  if (req.user.id !== employeeId && req.user.role !== 'admin') {
+  if (req.user.id !== employeeId && req.user.role !== 'admin' && req.user.role !== 'sub_admin') {
     throw forbidden();
   }
   
