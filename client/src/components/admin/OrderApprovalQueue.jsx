@@ -108,7 +108,7 @@ export default function OrderApprovalQueue() {
               <AlertCircle className="w-6 h-6 text-amber-600" />
               <div>
                 <p className="text-2xl font-bold text-amber-700">{stats.highValue}</p>
-                <p className="text-sm text-amber-600">High Value (>₹1L)</p>
+                <p className="text-sm text-amber-600">High Value (&gt;₹1L)</p>
               </div>
             </div>
           </div>

@@ -185,6 +185,10 @@ model User {
   errorReports               ErrorReport[]                @relation("ErrorReporter")
   errorReportsResolved       ErrorReport[]                @relation("ErrorResolver")
 
+  // ── Biometric Integration ──
+  bioDeviceId               String?                       // Device enroll number (e.g. "EMP001") for biometric matching
+  biometricPunches          BiometricPunch[]              @relation("PunchEmployee")
+
   // ── Confirmation Workflow ──
   confirmationExtensions    ConfirmationExtension[]       @relation("ConfirmationExtensions")
   extensionsGranted         ConfirmationExtension[]       @relation("ConfirmationExtensionsBy")
@@ -200,6 +204,7 @@ model User {
   @@index([createdAt])
   @@index([branchId])
   @@index([employeeType])
+  @@index([bioDeviceId])
 }
 
 model DailyReport {
@@ -2240,4 +2245,67 @@ model CompanyContract {
   @@index([companyId])
   @@index([status])
   @@index([expiryDate])
+}
+
+// ─── Biometric Integration ────────────────────────────────────────────────────
+
+model BiometricDevice {
+  id              Int      @id @default(autoincrement())
+  name            String                              // "Main Entrance", "Server Room"
+  serialNumber    String   @unique                   // Device serial number
+  location        String?                             // Physical location description
+  ipAddress       String?                             // Device IP for direct comm
+  esslUrl         String?                             // eSSL server URL (e.g. http://192.168.2.222:85)
+  apiUser         String?                             // eSSL API username
+  apiPassword     String?                             // eSSL API password
+  apiKey          String?                             // eSSL API key
+  companyCode     String?                             // eSSL company code
+  isActive        Boolean  @default(true)
+  lastSyncAt      DateTime?                           // Last successful sync timestamp
+  lastSyncStatus  String?                             // "success" | "failed" | "partial"
+  lastSyncMessage String?                             // Error or summary message
+  syncIntervalMin Int      @default(5)               // How often to poll (minutes)
+  forceDirection  String?                             // null = auto-detect | "in" = always entry | "out" = always exit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  punches         BiometricPunch[]
+
+  @@index([serialNumber])
+  @@index([isActive])
+}
+
+model BiometricPunch {
+  id              Int      @id @default(autoincrement())
+  deviceId        Int
+  deviceSerial    String                              // Device serial (denormalised for speed)
+  enrollNumber    String                              // Raw enroll/employee code from device
+  punchTime       String                              // "YYYY-MM-DD HH:MM:SS"
+  punchDate       String                              // "YYYY-MM-DD" (extracted for filtering)
+  direction       String?                             // "in" | "out" | "unknown"
+  workCode        String?                             // Optional work code from device
+  rawData         String?                             // Full raw JSON payload for debugging
+
+  // Matching result
+  userId          Int?                                // NULL = unmatched / unknown employee
+  matchStatus     String   @default("unmatched")     // "matched" | "unmatched" | "ignored"
+  matchNote       String?                             // e.g. "No employee with bioDeviceId=XYZ"
+
+  // Attendance linkage
+  attendanceId    Int?                                // Attendance record created/updated
+  processStatus   String   @default("pending")        // "pending" | "processed" | "skipped"
+  processNote     String?                             // e.g. "Clock-in created" or "Duplicate"
+
+  createdAt       DateTime @default(now())
+
+  device          BiometricDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee        User?           @relation("PunchEmployee", fields: [userId], references: [id])
+
+  @@unique([deviceSerial, enrollNumber, punchTime])   // Prevent duplicate punches
+  @@index([deviceId])
+  @@index([punchDate])
+  @@index([enrollNumber])
+  @@index([matchStatus])
+  @@index([processStatus])
+  @@index([userId])
 }

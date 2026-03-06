@@ -43,6 +43,10 @@ import {
   Building2,
   BadgeCheck,
   ScrollText,
+  Fingerprint,
+  FolderOpen,
+  Heart,
+  Wrench,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -183,6 +187,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/training/library', label: 'Training Library', icon: BookOpen },
         { to: '/training/contribute', label: 'Contribute Training', icon: Brain },
         { to: '/training/leaderboard', label: 'Training Leaderboard', icon: Crown },
+        { to: '/my-files', label: 'My Files', icon: FolderOpen },
         { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
       ],
     },
@@ -237,6 +242,7 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
+          { to: '/admin/biometric', label: 'Biometric', icon: Fingerprint },
           { to: '/admin/shifts', label: 'Shift Management', icon: Clock },
           { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
           { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },

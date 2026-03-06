@@ -45,6 +45,7 @@ const errorReportRoutes = require('./routes/errorReports');
 const branchRoutes = require('./routes/branches');
 const confirmationRoutes = require('./routes/confirmation');
 const companyContractsRoutes = require('./routes/companyContracts');
+const biometricRoutes = require('./routes/biometric');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -166,6 +167,7 @@ app.use('/api/error-reports', errorReportRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/confirmation', confirmationRoutes);
 app.use('/api/company-contracts', companyContractsRoutes);
+app.use('/api/biometric', biometricRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);
