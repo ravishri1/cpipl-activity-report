@@ -274,7 +274,9 @@ function VersionChangesBanner({ versionChanges, lastAcceptedVersion, currentVers
 // -- Policy Card --
 function PolicyCard({ policy, onClick }) {
   const catStyle = getCategoryStyle(policy.category);
-  const isAccepted = !!policy.acceptedAt;
+  // Support both top-level acceptedAt and nested acceptance.acceptedAt
+  const acceptedDate = policy.acceptedAt || policy.acceptance?.acceptedAt;
+  const isAccepted = !!acceptedDate;
 
   return (
     <button
@@ -320,12 +322,12 @@ function PolicyCard({ policy, onClick }) {
         {isAccepted ? (
           <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
-            Accepted {formatDate(policy.acceptedAt)}
+            Policy Accepted · {formatDate(acceptedDate)}
           </span>
         ) : (
           <span className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            Pending review
+            Action required
           </span>
         )}
         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
@@ -645,9 +647,9 @@ export default function PolicyAcceptance() {
         // Mandatory first
         if (a.isMandatory && !b.isMandatory) return -1;
         if (!a.isMandatory && b.isMandatory) return 1;
-        // Pending before accepted
-        const aAccepted = !!a.acceptedAt;
-        const bAccepted = !!b.acceptedAt;
+        // Pending before accepted (support both top-level and nested acceptance)
+        const aAccepted = !!(a.acceptedAt || a.acceptance?.acceptedAt);
+        const bAccepted = !!(b.acceptedAt || b.acceptance?.acceptedAt);
         if (!aAccepted && bAccepted) return -1;
         if (aAccepted && !bAccepted) return 1;
         // Then by date descending

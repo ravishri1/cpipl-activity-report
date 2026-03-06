@@ -16,7 +16,6 @@ import {
   Brain,
   ChevronDown,
   X,
-  Shield,
   ShieldCheck,
   BarChart3,
   Megaphone,
@@ -36,11 +35,7 @@ import {
   MessageSquare,
   BookOpen,
   UsersRound,
-  FolderOpen,
-  Star,
   Crown,
-  Wrench,
-  Heart,
   TrendingUp,
   Bug,
   ShoppingCart,
@@ -78,8 +73,7 @@ export default function Sidebar({ isOpen, onClose }) {
         label: 'Available',
         items: [
           { to: '/payslips', label: 'My Payslips', icon: IndianRupee },
-          { to: '/my-tickets', label: 'My Tickets', icon: LifeBuoy },
-          { to: '/suggestions', label: 'Suggestions', icon: MessageSquare },
+          { to: '/my-support', label: 'My Support', icon: LifeBuoy },
         ],
       },
     ];
@@ -113,7 +107,7 @@ export default function Sidebar({ isOpen, onClose }) {
             {/* Info notice */}
             <div className="mx-1 mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
-                Your employment has ended. You have limited access to payslips, tickets, and suggestions.
+                Your employment has ended. You have limited access to payslips and support.
               </p>
             </div>
             {separatedSections.map((section) => (
@@ -177,26 +171,19 @@ export default function Sidebar({ isOpen, onClose }) {
       key: 'myWork',
       label: 'My Work',
       items: [
-        { to: '/submit-report', label: 'Submit Report', icon: ClipboardEdit },
-        { to: '/reports', label: 'Report History', icon: FileText },
+        { to: '/activity-reports', label: 'Activity Reports', icon: ClipboardEdit },
         { to: '/attendance', label: 'Attendance', icon: Clock },
         { to: '/leave', label: 'Leave', icon: CalendarOff },
         { to: '/expenses', label: 'Expenses', icon: Wallet },
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
-        { to: '/my-assets', label: 'My Assets', icon: Package },
-        { to: '/my-repairs', label: 'My Repairs', icon: Wrench },
-        { to: '/policies', label: 'Policies', icon: Shield },
-        { to: '/surveys', label: 'Surveys', icon: ClipboardList },
-        { to: '/my-tickets', label: 'My Tickets', icon: LifeBuoy },
+        { to: '/my-workspace', label: 'My Workspace', icon: Boxes },
+        { to: '/my-compliance', label: 'Compliance', icon: ShieldCheck },
+        { to: '/my-support', label: 'My Support', icon: LifeBuoy },
         { to: '/training/my-assignments', label: 'My Training', icon: GraduationCap },
         { to: '/training/library', label: 'Training Library', icon: BookOpen },
         { to: '/training/contribute', label: 'Contribute Training', icon: Brain },
-        { to: '/training/my-points', label: 'My Points', icon: Star },
         { to: '/training/leaderboard', label: 'Training Leaderboard', icon: Crown },
-        { to: '/suggestions', label: 'Suggestions', icon: MessageSquare },
         { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
-        { to: '/my-files', label: 'My Files', icon: FolderOpen },
-        { to: '/my-insurance', label: 'Insurance Card', icon: Heart },
       ],
     },
   ];
@@ -222,7 +209,7 @@ export default function Sidebar({ isOpen, onClose }) {
     key: 'team',
     label: 'Team',
     items: [
-      { to: '/directory', label: 'Directory', icon: Users },
+      ...(isStrictAdmin || isTeamLead ? [{ to: '/directory', label: 'Directory', icon: Users }] : []),
       { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     ],
   });

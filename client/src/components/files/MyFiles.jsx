@@ -2,12 +2,11 @@ import { useState } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
-import { formatDate, formatINR } from '../../utils/formatters';
+import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
-import StatusBadge from '../shared/StatusBadge';
-import { Download, Trash2, FolderOpen, Upload } from 'lucide-react';
+import { Download, Trash2, FolderOpen } from 'lucide-react';
 
 const CATEGORY_COLORS = {
   photo: 'bg-blue-50 border-blue-200 text-blue-700',
@@ -27,62 +26,18 @@ const CATEGORY_LABELS = {
   other: 'Other',
 };
 
+const CATEGORIES = ['All', 'Documents', 'Receipts', 'ID Proofs', 'Education', 'Photos', 'Other'];
+const CATEGORY_VALUES = [null, 'document', 'receipt', 'id_proof', 'education', 'photo', 'other'];
+
 export default function MyFiles() {
   const [category, setCategory] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null);
 
   const url = `/files/my${category ? `?category=${category}` : ''}`;
   const { data: files, loading, error, refetch } = useFetch(url, []);
   const { execute: deleteFile, loading: deleting } = useApi();
-  const { execute: uploadFile, loading: uploading, error: uploadError, success } = useApi();
-
-  const categories = ['All', 'Documents', 'Receipts', 'ID Proofs', 'Education', 'Photos', 'Other'];
-  const categoryValues = [null, 'document', 'receipt', 'id_proof', 'education', 'photo', 'other'];
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    handleFileUpload(droppedFiles);
-  };
-
-  const handleFileUpload = async (uploadedFiles) => {
-    // Validate files
-    for (const file of uploadedFiles) {
-      if (file.size > 15 * 1024 * 1024) {
-        alert(`File "${file.name}" is too large (max 15MB)`);
-        return;
-      }
-      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        alert(`File "${file.name}" is not supported (images and PDF only)`);
-        return;
-      }
-    }
-
-    // Upload files
-    const formData = new FormData();
-    uploadedFiles.forEach((file) => formData.append('file', file));
-
-    await uploadFile(
-      () => api.post('/files/upload', formData),
-      'File(s) uploaded successfully!'
-    );
-    refetch();
-  };
 
   const handleDelete = async (fileId, fileName) => {
     if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
-
     await deleteFile(
       () => api.delete(`/files/${fileId}`),
       'File deleted successfully'
@@ -95,60 +50,24 @@ export default function MyFiles() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <FolderOpen className="w-8 h-8 text-blue-600" />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+          <FolderOpen className="w-7 h-7 text-blue-600" />
           My Files
         </h1>
-        <p className="text-gray-600 mt-2">Upload and organize your documents, photos, and receipts</p>
+        <p className="text-gray-500 mt-1 text-sm">View and manage your documents stored by the company</p>
       </div>
-
-      {success && <AlertMessage type="success" message={success} />}
-      {uploadError && <AlertMessage type="error" message={uploadError} />}
-
-      {/* Upload Zone */}
-      <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center mb-8 cursor-pointer transition ${
-          isDragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 bg-gray-50 hover:border-blue-400'
-        }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => document.getElementById('fileInput')?.click()}
-      >
-        <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-        <p className="text-lg font-semibold text-gray-700">Drag files here to upload</p>
-        <p className="text-sm text-gray-500 mt-1">or click to browse (Max 15MB per file)</p>
-        <p className="text-xs text-gray-400 mt-2">Supported: Images (JPEG, PNG, WebP) and PDF</p>
-        <input
-          id="fileInput"
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileUpload(Array.from(e.target.files))}
-          accept="image/*,.pdf"
-        />
-      </div>
-
-      {uploading && (
-        <div className="flex items-center justify-center gap-3 mb-6 p-4 bg-blue-50 rounded-lg">
-          <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
-          <span className="text-blue-700">Uploading file(s)...</span>
-        </div>
-      )}
 
       {/* Category Filter */}
       <div className="mb-6 flex flex-wrap gap-2">
-        {categories.map((cat, idx) => (
+        {CATEGORIES.map((cat, idx) => (
           <button
             key={cat}
-            onClick={() => setCategory(categoryValues[idx])}
-            className={`px-4 py-2 rounded-full font-medium transition ${
-              category === categoryValues[idx]
+            onClick={() => setCategory(CATEGORY_VALUES[idx])}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
+              category === CATEGORY_VALUES[idx]
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             {cat}
@@ -161,14 +80,14 @@ export default function MyFiles() {
         <EmptyState
           icon="📁"
           title="No files yet"
-          subtitle="Upload files using the upload area above"
+          subtitle="Files shared with you by HR will appear here"
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {files.map((file) => (
             <div
               key={file.id}
-              className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition"
+              className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition"
             >
               {/* Thumbnail */}
               {file.thumbnailUrl && (
@@ -195,7 +114,7 @@ export default function MyFiles() {
                 </div>
 
                 {/* Metadata */}
-                <div className="text-sm text-gray-600 mb-3 space-y-1">
+                <div className="text-sm text-gray-500 mb-3 space-y-1">
                   <p>Size: {(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
                   <p>Uploaded: {formatDate(file.uploadedAt)}</p>
                 </div>
@@ -209,12 +128,13 @@ export default function MyFiles() {
                     className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition text-sm font-medium"
                   >
                     <Download className="w-4 h-4" />
-                    Download
+                    Open
                   </a>
                   <button
                     onClick={() => handleDelete(file.id, file.fileName)}
                     disabled={deleting}
                     className="px-3 py-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition disabled:opacity-50"
+                    title="Delete file"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -227,7 +147,7 @@ export default function MyFiles() {
 
       {/* File Count Footer */}
       {files.length > 0 && (
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-center text-sm text-gray-600">
+        <div className="mt-6 p-3 bg-gray-50 rounded-lg text-center text-sm text-gray-500">
           {files.length} file{files.length !== 1 ? 's' : ''} in {category ? CATEGORY_LABELS[category] : 'all categories'}
         </div>
       )}

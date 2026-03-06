@@ -64,6 +64,10 @@ const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPane
 const BranchManager = lazy(() => import('./components/admin/BranchManager'));
 const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
 const CompanyContractsManager = lazy(() => import('./components/admin/CompanyContractsManager'));
+const ActivityReports = lazy(() => import('./components/reports/ActivityReports'));
+const MyWorkspace = lazy(() => import('./components/workspace/MyWorkspace'));
+const MyCompliance = lazy(() => import('./components/compliance/MyCompliance'));
+const MySupport = lazy(() => import('./components/support/MySupport'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -152,6 +156,12 @@ function AppRoutes() {
                   <Route path="/training/my-points" element={<SeparatedRoute><MyPointsDashboard /></SeparatedRoute>} />
                   <Route path="/training/leaderboard" element={<SeparatedRoute><TrainingLeaderboard /></SeparatedRoute>} />
                   <Route path="/my-insurance" element={<SeparatedRoute><MyInsuranceCard /></SeparatedRoute>} />
+
+                  {/* Combined pages (new navigation) */}
+                  <Route path="/activity-reports" element={<SeparatedRoute><ActivityReports /></SeparatedRoute>} />
+                  <Route path="/my-workspace" element={<SeparatedRoute><MyWorkspace /></SeparatedRoute>} />
+                  <Route path="/my-compliance" element={<SeparatedRoute><MyCompliance /></SeparatedRoute>} />
+                  <Route path="/my-support" element={<MySupport />} />
 
                   {/* Allowed for separated employees */}
                   <Route path="/payslips" element={<MyPayslips />} />

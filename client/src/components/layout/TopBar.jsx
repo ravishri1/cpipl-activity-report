@@ -5,7 +5,7 @@ import { FileText, Menu } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 
 export default function TopBar({ onMenuToggle }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
@@ -35,7 +35,19 @@ export default function TopBar({ onMenuToggle }) {
             <p className="text-sm font-medium text-slate-700">{user?.name}</p>
             <p className="text-[10px] text-slate-400 capitalize">{user?.department} · {user?.role?.replace('_', ' ')}</p>
           </div>
-          <UserButton afterSignOutUrl="/login" />
+          <UserButton
+            afterSignOutUrl="/login"
+            {...(!isAdmin && {
+              userProfileProps: {
+                appearance: {
+                  elements: {
+                    // Hide the Danger Zone (Delete Account) section for non-admin users
+                    profileSection__danger: { display: 'none' },
+                  },
+                },
+              },
+            })}
+          />
         </div>
       </div>
     </header>

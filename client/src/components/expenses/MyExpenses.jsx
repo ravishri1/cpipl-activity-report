@@ -694,10 +694,15 @@ function ReceiptUploader({ onExtracted, receiptUrl }) {
 
 function ExpenseCard({ expense }) {
   const [expanded, setExpanded] = useState(false);
+  const isRejected = expense.status === 'rejected';
+  const isApproved = expense.status === 'approved';
+  const isPaid = expense.status === 'paid';
 
   return (
     <div
-      className="border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-colors cursor-pointer"
+      className={`border rounded-lg p-4 hover:border-slate-300 transition-colors cursor-pointer ${
+        isRejected ? 'border-red-200 bg-red-50/30' : 'border-slate-200'
+      }`}
       onClick={() => setExpanded(!expanded)}
     >
       <div className="flex items-start justify-between gap-4">
@@ -721,6 +726,12 @@ function ExpenseCard({ expense }) {
             </span>
             {expense.createdAt && (
               <span>Submitted {formatDate(expense.createdAt)}</span>
+            )}
+            {isPaid && expense.paidOn && (
+              <span className="text-green-600 font-medium flex items-center gap-1">
+                <Wallet className="w-3 h-3" />
+                Paid {formatDate(expense.paidOn)}
+              </span>
             )}
           </div>
         </div>
@@ -748,6 +759,25 @@ function ExpenseCard({ expense }) {
         </div>
       </div>
 
+      {/* Prominent rejection reason — always visible, no expand needed */}
+      {isRejected && expense.reviewNote && (
+        <div className="mt-2.5 flex items-start gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg">
+          <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-red-700 mb-0.5">Rejection Reason</p>
+            <p className="text-xs text-red-600">{expense.reviewNote}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Approval note — shown inline for approved/paid */}
+      {(isApproved || isPaid) && expense.reviewNote && (
+        <div className="mt-2.5 flex items-start gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+          <CheckCircle className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-700">{expense.reviewNote}</p>
+        </div>
+      )}
+
       {expanded && (
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
           {expense.description && (
@@ -767,7 +797,8 @@ function ExpenseCard({ expense }) {
               </a>
             </p>
           )}
-          {expense.reviewNote && (
+          {/* Neutral review note in expanded view (only if not already shown above) */}
+          {expense.reviewNote && !isRejected && !isApproved && !isPaid && (
             <div className="p-2.5 bg-slate-50 rounded-lg">
               <p className="text-xs text-slate-500 font-medium mb-0.5">Review Note</p>
               <p className="text-sm text-slate-700">{expense.reviewNote}</p>
