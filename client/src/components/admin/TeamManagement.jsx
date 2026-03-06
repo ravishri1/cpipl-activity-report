@@ -10,9 +10,11 @@ export default function TeamManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [branches, setBranches] = useState([]);
+  const [companies, setCompanies] = useState([]);
 
   const fetchUsers = async () => {
     try {
@@ -23,10 +25,14 @@ export default function TeamManagement() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+    api.get('/branches').then(r => setBranches(r.data || [])).catch(() => {});
+    api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+  }, []);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal' });
+    setForm({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
     setEditUser(null);
     setShowForm(false);
     setError('');
@@ -39,11 +45,16 @@ export default function TeamManagement() {
     setError('');
     setLoading(true);
     try {
+      const payload = {
+        ...form,
+        branchId: form.branchId ? parseInt(form.branchId) : null,
+        costCenterId: form.costCenterId ? parseInt(form.costCenterId) : null,
+      };
       if (editUser) {
-        await api.put(`/users/${editUser.id}`, form);
+        await api.put(`/users/${editUser.id}`, payload);
       } else {
         // No password needed — Google login only
-        await api.post('/users', { ...form, password: 'google-auth-only' });
+        await api.post('/users', { ...payload, password: 'google-auth-only' });
       }
       fetchUsers();
       resetForm();
@@ -56,7 +67,7 @@ export default function TeamManagement() {
 
   const handleEdit = (user) => {
     setEditUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, department: user.department, employeeType: user.employeeType || 'internal' });
+    setForm({ name: user.name, email: user.email, role: user.role, department: user.department, employeeType: user.employeeType || 'internal', branchId: user.branchId || '', costCenterId: user.costCenterId || '' });
     setShowForm(true);
   };
 
@@ -166,6 +177,22 @@ export default function TeamManagement() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
               <input type="text" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
+              <select value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— No Branch —</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cost Centre</label>
+              <select value={form.costCenterId} onChange={(e) => setForm({ ...form, costCenterId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— No Cost Centre —</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
             <div className="flex items-end">
               <button type="submit" disabled={loading}
