@@ -357,7 +357,6 @@ export default function AssetManager() {
 
   const emptyRepairForm = {
     repairType: 'repair',
-    sentOutDate: new Date().toISOString().split('T')[0],
     expectedReturnDate: '',
     vendor: '',
     vendorPhone: '',
@@ -676,8 +675,12 @@ export default function AssetManager() {
     e.preventDefault();
     setFormError('');
     
-    if (!repairForm.repairType || !repairForm.sentOutDate || !repairForm.expectedReturnDate) {
-      setFormError('Please fill in repair type, sent date, and expected return date.');
+    if (!repairForm.repairType || !repairForm.expectedReturnDate) {
+      setFormError('Please fill in repair type and expected return date.');
+      return;
+    }
+    if (!repairForm.vendor || !repairForm.vendorLocation || !repairForm.issueDescription) {
+      setFormError('Please fill in vendor name, vendor location, and issue description.');
       return;
     }
 
@@ -685,14 +688,13 @@ export default function AssetManager() {
     try {
       await api.post(`/assets/repairs/${repairTarget.id}/initiate`, {
         repairType: repairForm.repairType,
-        sentOutDate: repairForm.sentOutDate,
         expectedReturnDate: repairForm.expectedReturnDate,
-        vendor: repairForm.vendor || null,
+        vendor: repairForm.vendor,
         vendorPhone: repairForm.vendorPhone || null,
         vendorEmail: repairForm.vendorEmail || null,
-        vendorLocation: repairForm.vendorLocation || null,
+        vendorLocation: repairForm.vendorLocation,
         estimatedCost: repairForm.estimatedCost ? parseFloat(repairForm.estimatedCost) : null,
-        issueDescription: repairForm.issueDescription || null,
+        issueDescription: repairForm.issueDescription,
         notes: repairForm.notes || null,
       });
       addToast(`Asset sent for repair successfully`);
@@ -1223,14 +1225,16 @@ export default function AssetManager() {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          {/* Send for Repair (all assets) */}
-                          <button
-                            onClick={() => handleSendForRepair(asset)}
-                            title="Send for Repair"
-                            className="p-1.5 rounded-md text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                          >
-                            <Wrench className="w-4 h-4" />
-                          </button>
+                          {/* Send for Repair (available or assigned assets only) */}
+                          {(asset.status === 'available' || asset.status === 'assigned') && (
+                            <button
+                              onClick={() => handleSendForRepair(asset)}
+                              title="Send for Repair"
+                              className="p-1.5 rounded-md text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            >
+                              <Wrench className="w-4 h-4" />
+                            </button>
+                          )}
                           {/* Assign (only if available) */}
                           {asset.status === 'available' && (
                             <button
@@ -1764,30 +1768,22 @@ export default function AssetManager() {
             </div>
 
             {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Sent Out Date *</label>
-                <input
-                  type="date"
-                  value={repairForm.sentOutDate}
-                  onChange={(e) => updateRepairForm('sentOutDate', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Expected Return Date *</label>
-                <input
-                  type="date"
-                  value={repairForm.expectedReturnDate}
-                  onChange={(e) => updateRepairForm('expectedReturnDate', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700">
+              📅 Sent out date will be recorded as <strong>today</strong>.
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Expected Return Date *</label>
+              <input
+                type="date"
+                value={repairForm.expectedReturnDate}
+                onChange={(e) => updateRepairForm('expectedReturnDate', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
             </div>
 
             {/* Vendor Info */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Vendor Name</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Vendor Name *</label>
               <input
                 type="text"
                 value={repairForm.vendor}
@@ -1823,7 +1819,7 @@ export default function AssetManager() {
 
             {/* Vendor Location */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Location</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Location *</label>
               <input
                 type="text"
                 value={repairForm.vendorLocation}
@@ -1847,7 +1843,7 @@ export default function AssetManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Issue Description</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Issue Description *</label>
                 <input
                   type="text"
                   value={repairForm.issueDescription}

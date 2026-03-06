@@ -353,7 +353,7 @@ router.post('/repairs/:assetId/initiate', requireAdmin, asyncHandler(async (req,
 
   const asset = await req.prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) throw notFound('Asset');
-  if (asset.status !== 'assigned') throw badRequest('Asset must be in "assigned" status to send for repair');
+  if (!['available', 'assigned'].includes(asset.status)) throw badRequest('Only available or assigned assets can be sent for repair');
 
   const today = new Date().toISOString().slice(0, 10);
   if (expectedReturnDate <= today) throw badRequest('Expected return date must be in the future');
