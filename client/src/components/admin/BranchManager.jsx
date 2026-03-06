@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import {
   Building2, Plus, Edit2, Trash2, ChevronLeft, ChevronRight,
   MapPin, Users, Calendar, X, Check, AlertCircle, Loader2,
