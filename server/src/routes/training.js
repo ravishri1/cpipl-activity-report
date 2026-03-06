@@ -21,31 +21,17 @@ const isWithinDeadline = (completedAt, deadline) => {
   return new Date(completedAt) <= new Date(deadline);
 };
 
-// Helper function to award points
+// Helper function to award points (logs to PointLog — no points field on User)
 const awardPoints = async (userId, points, reason, prisma) => {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw notFound('User');
-
-  const updatedUser = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      points: {
-        increment: points
-      }
-    }
-  });
-
-  // Log the point award
   await prisma.pointLog.create({
     data: {
       userId,
       points,
-      reason,
-      createdAt: new Date()
+      date: new Date().toISOString().slice(0, 10),
+      source: 'training',
+      description: reason,
     }
   });
-
-  return updatedUser;
 };
 
 // ═══════════════════════════════════════════════
@@ -232,7 +218,7 @@ router.post('/assign', asyncHandler(async (req, res) => {
 
   if (!reportee) throw notFound('Employee');
 
-  const isManager = req.user.role === 'admin' || 
+  const isManager = req.user.role === 'admin' || req.user.role === 'sub_admin' || 
                    (req.user.id === reportee.reportingManagerId);
 
   if (!isManager) throw forbidden();
@@ -338,7 +324,7 @@ router.put('/assignments/:id', asyncHandler(async (req, res) => {
   if (!assignment) throw notFound('Assignment');
 
   const isAllowed = req.user.id === assignment.assignedToId ||
-                   req.user.role === 'admin' ||
+                   req.user.role === 'admin' || req.user.role === 'sub_admin' ||
                    (assignment.assignedById === req.user.id);
 
   if (!isAllowed) throw forbidden();
@@ -501,10 +487,17 @@ router.put('/contributions/:id', requireAdmin, asyncHandler(async (req, res) => 
 router.get('/my-points', asyncHandler(async (req, res) => {
   const user = await req.prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, points: true }
+    select: { id: true, name: true }
   });
 
   if (!user) throw notFound('User');
+
+  // Aggregate total points from PointLog (User model has no points field)
+  const agg = await req.prisma.pointLog.aggregate({
+    where: { userId: req.user.id },
+    _sum: { points: true }
+  });
+  const totalPoints = agg._sum.points || 0;
 
   // Get point history
   const pointHistory = await req.prisma.pointLog.findMany({
@@ -533,7 +526,7 @@ router.get('/my-points', asyncHandler(async (req, res) => {
 
   res.json({
     user,
-    totalPoints: user.points,
+    totalPoints,
     completionPoints,
     contributionPoints,
     pointHistory,
@@ -548,16 +541,30 @@ router.get('/my-points', asyncHandler(async (req, res) => {
 
 // GET leaderboard (top point earners)
 router.get('/leaderboard', asyncHandler(async (req, res) => {
-  const topUsers = await req.prisma.user.findMany({
-    select: { id: true, name: true, email: true, department: true, points: true },
-    where: { points: { gt: 0 } },
-    orderBy: { points: 'desc' },
+  // Aggregate points from PointLog grouped by user (User model has no points field)
+  const pointAggregates = await req.prisma.pointLog.groupBy({
+    by: ['userId'],
+    _sum: { points: true },
+    orderBy: { _sum: { points: 'desc' } },
     take: 50
   });
 
-  const leaderboard = await Promise.all(topUsers.map(async (user) => {
+  if (pointAggregates.length === 0) return res.json([]);
+
+  // Fetch user details for top earners
+  const userIds = pointAggregates.map(p => p.userId);
+  const users = await req.prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, email: true, department: true }
+  });
+  const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+
+  const leaderboard = await Promise.all(pointAggregates.map(async (agg, idx) => {
+    const user = userMap[agg.userId];
+    if (!user) return null;
+
     const assignments = await req.prisma.trainingAssignment.findMany({
-      where: { assignedToId: user.id },
+      where: { assignedToId: agg.userId },
       include: { module: { select: { title: true } } }
     });
 
@@ -566,30 +573,25 @@ router.get('/leaderboard', asyncHandler(async (req, res) => {
       .reduce((sum, a) => sum + a.pointsAwarded, 0);
 
     const contributions = await req.prisma.trainingContribution.findMany({
-      where: { 
-        contributedBy: user.id,
+      where: {
+        contributedBy: agg.userId,
         status: { in: ['approved', 'implemented'] }
       }
     });
 
-    const contributionPoints = contributions
-      .reduce((sum, c) => sum + c.pointsAwarded, 0);
+    const contributionPoints = contributions.reduce((sum, c) => sum + c.pointsAwarded, 0);
 
     return {
       ...user,
-      rank: 0,
+      points: agg._sum.points || 0,
+      rank: idx + 1,
       completionPoints,
       contributionPoints,
       trainingsCompleted: assignments.filter(a => a.status === 'completed').length
     };
   }));
 
-  // Add rank
-  leaderboard.forEach((user, idx) => {
-    user.rank = idx + 1;
-  });
-
-  res.json(leaderboard);
+  res.json(leaderboard.filter(Boolean));
 }));
 
 module.exports = router;

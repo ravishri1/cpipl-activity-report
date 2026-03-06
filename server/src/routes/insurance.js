@@ -19,12 +19,7 @@ router.get('/my', asyncHandler(async (req, res) => {
     }
   });
 
-  if (!card) {
-    return res.status(404).json({
-      error: 'No insurance card uploaded yet',
-      card: null
-    });
-  }
+  if (!card) return res.json({ card: null });
 
   // Update viewedAt if user is viewing for the first time
   if (!card.isViewed) {

@@ -7,7 +7,7 @@ const { parseId } = require('../utils/validate');
 const router = express.Router();
 router.use(authenticate);
 
-function isAdminRole(user) { return user.role === 'admin' || user.role === 'team_lead'; }
+function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // GET /salary/:userId — Get salary structure (admin or self)
 router.get('/salary/:userId', requireActiveEmployee, asyncHandler(async (req, res) => {
@@ -217,31 +217,10 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
   const payslips = await req.prisma.payslip.findMany({
     where: { userId: req.user.id, status: 'published' },
     include: {
-      user: { 
-        select: { 
+      user: {
+        select: {
           id: true, name: true, email: true, employeeId: true, designation: true, department: true,
-          shiftAssignments: {
-            where: {
-              status: 'active',
-              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
-              OR: [
-                { effectiveTo: null },
-                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
-              ]
-            },
-            take: 1,
-            select: {
-              shift: {
-                select: {
-                  id: true,
-                  name: true,
-                  startTime: true,
-                  endTime: true,
-                }
-              }
-            }
-          }
-        } 
+        }
       },
     },
     orderBy: { month: 'desc' },
@@ -255,31 +234,11 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
   const payslip = await req.prisma.payslip.findUnique({
     where: { id },
     include: {
-      user: { 
-        select: { 
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true, bankName: true, bankAccountNumber: true, bankIfscCode: true,
-          shiftAssignments: {
-            where: {
-              status: 'active',
-              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
-              OR: [
-                { effectiveTo: null },
-                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } }
-              ]
-            },
-            take: 1,
-            select: {
-              shift: {
-                select: {
-                  id: true,
-                  name: true,
-                  startTime: true,
-                  endTime: true,
-                }
-              }
-            }
-          }
-        } 
+      user: {
+        select: {
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          bankName: true, bankAccountNumber: true, bankIfscCode: true,
+        }
       },
     },
   });

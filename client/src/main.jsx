@@ -35,6 +35,12 @@ if ('serviceWorker' in navigator) {
   console.info('[App] Service Workers not supported in this browser');
 }
 
+// Auto-reload when a lazy-loaded chunk fails (stale hash after new deployment)
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
