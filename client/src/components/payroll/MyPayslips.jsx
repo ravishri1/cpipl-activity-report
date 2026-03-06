@@ -285,13 +285,13 @@ function PayslipCard({ payslip, onView }) {
 /* ---------- Payslip Detail View ---------- */
 function PayslipDetail({ payslip, onBack }) {
   const earnings = [
-    { label: 'Basic Salary', value: payslip.basicSalary },
+    { label: 'Basic Salary', value: payslip.basic },
     { label: 'House Rent Allowance', value: payslip.hra },
     { label: 'Dearness Allowance', value: payslip.da },
     { label: 'Special Allowance', value: payslip.specialAllowance },
     { label: 'Medical Allowance', value: payslip.medicalAllowance },
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
-    { label: 'Other Allowances', value: payslip.otherEarnings },
+    { label: 'Other Allowances', value: payslip.otherAllowance },
   ].filter((item) => item.value && item.value > 0);
 
   const deductions = [

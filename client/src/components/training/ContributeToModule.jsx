@@ -24,7 +24,7 @@ const STATUS_COLORS = {
 
 export default function ContributeToModule() {
   const { data: trainingModules, loading: loadingModules } = useFetch('/training/modules', []);
-  const { data: contributions, loading: loadingContribs, error: contribError, refetch } = useFetch('/training/contributions/pending', []);
+  const { data: contributions, loading: loadingContribs, error: contribError, refetch } = useFetch('/training/contributions/my', []);
   const { execute, loading: submitting, error: submitErr, success } = useApi();
 
   const [showForm, setShowForm] = useState(false);

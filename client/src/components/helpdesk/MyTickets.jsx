@@ -118,7 +118,7 @@ function NewTicketModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     subject: '',
     description: '',
-    category: 'IT',
+    category: 'it',
     priority: 'medium',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -146,7 +146,7 @@ function NewTicketModal({ onClose, onCreated }) {
       onCreated();
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create ticket');
+      setError(err.response?.data?.error || 'Failed to create ticket');
     } finally {
       setSubmitting(false);
     }

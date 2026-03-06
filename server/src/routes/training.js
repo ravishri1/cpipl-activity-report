@@ -408,6 +408,19 @@ router.get('/contributions/pending', requireAdmin, asyncHandler(async (req, res)
   res.json(contributions);
 }));
 
+// GET own contributions (for current user)
+router.get('/contributions/my', asyncHandler(async (req, res) => {
+  const contributions = await req.prisma.trainingContribution.findMany({
+    where: { contributedBy: req.user.id },
+    include: {
+      module: { select: { id: true, title: true } },
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  res.json(contributions);
+}));
+
 // GET contributions for specific module
 router.get('/modules/:id/contributions', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
@@ -541,6 +554,8 @@ router.get('/my-points', asyncHandler(async (req, res) => {
 
 // GET leaderboard (top point earners)
 router.get('/leaderboard', asyncHandler(async (req, res) => {
+  const currentUserId = req.user.id;
+
   // Aggregate points from PointLog grouped by user (User model has no points field)
   const pointAggregates = await req.prisma.pointLog.groupBy({
     by: ['userId'],
@@ -549,7 +564,9 @@ router.get('/leaderboard', asyncHandler(async (req, res) => {
     take: 50
   });
 
-  if (pointAggregates.length === 0) return res.json([]);
+  if (pointAggregates.length === 0) {
+    return res.json({ leaders: [], yourRank: null, yourTotalPoints: 0, currentUserId });
+  }
 
   // Fetch user details for top earners
   const userIds = pointAggregates.map(p => p.userId);
@@ -559,18 +576,17 @@ router.get('/leaderboard', asyncHandler(async (req, res) => {
   });
   const userMap = Object.fromEntries(users.map(u => [u.id, u]));
 
-  const leaderboard = await Promise.all(pointAggregates.map(async (agg, idx) => {
+  const leaders = (await Promise.all(pointAggregates.map(async (agg, idx) => {
     const user = userMap[agg.userId];
     if (!user) return null;
 
     const assignments = await req.prisma.trainingAssignment.findMany({
       where: { assignedToId: agg.userId },
-      include: { module: { select: { title: true } } }
     });
 
     const completionPoints = assignments
       .filter(a => a.completionPointsEarned)
-      .reduce((sum, a) => sum + a.pointsAwarded, 0);
+      .reduce((sum, a) => sum + (a.pointsAwarded || 0), 0);
 
     const contributions = await req.prisma.trainingContribution.findMany({
       where: {
@@ -579,19 +595,27 @@ router.get('/leaderboard', asyncHandler(async (req, res) => {
       }
     });
 
-    const contributionPoints = contributions.reduce((sum, c) => sum + c.pointsAwarded, 0);
+    const contributionPoints = contributions.reduce((sum, c) => sum + (c.pointsAwarded || 0), 0);
 
     return {
-      ...user,
-      points: agg._sum.points || 0,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      department: user.department,
+      totalPoints: agg._sum.points || 0,
       rank: idx + 1,
       completionPoints,
       contributionPoints,
+      contributionsApproved: contributions.length,
       trainingsCompleted: assignments.filter(a => a.status === 'completed').length
     };
-  }));
+  }))).filter(Boolean);
 
-  res.json(leaderboard.filter(Boolean));
+  const currentUserEntry = leaders.find(l => l.userId === currentUserId);
+  const yourRank = currentUserEntry ? currentUserEntry.rank : null;
+  const yourTotalPoints = currentUserEntry ? currentUserEntry.totalPoints : 0;
+
+  res.json({ leaders, yourRank, yourTotalPoints, currentUserId });
 }));
 
 module.exports = router;

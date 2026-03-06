@@ -9,6 +9,7 @@ export default function GoogleSuggestions({ onAddTasks }) {
   const [loadingData, setLoadingData] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [fetched, setFetched] = useState(false);
+  const [connectError, setConnectError] = useState('');
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -26,10 +27,12 @@ export default function GoogleSuggestions({ onAddTasks }) {
 
   const handleConnect = async () => {
     try {
+      setConnectError('');
       const res = await api.get('/google/auth-url');
       window.location.href = res.data.url;
     } catch (err) {
       console.error('Google auth error:', err);
+      setConnectError(err.response?.data?.error || 'Failed to connect Google. Please try again.');
     }
   };
 
@@ -145,6 +148,9 @@ export default function GoogleSuggestions({ onAddTasks }) {
             Connect Google
           </button>
         </div>
+        {connectError && (
+          <p className="mt-2 text-xs text-red-600">{connectError}</p>
+        )}
       </div>
     );
   }

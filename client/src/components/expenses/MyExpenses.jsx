@@ -149,7 +149,7 @@ export default function MyExpenses() {
       fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to submit expense');
+      setError(err.response?.data?.error || 'Failed to submit expense');
     } finally {
       setSubmitting(false);
     }

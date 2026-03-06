@@ -50,9 +50,9 @@ export default function ReportHistory() {
       r.reportDate,
       r.user.name,
       r.user.department,
-      `"${r.activities.replace(/"/g, '""')}"`,
-      `"${r.challenges.replace(/"/g, '""')}"`,
-      `"${r.planTomorrow.replace(/"/g, '""')}"`,
+      `"${(r.activities || '').replace(/"/g, '""')}"`,
+      `"${(r.challenges || '').replace(/"/g, '""')}"`,
+      `"${(r.planTomorrow || '').replace(/"/g, '""')}"`,
       new Date(r.submittedAt).toLocaleString('en-IN'),
     ]);
     const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');

@@ -192,7 +192,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/training/library', label: 'Training Library', icon: BookOpen },
         { to: '/training/contribute', label: 'Contribute Training', icon: Brain },
         { to: '/training/my-points', label: 'My Points', icon: Star },
-        { to: '/training/leaderboard', label: 'Leaderboard', icon: Crown },
+        { to: '/training/leaderboard', label: 'Training Leaderboard', icon: Crown },
         { to: '/suggestions', label: 'Suggestions', icon: MessageSquare },
         { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
         { to: '/my-files', label: 'My Files', icon: FolderOpen },

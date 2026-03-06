@@ -29,10 +29,10 @@ export default function MyPointsDashboard() {
     if (!pointData.pointHistory) return [];
     
     if (filter === 'completion') {
-      return pointData.pointHistory.filter(p => p.reason.includes('Training Completion'));
+      return pointData.pointHistory.filter(p => (p.description || '').includes('Training Completion'));
     }
     if (filter === 'contribution') {
-      return pointData.pointHistory.filter(p => p.reason.includes('Training Value Added') || p.reason.includes('Contribution'));
+      return pointData.pointHistory.filter(p => (p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution'));
     }
     return pointData.pointHistory;
   }, [pointData.pointHistory, filter]);
@@ -124,8 +124,8 @@ export default function MyPointsDashboard() {
         <div className="flex border-b border-gray-200 bg-gray-50">
           {[
             { value: 'all', label: 'All Points', count: pointData.pointHistory?.length || 0 },
-            { value: 'completion', label: 'Completions', count: pointData.pointHistory?.filter(p => p.reason.includes('Training Completion')).length || 0 },
-            { value: 'contribution', label: 'Contributions', count: pointData.pointHistory?.filter(p => p.reason.includes('Training Value Added') || p.reason.includes('Contribution')).length || 0 },
+            { value: 'completion', label: 'Completions', count: pointData.pointHistory?.filter(p => (p.description || '').includes('Training Completion')).length || 0 },
+            { value: 'contribution', label: 'Contributions', count: pointData.pointHistory?.filter(p => (p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution')).length || 0 },
           ].map(tab => (
             <button
               key={tab.value}
@@ -157,7 +157,7 @@ export default function MyPointsDashboard() {
             filteredHistory.slice(0, 50).map(point => (
               <div key={point.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{point.reason}</p>
+                  <p className="text-sm font-medium text-gray-900">{point.description}</p>
                   <p className="text-xs text-gray-500 mt-1">{formatDate(point.createdAt)}</p>
                 </div>
                 <div className="text-right">
