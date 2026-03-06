@@ -7,8 +7,15 @@ const { requireFields, parseId } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 const { processProfilePhoto } = require('../services/photoProcessor');
+const { createWorkspaceUser, suspendWorkspaceUser, unsuspendWorkspaceUser } = require('../services/google/googleWorkspace');
 
 const router = express.Router();
+
+// ─── Workspace helper: is this email on the configured Workspace domain? ───────
+function isWorkspaceEmail(email) {
+  const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
+  return domain && email && email.toLowerCase().endsWith(`@${domain.toLowerCase()}`);
+}
 
 // ═══════════════════════════════════════════════
 // Change-log helper — logs profile changes to ProfileChangeLog
@@ -348,7 +355,27 @@ router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler
 
   const user = await req.prisma.user.create({ data: createData });
 
-  res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role, department: user.department });
+  // ── Google Workspace: auto-create account if email is on the company domain ──
+  const workspaceResult = { attempted: false };
+  if (isWorkspaceEmail(normalizedEmail)) {
+    workspaceResult.attempted = true;
+    try {
+      const tempPassword = await createWorkspaceUser(user.name, normalizedEmail);
+      workspaceResult.success = true;
+      workspaceResult.tempPassword = tempPassword; // shown to admin once; employee resets on first login
+      console.log(`Google Workspace account created for: ${normalizedEmail}`);
+    } catch (err) {
+      // Non-blocking: user record is already saved; admin can create Workspace account manually
+      workspaceResult.success = false;
+      workspaceResult.error = err.message;
+      console.error(`Google Workspace account creation failed for ${normalizedEmail}:`, err.message);
+    }
+  }
+
+  res.status(201).json({
+    id: user.id, name: user.name, email: user.email, role: user.role, department: user.department,
+    workspaceAccount: workspaceResult,
+  });
 }));
 
 // PUT /api/users/:id - Update user
@@ -376,7 +403,7 @@ router.delete('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHa
 
   const employee = await req.prisma.user.findUnique({
     where: { id },
-    select: { employeeType: true },
+    select: { employeeType: true, email: true },
   });
 
   const updateData = { isActive: false };
@@ -386,6 +413,17 @@ router.delete('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHa
   }
 
   await req.prisma.user.update({ where: { id }, data: updateData });
+
+  // ── Google Workspace: suspend account on deactivation (non-blocking) ──
+  if (employee && isWorkspaceEmail(employee.email)) {
+    try {
+      await suspendWorkspaceUser(employee.email);
+      console.log(`Google Workspace account suspended for: ${employee.email}`);
+    } catch (err) {
+      console.error(`Google Workspace account suspension failed for ${employee.email}:`, err.message);
+    }
+  }
+
   res.json({ message: 'User deactivated.' });
 }));
 

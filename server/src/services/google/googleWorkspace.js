@@ -1,6 +1,91 @@
 const { google } = require('googleapis');
 const { getServiceAccountClient } = require('./googleAuth');
 
+// Scopes required for creating/updating Workspace users (write access)
+const ADMIN_WRITE_SCOPES = ['https://www.googleapis.com/auth/admin.directory.user'];
+
+// ─────────────────────────────────────────────
+// Helper: build an authenticated Admin Directory client with write access
+// ─────────────────────────────────────────────
+async function getAdminWriteClient() {
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
+  if (!adminEmail) throw new Error('GOOGLE_ADMIN_EMAIL not configured in .env');
+  const authClient = await getServiceAccountClient(adminEmail, ADMIN_WRITE_SCOPES);
+  return google.admin({ version: 'directory_v1', auth: authClient });
+}
+
+// ─────────────────────────────────────────────
+// Helper: split a full name into givenName / familyName for the Directory API
+// ─────────────────────────────────────────────
+function splitName(fullName) {
+  const parts = (fullName || '').trim().split(/\s+/);
+  if (parts.length === 1) return { givenName: parts[0] || 'Employee', familyName: '.' };
+  return { givenName: parts[0], familyName: parts.slice(1).join(' ') };
+}
+
+// ─────────────────────────────────────────────
+// Helper: generate a random secure temporary password (12 chars)
+// Format: 8 random alphanumeric + Uppercase + digit + special
+// ─────────────────────────────────────────────
+function generateTempPassword() {
+  const base = Math.random().toString(36).slice(-8); // 8 lowercase alphanum
+  return `${base}A1!`; // append uppercase, digit, special — meets most policies
+}
+
+/**
+ * Create a new Google Workspace user account.
+ * Called when a new employee is added to the system.
+ *
+ * @param {string} fullName  Employee full name (e.g. "Rahul Sharma")
+ * @param {string} email     Primary Workspace email (must be on the domain)
+ * @returns {string}         The generated temporary password (show to admin once)
+ */
+async function createWorkspaceUser(fullName, email) {
+  const admin = await getAdminWriteClient();
+  const { givenName, familyName } = splitName(fullName);
+  const tempPassword = generateTempPassword();
+
+  await admin.users.insert({
+    requestBody: {
+      primaryEmail: email,
+      name: { givenName, familyName },
+      password: tempPassword,
+      changePasswordAtNextLogin: true, // employee must reset on first login
+    },
+  });
+
+  return tempPassword;
+}
+
+/**
+ * Suspend a Google Workspace user account.
+ * Called when an employee is deactivated in the HR system.
+ * Suspended accounts cannot sign in but data is preserved.
+ *
+ * @param {string} email  Primary Workspace email to suspend
+ */
+async function suspendWorkspaceUser(email) {
+  const admin = await getAdminWriteClient();
+  await admin.users.update({
+    userKey: email,
+    requestBody: { suspended: true },
+  });
+}
+
+/**
+ * Unsuspend (re-activate) a Google Workspace user account.
+ * Called when a previously deactivated employee is re-hired.
+ *
+ * @param {string} email  Primary Workspace email to unsuspend
+ */
+async function unsuspendWorkspaceUser(email) {
+  const admin = await getAdminWriteClient();
+  await admin.users.update({
+    userKey: email,
+    requestBody: { suspended: false },
+  });
+}
+
 // Fetch all users from Google Workspace Admin Directory
 async function fetchGoogleWorkspaceUsers(domain) {
   const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
@@ -121,4 +206,7 @@ module.exports = {
   fetchGoogleWorkspaceUsers,
   fetchEmailActivity,
   fetchAndStoreEmailActivity,
+  createWorkspaceUser,
+  suspendWorkspaceUser,
+  unsuspendWorkspaceUser,
 };

@@ -3,8 +3,15 @@ const { authenticate, requireAdmin, requireActiveEmployee } = require('../middle
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { suspendWorkspaceUser } = require('../services/google/googleWorkspace');
 
 const router = express.Router();
+
+// Workspace helper: is this email on the configured domain?
+function isWorkspaceEmail(email) {
+  const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
+  return domain && email && email.toLowerCase().endsWith(`@${domain.toLowerCase()}`);
+}
 router.use(authenticate);
 router.use(requireActiveEmployee);
 
@@ -239,6 +246,22 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
 
     if (Object.keys(userUpdate).length > 0) {
       await req.prisma.user.update({ where: { id: existing.userId }, data: userUpdate });
+    }
+
+    // ── Google Workspace: suspend account when separation is completed ──
+    if (status === 'completed') {
+      const separatedUser = await req.prisma.user.findUnique({
+        where: { id: existing.userId },
+        select: { email: true },
+      });
+      if (separatedUser && isWorkspaceEmail(separatedUser.email)) {
+        try {
+          await suspendWorkspaceUser(separatedUser.email);
+          console.log(`Google Workspace account suspended on FnF completion for: ${separatedUser.email}`);
+        } catch (err) {
+          console.error(`Google Workspace suspension failed for ${separatedUser.email}:`, err.message);
+        }
+      }
     }
   }
 
