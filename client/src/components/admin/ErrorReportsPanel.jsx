@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import {
-  Bug, Wrench, AlertTriangle, CheckCircle2, XCircle, Clock,
+  Bug, AlertTriangle, CheckCircle2, XCircle, Clock,
   RefreshCw, ChevronDown, ChevronRight, Loader2, Users, X,
   BarChart3, Zap, Eye, Trash2,
 } from 'lucide-react';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi }   from '../../hooks/useApi';
 import api           from '../../utils/api';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 import StatusBadge    from '../shared/StatusBadge';
 import AlertMessage   from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -99,6 +99,20 @@ function AnalysisCard({ analysis, aiModel }) {
   );
 }
 
+// ─── Resolution duration helper ───────────────────────────────────────────────
+
+function formatResolutionDuration(createdAt, resolvedAt) {
+  if (!createdAt || !resolvedAt) return null;
+  const diffMs = new Date(resolvedAt) - new Date(createdAt);
+  if (diffMs < 0) return null;
+  const totalMins = Math.floor(diffMs / 60000);
+  const hours = Math.floor(totalMins / 60);
+  const mins  = totalMins % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins  === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({ report, onClose, onUpdated }) {
@@ -108,7 +122,6 @@ function DetailPanel({ report, onClose, onUpdated }) {
   );
   const [aiModel,   setAiModel]   = useState(report.aiModel || null);
   const [resolution, setResolution] = useState(report.resolution || '');
-  const [fixResult, setFixResult] = useState(null);
 
   const handleAnalyze = async () => {
     await execute(async () => {
@@ -117,18 +130,6 @@ function DetailPanel({ report, onClose, onUpdated }) {
       if (res.data.model) setAiModel(res.data.model);
       return res;
     }, 'Analysis complete!');
-    onUpdated();
-  };
-
-  const handleFix = async () => {
-    await execute(async () => {
-      const res = await api.post(`/error-reports/${report.id}/fix`);
-      setAnalysis(res.data.analysis);
-      setFixResult(res.data.fixResult);
-      setResolution(res.data.resolution);
-      if (res.data.model) setAiModel(res.data.model);
-      return res;
-    }, 'Fix applied!');
     onUpdated();
   };
 
@@ -182,6 +183,12 @@ function DetailPanel({ report, onClose, onUpdated }) {
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
               <p className="text-slate-400 mb-1">Status</p>
               <StatusBadge status={report.status} styles={ERROR_REPORT_STATUS_STYLES} />
+              {(report.status === 'fixed' || report.status === 'dismissed') && (() => {
+                const dur = formatResolutionDuration(report.createdAt, report.resolvedAt);
+                return dur ? (
+                  <p className="text-xs text-slate-500 mt-1.5">⏱ Resolved in {dur}</p>
+                ) : null;
+              })()}
             </div>
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
               <p className="text-slate-400 mb-1">Type</p>
@@ -195,7 +202,7 @@ function DetailPanel({ report, onClose, onUpdated }) {
             </div>
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
               <p className="text-slate-400 mb-1">First Reported</p>
-              <span className="font-medium text-slate-700">{formatDate(report.createdAt)}</span>
+              <span className="font-medium text-slate-700">{formatDateTime(report.createdAt)}</span>
             </div>
           </div>
 
@@ -244,14 +251,6 @@ function DetailPanel({ report, onClose, onUpdated }) {
           {/* AI Analysis */}
           <AnalysisCard analysis={analysis} aiModel={aiModel} />
 
-          {/* Fix result */}
-          {fixResult && (
-            <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-sm">
-              <p className="font-semibold text-green-800 mb-1">Auto-fix Result</p>
-              <p className="text-green-700">{fixResult}</p>
-            </div>
-          )}
-
           {/* Resolution note */}
           {(report.status === 'fixed' || report.status === 'dismissed') && resolution && (
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
@@ -280,25 +279,15 @@ function DetailPanel({ report, onClose, onUpdated }) {
         {/* Sticky footer actions */}
         <div className="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 space-y-2">
           {/* Primary actions row */}
-          {report.status !== 'fixed' && report.status !== 'dismissed' && (
+          {report.status !== 'fixed' && report.status !== 'dismissed' && !analysis && (
             <div className="flex gap-2">
-              {!analysis && (
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                  Analyze
-                </button>
-              )}
               <button
-                onClick={handleFix}
+                onClick={handleAnalyze}
                 disabled={loading}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
-                Fix It
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                Analyze
               </button>
             </div>
           )}
@@ -385,7 +374,7 @@ function ErrorRow({ report, onSelect }) {
           {report.errorMessage}
         </p>
         <p className="text-xs text-slate-400 mt-0.5 truncate">
-          {report.path} · {formatDate(report.createdAt)} · {report.userEmail || 'Unknown user'}
+          {report.path} · {formatDateTime(report.createdAt)} · {report.userEmail || 'Unknown user'}
         </p>
       </div>
 
