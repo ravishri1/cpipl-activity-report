@@ -93,21 +93,34 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true } } },
+    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive);
   if (activeSalaries.length === 0) throw badRequest('No active employees with salary structures');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
-  const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
-  const holidayDates = new Set(holidays.map(h => h.date));
 
-  let workingDays = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const date = `${month}-${String(d).padStart(2, '0')}`;
-    const dayOfWeek = new Date(year, monthNum - 1, d).getDay();
-    if (dayOfWeek !== 0 && !holidayDates.has(date)) workingDays++;
+  // Global holidays for the month
+  const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
+  const globalHolidayDates = new Set(holidays.map(h => h.date));
+
+  // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls
+  const branchHolidayCache = {};
+  const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
+  for (const branchId of uniqueBranchIds) {
+    const bh = await req.prisma.branchHoliday.findMany({ where: { branchId, date: { startsWith: month } } });
+    branchHolidayCache[branchId] = new Set(bh.map(h => h.date));
   }
+
+  // Helper: compute working days for a given holiday set
+  const calcWorkingDays = (holidaySet) => {
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${month}-${String(d).padStart(2, '0')}`;
+      if (new Date(year, monthNum - 1, d).getDay() !== 0 && !holidaySet.has(date)) count++;
+    }
+    return count;
+  };
 
   const results = [];
   for (const sal of activeSalaries) {
@@ -115,6 +128,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       where: { userId_month: { userId: sal.userId, month } },
     });
     if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
+
+    // Merge global + branch holidays for this employee
+    const mergedHolidays = new Set(globalHolidayDates);
+    if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
+      branchHolidayCache[sal.user.branchId].forEach(d => mergedHolidays.add(d));
+    }
+    const workingDays = calcWorkingDays(mergedHolidays);
 
     const attendances = await req.prisma.attendance.findMany({
       where: { userId: sal.userId, date: { startsWith: month } },
@@ -150,7 +170,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     results.push({ userId: sal.userId, status: 'generated', netPay });
   }
-  res.json({ message: `Payslips generated for ${month}`, workingDays, results });
+  res.json({ message: `Payslips generated for ${month}`, results });
 }));
 
 // GET /payslips?month= — All payslips for a month (admin)
@@ -357,6 +377,26 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
     departments: Object.values(byDepartment).sort((a, b) => b.netPay - a.netPay),
     payslips,
   });
+}));
+
+// GET /api/payroll/pending-salary — active employees with no salary structure (admin)
+router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const pending = await req.prisma.user.findMany({
+    where: {
+      isActive: true,
+      salaryStructure: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      employeeId: true,
+      designation: true,
+      department: true,
+      dateOfJoining: true,
+    },
+    orderBy: { name: 'asc' },
+  });
+  res.json(pending);
 }));
 
 module.exports = router;

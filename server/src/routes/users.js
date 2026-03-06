@@ -160,7 +160,11 @@ router.get('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       bankName: true, bankAccountNumber: true, bankBranch: true, bankIfscCode: true,
       confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
       previousExperience: true, location: true, grade: true, shift: true, companyId: true,
+      employeeType: true, branchId: true, costCenterId: true,
+      confirmationStatus: true, confirmedAt: true, benefitsUnlocked: true, officialEmailDisabled: true,
       company: { select: { id: true, name: true, shortName: true } },
+      branch: { select: { id: true, name: true, state: true, city: true } },
+      costCenter: { select: { id: true, name: true, shortName: true } },
       reportingManager: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true } },
       subordinates: { select: { id: true, name: true, employeeId: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true } },
       educations: { orderBy: { id: 'desc' } },
@@ -206,10 +210,13 @@ router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       'aadhaarNumber', 'panNumber', 'passportNumber', 'passportExpiry', 'drivingLicense', 'uanNumber',
       'bankName', 'bankAccountNumber', 'bankBranch', 'bankIfscCode',
       'confirmationDate', 'probationEndDate', 'noticePeriodDays', 'previousExperience', 'location', 'grade', 'shift',
+      'employeeType', 'officialEmailDisabled', 'confirmationStatus', 'confirmedAt', 'benefitsUnlocked',
     ];
     adminFields.forEach((f) => { if (req.body[f] !== undefined) data[f] = req.body[f]; });
     if (req.body.reportingManagerId !== undefined) data.reportingManagerId = req.body.reportingManagerId || null;
     if (req.body.companyId !== undefined) data.companyId = req.body.companyId ? parseInt(req.body.companyId) : null;
+    if (req.body.branchId !== undefined) data.branchId = req.body.branchId ? parseInt(req.body.branchId) : null;
+    if (req.body.costCenterId !== undefined) data.costCenterId = req.body.costCenterId ? parseInt(req.body.costCenterId) : null;
   }
 
   if (data.name) data.name = normalizeName(data.name);
@@ -238,7 +245,11 @@ router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
       confirmationDate: true, probationEndDate: true, noticePeriodDays: true,
       previousExperience: true, location: true, grade: true, shift: true,
       dateOfBirth: true, emergencyContact: true, companyId: true,
+      employeeType: true, branchId: true, costCenterId: true,
+      confirmationStatus: true, confirmedAt: true, benefitsUnlocked: true, officialEmailDisabled: true,
       company: { select: { id: true, name: true, shortName: true } },
+      branch: { select: { id: true, name: true, state: true, city: true } },
+      costCenter: { select: { id: true, name: true, shortName: true } },
     },
   });
 
@@ -316,13 +327,26 @@ router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler
   if (existing) throw conflict('Email already exists.');
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const user = await req.prisma.user.create({
-    data: {
-      name: normalizeName(name), email: normalizedEmail, password: hashedPassword,
-      role: role || 'member', department: department || 'General',
-      companyId: companyId ? parseInt(companyId) : null,
-    },
-  });
+  const employeeType = req.body.employeeType || 'internal';
+
+  const createData = {
+    name: normalizeName(name), email: normalizedEmail, password: hashedPassword,
+    role: role || 'member', department: department || 'General',
+    companyId: companyId ? parseInt(companyId) : null,
+    employeeType,
+  };
+
+  // Auto-set confirmation due date for internal employees (DOJ + 6 months)
+  const doj = req.body.dateOfJoining;
+  if (employeeType === 'internal' && doj) {
+    const dojDate = new Date(doj);
+    dojDate.setMonth(dojDate.getMonth() + 6);
+    createData.confirmationDate = dojDate.toISOString().slice(0, 10);
+    createData.confirmationStatus = 'pending';
+    createData.dateOfJoining = doj;
+  }
+
+  const user = await req.prisma.user.create({ data: createData });
 
   res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role, department: user.department });
 }));
@@ -348,7 +372,20 @@ router.put('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHandl
 
 // DELETE /api/users/:id - Deactivate user (soft delete)
 router.delete('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
-  await req.prisma.user.update({ where: { id: parseId(req.params.id) }, data: { isActive: false } });
+  const id = parseId(req.params.id);
+
+  const employee = await req.prisma.user.findUnique({
+    where: { id },
+    select: { employeeType: true },
+  });
+
+  const updateData = { isActive: false };
+  // Intern and external employees have their official email disabled on deactivation
+  if (employee && (employee.employeeType === 'intern' || employee.employeeType === 'external')) {
+    updateData.officialEmailDisabled = true;
+  }
+
+  await req.prisma.user.update({ where: { id }, data: updateData });
   res.json({ message: 'User deactivated.' });
 }));
 
@@ -533,6 +570,40 @@ router.get('/:id/change-history', authenticate, asyncHandler(async (req, res) =>
 // ═══════════════════════════════════════════════
 // Profile Completion Score
 // ═══════════════════════════════════════════════
+
+// GET /api/users/completion-summary  — admin: scores for all active users
+router.get('/completion-summary', requireAdmin, asyncHandler(async (req, res) => {
+  const threshold = parseInt(req.query.threshold || '98', 10);
+
+  const users = await req.prisma.user.findMany({
+    where: { isActive: true, employmentStatus: 'active' },
+    select: {
+      id: true, name: true, department: true, designation: true,
+      email: true, phone: true, dateOfBirth: true, gender: true,
+      bloodGroup: true, nationality: true, address: true, permanentAddress: true,
+      profilePhotoUrl: true, driveProfilePhotoUrl: true,
+      employeeId: true, dateOfJoining: true, reportingManagerId: true,
+      aadhaarNumber: true, panNumber: true, personalEmail: true,
+      bankAccountNumber: true, bankIfsc: true, emergencyContact: true,
+      _count: { select: { education: true, familyMembers: true } },
+    },
+  });
+
+  const { computeProfileCompletion } = require('../utils/profileCompletion');
+
+  const results = users.map(u => {
+    const { score, missing } = computeProfileCompletion(u, {
+      education: u._count.education,
+      family:    u._count.familyMembers,
+    });
+    return { id: u.id, name: u.name, department: u.department, designation: u.designation, score, missing };
+  });
+
+  const belowThreshold = results.filter(r => r.score < threshold).sort((a, b) => a.score - b.score);
+  const avgScore       = results.length ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length) : 0;
+
+  res.json({ avgScore, threshold, total: results.length, belowThreshold, all: results });
+}));
 
 // GET /api/users/:id/completion-score
 router.get('/:id/completion-score', authenticate, asyncHandler(async (req, res) => {

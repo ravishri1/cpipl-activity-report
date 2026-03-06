@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 import { driveImageUrl } from '../../utils/formatters';
+import { EMPLOYEE_TYPE_STYLES, CONFIRMATION_STATUS_STYLES } from '../../utils/constants';
 import {
   User, Mail, Phone, Building2, Calendar, Briefcase, MapPin,
   Heart, Shield, ArrowLeft, Edit3, Save, X, CreditCard,
@@ -34,6 +35,7 @@ export default function EmployeeProfile() {
   const [saving, setSaving] = useState(false);
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [completionScore, setCompletionScore] = useState(null);
 
   const isSelf = currentUser?.id === parseInt(id);
   const canEdit = isAdmin && currentUser?.role === 'admin';
@@ -73,13 +75,15 @@ export default function EmployeeProfile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const [profileRes, docRes] = await Promise.all([
+        const [profileRes, docRes, scoreRes] = await Promise.all([
           api.get(`/users/${id}/profile`),
           api.get(`/users/${id}/documents`).catch(() => ({ data: [] })),
+          api.get(`/users/${id}/completion-score`).catch(() => ({ data: null })),
         ]);
         setProfile(profileRes.data);
         setForm(profileRes.data);
         setDocuments(docRes.data);
+        setCompletionScore(scoreRes.data);
       } catch (err) {
         console.error('Profile error:', err);
       } finally {
@@ -203,12 +207,60 @@ export default function EmployeeProfile() {
               <span className="capitalize text-[11px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">{profile.role?.replace('_', ' ')}</span>
               <span className="capitalize text-[11px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded">{profile.employmentType?.replace('_', ' ')}</span>
               {profile.location && <span className="text-[11px] px-2 py-0.5 bg-green-50 text-green-600 rounded flex items-center gap-0.5"><MapPin className="w-3 h-3" />{profile.location}</span>}
+              {profile.employeeType && (
+                <span className={`text-[11px] px-2 py-0.5 rounded border capitalize font-medium ${EMPLOYEE_TYPE_STYLES[profile.employeeType] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  {profile.employeeType}
+                </span>
+              )}
+              {profile.branch?.name && (
+                <span className="text-[11px] px-2 py-0.5 bg-teal-50 text-teal-700 rounded border border-teal-200 flex items-center gap-0.5">
+                  <Building2 className="w-3 h-3" />{profile.branch.name}
+                </span>
+              )}
+              {profile.employeeType === 'internal' && profile.confirmationStatus && (
+                <span className={`text-[11px] px-2 py-0.5 rounded border capitalize ${CONFIRMATION_STATUS_STYLES[profile.confirmationStatus] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  {profile.confirmationStatus === 'confirmed' ? '✓ Confirmed' : `Confirmation: ${profile.confirmationStatus}`}
+                </span>
+              )}
+              {profile.officialEmailDisabled && (
+                <span className="text-[11px] px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-200">Email Disabled</span>
+              )}
             </div>
             {/* Quick contact */}
             <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-500">
               <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{profile.email?.toLowerCase()}</span>
               {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{profile.phone}</span>}
             </div>
+
+            {/* Profile Completion bar */}
+            {completionScore !== null && (
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex-1 max-w-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                      <UserCheck className="w-3 h-3" />
+                      Profile Completion
+                    </span>
+                    <span className={`text-[11px] font-bold ${completionScore.score >= 98 ? 'text-green-600' : completionScore.score >= 75 ? 'text-amber-600' : 'text-red-500'}`}>
+                      {completionScore.score}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <div
+                      className={`h-1.5 rounded-full transition-all ${completionScore.score >= 98 ? 'bg-green-500' : completionScore.score >= 75 ? 'bg-amber-400' : 'bg-red-400'}`}
+                      style={{ width: `${completionScore.score}%` }}
+                    />
+                  </div>
+                  {completionScore.missing?.length > 0 && (
+                    <p className="text-[10px] text-slate-400 mt-0.5 truncate"
+                       title={completionScore.missing.map(m => m.label || m).join(', ')}>
+                      Missing: {completionScore.missing.slice(0, 3).map(m => m.label || m).join(', ')}
+                      {completionScore.missing.length > 3 ? ` +${completionScore.missing.length - 3} more` : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -401,6 +453,14 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [newEmp, setNewEmp] = useState({ company: '', designation: '', fromDate: '', toDate: '', ctc: '', reasonForLeaving: '' });
+  const [branches, setBranches] = useState([]);
+  const [companies, setCompanies] = useState([]);
+
+  useEffect(() => {
+    if (!canEdit) return;
+    api.get('/branches').then(r => setBranches(r.data || [])).catch(() => {});
+    api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+  }, [canEdit]);
 
   const handleAdd = async () => {
     try {
@@ -446,6 +506,41 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
           <Field icon={Briefcase} label="Employment Type" value={profile.employmentType?.replace('_', ' ')}
             editing={editing && canEdit} onChange={(v) => updateField('employmentType', v)} editValue={form.employmentType}
             type="select" options={['full_time', 'part_time', 'contract', 'intern']} />
+          <Field icon={Users} label="Employee Type" value={profile.employeeType}
+            editing={editing && canEdit} onChange={(v) => updateField('employeeType', v)} editValue={form.employeeType}
+            type="select" options={['internal', 'intern', 'external']} />
+          {/* Branch — id/name select */}
+          <div className="flex items-start gap-3">
+            <Building2 className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase text-slate-400 font-medium">Branch</p>
+              {editing && canEdit ? (
+                <select value={form.branchId || ''} onChange={(e) => updateField('branchId', e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-sm mt-0.5 bg-white">
+                  <option value="">None</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name} ({b.city})</option>)}
+                </select>
+              ) : (
+                <p className="text-sm text-slate-700">{profile.branch ? `${profile.branch.name} (${profile.branch.city})` : '—'}</p>
+              )}
+            </div>
+          </div>
+          {/* Cost Centre — company id/name select */}
+          <div className="flex items-start gap-3">
+            <Landmark className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase text-slate-400 font-medium">Cost Centre</p>
+              {editing && canEdit ? (
+                <select value={form.costCenterId || ''} onChange={(e) => updateField('costCenterId', e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-sm mt-0.5 bg-white">
+                  <option value="">None</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <p className="text-sm text-slate-700">{profile.costCenter ? profile.costCenter.name : '—'}</p>
+              )}
+            </div>
+          </div>
           {profile.reportingManager && (
             <div className="flex items-start gap-3">
               <UserCheck className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
@@ -466,6 +561,20 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
             editing={editing && canEdit} onChange={(v) => updateField('dateOfJoining', v)} editValue={form.dateOfJoining} type="date" />
           <Field icon={Calendar} label="Confirmation Date" value={profile.confirmationDate}
             editing={editing && canEdit} onChange={(v) => updateField('confirmationDate', v)} editValue={form.confirmationDate} type="date" />
+          {profile.employeeType === 'internal' && profile.confirmationStatus && (
+            <div className="flex items-start gap-3">
+              <BadgeCheck className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[10px] uppercase text-slate-400 font-medium">Confirmation Status</p>
+                <span className={`inline-block text-xs px-2 py-0.5 rounded border capitalize mt-0.5 ${CONFIRMATION_STATUS_STYLES[profile.confirmationStatus] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  {profile.confirmationStatus}
+                </span>
+                {profile.confirmedAt && (
+                  <p className="text-xs text-slate-500 mt-0.5">Confirmed on {profile.confirmedAt}</p>
+                )}
+              </div>
+            </div>
+          )}
           <Field icon={Calendar} label="Probation End Date" value={profile.probationEndDate}
             editing={editing && canEdit} onChange={(v) => updateField('probationEndDate', v)} editValue={form.probationEndDate} type="date" />
           <Field icon={Clock} label="Notice Period (Days)" value={profile.noticePeriodDays}

@@ -1249,6 +1249,60 @@ async function sendSeparationAlert(adminEmail, adminName, separations) {
   return sendEmail(adminEmail, subject, html);
 }
 
+// ─────────────────────────────────────────────────────
+// Confirmation Workflow Emails
+// ─────────────────────────────────────────────────────
+
+async function sendConfirmationDueAlert(to, employeeName) {
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <h2 style="color:#1d4ed8">Confirmation Due Today</h2>
+      <p>Hi ${employeeName},</p>
+      <p>Your <strong>6-month confirmation review</strong> is due today.</p>
+      <p>Please reach out to your reporting manager or HR team to proceed with your confirmation.</p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
+    </div>`;
+  return sendEmail(to, `Confirmation Due Today — ${employeeName}`, html);
+}
+
+async function sendConfirmationDueManagerAlert(to, employeeName) {
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <h2 style="color:#d97706">Action Required: Employee Confirmation</h2>
+      <p>Hi,</p>
+      <p>The confirmation review for <strong>${employeeName}</strong> is due today.</p>
+      <p>Please log in to the HR system to confirm, extend, or discuss next steps with HR.</p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
+    </div>`;
+  return sendEmail(to, `Confirmation Due — ${employeeName} (Action Required)`, html);
+}
+
+async function sendConfirmationLetter(to, employeeName, confirmedDate) {
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <h2 style="color:#16a34a">Confirmation Letter</h2>
+      <p>Dear ${employeeName},</p>
+      <p>We are pleased to inform you that your employment has been <strong>confirmed</strong> with effect from <strong>${confirmedDate}</strong>.</p>
+      <p>You are now entitled to all permanent employee benefits. HR will follow up regarding your insurance and other entitlements.</p>
+      <p>Congratulations and we wish you continued success in your career with us.</p>
+      <p>Warm regards,<br/>HR Department<br/>CPIPL</p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
+    </div>`;
+  return sendEmail(to, `Confirmation Letter — ${employeeName}`, html);
+}
+
+async function sendConfirmationAdminNotify(to, employeeName) {
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <h2 style="color:#7c3aed">Employee Confirmed — Insurance Setup Required</h2>
+      <p>Hi,</p>
+      <p><strong>${employeeName}</strong> has been confirmed as a permanent employee.</p>
+      <p>An insurance card placeholder has been created in the system. Please log in to the HR portal to complete the insurance setup.</p>
+      <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
+    </div>`;
+  return sendEmail(to, `Insurance Setup Required — ${employeeName} Confirmed`, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -1265,4 +1319,8 @@ module.exports = {
   sendOnboardingOverdueAlert,
   sendTrainingDeadlineAlert,
   sendSeparationAlert,
+  sendConfirmationDueAlert,
+  sendConfirmationDueManagerAlert,
+  sendConfirmationLetter,
+  sendConfirmationAdminNotify,
 };

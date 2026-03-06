@@ -82,6 +82,17 @@ model User {
   companyId          Int?
   company            Company? @relation(fields: [companyId], references: [id])
 
+  // ── Employee Type & Branch ──
+  employeeType              String   @default("internal")   // internal | intern | external
+  officialEmailDisabled     Boolean  @default(false)
+  branchId                  Int?
+  branch                    Branch?  @relation(fields: [branchId], references: [id])
+  costCenterId              Int?
+  costCenter                Company? @relation("CostCenter", fields: [costCenterId], references: [id])
+  confirmationStatus        String?  // pending | extended | confirmed (null = N/A)
+  confirmedAt               String?  // "YYYY-MM-DD"
+  benefitsUnlocked          Boolean  @default(false)
+
   // ── Existing Relations ──
   reports          DailyReport[]
   reminders        Reminder[]
@@ -170,6 +181,11 @@ model User {
   errorReports               ErrorReport[]                @relation("ErrorReporter")
   errorReportsResolved       ErrorReport[]                @relation("ErrorResolver")
 
+  // ── Confirmation Workflow ──
+  confirmationExtensions    ConfirmationExtension[]       @relation("ConfirmationExtensions")
+  extensionsGranted         ConfirmationExtension[]       @relation("ConfirmationExtensionsBy")
+  contractsCreated          CompanyContract[]             @relation("ContractCreator")
+
   @@index([department])
   @@index([isActive])
   @@index([employmentStatus])
@@ -178,6 +194,8 @@ model User {
   @@index([reportingManagerId])
   @@index([role])
   @@index([createdAt])
+  @@index([branchId])
+  @@index([employeeType])
 }
 
 model DailyReport {
@@ -517,6 +535,8 @@ model Company {
   vendors          Vendor[]
   locations        Location[]
   purchaseOrders   PurchaseOrder[]
+  costCenterEmployees  User[]       @relation("CostCenter")
+  contracts        CompanyContract[]
 }
 
 // ═══════════════════════════════════════════════
@@ -2091,4 +2111,129 @@ model ErrorReport {
   @@index([userId])
   @@index([errorType])
   @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════
+// Branch Management (Multi-Branch Holiday Support)
+// ═══════════════════════════════════════════════
+
+model Branch {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  state     String
+  city      String
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users     User[]
+  holidays  BranchHoliday[]
+}
+
+model BranchHoliday {
+  id         Int     @id @default(autoincrement())
+  branchId   Int
+  name       String
+  date       String  // "YYYY-MM-DD"
+  year       Int
+  isOptional Boolean @default(false)
+
+  branch     Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, date])
+  @@index([branchId, year])
+}
+
+// ═══════════════════════════════════════════════
+// Confirmation Extension Audit Log
+// ═══════════════════════════════════════════════
+
+model ConfirmationExtension {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  extendedBy       Int
+  previousDueDate  String   // "YYYY-MM-DD"
+  newDueDate       String   // "YYYY-MM-DD"
+  reason           String?
+  createdAt        DateTime @default(now())
+
+  user             User     @relation("ConfirmationExtensions", fields: [userId], references: [id], onDelete: Cascade)
+  extender         User     @relation("ConfirmationExtensionsBy", fields: [extendedBy], references: [id])
+
+  @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// Company Contracts (Software Licenses, Services,
+// Compliance, IP Assets, Misc)
+// ═══════════════════════════════════════════════
+
+model CompanyContract {
+  id               Int      @id @default(autoincrement())
+  companyId        Int?
+
+  // ── Classification ──
+  // category: software | service | compliance | ip | misc
+  category         String
+  // subCategory examples:
+  //   software  → tally, windows_license, aws, github, gsuite, other
+  //   service   → pest_control, water_filter, ac_maintenance, cctv, internet, other
+  //   compliance→ fssai, fire_safety, gst_filing, other
+  //   ip        → trademark, patent, copyright, other
+  //   misc      → harwala, fish_tank, activa, other
+  subCategory      String?
+
+  // ── Basic Info ──
+  name             String                     // "Tally Prime", "FSSAI License 2026"
+  description      String?
+  status           String   @default("active") // active, expired, pending, cancelled, renewed
+
+  // ── Vendor Info ──
+  vendorName       String?
+  vendorContact    String?                    // phone or email
+  vendorPAN        String?
+  vendorGST        String?
+
+  // ── Payment / Finance ──
+  amount           Float?                     // cost in INR
+  paymentMode      String?                    // cash, upi, bank_transfer, cheque, neft, rtgs
+  paymentDate      String?                    // "YYYY-MM-DD"
+  paymentUTR       String?                    // UTR / cheque number
+  vendorBankName   String?
+  vendorBankAccount String?
+  vendorIfsc       String?
+
+  // ── Invoice ──
+  invoiceNumber    String?
+  invoiceDate      String?                    // "YYYY-MM-DD"
+  invoiceFileUrl   String?                    // Google Drive URL
+
+  // ── Dates ──
+  startDate        String?                    // "YYYY-MM-DD"
+  expiryDate       String?                    // "YYYY-MM-DD" – drives expiry alerts
+  renewalDate      String?                    // "YYYY-MM-DD" – when to action renewal
+  lastServiceDate  String?                    // "YYYY-MM-DD" – last serviced/paid
+
+  // ── Software-specific ──
+  licenseKey       String?
+  seats            Int?                       // number of users/seats
+
+  // ── IP-specific ──
+  registrationNumber String?
+  ipClass          String?                    // e.g. "Class 16" for trademark
+  ipJurisdiction   String?                    // India, USA, etc.
+
+  // ── Audit ──
+  notes            String?
+  createdBy        Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company          Company? @relation(fields: [companyId], references: [id])
+  creator          User?    @relation("ContractCreator", fields: [createdBy], references: [id])
+
+  @@index([category])
+  @@index([companyId])
+  @@index([status])
+  @@index([expiryDate])
 }

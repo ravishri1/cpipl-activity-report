@@ -85,6 +85,7 @@ export default function SalaryStructure() {
   const [revisions, setRevisions] = useState([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
   const [salaryCache, setSalaryCache] = useState({});
+  const [pendingSalary, setPendingSalary] = useState([]);
 
   // Fetch employees
   useEffect(() => {
@@ -101,6 +102,13 @@ export default function SalaryStructure() {
       }
     };
     fetchEmployees();
+  }, []);
+
+  // Fetch employees with no salary structure
+  useEffect(() => {
+    api.get('/payroll/pending-salary')
+      .then((r) => setPendingSalary(r.data || []))
+      .catch(() => {});
   }, []);
 
   // Filtered employees
@@ -823,6 +831,21 @@ export default function SalaryStructure() {
           {employees.length} active employee{employees.length !== 1 ? 's' : ''}
         </div>
       </div>
+
+      {/* Pending Salary Banner */}
+      {pendingSalary.length > 0 && (
+        <div className="mx-6 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800">
+              {pendingSalary.length} active employee{pendingSalary.length !== 1 ? 's have' : ' has'} no salary structure assigned
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              {pendingSalary.map((e) => e.name).join(', ')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Search & Table Card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm">

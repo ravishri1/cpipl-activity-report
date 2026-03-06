@@ -61,6 +61,9 @@ const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement')
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/predictive/PredictiveMaintenanceDashboard'));
 const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
+const BranchManager = lazy(() => import('./components/admin/BranchManager'));
+const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
+const CompanyContractsManager = lazy(() => import('./components/admin/CompanyContractsManager'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -186,7 +189,10 @@ function AppRoutes() {
                   <Route path="/admin/inventory" element={<SeparatedRoute><AdminRoute><InventoryAnalytics /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/contracts" element={<SeparatedRoute><AdminRoute><CompanyContractsManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/branches" element={<SeparatedRoute><AdminRoute><BranchManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/confirmations" element={<SeparatedRoute><AdminRoute><ConfirmationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />

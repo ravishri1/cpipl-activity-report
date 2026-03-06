@@ -14,6 +14,7 @@ const { runInsuranceExpiryCheck }  = require('./notifications/insuranceAlertServ
 const { runOnboardingOverdueCheck } = require('./notifications/onboardingOverdueService');
 const { runTrainingDeadlineCheck }  = require('./notifications/trainingDeadlineService');
 const { runSeparationAlert }        = require('./notifications/separationAlertService');
+const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -230,6 +231,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Separation last-day alert scheduled: 30 10 * * 1-6 (10:30 Mon-Sat)');
+
+  // Confirmation due alerts: 10:45 AM daily (Mon-Sat)
+  // Alerts employee + reporting manager when 6-month confirmation is due today
+  cron.schedule('45 10 * * 1-6', async () => {
+    console.log(`[CRON] Confirmation alerts triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runConfirmationAlerts(prisma);
+      console.log(`[CRON] Confirmation alerts complete: ${count} alert(s) sent.`);
+    } catch (err) {
+      console.error('[CRON] Confirmation alerts failed:', err);
+    }
+  });
+  console.log('  -> Confirmation due alert scheduled: 45 10 * * 1-6 (10:45 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

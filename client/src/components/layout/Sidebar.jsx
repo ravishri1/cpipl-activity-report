@@ -45,6 +45,9 @@ import {
   Bug,
   ShoppingCart,
   Boxes,
+  Building2,
+  BadgeCheck,
+  ScrollText,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -233,6 +236,8 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/team', label: 'Team Management', icon: Users },
+          { to: '/admin/branches', label: 'Branch Manager', icon: Building2 },
+          { to: '/admin/confirmations', label: 'Confirmations', icon: BadgeCheck },
           { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
           { to: '/admin/separations', label: 'Separations', icon: UserMinus },
           { to: '/admin/import', label: 'Import Employees', icon: Upload },
@@ -265,6 +270,7 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/inventory', label: 'Inventory', icon: Boxes },
           { to: '/admin/predictive-maintenance', label: 'Predictive Maintenance', icon: Wrench },
           { to: '/admin/insurance', label: 'Insurance Management', icon: Heart },
+          { to: '/admin/contracts', label: 'Company Contracts', icon: ScrollText },
           { to: '/admin/letters', label: 'Letters', icon: Mail },
           { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
           { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },

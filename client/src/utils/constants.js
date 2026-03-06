@@ -101,6 +101,22 @@ export const REPAIR_TYPE_STYLES = {
 
 export const REPAIR_TYPES = ['repair', 'maintenance', 'inspection', 'calibration'];
 
+// ═══ Employee Type-specific ═══
+export const EMPLOYEE_TYPE_STYLES = {
+  internal: 'bg-blue-100 text-blue-700 border-blue-200',
+  intern:   'bg-purple-100 text-purple-700 border-purple-200',
+  external: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+export const EMPLOYEE_TYPES = ['internal', 'intern', 'external'];
+
+// ═══ Confirmation Workflow-specific ═══
+export const CONFIRMATION_STATUS_STYLES = {
+  pending:   'bg-amber-100 text-amber-700 border-amber-200',
+  extended:  'bg-orange-100 text-orange-700 border-orange-200',
+  confirmed: 'bg-green-100 text-green-700 border-green-200',
+};
+
 // ═══ Error Reports ═══
 export const ERROR_REPORT_STATUS_STYLES = {
   new:        'bg-red-100 text-red-700 border-red-200',

@@ -10,7 +10,7 @@ export default function TeamManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,7 +26,7 @@ export default function TeamManagement() {
   useEffect(() => { fetchUsers(); }, []);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', role: 'member', department: 'General' });
+    setForm({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal' });
     setEditUser(null);
     setShowForm(false);
     setError('');
@@ -56,7 +56,7 @@ export default function TeamManagement() {
 
   const handleEdit = (user) => {
     setEditUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, department: user.department });
+    setForm({ name: user.name, email: user.email, role: user.role, department: user.department, employeeType: user.employeeType || 'internal' });
     setShowForm(true);
   };
 
@@ -150,6 +150,15 @@ export default function TeamManagement() {
                 <option value="member">Member</option>
                 <option value="team_lead">Team Lead</option>
                 <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Employee Type</label>
+              <select value={form.employeeType} onChange={(e) => setForm({ ...form, employeeType: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="internal">Internal (Permanent)</option>
+                <option value="intern">Intern</option>
+                <option value="external">External / Contractor</option>
               </select>
             </div>
             <div>
