@@ -256,6 +256,8 @@ export default function Sidebar({ isOpen, onClose }) {
         label: 'Organization',
         adminOnly: true,
         items: [
+          { to: '/admin/company-master', label: 'Company Master', icon: Building2 },
+          { to: '/admin/compliance', label: 'Compliance Tracker', icon: BadgeCheck },
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
           { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
           { to: '/admin/procurement', label: 'Procurement', icon: ShoppingCart },

@@ -65,6 +65,8 @@ const BranchManager = lazy(() => import('./components/admin/BranchManager'));
 const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
 const BiometricDashboard = lazy(() => import('./components/admin/BiometricDashboard'));
 const CompanyContractsManager = lazy(() => import('./components/admin/CompanyContractsManager'));
+const CompanyMaster = lazy(() => import('./components/admin/CompanyMaster'));
+const ComplianceTracker = lazy(() => import('./components/admin/ComplianceTracker'));
 const ActivityReports = lazy(() => import('./components/reports/ActivityReports'));
 const MyWorkspace = lazy(() => import('./components/workspace/MyWorkspace'));
 const MyCompliance = lazy(() => import('./components/compliance/MyCompliance'));
@@ -205,6 +207,8 @@ function AppRoutes() {
                   <Route path="/admin/branches" element={<SeparatedRoute><AdminRoute><BranchManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/confirmations" element={<SeparatedRoute><AdminRoute><ConfirmationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/biometric" element={<SeparatedRoute><AdminRoute><BiometricDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/company-master" element={<SeparatedRoute><AdminRoute><CompanyMaster /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/compliance" element={<SeparatedRoute><AdminRoute><ComplianceTracker /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />

@@ -1291,6 +1291,73 @@ async function sendConfirmationLetter(to, employeeName, confirmedDate) {
   return sendEmail(to, `Confirmation Letter — ${employeeName}`, html);
 }
 
+async function sendComplianceReminderEmail(adminEmail, adminName, dueSoonCerts, overdueCerts) {
+  const subject = `Compliance Alert: ${overdueCerts.length > 0 ? `${overdueCerts.length} Overdue, ` : ''}${dueSoonCerts.length} Due Soon`;
+
+  const certRow = (cert) => {
+    const daysLeft = cert.daysLeft;
+    const statusColor = daysLeft < 0 ? '#dc3545' : daysLeft <= 7 ? '#ff6600' : '#e6a817';
+    const statusLabel = daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`;
+    return `
+      <tr>
+        <td style="padding:8px 12px; border-bottom:1px solid #eee;">${cert.companyRegistration?.abbr || '—'}</td>
+        <td style="padding:8px 12px; border-bottom:1px solid #eee;">${cert.certificateType}</td>
+        <td style="padding:8px 12px; border-bottom:1px solid #eee;">${cert.certificateNo}</td>
+        <td style="padding:8px 12px; border-bottom:1px solid #eee;">${cert.expiryDate || '—'}</td>
+        <td style="padding:8px 12px; border-bottom:1px solid #eee; color:${statusColor}; font-weight:bold;">${statusLabel}</td>
+      </tr>`;
+  };
+
+  const overdueSection = overdueCerts.length > 0 ? `
+    <h3 style="color:#dc3545; margin-top:24px;">⚠ Overdue (${overdueCerts.length})</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead>
+        <tr style="background:#f8f9fa;">
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Entity</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Type</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Certificate No</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Expiry Date</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Status</th>
+        </tr>
+      </thead>
+      <tbody>${overdueCerts.map(certRow).join('')}</tbody>
+    </table>` : '';
+
+  const dueSoonSection = dueSoonCerts.length > 0 ? `
+    <h3 style="color:#e6a817; margin-top:24px;">🔔 Due Soon (${dueSoonCerts.length})</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead>
+        <tr style="background:#f8f9fa;">
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Entity</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Type</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Certificate No</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Expiry Date</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #dee2e6;">Days Left</th>
+        </tr>
+      </thead>
+      <tbody>${dueSoonCerts.map(certRow).join('')}</tbody>
+    </table>` : '';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 750px; margin: 0 auto;">
+      <div style="background: #1e3a5f; color: white; padding: 20px; text-align: center;">
+        <h2 style="margin:0;">📋 Compliance Renewal Alert</h2>
+        <p style="margin:4px 0 0; opacity:0.85;">Daily compliance certificate status report</p>
+      </div>
+      <div style="padding: 24px; background: #f8f9fa;">
+        <p>Dear <strong>${adminName}</strong>,</p>
+        <p>Please review the following compliance certificates that require your attention:</p>
+        ${overdueSection}
+        ${dueSoonSection}
+        <br/>
+        <p>Log in to the <strong>Compliance Tracker</strong> to renew certificates or update records.</p>
+        <p style="color: #666; font-size:13px;">— Color Papers HR System</p>
+      </div>
+    </div>
+  `;
+  return sendEmail(adminEmail, subject, html);
+}
+
 async function sendConfirmationAdminNotify(to, employeeName) {
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -1323,4 +1390,5 @@ module.exports = {
   sendConfirmationDueManagerAlert,
   sendConfirmationLetter,
   sendConfirmationAdminNotify,
+  sendComplianceReminderEmail,
 };

@@ -15,6 +15,7 @@ const { runOnboardingOverdueCheck } = require('./notifications/onboardingOverdue
 const { runTrainingDeadlineCheck }  = require('./notifications/trainingDeadlineService');
 const { runSeparationAlert }        = require('./notifications/separationAlertService');
 const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
+const { runComplianceAlerts }       = require('./notifications/complianceAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -244,6 +245,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Confirmation due alert scheduled: 45 10 * * 1-6 (10:45 Mon-Sat)');
+
+  // Compliance certificate renewal alerts: 10:00 AM daily (Mon-Sat)
+  // Alerts admins about overdue certs and certs within each cert's reminderDays window
+  cron.schedule('0 10 * * 1-6', async () => {
+    console.log(`[CRON] Compliance alert triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runComplianceAlerts(prisma);
+      console.log(`[CRON] Compliance alert complete: ${count} certificate(s) need attention.`);
+    } catch (err) {
+      console.error('[CRON] Compliance alert failed:', err);
+    }
+  });
+  console.log('  -> Compliance certificate alert scheduled: 0 10 * * 1-6 (10:00 Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

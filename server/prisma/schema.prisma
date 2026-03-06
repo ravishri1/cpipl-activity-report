@@ -83,6 +83,10 @@ model User {
   companyId          Int?
   company            Company? @relation(fields: [companyId], references: [id])
 
+  // ── Company Master (GSTIN-level registration) ──
+  companyRegistrationId  Int?
+  companyRegistration    CompanyRegistration? @relation("UserCompanyRegistration", fields: [companyRegistrationId], references: [id])
+
   // ── Employee Type & Branch ──
   employeeType              String   @default("internal")   // internal | intern | external
   officialEmailDisabled     Boolean  @default(false)
@@ -205,6 +209,7 @@ model User {
   @@index([branchId])
   @@index([employeeType])
   @@index([bioDeviceId])
+  @@index([companyRegistrationId])
 }
 
 model DailyReport {
@@ -839,6 +844,7 @@ model Asset {
   
   notes          String?
   companyId      Int?
+  companyRegistrationId Int?                              // Links to CompanyRegistration (GSTIN-level ownership)
   location       String?                                  // "Miraroad", "Lucknow" — office location where asset is
   isMandatoryReturn Boolean @default(true)               // must return on exit (false for consumables)
   createdAt      DateTime  @default(now())
@@ -846,6 +852,7 @@ model Asset {
 
   assignee          User?     @relation("AssetAssignment", fields: [assignedTo], references: [id])
   company           Company?  @relation(fields: [companyId], references: [id])
+  companyRegistration CompanyRegistration? @relation("AssetCompanyRegistration", fields: [companyRegistrationId], references: [id])
   handovers         AssetHandover[]
   repairHistory     AssetRepair[]
   vendorMetrics     VendorMetrics[] @relation("VendorMetrics")
@@ -2308,4 +2315,84 @@ model BiometricPunch {
   @@index([matchStatus])
   @@index([processStatus])
   @@index([userId])
+}
+
+// ═══════════════════════════════════════════════
+// Company Master — Single Source of Truth
+// ═══════════════════════════════════════════════
+
+model LegalEntity {
+  id        Int      @id @default(autoincrement())
+  legalName String   // "Color Papers India Pvt. Ltd."
+  pan       String?  @unique
+  tan       String?  @unique
+  lei       String?  // Legal Entity Identifier (yearly renewal)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations CompanyRegistration[]
+}
+
+model CompanyRegistration {
+  id             Int     @id @default(autoincrement())
+  legalEntityId  Int
+  abbr           String  @unique // e.g. "CPIPL-MUM/27-R1" — auto-computed on save
+  officeCity     String  // operational city
+  gstin          String  @unique // 15-char, PRIMARY identifier
+  state          String
+  district       String?
+  stateCode      String  // gstin[0:1] as "09" (preserve leading zero)
+  regNo          Int     // gstin[12] as integer
+  placeType      String  @default("Principal") // "Principal" or "Additional"
+  address        String? // full registered address
+  fssai          String? // FSSAI licence number
+  udyam          String? // Udyam registration number
+  iec            String? // Import Export Code
+  isActive       Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  legalEntity    LegalEntity @relation(fields: [legalEntityId], references: [id])
+  users          User[]      @relation("UserCompanyRegistration")
+  assets         Asset[]     @relation("AssetCompanyRegistration")
+  certificates   ComplianceCertificate[]
+
+  @@index([legalEntityId])
+  @@index([stateCode])
+  @@index([isActive])
+}
+
+model ComplianceCertificate {
+  id                     Int      @id @default(autoincrement())
+  companyRegistrationId  Int
+  certificateType        String   // FSSAI | IEC | UDYAM | GST | TAN | PAN | LEI | OTHER
+  certificateNo          String
+  issueDate              String?  // YYYY-MM-DD
+  expiryDate             String?  // NULL if lifetime
+  renewalFrequency       String   // YEARLY | 5_YEARLY | LIFETIME | NONE
+  lastRenewed            String?
+  nextDue                String?  // computed: lastRenewed + renewalFrequency
+  reminderDays           Int      @default(30)
+  documentUrl            String?
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  companyRegistration    CompanyRegistration @relation(fields: [companyRegistrationId], references: [id], onDelete: Cascade)
+
+  @@index([companyRegistrationId])
+  @@index([expiryDate])
+  @@index([certificateType])
+}
+
+model EntityCode {
+  id         Int    @id @default(autoincrement())
+  legalName  String @unique // "Color Papers India Pvt. Ltd."
+  code       String @unique // "CPIPL"
+}
+
+model CityCode {
+  id       Int    @id @default(autoincrement())
+  cityName String @unique // "Mumbai"
+  code     String @unique // "MUM"
 }

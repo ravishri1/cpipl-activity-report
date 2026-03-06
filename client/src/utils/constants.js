@@ -132,3 +132,15 @@ export const ERROR_SEVERITY_STYLES = {
   low:      'bg-blue-100 text-blue-700 border-blue-200',
   unknown:  'bg-slate-100 text-slate-500 border-slate-200',
 };
+
+// ═══ Compliance Certificate-specific ═══
+export const COMPLIANCE_STATUS_STYLES = {
+  VALID:    'bg-green-100 text-green-700 border-green-200',
+  DUE_SOON: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  OVERDUE:  'bg-red-100 text-red-700 border-red-200',
+  LIFETIME: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+export const CERTIFICATE_TYPES = ['FSSAI', 'IEC', 'UDYAM', 'GST', 'TAN', 'PAN', 'LEI', 'OTHER'];
+
+export const RENEWAL_FREQUENCIES = ['YEARLY', '5_YEARLY', 'LIFETIME', 'NONE'];
