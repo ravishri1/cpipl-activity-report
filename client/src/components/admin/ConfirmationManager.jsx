@@ -49,7 +49,7 @@ function ExtendModal({ employee, onClose, onDone }) {
     setSaving(true);
     setError(null);
     try {
-      await api.post(`/api/confirmation/${employee.id}/extend`, { newDueDate, reason });
+      await api.post(`/confirmation/${employee.id}/extend`, { newDueDate, reason });
       onDone('Confirmation due date extended successfully.');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to extend confirmation.');
@@ -118,7 +118,7 @@ function ConfirmModal({ employee, onClose, onDone }) {
     setSaving(true);
     setError(null);
     try {
-      await api.post(`/api/confirmation/${employee.id}/confirm`);
+      await api.post(`/confirmation/${employee.id}/confirm`);
       onDone('Employee confirmed! Benefits unlocked and insurance card created.');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to confirm employee.');
@@ -181,7 +181,7 @@ function HistoryDrawer({ employee, onClose }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get(`/api/confirmation/${employee.id}/history`)
+    api.get(`/confirmation/${employee.id}/history`)
       .then(res => setHistory(res.data))
       .catch(err => setError(err.response?.data?.error || 'Failed to load history.'))
       .finally(() => setLoading(false));
@@ -331,7 +331,7 @@ export default function ConfirmationManager() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/api/confirmation/due');
+      const res = await api.get('/confirmation/due');
       setEmployees(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load confirmation data.');

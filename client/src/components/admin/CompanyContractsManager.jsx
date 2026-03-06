@@ -191,8 +191,8 @@ function ContractModal({ contract, companies, onClose, onSaved }) {
     if (!payload.name.trim()) return;
     await execute(
       () => isEdit
-        ? api.put(`/api/company-contracts/${contract.id}`, payload)
-        : api.post('/api/company-contracts', payload),
+        ? api.put(`/company-contracts/${contract.id}`, payload)
+        : api.post('/company-contracts', payload),
       isEdit ? 'Contract updated' : 'Contract created',
     );
     onSaved();
@@ -393,8 +393,8 @@ export default function CompanyContractsManager() {
   const [editingContract, setEditingContract] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data: contracts, loading, error, refetch } = useFetch('/api/company-contracts', []);
-  const { data: summary, refetch: refetchSummary }   = useFetch('/api/company-contracts/summary', {});
+  const { data: contracts, loading, error, refetch } = useFetch('/company-contracts', []);
+  const { data: summary, refetch: refetchSummary }   = useFetch('/company-contracts/summary', {});
   const { data: companies } = useFetch('/api/companies', []);
   const { execute: execDelete, loading: deleting }   = useApi();
 
@@ -412,7 +412,7 @@ export default function CompanyContractsManager() {
   function openCreate() { setEditingContract(null); setShowModal(true); }
   function openEdit(c)  { setEditingContract(c);    setShowModal(true); }
   async function confirmDelete() {
-    await execDelete(() => api.delete(`/api/company-contracts/${deleteTarget.id}`), 'Deleted');
+    await execDelete(() => api.delete(`/company-contracts/${deleteTarget.id}`), 'Deleted');
     setDeleteTarget(null);
     refetch();
     refetchSummary();

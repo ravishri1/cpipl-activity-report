@@ -48,9 +48,9 @@ function BranchModal({ branch, onClose, onSaved }) {
     setError(null);
     try {
       if (branch) {
-        await api.put(`/api/branches/${branch.id}`, form);
+        await api.put(`/branches/${branch.id}`, form);
       } else {
-        await api.post('/api/branches', form);
+        await api.post('/branches', form);
       }
       onSaved();
     } catch (err) {
@@ -113,7 +113,7 @@ function BranchHolidaysPanel({ branch, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/api/branches/${branch.id}/holidays?year=${year}`);
+      const res = await api.get(`/branches/${branch.id}/holidays?year=${year}`);
       setHolidays(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load holidays.');
@@ -132,7 +132,7 @@ function BranchHolidaysPanel({ branch, onClose }) {
     setAdding(true);
     setError(null);
     try {
-      await api.post(`/api/branches/${branch.id}/holidays`, addForm);
+      await api.post(`/branches/${branch.id}/holidays`, addForm);
       setAddForm({ name: '', date: '', isOptional: false });
       setSuccess('Holiday added.');
       setTimeout(() => setSuccess(null), 3000);
@@ -147,7 +147,7 @@ function BranchHolidaysPanel({ branch, onClose }) {
   const handleDelete = async (holidayId) => {
     if (!window.confirm('Delete this branch holiday?')) return;
     try {
-      await api.delete(`/api/branches/${branch.id}/holidays/${holidayId}`);
+      await api.delete(`/branches/${branch.id}/holidays/${holidayId}`);
       setHolidays(h => h.filter(x => x.id !== holidayId));
       setSuccess('Holiday deleted.');
       setTimeout(() => setSuccess(null), 3000);
@@ -284,7 +284,7 @@ export default function BranchManager() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/api/branches');
+      const res = await api.get('/branches');
       setBranches(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load branches.');
@@ -307,7 +307,7 @@ export default function BranchManager() {
     const action = branch.isActive ? 'deactivate' : 're-activate';
     if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} branch "${branch.name}"?`)) return;
     try {
-      await api.delete(`/api/branches/${branch.id}`);
+      await api.delete(`/branches/${branch.id}`);
       setSuccess(`Branch ${action}d.`);
       setTimeout(() => setSuccess(null), 3000);
       fetchBranches();
