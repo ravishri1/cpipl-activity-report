@@ -86,6 +86,8 @@ model User {
   // ── Employee Type & Branch ──
   employeeType              String   @default("internal")   // internal | intern | external
   officialEmailDisabled     Boolean  @default(false)
+  workspaceSuspendPending   Boolean  @default(false)  // HR must manually suspend/delete Workspace account
+  workspaceSuspendDoneAt    String?                   // "YYYY-MM-DD" when HR confirmed suspension done
   branchId                  Int?
   branch                    Branch?  @relation(fields: [branchId], references: [id])
   costCenterId              Int?

@@ -3,7 +3,6 @@ const { authenticate, requireAdmin, requireActiveEmployee } = require('../middle
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
-const { suspendWorkspaceUser } = require('../services/google/googleWorkspace');
 
 const router = express.Router();
 
@@ -248,19 +247,17 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
       await req.prisma.user.update({ where: { id: existing.userId }, data: userUpdate });
     }
 
-    // ── Google Workspace: suspend account when separation is completed ──
+    // ── Google Workspace: flag account for HR to manually suspend on FnF completion ──
     if (status === 'completed') {
       const separatedUser = await req.prisma.user.findUnique({
         where: { id: existing.userId },
         select: { email: true },
       });
       if (separatedUser && isWorkspaceEmail(separatedUser.email)) {
-        try {
-          await suspendWorkspaceUser(separatedUser.email);
-          console.log(`Google Workspace account suspended on FnF completion for: ${separatedUser.email}`);
-        } catch (err) {
-          console.error(`Google Workspace suspension failed for ${separatedUser.email}:`, err.message);
-        }
+        await req.prisma.user.update({
+          where: { id: existing.userId },
+          data: { workspaceSuspendPending: true },
+        });
       }
     }
   }

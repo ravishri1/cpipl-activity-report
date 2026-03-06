@@ -7,7 +7,7 @@ const { requireFields, parseId } = require('../utils/validate');
 const { normalizeEmail, normalizeName } = require('../utils/normalize');
 const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 const { processProfilePhoto } = require('../services/photoProcessor');
-const { createWorkspaceUser, suspendWorkspaceUser, unsuspendWorkspaceUser } = require('../services/google/googleWorkspace');
+const { createWorkspaceUser, unsuspendWorkspaceUser } = require('../services/google/googleWorkspace');
 
 const router = express.Router();
 
@@ -411,20 +411,66 @@ router.delete('/:id', authenticate, requireActiveEmployee, requireAdmin, asyncHa
   if (employee && (employee.employeeType === 'intern' || employee.employeeType === 'external')) {
     updateData.officialEmailDisabled = true;
   }
+  // Flag Workspace account for manual suspension by HR
+  if (employee && isWorkspaceEmail(employee.email)) {
+    updateData.workspaceSuspendPending = true;
+  }
 
   await req.prisma.user.update({ where: { id }, data: updateData });
 
-  // ── Google Workspace: suspend account on deactivation (non-blocking) ──
-  if (employee && isWorkspaceEmail(employee.email)) {
-    try {
-      await suspendWorkspaceUser(employee.email);
-      console.log(`Google Workspace account suspended for: ${employee.email}`);
-    } catch (err) {
-      console.error(`Google Workspace account suspension failed for ${employee.email}:`, err.message);
-    }
+  res.json({ message: 'User deactivated.' });
+}));
+
+// ─────────────────────────────────────────────
+// Google Workspace pending-suspension helpers
+// ─────────────────────────────────────────────
+
+// GET /api/users/workspace-pending — employees whose Workspace account still needs HR action
+router.get('/workspace-pending', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const pending = await req.prisma.user.findMany({
+    where: { workspaceSuspendPending: true },
+    select: { id: true, name: true, email: true, employeeId: true, department: true },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  if (!pending.length) return res.json([]);
+
+  // Enrich with last working date from separation records
+  const userIds = pending.map((u) => u.id);
+  const separations = await req.prisma.separation.findMany({
+    where: { userId: { in: userIds }, status: { not: 'cancelled' } },
+    select: { userId: true, lastWorkingDate: true, status: true, type: true },
+    orderBy: { id: 'desc' },
+  });
+
+  const sepMap = new Map();
+  for (const s of separations) {
+    if (!sepMap.has(s.userId)) sepMap.set(s.userId, s); // keep latest only
   }
 
-  res.json({ message: 'User deactivated.' });
+  const result = pending.map((u) => {
+    const sep = sepMap.get(u.id);
+    const lastWorkingDate = sep?.lastWorkingDate || null;
+    const daysOverdue = lastWorkingDate
+      ? Math.max(0, Math.floor((new Date(today) - new Date(lastWorkingDate)) / (1000 * 60 * 60 * 24)))
+      : null;
+    return { ...u, lastWorkingDate, daysOverdue, separationType: sep?.type || null };
+  });
+
+  res.json(result);
+}));
+
+// PUT /api/users/:id/workspace-done — HR confirms Workspace account has been suspended/deleted
+router.put('/:id/workspace-done', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const today = new Date().toISOString().slice(0, 10);
+  await req.prisma.user.update({
+    where: { id },
+    data: { workspaceSuspendPending: false, workspaceSuspendDoneAt: today },
+  });
+  res.json({ message: 'Workspace account marked as suspended.' });
 }));
 
 // ═══════════════════════════════════════════════

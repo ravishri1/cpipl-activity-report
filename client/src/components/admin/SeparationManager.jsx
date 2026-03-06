@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import WorkspacePendingAlerts from './WorkspacePendingAlerts';
 
 const formatCurrency = (amount) => {
   const num = parseFloat(amount);
@@ -324,6 +325,11 @@ export default function SeparationManager() {
         <StatCard icon={Clock} label="In Notice Period" value={stats.noticePeriod} color="bg-yellow-500" />
         <StatCard icon={IndianRupee} label="FnF Pending" value={stats.fnfPending} color="bg-orange-500" />
         <StatCard icon={CheckCircle} label="Completed This Month" value={stats.completedThisMonth} color="bg-green-500" />
+      </div>
+
+      {/* Google Workspace pending suspension alerts */}
+      <div className="px-0 pt-4">
+        <WorkspacePendingAlerts />
       </div>
 
       {/* Filters */}
