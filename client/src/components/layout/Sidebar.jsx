@@ -47,6 +47,11 @@ import {
   FolderOpen,
   Heart,
   Wrench,
+  AlarmClock,
+  Calculator,
+  Target,
+  Briefcase,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -179,6 +184,10 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/attendance', label: 'Attendance', icon: Clock },
         { to: '/leave', label: 'Leave', icon: CalendarOff },
         { to: '/overtime', label: 'Overtime', icon: Clock },
+        { to: '/my-comp-off', label: 'Comp-Off', icon: AlarmClock },
+        { to: '/my-loans', label: 'My Loans', icon: Banknote },
+        { to: '/my-investment', label: 'Investment Declaration', icon: Calculator },
+        { to: '/my-performance', label: 'My Performance', icon: Target },
         { to: '/expenses', label: 'Expenses', icon: Wallet },
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
         { to: '/my-workspace', label: 'My Workspace', icon: Boxes },
@@ -229,6 +238,7 @@ export default function Sidebar({ isOpen, onClose }) {
         adminOnly: true,
         items: [
           { to: '/admin/team', label: 'Team Management', icon: Users },
+          { to: '/admin/recruitment', label: 'Recruitment', icon: Briefcase },
           { to: '/admin/branches', label: 'Branch Manager', icon: Building2 },
           { to: '/admin/confirmations', label: 'Confirmations', icon: BadgeCheck },
           { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
@@ -251,6 +261,9 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/salary-setup', label: 'Salary Setup', icon: Banknote },
           { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
           { to: '/admin/overtime', label: 'Overtime Manager', icon: Clock },
+          { to: '/admin/comp-off', label: 'Comp-Off Manager', icon: AlarmClock },
+          { to: '/admin/loans', label: 'Loan Manager', icon: Banknote },
+          { to: '/admin/investment-declarations', label: 'Investment Declarations', icon: Calculator },
         ],
       },
       {
@@ -260,6 +273,8 @@ export default function Sidebar({ isOpen, onClose }) {
         items: [
           { to: '/admin/company-master', label: 'Company Master', icon: Building2 },
           { to: '/admin/compliance', label: 'Compliance Tracker', icon: BadgeCheck },
+          { to: '/admin/renewals', label: 'Renewal Manager', icon: RefreshCw },
+          { to: '/admin/performance', label: 'Performance Management', icon: Target },
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
           { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
           { to: '/admin/procurement', label: 'Procurement', icon: ShoppingCart },

@@ -17,6 +17,7 @@ const { runSeparationAlert }        = require('./notifications/separationAlertSe
 const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
 const { runComplianceAlerts }       = require('./notifications/complianceAlertService');
 const { runRenewalAlerts }          = require('./notifications/renewalAlertService');
+const { scanInboxForRenewals }      = require('./gmailRenewalScanner');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -272,6 +273,26 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> Renewal alert scheduled: 0 9 * * 1-6 (9:00 AM IST Mon-Sat)');
+
+  // Gmail inbox scan for renewal emails: 8:30 AM every Monday
+  cron.schedule('30 8 * * 1', async () => {
+    console.log(`[CRON] Gmail renewal scan triggered at ${new Date().toLocaleString()}`);
+    try {
+      // Find an admin user with a Google token
+      const adminToken = await prisma.googleToken.findFirst({
+        include: { user: { select: { role: true, id: true } } },
+      });
+      if (!adminToken || !['admin', 'team_lead'].includes(adminToken.user.role)) {
+        console.log('[CRON] Gmail scan skipped: no admin with Google token found.');
+        return;
+      }
+      const result = await scanInboxForRenewals(prisma, adminToken.userId);
+      console.log(`[CRON] Gmail renewal scan complete: ${result.newFound} new renewal email(s) found.`);
+    } catch (err) {
+      console.error('[CRON] Gmail renewal scan failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Gmail renewal scan scheduled: 30 8 * * 1 (8:30 AM IST every Monday)');
 }
 
 module.exports = { initCronJobs };

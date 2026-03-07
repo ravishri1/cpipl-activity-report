@@ -393,4 +393,73 @@ router.get('/:id/history', asyncHandler(async (req, res) => {
   res.json(history);
 }));
 
+// ─── EMAIL RENEWAL SCANS ─────────────────────────────────────────────────────
+
+// POST /api/renewals/scan-email — trigger Gmail inbox scan for renewal emails
+router.post('/scan-email', requireAdmin, asyncHandler(async (req, res) => {
+  const { scanInboxForRenewals } = require('../services/gmailRenewalScanner');
+  // Use the requesting admin's token, or fall back to any admin with a token
+  let adminUserId = req.user.id;
+  const token = await req.prisma.googleToken.findUnique({ where: { userId: adminUserId } });
+  if (!token) {
+    // Try any admin with a Gmail token
+    const anyAdmin = await req.prisma.googleToken.findFirst({
+      include: { user: { select: { role: true } } },
+    });
+    if (!anyAdmin || !['admin', 'team_lead'].includes(anyAdmin.user.role)) {
+      throw badRequest('No Gmail token found. Please connect Google account via Settings → Google Integration.');
+    }
+    adminUserId = anyAdmin.userId;
+  }
+  const result = await scanInboxForRenewals(req.prisma, adminUserId);
+  res.json(result);
+}));
+
+// GET /api/renewals/email-scans — list email scan results
+router.get('/email-scans', requireAdmin, asyncHandler(async (req, res) => {
+  const where = {};
+  if (req.query.status) where.status = req.query.status;
+  const scans = await req.prisma.emailRenewalScan.findMany({
+    where,
+    include: {
+      renewal:  { select: { id: true, itemName: true, vendorName: true } },
+      reviewer: { select: { name: true } },
+    },
+    orderBy: { receivedAt: 'desc' },
+    take: 200,
+  });
+  res.json(scans);
+}));
+
+// POST /api/renewals/email-scans/:id/link — link scan to an existing renewal or create new
+router.post('/email-scans/:id/link', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { renewalId } = req.body;
+  const scan = await req.prisma.emailRenewalScan.update({
+    where: { id },
+    data: {
+      status:     'linked',
+      renewalId:  renewalId ? parseInt(renewalId) : null,
+      reviewedBy: req.user.id,
+      reviewedAt: new Date(),
+    },
+    include: { renewal: { select: { id: true, itemName: true } } },
+  });
+  res.json(scan);
+}));
+
+// POST /api/renewals/email-scans/:id/dismiss — dismiss a scan (not a renewal)
+router.post('/email-scans/:id/dismiss', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const scan = await req.prisma.emailRenewalScan.update({
+    where: { id },
+    data: {
+      status:     'dismissed',
+      reviewedBy: req.user.id,
+      reviewedAt: new Date(),
+    },
+  });
+  res.json(scan);
+}));
+
 module.exports = router;

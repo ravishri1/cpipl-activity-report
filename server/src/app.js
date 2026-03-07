@@ -49,6 +49,12 @@ const renewalsRoutes = require('./routes/renewals');
 const biometricRoutes = require('./routes/biometric');
 const companyMasterRoutes = require('./routes/companyMaster');
 const complianceRoutes = require('./routes/compliance');
+const compOffRoutes = require('./routes/compOff');
+const regularizationRoutes = require('./routes/regularization');
+const loanRoutes = require('./routes/loans');
+const investmentDeclarationRoutes = require('./routes/investmentDeclaration');
+const recruitmentRoutes = require('./routes/recruitment');
+const performanceRoutes = require('./routes/performance');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -174,6 +180,12 @@ app.use('/api/renewals', renewalsRoutes);
 app.use('/api/biometric', biometricRoutes);
 app.use('/api/company-master', companyMasterRoutes);
 app.use('/api/compliance', complianceRoutes);
+app.use('/api/comp-off', compOffRoutes);
+app.use('/api/regularization', regularizationRoutes);
+app.use('/api/loans', loanRoutes);
+app.use('/api/investment-declarations', investmentDeclarationRoutes);
+app.use('/api/recruitment', recruitmentRoutes);
+app.use('/api/performance', performanceRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

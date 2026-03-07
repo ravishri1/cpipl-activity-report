@@ -73,6 +73,16 @@ const MyOvertime = lazy(() => import('./components/overtime/MyOvertime'));
 const OvertimeManager = lazy(() => import('./components/admin/OvertimeManager'));
 const MyCompliance = lazy(() => import('./components/compliance/MyCompliance'));
 const MySupport = lazy(() => import('./components/support/MySupport'));
+const MyCompOff = lazy(() => import('./components/compoff/MyCompOff'));
+const CompOffManager = lazy(() => import('./components/compoff/CompOffManager'));
+const MyLoans = lazy(() => import('./components/loans/MyLoans'));
+const LoanManager = lazy(() => import('./components/loans/LoanManager'));
+const InvestmentDeclaration = lazy(() => import('./components/investment/InvestmentDeclaration'));
+const InvestmentDeclarations = lazy(() => import('./components/investment/InvestmentDeclarations'));
+const RecruitmentManager = lazy(() => import('./components/recruitment/RecruitmentManager'));
+const MyPerformance = lazy(() => import('./components/performance/MyPerformance'));
+const PerformanceManager = lazy(() => import('./components/performance/PerformanceManager'));
+const RenewalManager = lazy(() => import('./components/admin/RenewalManager'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -167,6 +177,10 @@ function AppRoutes() {
                   <Route path="/my-workspace" element={<SeparatedRoute><MyWorkspace /></SeparatedRoute>} />
                   <Route path="/my-compliance" element={<SeparatedRoute><MyCompliance /></SeparatedRoute>} />
                   <Route path="/overtime" element={<SeparatedRoute><MyOvertime /></SeparatedRoute>} />
+                  <Route path="/my-comp-off" element={<SeparatedRoute><MyCompOff /></SeparatedRoute>} />
+                  <Route path="/my-loans" element={<SeparatedRoute><MyLoans /></SeparatedRoute>} />
+                  <Route path="/my-investment" element={<SeparatedRoute><InvestmentDeclaration /></SeparatedRoute>} />
+                  <Route path="/my-performance" element={<SeparatedRoute><MyPerformance /></SeparatedRoute>} />
                   <Route path="/my-support" element={<MySupport />} />
 
                   {/* Allowed for separated employees */}
@@ -213,6 +227,12 @@ function AppRoutes() {
                   <Route path="/admin/company-master" element={<SeparatedRoute><AdminRoute><CompanyMaster /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/compliance" element={<SeparatedRoute><AdminRoute><ComplianceTracker /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/overtime" element={<SeparatedRoute><AdminRoute><OvertimeManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/comp-off" element={<SeparatedRoute><AdminRoute><CompOffManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/loans" element={<SeparatedRoute><AdminRoute><LoanManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/investment-declarations" element={<SeparatedRoute><AdminRoute><InvestmentDeclarations /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/recruitment" element={<SeparatedRoute><AdminRoute><RecruitmentManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/performance" element={<SeparatedRoute><AdminRoute><PerformanceManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/renewals" element={<SeparatedRoute><AdminRoute><RenewalManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />

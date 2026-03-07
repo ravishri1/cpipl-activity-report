@@ -151,3 +151,106 @@ export const COMPLIANCE_STATUS_STYLES = {
 export const CERTIFICATE_TYPES = ['FSSAI', 'IEC', 'UDYAM', 'GST', 'TAN', 'PAN', 'LEI', 'OTHER'];
 
 export const RENEWAL_FREQUENCIES = ['YEARLY', '5_YEARLY', 'LIFETIME', 'NONE'];
+
+// ─── Comp-Off ──────────────────────────────────────────────────────────────
+export const COMP_OFF_STATUS_STYLES = {
+  pending:  'bg-amber-100 text-amber-700 border-amber-200',
+  approved: 'bg-green-100 text-green-700 border-green-200',
+  rejected: 'bg-red-100 text-red-700 border-red-200',
+};
+
+export const COMP_OFF_TYPES = ['earn', 'redeem'];
+
+// ─── Loans ─────────────────────────────────────────────────────────────────
+export const LOAN_STATUS_STYLES = {
+  pending:    'bg-amber-100 text-amber-700 border-amber-200',
+  approved:   'bg-blue-100 text-blue-700 border-blue-200',
+  disbursed:  'bg-indigo-100 text-indigo-700 border-indigo-200',
+  active:     'bg-green-100 text-green-700 border-green-200',
+  closed:     'bg-slate-100 text-slate-600 border-slate-200',
+  rejected:   'bg-red-100 text-red-700 border-red-200',
+};
+
+export const REPAYMENT_STATUS_STYLES = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-200',
+  paid:    'bg-green-100 text-green-700 border-green-200',
+  overdue: 'bg-red-100 text-red-700 border-red-200',
+};
+
+// ─── Investment Declarations ────────────────────────────────────────────────
+export const DECLARATION_STATUS_STYLES = {
+  draft:     'bg-slate-100 text-slate-600 border-slate-200',
+  submitted: 'bg-amber-100 text-amber-700 border-amber-200',
+  approved:  'bg-green-100 text-green-700 border-green-200',
+  rejected:  'bg-red-100 text-red-700 border-red-200',
+};
+
+// ─── Recruitment ────────────────────────────────────────────────────────────
+export const CANDIDATE_STAGE_STYLES = {
+  applied:     'bg-slate-100 text-slate-600 border-slate-200',
+  shortlisted: 'bg-blue-100 text-blue-700 border-blue-200',
+  interview:   'bg-indigo-100 text-indigo-700 border-indigo-200',
+  offered:     'bg-amber-100 text-amber-700 border-amber-200',
+  joined:      'bg-green-100 text-green-700 border-green-200',
+  rejected:    'bg-red-100 text-red-700 border-red-200',
+  withdrawn:   'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+export const JOB_STATUS_STYLES = {
+  draft:  'bg-slate-100 text-slate-600 border-slate-200',
+  open:   'bg-green-100 text-green-700 border-green-200',
+  closed: 'bg-red-100 text-red-600 border-red-200',
+  hold:   'bg-amber-100 text-amber-700 border-amber-200',
+};
+
+export const CANDIDATE_STAGES = ['applied', 'shortlisted', 'interview', 'offered', 'joined', 'rejected', 'withdrawn'];
+export const JOB_TYPES = ['full_time', 'part_time', 'contract', 'internship'];
+export const EMPLOYMENT_MODES = ['on_site', 'remote', 'hybrid'];
+
+// ─── Performance ────────────────────────────────────────────────────────────
+export const REVIEW_STATUS_STYLES = {
+  pending:         'bg-slate-100 text-slate-600 border-slate-200',
+  self_review:     'bg-blue-100 text-blue-700 border-blue-200',
+  manager_review:  'bg-indigo-100 text-indigo-700 border-indigo-200',
+  hr_review:       'bg-amber-100 text-amber-700 border-amber-200',
+  completed:       'bg-green-100 text-green-700 border-green-200',
+};
+
+export const GOAL_STATUS_STYLES = {
+  not_started: 'bg-slate-100 text-slate-500 border-slate-200',
+  in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
+  completed:   'bg-green-100 text-green-700 border-green-200',
+  cancelled:   'bg-red-100 text-red-600 border-red-200',
+};
+
+export const REVIEW_CYCLE_TYPES = ['annual', 'mid_year', 'quarterly', 'probation'];
+export const GOAL_STATUSES = ['not_started', 'in_progress', 'completed', 'cancelled'];
+export const RATING_LABELS = ['Exceptional', 'Exceeds Expectations', 'Meets Expectations', 'Needs Improvement', 'Unsatisfactory'];
+
+export const RENEWAL_STATUS_STYLES = {
+  active:    'bg-green-100 text-green-700 border-green-200',
+  expired:   'bg-red-100 text-red-700 border-red-200',
+  cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
+  on_hold:   'bg-amber-100 text-amber-700 border-amber-200',
+};
+
+export const RENEWAL_TRAFFIC_LIGHT = {
+  red:    { dot: 'bg-red-500',    label: 'Due Soon (≤7 days)',  badge: 'bg-red-100 text-red-700' },
+  yellow: { dot: 'bg-yellow-500', label: 'Due Soon (≤30 days)', badge: 'bg-yellow-100 text-yellow-700' },
+  green:  { dot: 'bg-green-500',  label: 'OK (>30 days)',       badge: 'bg-green-100 text-green-700' },
+  grey:   { dot: 'bg-slate-400',  label: 'Expired',             badge: 'bg-slate-100 text-slate-600' },
+};
+
+export const BILLING_CYCLE_LABELS = {
+  monthly:     'Monthly',
+  quarterly:   'Quarterly',
+  half_yearly: 'Half-Yearly',
+  yearly:      'Yearly',
+  one_time:    'One-Time',
+};
+
+export const EMAIL_SCAN_STATUS_STYLES = {
+  pending:   'bg-amber-100 text-amber-700 border-amber-200',
+  linked:    'bg-green-100 text-green-700 border-green-200',
+  dismissed: 'bg-slate-100 text-slate-500 border-slate-200',
+};

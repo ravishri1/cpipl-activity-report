@@ -1,4 +1,4 @@
-const { sendEmail } = require('../emailService');
+const { sendEmail } = require('./emailService');
 
 /**
  * Run daily renewal alerts.

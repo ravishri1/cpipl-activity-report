@@ -34,6 +34,7 @@ async function sendEmail(to, subject, html) {
 
 async function sendReminderEmail(memberName, memberEmail) {
   const subject = 'Reminder: EOD Report Pending';
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #dc3545; color: white; padding: 20px; text-align: center;">
@@ -43,6 +44,11 @@ async function sendReminderEmail(memberName, memberEmail) {
         <p>Dear <strong>${memberName}</strong>,</p>
         <p>This is a reminder that you have <strong>not yet submitted</strong> your EOD report for today.</p>
         <p>Please submit your report as soon as possible.</p>
+        <a href="${appUrl}/submit-report"
+           style="display:inline-block;margin-top:14px;padding:10px 22px;background:#dc3545;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          Submit EOD Report →
+        </a>
         <br/>
         <p style="color: #666;">— Color Papers EOD System</p>
       </div>
@@ -53,6 +59,7 @@ async function sendReminderEmail(memberName, memberEmail) {
 
 async function sendEscalationEmail(memberName, memberEmail) {
   const subject = 'URGENT: EOD Report Still Pending After Reminder';
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #ff6600; color: white; padding: 20px; text-align: center;">
@@ -62,6 +69,11 @@ async function sendEscalationEmail(memberName, memberEmail) {
         <p>Dear <strong>${memberName}</strong>,</p>
         <p>You were sent a reminder yesterday but have <strong>still not submitted</strong> your EOD report.</p>
         <p>This has been escalated to the team lead. Please submit your report immediately.</p>
+        <a href="${appUrl}/submit-report"
+           style="display:inline-block;margin-top:14px;padding:10px 22px;background:#ff6600;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          Submit EOD Report →
+        </a>
         <br/>
         <p style="color: #666;">— Color Papers EOD System</p>
       </div>
@@ -73,6 +85,7 @@ async function sendEscalationEmail(memberName, memberEmail) {
 async function sendSummaryToLead(leadEmail, date, summary) {
   const { reported, notReported, ignoredReminder } = summary;
   const subject = `EOD Report Summary — ${date}`;
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
   const reportedList = reported.length
     ? reported.map((m) => `<li style="color:green;">✅ ${m.name} (${new Date(m.submittedAt).toLocaleTimeString('en-IN')})</li>`).join('')
@@ -117,6 +130,11 @@ async function sendSummaryToLead(leadEmail, date, summary) {
 
         <h3 style="color: orange;">Ignored Reminder</h3>
         <ul>${ignoredList}</ul>
+        <a href="${appUrl}/reports"
+           style="display:inline-block;margin-top:18px;padding:10px 22px;background:#0d6efd;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          View Reports
+        </a>
       </div>
       <div style="padding: 10px; background: #e9ecef; text-align: center; color: #666;">
         Color Papers EOD System
@@ -566,12 +584,12 @@ async function sendPendingApprovalsAlert(adminEmail, adminName, leaves, expenses
         ${expenseSection}
 
         <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
-          <a href="${appUrl}/admin/leave"
+          <a href="${appUrl}/admin/leave-requests"
              style="display:inline-block;padding:9px 18px;background:#10b981;color:white;
                     text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
             Review Leaves
           </a>
-          <a href="${appUrl}/admin/expenses"
+          <a href="${appUrl}/admin/expense-claims"
              style="display:inline-block;padding:9px 18px;background:#6366f1;color:white;
                     text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
             Review Expenses
@@ -657,10 +675,10 @@ async function sendProbationEndAlert(adminEmail, adminName, employees) {
           before probation end to allow for proper documentation and onboarding/offboarding if needed.
         </div>
 
-        <a href="${appUrl}/admin/team"
+        <a href="${appUrl}/admin/confirmations"
            style="display:inline-block;margin-top:18px;padding:10px 22px;background:#7c3aed;color:white;
                   text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
-          View Employee Profiles
+          Manage Confirmations
         </a>
       </div>
 
@@ -834,10 +852,10 @@ async function sendInsuranceExpiryAlert(adminEmail, adminName, cards) {
           before expiry. Upload the new card to the employee's profile once received.
         </div>
 
-        <a href="${appUrl}/admin/team"
+        <a href="${appUrl}/admin/insurance"
            style="display:inline-block;margin-top:18px;padding:10px 22px;background:#be185d;color:white;
                   text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
-          View Employee Profiles
+          View Insurance Cards
         </a>
       </div>
 
@@ -947,10 +965,10 @@ async function sendOnboardingOverdueAlert(adminEmail, adminName, employeeGroups,
           tasks complete or adjust due dates as needed.
         </div>
 
-        <a href="${appUrl}/admin/team"
+        <a href="${appUrl}/admin/onboarding"
            style="display:inline-block;margin-top:18px;padding:10px 22px;background:#1e40af;color:white;
                   text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
-          View Employee Profiles
+          View Onboarding Tasks
         </a>
       </div>
 
@@ -1095,10 +1113,10 @@ async function sendTrainingDeadlineAlert(adminEmail, adminName, employeeGroups, 
           extend deadlines, or mark modules as completed where applicable.
         </div>
 
-        <a href="${appUrl}/admin/team"
+        <a href="${appUrl}/admin/training"
            style="display:inline-block;margin-top:18px;padding:10px 22px;background:#d97706;color:white;
                   text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
-          View Employee Profiles
+          View Training Assignments
         </a>
       </div>
 
@@ -1234,7 +1252,7 @@ async function sendSeparationAlert(adminEmail, adminName, separations) {
           </ul>
         </div>
 
-        <a href="${appUrl}/admin/team"
+        <a href="${appUrl}/admin/separations"
            style="display:inline-block;margin-top:18px;padding:10px 22px;background:#475569;color:white;
                   text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
           View Separations
@@ -1254,30 +1272,43 @@ async function sendSeparationAlert(adminEmail, adminName, separations) {
 // ─────────────────────────────────────────────────────
 
 async function sendConfirmationDueAlert(to, employeeName) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <h2 style="color:#1d4ed8">Confirmation Due Today</h2>
       <p>Hi ${employeeName},</p>
       <p>Your <strong>6-month confirmation review</strong> is due today.</p>
       <p>Please reach out to your reporting manager or HR team to proceed with your confirmation.</p>
+      <a href="${appUrl}/dashboard"
+         style="display:inline-block;margin-top:14px;padding:10px 22px;background:#1d4ed8;color:white;
+                text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+        Open My Portal
+      </a>
       <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
     </div>`;
   return sendEmail(to, `Confirmation Due Today — ${employeeName}`, html);
 }
 
 async function sendConfirmationDueManagerAlert(to, employeeName) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <h2 style="color:#d97706">Action Required: Employee Confirmation</h2>
       <p>Hi,</p>
       <p>The confirmation review for <strong>${employeeName}</strong> is due today.</p>
       <p>Please log in to the HR system to confirm, extend, or discuss next steps with HR.</p>
+      <a href="${appUrl}/admin/confirmations"
+         style="display:inline-block;margin-top:14px;padding:10px 22px;background:#d97706;color:white;
+                text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+        Manage Confirmations
+      </a>
       <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
     </div>`;
   return sendEmail(to, `Confirmation Due — ${employeeName} (Action Required)`, html);
 }
 
 async function sendConfirmationLetter(to, employeeName, confirmedDate) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <h2 style="color:#16a34a">Confirmation Letter</h2>
@@ -1286,6 +1317,11 @@ async function sendConfirmationLetter(to, employeeName, confirmedDate) {
       <p>You are now entitled to all permanent employee benefits. HR will follow up regarding your insurance and other entitlements.</p>
       <p>Congratulations and we wish you continued success in your career with us.</p>
       <p>Warm regards,<br/>HR Department<br/>CPIPL</p>
+      <a href="${appUrl}/dashboard"
+         style="display:inline-block;margin-top:14px;padding:10px 22px;background:#16a34a;color:white;
+                text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+        View My Benefits
+      </a>
       <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
     </div>`;
   return sendEmail(to, `Confirmation Letter — ${employeeName}`, html);
@@ -1338,6 +1374,7 @@ async function sendComplianceReminderEmail(adminEmail, adminName, dueSoonCerts, 
       <tbody>${dueSoonCerts.map(certRow).join('')}</tbody>
     </table>` : '';
 
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 750px; margin: 0 auto;">
       <div style="background: #1e3a5f; color: white; padding: 20px; text-align: center;">
@@ -1351,6 +1388,11 @@ async function sendComplianceReminderEmail(adminEmail, adminName, dueSoonCerts, 
         ${dueSoonSection}
         <br/>
         <p>Log in to the <strong>Compliance Tracker</strong> to renew certificates or update records.</p>
+        <a href="${appUrl}/admin/compliance"
+           style="display:inline-block;margin-top:14px;padding:10px 22px;background:#1e3a5f;color:white;
+                  text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+          Open Compliance Tracker
+        </a>
         <p style="color: #666; font-size:13px;">— Color Papers HR System</p>
       </div>
     </div>
@@ -1359,12 +1401,18 @@ async function sendComplianceReminderEmail(adminEmail, adminName, dueSoonCerts, 
 }
 
 async function sendConfirmationAdminNotify(to, employeeName) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <h2 style="color:#7c3aed">Employee Confirmed — Insurance Setup Required</h2>
       <p>Hi,</p>
       <p><strong>${employeeName}</strong> has been confirmed as a permanent employee.</p>
       <p>An insurance card placeholder has been created in the system. Please log in to the HR portal to complete the insurance setup.</p>
+      <a href="${appUrl}/admin/insurance"
+         style="display:inline-block;margin-top:14px;padding:10px 22px;background:#7c3aed;color:white;
+                text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">
+        Set Up Insurance
+      </a>
       <p style="color:#6b7280;font-size:12px;margin-top:24px">CPIPL HR System</p>
     </div>`;
   return sendEmail(to, `Insurance Setup Required — ${employeeName} Confirmed`, html);
