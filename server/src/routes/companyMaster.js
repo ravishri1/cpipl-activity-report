@@ -1,59 +1,36 @@
+// server/src/routes/companyMaster.js
 const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { badRequest, notFound, conflict } = require('../utils/httpErrors');
+const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
 
-// ──────────────────────────────────────────────────────────
-// Helper: compute abbreviation from GSTIN + officeCity + legalEntityId
-// ──────────────────────────────────────────────────────────
+// ─── Abbr Auto-generation ──────────────────────────────────────────────────
 async function computeAbbr(prisma, gstin, officeCity, legalEntityId) {
   const stateCode = gstin.slice(0, 2);
-  const regNo     = parseInt(gstin[12]) || 1;
-
+  const regNo = parseInt(gstin[12]);
   const entity = await prisma.legalEntity.findUnique({ where: { id: legalEntityId } });
   if (!entity) throw badRequest('Legal entity not found');
-
   const entityCode = await prisma.entityCode.findFirst({ where: { legalName: entity.legalName } });
-  if (!entityCode) throw badRequest(`No EntityCode found for legal name: ${entity.legalName}`);
-
+  if (!entityCode) throw badRequest(`No entity code found for "${entity.legalName}". Add one first.`);
   const cityCode = await prisma.cityCode.findFirst({ where: { cityName: officeCity } });
-  if (!cityCode) throw badRequest(`No CityCode found for city: ${officeCity}. Add it via POST /api/company-master/city-codes first.`);
-
+  if (!cityCode) throw badRequest(`No city code found for "${officeCity}". Add one first.`);
   return `${entityCode.code}-${cityCode.code}/${stateCode}-R${regNo}`;
 }
 
-// GET /api/company-master/abbr-preview
-// Query: ?gstin=27AAJCC2415M1ZJ&legalEntityId=1&officeCity=Mumbai
-// Returns a live abbreviation preview without saving anything
-router.get('/abbr-preview', asyncHandler(async (req, res) => {
-  const { gstin, legalEntityId, officeCity } = req.query;
-  if (!gstin || !legalEntityId || !officeCity) {
-    throw badRequest('gstin, legalEntityId and officeCity are required');
-  }
-  if (gstin.length !== 15) throw badRequest('GSTIN must be exactly 15 characters');
-  const abbr = await computeAbbr(req.prisma, gstin, officeCity, parseInt(legalEntityId));
-  res.json({ abbr });
-}));
-
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // LEGAL ENTITIES
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 // GET /api/company-master/legal-entities
 router.get('/legal-entities', asyncHandler(async (req, res) => {
   const entities = await req.prisma.legalEntity.findMany({
     include: {
-      registrations: {
-        select: {
-          id: true, abbr: true, gstin: true, state: true, officeCity: true,
-          isActive: true, placeType: true,
-        },
-        orderBy: { abbr: 'asc' },
-      },
+      _count: { select: { registrations: true } },
+      registrations: { select: { id: true, abbr: true, gstin: true, isActive: true, officeCity: true, state: true } },
     },
     orderBy: { legalName: 'asc' },
   });
@@ -79,20 +56,26 @@ router.put('/legal-entities/:id', requireAdmin, asyncHandler(async (req, res) =>
   res.json(entity);
 }));
 
-// ══════════════════════════════════════════════════════════
-// COMPANY REGISTRATIONS (GSTIN-LEVEL)
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPANY REGISTRATIONS
+// ═══════════════════════════════════════════════════════════════════════════
 
 // GET /api/company-master/registrations
 router.get('/registrations', asyncHandler(async (req, res) => {
-  const registrations = await req.prisma.companyRegistration.findMany({
+  const { legalEntityId, isActive } = req.query;
+  const where = {};
+  if (legalEntityId) where.legalEntityId = parseInt(legalEntityId);
+  if (isActive !== undefined) where.isActive = isActive === 'true';
+
+  const regs = await req.prisma.companyRegistration.findMany({
+    where,
     include: {
-      legalEntity: true,
+      legalEntity: { select: { id: true, legalName: true, pan: true } },
       _count: { select: { users: true, assets: true, certificates: true } },
     },
     orderBy: [{ legalEntityId: 'asc' }, { abbr: 'asc' }],
   });
-  res.json(registrations);
+  res.json(regs);
 }));
 
 // GET /api/company-master/registrations/:id
@@ -106,173 +89,131 @@ router.get('/registrations/:id', asyncHandler(async (req, res) => {
       _count: { select: { users: true, assets: true } },
     },
   });
-  if (!reg) throw notFound('Company Registration');
+  if (!reg) throw notFound('Company registration');
   res.json(reg);
 }));
 
 // POST /api/company-master/registrations
 router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'legalEntityId', 'gstin', 'officeCity', 'state');
-  const { legalEntityId, gstin, officeCity, state, district, placeType, address, fssai, udyam, iec } = req.body;
-  const lid = parseId(String(legalEntityId));
-
+  const { legalEntityId, gstin, officeCity, state, district, address,
+          placeType, fssai, udyam, iec } = req.body;
+  if (gstin.length !== 15) throw badRequest('GSTIN must be exactly 15 characters');
   const stateCode = gstin.slice(0, 2);
-  const regNo     = parseInt(gstin[12]) || 1;
-  const abbr      = await computeAbbr(req.prisma, gstin, officeCity, lid);
-
+  const regNo = parseInt(gstin[12]);
+  const abbr = await computeAbbr(req.prisma, gstin, officeCity, parseInt(legalEntityId));
   const reg = await req.prisma.companyRegistration.create({
-    data: { legalEntityId: lid, abbr, gstin, officeCity, state, district, stateCode, regNo, placeType: placeType || 'Additional', address, fssai, udyam, iec },
-    include: { legalEntity: true },
+    data: { legalEntityId: parseInt(legalEntityId), gstin, stateCode, regNo, abbr,
+            officeCity, state, district, address, placeType: placeType || 'Principal',
+            fssai, udyam, iec },
+    include: { legalEntity: { select: { legalName: true } } },
   });
   res.status(201).json(reg);
 }));
 
 // PUT /api/company-master/registrations/:id
-// Supports deactivation cascade with ?confirm=true
 router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const existing = await req.prisma.companyRegistration.findUnique({ where: { id } });
-  if (!existing) throw notFound('Company Registration');
+  const { officeCity, state, district, address, placeType, fssai, udyam, iec, isActive } = req.body;
 
-  const { isActive, gstin, officeCity, legalEntityId, state, district, placeType, address, fssai, udyam, iec } = req.body;
-  const confirm = req.query.confirm === 'true';
-
-  // ── Deactivation cascade preview ──
-  if (isActive === false && existing.isActive === true) {
+  // Deactivation preview (isActive = false without ?confirm=true shows impact summary)
+  if (isActive === false || isActive === 'false') {
+    const confirm = req.query.confirm === 'true';
     const [empCount, assetCount, certCount] = await Promise.all([
       req.prisma.user.count({ where: { companyRegistrationId: id } }),
       req.prisma.asset.count({ where: { companyRegistrationId: id } }),
       req.prisma.complianceCertificate.count({ where: { companyRegistrationId: id } }),
     ]);
-
     if (!confirm) {
       return res.json({
-        preview: true,
-        message: 'Review the impact below. Send request again with ?confirm=true to proceed.',
-        abbr: existing.abbr,
-        impact: { employees: empCount, assets: assetCount, certificates: certCount },
+        preview: true, employees: empCount, assets: assetCount, certificates: certCount,
+        message: `Deactivating this registration will flag ${empCount} employee(s) and ${assetCount} asset(s). Pass ?confirm=true to proceed.`,
       });
     }
-    // Proceed with deactivation
-    await req.prisma.companyRegistration.update({ where: { id }, data: { isActive: false } });
-    return res.json({
-      deactivated: true,
-      abbr: existing.abbr,
-      flaggedEmployees: empCount,
-      flaggedAssets:    assetCount,
-      message: `${existing.abbr} deactivated. ${empCount} employees and ${assetCount} assets are now flagged.`,
+    // Confirmed — deactivate
+    const reg = await req.prisma.companyRegistration.update({
+      where: { id }, data: { isActive: false },
     });
+    return res.json({ deactivated: true, flaggedEmployees: empCount, flaggedAssets: assetCount, registration: reg });
   }
 
-  // ── Normal update ──
-  const updateData = {};
-  if (state)      updateData.state      = state;
-  if (district !== undefined) updateData.district = district;
-  if (placeType)  updateData.placeType  = placeType;
-  if (address !== undefined) updateData.address  = address;
-  if (fssai !== undefined)   updateData.fssai    = fssai;
-  if (udyam !== undefined)   updateData.udyam    = udyam;
-  if (iec !== undefined)     updateData.iec      = iec;
-  if (isActive !== undefined) updateData.isActive = isActive;
-
-  // Recompute abbr if officeCity or GSTIN changed
-  const newGstin      = gstin ?? existing.gstin;
-  const newOfficeCity = officeCity ?? existing.officeCity;
-  const newEntityId   = legalEntityId ? parseId(String(legalEntityId)) : existing.legalEntityId;
-
-  if (officeCity || gstin || legalEntityId) {
-    updateData.abbr      = await computeAbbr(req.prisma, newGstin, newOfficeCity, newEntityId);
-    updateData.gstin     = newGstin;
-    updateData.officeCity= newOfficeCity;
-    updateData.stateCode = newGstin.slice(0, 2);
-    updateData.regNo     = parseInt(newGstin[12]) || 1;
-    updateData.legalEntityId = newEntityId;
+  // Re-compute abbr if officeCity changed
+  const existing = await req.prisma.companyRegistration.findUnique({ where: { id } });
+  if (!existing) throw notFound('Company registration');
+  let abbr = existing.abbr;
+  if (officeCity && officeCity !== existing.officeCity) {
+    abbr = await computeAbbr(req.prisma, existing.gstin, officeCity, existing.legalEntityId);
   }
 
   const reg = await req.prisma.companyRegistration.update({
     where: { id },
-    data: updateData,
-    include: { legalEntity: true },
+    data: { officeCity: officeCity ?? existing.officeCity, state: state ?? existing.state,
+            district: district ?? existing.district, address: address ?? existing.address,
+            placeType: placeType ?? existing.placeType, abbr,
+            fssai: fssai ?? existing.fssai, udyam: udyam ?? existing.udyam,
+            iec: iec ?? existing.iec, isActive: true },
+    include: { legalEntity: { select: { legalName: true } } },
   });
   res.json(reg);
 }));
 
-// DELETE /api/company-master/registrations/:id  (soft deactivate)
+// DELETE /api/company-master/registrations/:id  (soft-deactivate)
 router.delete('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const reg = await req.prisma.companyRegistration.findUnique({ where: { id } });
-  if (!reg) throw notFound('Company Registration');
   await req.prisma.companyRegistration.update({ where: { id }, data: { isActive: false } });
-  res.json({ message: `${reg.abbr} deactivated.` });
+  res.json({ success: true, message: 'Registration deactivated' });
 }));
 
-// ══════════════════════════════════════════════════════════
-// ENTITY CODES (lookup table)
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTITY CODES (lookup)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// GET /api/company-master/entity-codes
 router.get('/entity-codes', asyncHandler(async (req, res) => {
-  const codes = await req.prisma.entityCode.findMany({ orderBy: { code: 'asc' } });
+  const codes = await req.prisma.entityCode.findMany({ orderBy: { legalName: 'asc' } });
   res.json(codes);
 }));
 
-// POST /api/company-master/entity-codes
 router.post('/entity-codes', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'legalName', 'code');
-  const ec = await req.prisma.entityCode.create({ data: { legalName: req.body.legalName, code: req.body.code.toUpperCase() } });
+  const { legalName, code } = req.body;
+  const ec = await req.prisma.entityCode.create({ data: { legalName, code: code.toUpperCase() } });
   res.status(201).json(ec);
 }));
 
-// PUT /api/company-master/entity-codes/:id
 router.put('/entity-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  const { legalName, code } = req.body;
   const ec = await req.prisma.entityCode.update({
     where: { id },
-    data: { legalName: req.body.legalName, code: req.body.code?.toUpperCase() },
+    data: { legalName, code: code?.toUpperCase() },
   });
   res.json(ec);
 }));
 
-// ══════════════════════════════════════════════════════════
-// CITY CODES (lookup table)
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// CITY CODES (lookup)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// GET /api/company-master/city-codes
 router.get('/city-codes', asyncHandler(async (req, res) => {
-  const codes = await req.prisma.cityCode.findMany({ orderBy: { code: 'asc' } });
+  const codes = await req.prisma.cityCode.findMany({ orderBy: { cityName: 'asc' } });
   res.json(codes);
 }));
 
-// POST /api/company-master/city-codes
 router.post('/city-codes', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'cityName', 'code');
-  const cc = await req.prisma.cityCode.create({ data: { cityName: req.body.cityName, code: req.body.code.toUpperCase() } });
+  const { cityName, code } = req.body;
+  const cc = await req.prisma.cityCode.create({ data: { cityName, code: code.toUpperCase() } });
   res.status(201).json(cc);
 }));
 
-// PUT /api/company-master/city-codes/:id
 router.put('/city-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  const { cityName, code } = req.body;
   const cc = await req.prisma.cityCode.update({
     where: { id },
-    data: { cityName: req.body.cityName, code: req.body.code?.toUpperCase() },
+    data: { cityName, code: code?.toUpperCase() },
   });
   res.json(cc);
-}));
-
-// ══════════════════════════════════════════════════════════
-// SUMMARY (dashboard stats)
-// ══════════════════════════════════════════════════════════
-
-// GET /api/company-master/summary
-router.get('/summary', asyncHandler(async (req, res) => {
-  const [entityCount, regCount, activeCount, certCount] = await Promise.all([
-    req.prisma.legalEntity.count(),
-    req.prisma.companyRegistration.count(),
-    req.prisma.companyRegistration.count({ where: { isActive: true } }),
-    req.prisma.complianceCertificate.count(),
-  ]);
-  res.json({ legalEntities: entityCount, registrations: regCount, activeRegistrations: activeCount, certificates: certCount });
 }));
 
 module.exports = router;

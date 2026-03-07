@@ -2,227 +2,306 @@ const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
-const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { requireFields, parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
 
-// ──────────────────────────────────────────────────────────
-// Helper: compute certificate status from expiry / frequency
-// ──────────────────────────────────────────────────────────
+// ─── Status Helper ──────────────────────────────────────────────────────────
+
 function computeStatus(cert) {
   if (!cert.expiryDate || cert.renewalFrequency === 'LIFETIME') return 'LIFETIME';
-  const today    = new Date();
-  const expiry   = new Date(cert.expiryDate);
+  const today = new Date();
+  const expiry = new Date(cert.expiryDate);
   const daysLeft = Math.ceil((expiry - today) / 86400000);
-  if (daysLeft < 0)   return 'OVERDUE';
-  if (daysLeft <= 30) return 'DUE_SOON';
+  if (daysLeft < 0) return 'OVERDUE';
+  if (daysLeft <= cert.reminderDays) return 'DUE_SOON';
   return 'VALID';
 }
 
-// ──────────────────────────────────────────────────────────
-// Helper: compute nextDue from lastRenewed + frequency
-// ──────────────────────────────────────────────────────────
-function computeNextDue(lastRenewed, renewalFrequency) {
-  if (!lastRenewed || renewalFrequency === 'LIFETIME' || renewalFrequency === 'NONE') return null;
-  const d = new Date(lastRenewed);
-  if (renewalFrequency === 'YEARLY')   d.setFullYear(d.getFullYear() + 1);
-  if (renewalFrequency === '5_YEARLY') d.setFullYear(d.getFullYear() + 5);
-  return d.toISOString().slice(0, 10);
+function computeDaysLeft(cert) {
+  if (!cert.expiryDate || cert.renewalFrequency === 'LIFETIME') return null;
+  const today = new Date();
+  const expiry = new Date(cert.expiryDate);
+  return Math.ceil((expiry - today) / 86400000);
 }
 
-// ──────────────────────────────────────────────────────────
-// Helper: enrich cert with computed status + daysLeft
-// ──────────────────────────────────────────────────────────
-function enrichCert(cert) {
-  const status = computeStatus(cert);
-  let daysLeft = null;
-  if (cert.expiryDate && status !== 'LIFETIME') {
-    daysLeft = Math.ceil((new Date(cert.expiryDate) - new Date()) / 86400000);
-  }
-  return { ...cert, status, daysLeft };
+function addStatusToCert(cert) {
+  return {
+    ...cert,
+    status: computeStatus(cert),
+    daysLeft: computeDaysLeft(cert),
+  };
 }
 
-const CERT_INCLUDE = {
-  companyRegistration: {
-    include: { legalEntity: { select: { id: true, legalName: true, pan: true } } },
-  },
-};
+// ─── GET /certificates ───────────────────────────────────────────────────────
 
-// ══════════════════════════════════════════════════════════
-// CERTIFICATES
-// ══════════════════════════════════════════════════════════
-
-// GET /api/compliance/certificates
-// Query: ?registrationId=1 &type=FSSAI &status=DUE_SOON &activeOnly=true
 router.get('/certificates', asyncHandler(async (req, res) => {
-  const { registrationId, type, status, activeOnly } = req.query;
+  const { registrationId, certificateType, status } = req.query;
 
   const where = {};
-  if (registrationId) where.companyRegistrationId = parseInt(registrationId);
-  if (type)           where.certificateType        = type;
-  if (activeOnly !== 'false') {
-    where.companyRegistration = { isActive: true };
-  }
+  if (registrationId) where.companyRegistrationId = parseId(registrationId);
+  if (certificateType) where.certificateType = certificateType;
 
   const certs = await req.prisma.complianceCertificate.findMany({
     where,
-    include: CERT_INCLUDE,
-    orderBy: [{ companyRegistrationId: 'asc' }, { certificateType: 'asc' }],
+    include: {
+      companyRegistration: {
+        select: {
+          id: true,
+          abbr: true,
+          gstin: true,
+          officeCity: true,
+          state: true,
+          isActive: true,
+          legalEntity: { select: { id: true, legalName: true } },
+        },
+      },
+    },
+    orderBy: [{ expiryDate: 'asc' }, { certificateType: 'asc' }],
   });
 
-  let enriched = certs.map(enrichCert);
+  let result = certs.map(addStatusToCert);
 
-  // Client-side status filter (computed field, can't filter in DB)
-  if (status) enriched = enriched.filter(c => c.status === status);
+  // Filter by computed status if requested
+  if (status) {
+    result = result.filter(c => c.status === status.toUpperCase());
+  }
 
-  res.json(enriched);
+  res.json(result);
 }));
 
-// GET /api/compliance/certificates/:id
-router.get('/certificates/:id', asyncHandler(async (req, res) => {
-  const id   = parseId(req.params.id);
-  const cert = await req.prisma.complianceCertificate.findUnique({ where: { id }, include: CERT_INCLUDE });
-  if (!cert) throw notFound('Certificate');
-  res.json(enrichCert(cert));
+// ─── GET /due-soon ────────────────────────────────────────────────────────────
+
+router.get('/due-soon', asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + days);
+  const futureDateStr = futureDate.toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const certs = await req.prisma.complianceCertificate.findMany({
+    where: {
+      renewalFrequency: { not: 'LIFETIME' },
+      expiryDate: {
+        gte: todayStr,
+        lte: futureDateStr,
+      },
+    },
+    include: {
+      companyRegistration: {
+        select: {
+          id: true,
+          abbr: true,
+          gstin: true,
+          officeCity: true,
+          isActive: true,
+          legalEntity: { select: { id: true, legalName: true } },
+        },
+      },
+    },
+    orderBy: { expiryDate: 'asc' },
+  });
+
+  res.json(certs.map(addStatusToCert));
 }));
 
-// POST /api/compliance/certificates
+// ─── GET /overdue ─────────────────────────────────────────────────────────────
+
+router.get('/overdue', asyncHandler(async (req, res) => {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const certs = await req.prisma.complianceCertificate.findMany({
+    where: {
+      renewalFrequency: { not: 'LIFETIME' },
+      expiryDate: { lt: todayStr },
+    },
+    include: {
+      companyRegistration: {
+        select: {
+          id: true,
+          abbr: true,
+          gstin: true,
+          officeCity: true,
+          isActive: true,
+          legalEntity: { select: { id: true, legalName: true } },
+        },
+      },
+    },
+    orderBy: { expiryDate: 'asc' },
+  });
+
+  res.json(certs.map(addStatusToCert));
+}));
+
+// ─── POST /certificates ───────────────────────────────────────────────────────
+
 router.post('/certificates', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'companyRegistrationId', 'certificateType', 'certificateNo', 'renewalFrequency');
-  requireEnum(req.body.certificateType, ['FSSAI', 'IEC', 'UDYAM', 'GST', 'TAN', 'PAN', 'LEI', 'OTHER'], 'certificateType');
-  requireEnum(req.body.renewalFrequency, ['YEARLY', '5_YEARLY', 'LIFETIME', 'NONE'], 'renewalFrequency');
 
-  const { companyRegistrationId, certificateType, certificateNo, issueDate, expiryDate, renewalFrequency, lastRenewed, reminderDays, documentUrl, notes } = req.body;
+  const {
+    companyRegistrationId,
+    certificateType,
+    certificateNo,
+    issueDate,
+    expiryDate,
+    renewalFrequency,
+    lastRenewed,
+    nextDue,
+    reminderDays,
+    documentUrl,
+    notes,
+  } = req.body;
 
-  const nextDue = computeNextDue(lastRenewed, renewalFrequency);
+  const validTypes = ['FSSAI', 'IEC', 'UDYAM', 'GST', 'TAN', 'PAN', 'LEI', 'OTHER'];
+  const validFreqs = ['YEARLY', '5_YEARLY', 'LIFETIME', 'NONE'];
+
+  if (!validTypes.includes(certificateType)) {
+    throw badRequest(`certificateType must be one of: ${validTypes.join(', ')}`);
+  }
+  if (!validFreqs.includes(renewalFrequency)) {
+    throw badRequest(`renewalFrequency must be one of: ${validFreqs.join(', ')}`);
+  }
+
+  const regId = parseId(companyRegistrationId);
+  const reg = await req.prisma.companyRegistration.findUnique({ where: { id: regId } });
+  if (!reg) throw notFound('CompanyRegistration');
 
   const cert = await req.prisma.complianceCertificate.create({
     data: {
-      companyRegistrationId: parseInt(companyRegistrationId),
-      certificateType, certificateNo, issueDate, expiryDate,
-      renewalFrequency, lastRenewed, nextDue,
+      companyRegistrationId: regId,
+      certificateType,
+      certificateNo,
+      issueDate: issueDate || null,
+      expiryDate: expiryDate || null,
+      renewalFrequency,
+      lastRenewed: lastRenewed || null,
+      nextDue: nextDue || null,
       reminderDays: reminderDays ? parseInt(reminderDays) : 30,
-      documentUrl, notes,
+      documentUrl: documentUrl || null,
+      notes: notes || null,
     },
-    include: CERT_INCLUDE,
+    include: {
+      companyRegistration: {
+        select: { id: true, abbr: true, legalEntity: { select: { legalName: true } } },
+      },
+    },
   });
-  res.status(201).json(enrichCert(cert));
+
+  res.status(201).json(addStatusToCert(cert));
 }));
 
-// PUT /api/compliance/certificates/:id
+// ─── PUT /certificates/:id ────────────────────────────────────────────────────
+
 router.put('/certificates/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+
   const existing = await req.prisma.complianceCertificate.findUnique({ where: { id } });
-  if (!existing) throw notFound('Certificate');
+  if (!existing) throw notFound('ComplianceCertificate');
 
-  const { certificateNo, issueDate, expiryDate, renewalFrequency, lastRenewed, reminderDays, documentUrl, notes } = req.body;
+  const {
+    certificateType,
+    certificateNo,
+    issueDate,
+    expiryDate,
+    renewalFrequency,
+    lastRenewed,
+    nextDue,
+    reminderDays,
+    documentUrl,
+    notes,
+  } = req.body;
 
-  const freq   = renewalFrequency ?? existing.renewalFrequency;
-  const lrDate = lastRenewed     ?? existing.lastRenewed;
-  const nextDue = computeNextDue(lrDate, freq);
+  const validTypes = ['FSSAI', 'IEC', 'UDYAM', 'GST', 'TAN', 'PAN', 'LEI', 'OTHER'];
+  const validFreqs = ['YEARLY', '5_YEARLY', 'LIFETIME', 'NONE'];
+
+  if (certificateType && !validTypes.includes(certificateType)) {
+    throw badRequest(`certificateType must be one of: ${validTypes.join(', ')}`);
+  }
+  if (renewalFrequency && !validFreqs.includes(renewalFrequency)) {
+    throw badRequest(`renewalFrequency must be one of: ${validFreqs.join(', ')}`);
+  }
+
+  const updateData = {};
+  if (certificateType !== undefined) updateData.certificateType = certificateType;
+  if (certificateNo !== undefined) updateData.certificateNo = certificateNo;
+  if (issueDate !== undefined) updateData.issueDate = issueDate || null;
+  if (expiryDate !== undefined) updateData.expiryDate = expiryDate || null;
+  if (renewalFrequency !== undefined) updateData.renewalFrequency = renewalFrequency;
+  if (lastRenewed !== undefined) updateData.lastRenewed = lastRenewed || null;
+  if (nextDue !== undefined) updateData.nextDue = nextDue || null;
+  if (reminderDays !== undefined) updateData.reminderDays = parseInt(reminderDays);
+  if (documentUrl !== undefined) updateData.documentUrl = documentUrl || null;
+  if (notes !== undefined) updateData.notes = notes || null;
 
   const cert = await req.prisma.complianceCertificate.update({
     where: { id },
-    data: {
-      certificateNo:    certificateNo ?? existing.certificateNo,
-      issueDate:        issueDate     ?? existing.issueDate,
-      expiryDate:       expiryDate    ?? existing.expiryDate,
-      renewalFrequency: freq,
-      lastRenewed:      lrDate,
-      nextDue,
-      reminderDays:     reminderDays ? parseInt(reminderDays) : existing.reminderDays,
-      documentUrl:      documentUrl  ?? existing.documentUrl,
-      notes:            notes        ?? existing.notes,
+    data: updateData,
+    include: {
+      companyRegistration: {
+        select: { id: true, abbr: true, legalEntity: { select: { legalName: true } } },
+      },
     },
-    include: CERT_INCLUDE,
   });
-  res.json(enrichCert(cert));
+
+  res.json(addStatusToCert(cert));
 }));
 
-// DELETE /api/compliance/certificates/:id
+// ─── DELETE /certificates/:id ─────────────────────────────────────────────────
+
 router.delete('/certificates/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const cert = await req.prisma.complianceCertificate.findUnique({ where: { id } });
-  if (!cert) throw notFound('Certificate');
+
+  const existing = await req.prisma.complianceCertificate.findUnique({ where: { id } });
+  if (!existing) throw notFound('ComplianceCertificate');
+
   await req.prisma.complianceCertificate.delete({ where: { id } });
-  res.json({ message: 'Certificate deleted' });
+
+  res.json({ success: true, message: 'Certificate deleted.' });
 }));
 
-// POST /api/compliance/certificates/:id/renew
-// Body: { newExpiryDate, notes }
+// ─── POST /certificates/:id/renew ─────────────────────────────────────────────
+
 router.post('/certificates/:id/renew', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const cert = await req.prisma.complianceCertificate.findUnique({ where: { id } });
-  if (!cert) throw notFound('Certificate');
-  if (cert.renewalFrequency === 'LIFETIME') throw badRequest('LIFETIME certificates do not need renewal');
 
-  const today  = new Date().toISOString().slice(0, 10);
-  const nextDue = computeNextDue(today, cert.renewalFrequency);
-  const newExpiry = req.body.newExpiryDate ?? nextDue;
+  const cert = await req.prisma.complianceCertificate.findUnique({ where: { id } });
+  if (!cert) throw notFound('ComplianceCertificate');
+
+  const { renewedDate, newExpiryDate } = req.body;
+  if (!renewedDate) throw badRequest('renewedDate is required');
+
+  // Compute nextDue based on renewalFrequency if not provided
+  let nextDue = newExpiryDate || null;
+  if (!nextDue && cert.renewalFrequency !== 'LIFETIME' && cert.renewalFrequency !== 'NONE') {
+    const d = new Date(renewedDate);
+    if (cert.renewalFrequency === 'YEARLY') {
+      d.setFullYear(d.getFullYear() + 1);
+    } else if (cert.renewalFrequency === '5_YEARLY') {
+      d.setFullYear(d.getFullYear() + 5);
+    }
+    nextDue = d.toISOString().slice(0, 10);
+  }
 
   const updated = await req.prisma.complianceCertificate.update({
     where: { id },
-    data: { lastRenewed: today, nextDue, expiryDate: newExpiry, notes: req.body.notes ?? cert.notes },
-    include: CERT_INCLUDE,
-  });
-  res.json({ ...enrichCert(updated), message: `Renewed. Next due: ${nextDue}` });
-}));
-
-// ══════════════════════════════════════════════════════════
-// ALERT QUERIES
-// ══════════════════════════════════════════════════════════
-
-// GET /api/compliance/due-soon?days=30
-router.get('/due-soon', asyncHandler(async (req, res) => {
-  const days = parseInt(req.query.days) || 30;
-  const future = new Date();
-  future.setDate(future.getDate() + days);
-  const futureStr = future.toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
-
-  const certs = await req.prisma.complianceCertificate.findMany({
-    where: {
-      expiryDate: { gte: today, lte: futureStr },
-      renewalFrequency: { not: 'LIFETIME' },
-      companyRegistration: { isActive: true },
+    data: {
+      lastRenewed: renewedDate,
+      expiryDate: nextDue,
+      nextDue,
     },
-    include: CERT_INCLUDE,
-    orderBy: { expiryDate: 'asc' },
-  });
-  res.json(certs.map(enrichCert));
-}));
-
-// GET /api/compliance/overdue
-router.get('/overdue', asyncHandler(async (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
-  const certs = await req.prisma.complianceCertificate.findMany({
-    where: {
-      expiryDate: { lt: today },
-      renewalFrequency: { not: 'LIFETIME' },
-      companyRegistration: { isActive: true },
+    include: {
+      companyRegistration: {
+        select: {
+          id: true,
+          abbr: true,
+          legalEntity: { select: { legalName: true } },
+        },
+      },
     },
-    include: CERT_INCLUDE,
-    orderBy: { expiryDate: 'asc' },
   });
-  res.json(certs.map(enrichCert));
-}));
 
-// GET /api/compliance/dashboard
-// Returns grouped stats for the dashboard
-router.get('/dashboard', asyncHandler(async (req, res) => {
-  const today     = new Date().toISOString().slice(0, 10);
-  const in30days  = new Date(); in30days.setDate(in30days.getDate() + 30);
-  const in30str   = in30days.toISOString().slice(0, 10);
-
-  const [total, overdue, dueSoon, lifetime] = await Promise.all([
-    req.prisma.complianceCertificate.count({ where: { companyRegistration: { isActive: true } } }),
-    req.prisma.complianceCertificate.count({ where: { expiryDate: { lt: today }, renewalFrequency: { not: 'LIFETIME' }, companyRegistration: { isActive: true } } }),
-    req.prisma.complianceCertificate.count({ where: { expiryDate: { gte: today, lte: in30str }, renewalFrequency: { not: 'LIFETIME' }, companyRegistration: { isActive: true } } }),
-    req.prisma.complianceCertificate.count({ where: { renewalFrequency: 'LIFETIME', companyRegistration: { isActive: true } } }),
-  ]);
-  const valid = total - overdue - dueSoon - lifetime;
-  res.json({ total, overdue, dueSoon, valid, lifetime });
+  res.json(addStatusToCert(updated));
 }));
 
 module.exports = router;

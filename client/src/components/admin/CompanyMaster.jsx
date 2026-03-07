@@ -1,687 +1,537 @@
-import { useState, useEffect, useCallback } from 'react';
-import api from '../../utils/api';
-import {
-  Building2, Plus, Edit2, ChevronRight, X, Loader2,
-  MapPin, Hash, Shield, AlertCircle, Check, Globe,
-  FileText, RefreshCw, Building,
-} from 'lucide-react';
-import AlertMessage from '../shared/AlertMessage';
+import { useState } from 'react';
+import api from '../../services/api';
+import { useFetch } from '../../hooks/useFetch';
+import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
+import AlertMessage from '../shared/AlertMessage';
+import EmptyState from '../shared/EmptyState';
+import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle } from 'lucide-react';
 
-// ─── Small Helpers ────────────────────────────────────────────────────────────
-function InputField({ label, value, onChange, placeholder, required = false, hint }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm
-                   focus:outline-none focus:ring-2 focus:ring-blue-500"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
-    </div>
-  );
-}
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-function SelectField({ label, value, onChange, options, required = false }) {
+function Badge({ children, color = 'gray' }) {
+  const colors = {
+    green: 'bg-green-100 text-green-800',
+    red: 'bg-red-100 text-red-800',
+    blue: 'bg-blue-100 text-blue-800',
+    gray: 'bg-gray-100 text-gray-700',
+    amber: 'bg-amber-100 text-amber-800',
+  };
   return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <select
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm
-                   focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-      >
-        <option value="">— Select —</option>
-        {options.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-    </div>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color]}`}>
+      {children}
+    </span>
   );
 }
 
 // ─── Legal Entity Modal ───────────────────────────────────────────────────────
-function LegalEntityModal({ entity, onClose, onSaved }) {
+
+function EntityModal({ entity, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     legalName: entity?.legalName || '',
-    pan:       entity?.pan       || '',
-    tan:       entity?.tan       || '',
-    lei:       entity?.lei       || '',
+    pan: entity?.pan || '',
+    tan: entity?.tan || '',
+    lei: entity?.lei || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState(null);
 
-  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleSubmit = async () => {
-    if (!form.legalName.trim()) { setError('Legal name is required.'); return; }
-    setSaving(true); setError(null);
-    try {
-      if (entity) {
-        await api.put(`/company-master/legal-entities/${entity.id}`, form);
-      } else {
-        await api.post('/company-master/legal-entities', form);
-      }
-      onSaved();
-    } catch (err) {
-      setError(String(err.response?.data?.error || 'Failed to save entity.'));
-      setSaving(false);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      legalName: form.legalName,
+      pan: form.pan || null,
+      tan: form.tan || null,
+      lei: form.lei || null,
+    };
+    if (entity) {
+      await execute(() => api.put(`/api/company-master/legal-entities/${entity.id}`, payload), 'Entity updated!');
+    } else {
+      await execute(() => api.post('/api/company-master/legal-entities', payload), 'Entity created!');
     }
+    onSaved();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">
             {entity ? 'Edit Legal Entity' : 'Add Legal Entity'}
           </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
-        <div className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <AlertMessage type="error" message={error} />}
-          <InputField label="Legal Name" value={form.legalName}
-            onChange={v => setField('legalName', v)}
-            placeholder="e.g. Color Papers India Pvt. Ltd." required />
-          <InputField label="PAN" value={form.pan}
-            onChange={v => setField('pan', v.toUpperCase())}
-            placeholder="e.g. AAJCC2415M" hint="10-character PAN number" />
-          <InputField label="TAN" value={form.tan}
-            onChange={v => setField('tan', v.toUpperCase())}
-            placeholder="e.g. PNEC15279F" hint="Tax Deduction Account Number" />
-          <InputField label="LEI" value={form.lei}
-            onChange={v => setField('lei', v.toUpperCase())}
-            placeholder="e.g. 9845004936B8T0DFE094" hint="Legal Entity Identifier (yearly renewal)" />
-        </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
-            Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={saving}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg
-                       hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {entity ? 'Save Changes' : 'Create Entity'}
-          </button>
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Legal Name *</label>
+            <input value={form.legalName} onChange={e => set('legalName', e.target.value)}
+              required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Color Papers India Pvt. Ltd." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PAN</label>
+              <input value={form.pan} onChange={e => set('pan', e.target.value.toUpperCase())}
+                maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="AAJCC2415M" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">TAN</label>
+              <input value={form.tan} onChange={e => set('tan', e.target.value.toUpperCase())}
+                maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="PNEC15279F" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">LEI (Legal Entity Identifier)</label>
+            <input value={form.lei} onChange={e => set('lei', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="20-char alphanumeric" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : entity ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
 // ─── Registration Modal ───────────────────────────────────────────────────────
-function RegistrationModal({ registration, entities, onClose, onSaved }) {
+
+function RegistrationModal({ registration, entityId, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
-    legalEntityId:  String(registration?.legalEntityId || ''),
-    gstin:          registration?.gstin      || '',
-    officeCity:     registration?.officeCity || '',
-    state:          registration?.state      || '',
-    district:       registration?.district   || '',
-    placeType:      registration?.placeType  || 'Principal',
-    address:        registration?.address    || '',
-    fssai:          registration?.fssai      || '',
-    udyam:          registration?.udyam      || '',
-    iec:            registration?.iec        || '',
+    gstin: registration?.gstin || '',
+    officeCity: registration?.officeCity || '',
+    state: registration?.state || '',
+    district: registration?.district || '',
+    placeType: registration?.placeType || 'Principal',
+    address: registration?.address || '',
+    fssai: registration?.fssai || '',
+    udyam: registration?.udyam || '',
+    iec: registration?.iec || '',
+    legalEntityId: registration?.legalEntityId || entityId || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState(null);
   const [abbrPreview, setAbbrPreview] = useState(registration?.abbr || '');
 
-  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // Live abbr preview via API
-  const fetchAbbrPreview = useCallback(async (f) => {
-    if (!f.gstin || f.gstin.length !== 15 || !f.legalEntityId || !f.officeCity) {
-      setAbbrPreview('');
-      return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      legalEntityId: parseInt(form.legalEntityId),
+      district: form.district || null,
+      address: form.address || null,
+      fssai: form.fssai || null,
+      udyam: form.udyam || null,
+      iec: form.iec || null,
+    };
+    let result;
+    if (registration) {
+      result = await execute(() => api.put(`/api/company-master/registrations/${registration.id}`, payload), 'Registration updated!');
+    } else {
+      result = await execute(() => api.post('/api/company-master/registrations', payload), 'Registration created!');
     }
-    try {
-      const res = await api.get(`/company-master/abbr-preview?gstin=${f.gstin}&legalEntityId=${f.legalEntityId}&officeCity=${encodeURIComponent(f.officeCity)}`);
-      setAbbrPreview(res.data.abbr || '');
-    } catch { setAbbrPreview(''); }
-  }, []);
-
-  useEffect(() => { fetchAbbrPreview(form); }, [form.gstin, form.legalEntityId, form.officeCity, fetchAbbrPreview]);
-
-  const handleSubmit = async () => {
-    if (!form.legalEntityId || !form.gstin || !form.officeCity || !form.state) {
-      setError('Legal entity, GSTIN, city, and state are required.'); return;
-    }
-    if (form.gstin.length !== 15) { setError('GSTIN must be exactly 15 characters.'); return; }
-    setSaving(true); setError(null);
-    try {
-      if (registration) {
-        await api.put(`/company-master/registrations/${registration.id}`, form);
-      } else {
-        await api.post('/company-master/registrations', form);
-      }
-      onSaved();
-    } catch (err) {
-      setError(String(err.response?.data?.error || 'Failed to save registration.'));
-      setSaving(false);
-    }
+    if (result?.abbr) setAbbrPreview(result.abbr);
+    onSaved();
+    onClose();
   };
 
-  const entityOptions = entities.map(e => ({ value: String(e.id), label: e.legalName }));
-  const placeOptions  = [{ value: 'Principal', label: 'Principal Place' }, { value: 'Additional', label: 'Additional Place' }];
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">
-              {registration ? 'Edit Registration' : 'Add Registration'}
+            <h2 className="text-lg font-semibold text-gray-900">
+              {registration ? 'Edit Registration' : 'Add GSTIN Registration'}
             </h2>
             {abbrPreview && (
-              <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 mt-0.5 inline-block">
-                Preview: {abbrPreview}
-              </span>
+              <p className="text-xs text-blue-600 font-mono mt-0.5">Abbr: {abbrPreview}</p>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
-        <div className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && <AlertMessage type="error" message={error} />}
-          <SelectField label="Legal Entity" value={form.legalEntityId}
-            onChange={v => setField('legalEntityId', v)} options={entityOptions} required />
-          <div className="grid grid-cols-2 gap-4">
-            <InputField label="GSTIN" value={form.gstin}
-              onChange={v => setField('gstin', v.toUpperCase())}
-              placeholder="27AAJCC2415M1ZJ" required
-              hint="15-character GST Identification Number" />
-            <SelectField label="Place Type" value={form.placeType}
-              onChange={v => setField('placeType', v)} options={placeOptions} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN *</label>
+            <input value={form.gstin} onChange={e => set('gstin', e.target.value.toUpperCase())}
+              required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="27AAJCC2415M1ZJ" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="State" value={form.state}
-              onChange={v => setField('state', v)} placeholder="e.g. Maharashtra" required />
-            <InputField label="District" value={form.district}
-              onChange={v => setField('district', v)} placeholder="e.g. Mumbai City" />
-          </div>
-          <InputField label="Office City" value={form.officeCity}
-            onChange={v => setField('officeCity', v)} placeholder="e.g. Mumbai" required
-            hint="Used to generate the abbreviation code" />
-          <InputField label="Registered Address" value={form.address}
-            onChange={v => setField('address', v)}
-            placeholder="Full registered address as per GST certificate" />
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Additional Registrations (optional)
-            </p>
-            <div className="grid grid-cols-3 gap-4">
-              <InputField label="FSSAI" value={form.fssai}
-                onChange={v => setField('fssai', v)} placeholder="Licence number" />
-              <InputField label="Udyam" value={form.udyam}
-                onChange={v => setField('udyam', v.toUpperCase())} placeholder="UDYAM-MH-33-..." />
-              <InputField label="IEC" value={form.iec}
-                onChange={v => setField('iec', v.toUpperCase())} placeholder="Import Export Code" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Office City *</label>
+              <input value={form.officeCity} onChange={e => set('officeCity', e.target.value)}
+                required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mumbai" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+              <input value={form.state} onChange={e => set('state', e.target.value)}
+                required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Maharashtra" />
             </div>
           </div>
-        </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
-            Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={saving}
-            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg
-                       hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {registration ? 'Save Changes' : 'Create Registration'}
-          </button>
-        </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+              <input value={form.district} onChange={e => set('district', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Place Type</label>
+              <select value={form.placeType} onChange={e => set('placeType', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option>Principal</option>
+                <option>Additional</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Registered Address</label>
+            <textarea value={form.address} onChange={e => set('address', e.target.value)}
+              rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">FSSAI</label>
+              <input value={form.fssai} onChange={e => set('fssai', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Udyam</label>
+              <input value={form.udyam} onChange={e => set('udyam', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">IEC</label>
+              <input value={form.iec} onChange={e => set('iec', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : registration ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-// ─── Deactivation Confirm Dialog ──────────────────────────────────────────────
-function DeactivateDialog({ registration, onClose, onDeactivated }) {
-  const [preview, setPreview]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState(null);
+// ─── Registration Detail Panel ────────────────────────────────────────────────
 
-  useEffect(() => {
-    api.put(`/company-master/registrations/${registration.id}`, { isActive: false })
-      .then(res => { setPreview(res.data); setLoading(false); })
-      .catch(err => { setError(String(err.response?.data?.error || 'Failed.')); setLoading(false); });
-  }, [registration.id]);
+function RegistrationDetail({ reg, onEdit, onDeactivate }) {
+  const fields = [
+    { label: 'GSTIN', value: reg.gstin, mono: true },
+    { label: 'State Code', value: reg.stateCode },
+    { label: 'State', value: reg.state },
+    { label: 'District', value: reg.district },
+    { label: 'Place Type', value: reg.placeType },
+    { label: 'Address', value: reg.address },
+    { label: 'FSSAI', value: reg.fssai },
+    { label: 'Udyam', value: reg.udyam },
+    { label: 'IEC', value: reg.iec },
+  ].filter(f => f.value);
+
+  return (
+    <div className={`border rounded-xl p-4 ${reg.isActive ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-70'}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-semibold text-blue-700 text-sm">{reg.abbr}</span>
+            {!reg.isActive && <Badge color="gray">Inactive</Badge>}
+            {reg.placeType === 'Principal' && reg.isActive && <Badge color="blue">Principal</Badge>}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">{reg.officeCity} · {reg.state}</p>
+        </div>
+        {reg.isActive && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => onEdit(reg)}
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              <Edit2 size={12} /> Edit
+            </button>
+            <button onClick={() => onDeactivate(reg)}
+              className="text-xs text-red-500 hover:underline">
+              Deactivate
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {fields.map(f => (
+          <div key={f.label} className="min-w-0">
+            <p className="text-xs text-gray-400">{f.label}</p>
+            <p className={`text-xs text-gray-800 truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
+          </div>
+        ))}
+      </div>
+      {/* Stats */}
+      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-500">
+        <span>{reg._count?.users ?? 0} employees</span>
+        <span>{reg._count?.assets ?? 0} assets</span>
+        <span>{reg._count?.certificates ?? reg.certificates?.length ?? 0} certs</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Deactivate Confirm Modal ─────────────────────────────────────────────────
+
+function DeactivateModal({ reg, onClose, onDone }) {
+  const { execute, loading, error } = useApi();
+  const [preview, setPreview] = useState(null);
+  const [checked, setChecked] = useState(false);
+
+  const fetchPreview = async () => {
+    const res = await execute(
+      () => api.put(`/api/company-master/registrations/${reg.id}`, { isActive: false }),
+      null
+    );
+    if (res?.preview) setPreview(res);
+  };
+
+  useState(() => { fetchPreview(); }, []);
 
   const handleConfirm = async () => {
-    setSaving(true); setError(null);
-    try {
-      await api.put(`/company-master/registrations/${registration.id}?confirm=true`, { isActive: false });
-      onDeactivated();
-    } catch (err) {
-      setError(String(err.response?.data?.error || 'Failed to deactivate.'));
-      setSaving(false);
-    }
+    await execute(
+      () => api.put(`/api/company-master/registrations/${reg.id}?confirm=true`, { isActive: false }),
+      'Registration deactivated'
+    );
+    onDone();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800">Deactivate Registration</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle className="text-amber-500" size={20} />
+          <h3 className="text-lg font-semibold text-gray-900">Deactivate {reg.abbr}?</h3>
         </div>
-        <div className="p-6">
-          {loading && <LoadingSpinner />}
-          {error  && <AlertMessage type="error" message={error} />}
-          {preview && preview.preview && (
-            <div className="space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800">
-                    Deactivating <span className="font-mono">{registration.abbr}</span> will affect:
-                  </p>
-                  <ul className="mt-2 text-sm text-amber-700 space-y-0.5">
-                    <li>• {preview.employees} employee(s) linked to this registration</li>
-                    <li>• {preview.assets} asset(s) linked to this registration</li>
-                    <li>• {preview.certificates} certificate(s) suspended from alerts</li>
-                  </ul>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600">
-                Employee and asset references are retained — only the registration status changes.
-                Compliance alerts will stop for suspended certificates.
-              </p>
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+        {error && <AlertMessage type="error" message={error} />}
+        {preview ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm space-y-1">
+            <p className="font-medium text-amber-800">This will affect:</p>
+            <p className="text-amber-700">{preview.employees} employee(s)</p>
+            <p className="text-amber-700">{preview.assets} asset(s)</p>
+            <p className="text-amber-700">{preview.certificates} certificate(s)</p>
+            <p className="text-xs text-amber-600 mt-2">References are preserved. A warning badge will appear on affected records.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 mb-4">Loading impact preview...</p>
+        )}
+        <label className="flex items-center gap-2 text-sm text-gray-700 mb-4 cursor-pointer">
+          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} />
+          I understand the impact and want to deactivate this registration.
+        </label>
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
             Cancel
           </button>
-          <button onClick={handleConfirm} disabled={saving || loading}
-            className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg
-                       hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Confirm Deactivation
+          <button onClick={handleConfirm} disabled={!checked || loading || !preview}
+            className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+            {loading ? 'Deactivating...' : 'Deactivate'}
           </button>
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Registration Row ─────────────────────────────────────────────────────────
-function RegistrationRow({ reg, onEdit, onToggleActive }) {
-  return (
-    <tr className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${!reg.isActive ? 'opacity-60' : ''}`}>
-      <td className="px-4 py-3">
-        <span className="font-mono text-sm font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-          {reg.abbr}
-        </span>
-      </td>
-      <td className="px-4 py-3 font-mono text-xs text-slate-600">{reg.gstin}</td>
-      <td className="px-4 py-3 text-sm text-slate-700">{reg.officeCity}, {reg.state}</td>
-      <td className="px-4 py-3 text-xs text-slate-500">{reg.placeType}</td>
-      <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate" title={reg.address}>
-        {reg.address || <span className="italic text-slate-400">—</span>}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap gap-1">
-          {reg.fssai && <span className="text-xs bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded border border-orange-200">FSSAI</span>}
-          {reg.udyam && <span className="text-xs bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">Udyam</span>}
-          {reg.iec   && <span className="text-xs bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-200">IEC</span>}
-        </div>
-      </td>
-      <td className="px-4 py-3">
-        {reg.isActive
-          ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">Active</span>
-          : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">Inactive</span>
-        }
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
-          <button onClick={() => onEdit(reg)}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600">
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button onClick={() => onToggleActive(reg)}
-            className={`p-1.5 rounded hover:bg-slate-100 ${reg.isActive ? 'text-slate-500 hover:text-red-600' : 'text-slate-400 hover:text-green-600'}`}
-            title={reg.isActive ? 'Deactivate' : 'Reactivate'}>
-            {reg.isActive ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-          </button>
-        </div>
-      </td>
-    </tr>
   );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function CompanyMaster() {
-  const [entities, setEntities]             = useState([]);
-  const [registrations, setRegistrations]   = useState([]);
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState(null);
-  const [success, setSuccess]               = useState(null);
-  const [selectedEntity, setSelectedEntity] = useState(null);
+  const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
+    useFetch('/api/company-master/legal-entities', []);
+  const { data: registrations, loading: regLoading, refetch: refetchRegs } =
+    useFetch('/api/company-master/registrations', []);
 
-  // Modal states
-  const [showEntityModal, setShowEntityModal]         = useState(false);
-  const [editingEntity, setEditingEntity]             = useState(null);
-  const [showRegModal, setShowRegModal]               = useState(false);
-  const [editingReg, setEditingReg]                   = useState(null);
-  const [deactivatingReg, setDeactivatingReg]         = useState(null);
+  const [selectedEntityId, setSelectedEntityId] = useState(null);
+  const [entityModal, setEntityModal] = useState(null); // null | 'add' | entity object
+  const [regModal, setRegModal] = useState(null);       // null | 'add' | registration object
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
 
-  const showMsg = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 4000); };
+  if (entLoading) return <LoadingSpinner />;
+  if (entError) return <AlertMessage type="error" message={entError} />;
 
-  const fetchData = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const [entRes, regRes] = await Promise.all([
-        api.get('/company-master/legal-entities'),
-        api.get('/company-master/registrations'),
-      ]);
-      const ents = Array.isArray(entRes.data) ? entRes.data : [];
-      const regs = Array.isArray(regRes.data) ? regRes.data : [];
-      setEntities(ents);
-      setRegistrations(regs);
-      // Auto-select first entity if none selected
-      setSelectedEntity(prev => {
-        if (prev) return ents.find(e => e.id === prev.id) || ents[0] || null;
-        return ents[0] || null;
-      });
-    } catch (err) {
-      setError(String(err.response?.data?.error || 'Failed to load data.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const selectedEntity = entities.find(e => e.id === selectedEntityId) || entities[0] || null;
+  const effectiveId = selectedEntity?.id;
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const entityRegs = registrations.filter(r => r.legalEntityId === effectiveId);
+  const activeRegs = entityRegs.filter(r => r.isActive);
+  const inactiveRegs = entityRegs.filter(r => !r.isActive);
 
-  const handleReactivate = async (reg) => {
-    try {
-      await api.put(`/company-master/registrations/${reg.id}?confirm=true`, { isActive: true });
-      showMsg(`${reg.abbr} reactivated.`);
-      fetchData();
-    } catch (err) {
-      setError(String(err.response?.data?.error || 'Failed to reactivate.'));
-    }
-  };
-
-  const handleToggleActive = (reg) => {
-    if (reg.isActive) {
-      setDeactivatingReg(reg);
-    } else {
-      handleReactivate(reg);
-    }
-  };
-
-  // Filter registrations for selected entity
-  const filteredRegs = selectedEntity
-    ? registrations.filter(r => r.legalEntityId === selectedEntity.id)
-    : registrations;
-
-  const entityRegCount = (entityId) => registrations.filter(r => r.legalEntityId === entityId).length;
-  const entityActiveCount = (entityId) => registrations.filter(r => r.legalEntityId === entityId && r.isActive).length;
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <LoadingSpinner />
-    </div>
-  );
+  const handleSaved = () => { refetchEntities(); refetchRegs(); };
 
   return (
     <div className="h-full flex flex-col">
-      {/* ── Page Header ── */}
+      {/* Page Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Building2 className="w-5 h-5 text-blue-600" />
-            </div>
+            <Building2 className="text-blue-600" size={22} />
             <div>
-              <h1 className="text-xl font-bold text-slate-800">Company Master</h1>
-              <p className="text-sm text-slate-500">Legal entities and GSTIN registrations</p>
+              <h1 className="text-xl font-bold text-gray-900">Company Master</h1>
+              <p className="text-xs text-gray-500">Legal entities and GSTIN registrations</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={fetchData}
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button onClick={() => { setEditingEntity(null); setShowEntityModal(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm
-                         rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus className="w-4 h-4" />
-              Add Entity
-            </button>
-          </div>
+          <button onClick={() => setEntityModal('add')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+            <Plus size={15} /> Add Entity
+          </button>
         </div>
-        {(error || success) && (
-          <div className="mt-3">
-            {error   && <AlertMessage type="error"   message={error}   />}
-            {success && <AlertMessage type="success" message={success} />}
-          </div>
-        )}
       </div>
 
-      {/* ── Two-Panel Layout ── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Entity List */}
-        <div className="w-72 flex-shrink-0 border-r border-slate-200 overflow-y-auto bg-slate-50">
-          <div className="p-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-2 mb-2">
+      {/* Two-panel layout */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Left panel: Legal Entities */}
+        <div className="w-72 border-r border-gray-200 flex flex-col overflow-hidden">
+          <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Legal Entities ({entities.length})
             </p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {entities.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">
-                No entities yet. Add one to get started.
-              </div>
+              <EmptyState icon="🏢" title="No entities yet" subtitle="Add a legal entity to start" />
             ) : (
-              <div className="space-y-1">
-                {entities.map(entity => {
-                  const total  = entityRegCount(entity.id);
-                  const active = entityActiveCount(entity.id);
-                  const isSelected = selectedEntity?.id === entity.id;
-                  return (
-                    <button
-                      key={entity.id}
-                      onClick={() => setSelectedEntity(entity)}
-                      className={`w-full text-left px-3 py-3 rounded-lg transition-all ${
-                        isSelected
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'hover:bg-white hover:shadow-sm text-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-sm font-medium leading-tight truncate ${isSelected ? 'text-white' : 'text-slate-800'}`}>
-                            {entity.legalName}
-                          </p>
-                          {entity.pan && (
-                            <p className={`text-xs font-mono mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
-                              PAN: {entity.pan}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                            isSelected ? 'bg-blue-500 text-blue-100' : 'bg-slate-200 text-slate-600'
-                          }`}>
-                            {total} GSTIN{total !== 1 ? 's' : ''}
-                          </span>
-                          {total !== active && (
-                            <span className={`text-xs ${isSelected ? 'text-blue-200' : 'text-amber-600'}`}>
-                              {active} active
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className={`flex items-center gap-2 mt-1.5 flex-wrap ${isSelected ? '' : ''}`}>
-                        {entity.tan && (
-                          <span className={`text-xs ${isSelected ? 'text-blue-200' : 'text-slate-400'}`}>
-                            TAN: {entity.tan}
-                          </span>
-                        )}
-                        {entity.lei && (
-                          <span className={`text-xs ${isSelected ? 'text-blue-200' : 'text-slate-400'}`}>
-                            LEI ✓
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              entities.map(entity => {
+                const isSelected = entity.id === (effectiveId);
+                const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
+                return (
+                  <button key={entity.id}
+                    onClick={() => setSelectedEntityId(entity.id)}
+                    className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100 border border-transparent'}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
+                      <ChevronRight size={14} className={`flex-shrink-0 ml-1 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      {entity.pan && <span className="text-xs text-gray-400 font-mono">{entity.pan}</span>}
+                      <Badge color="blue">{regCount} GSTINs</Badge>
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Right: Registration Table */}
-        <div className="flex-1 overflow-auto">
-          {selectedEntity ? (
-            <div>
-              {/* Entity detail header */}
-              <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-3">
-                <div className="flex items-center justify-between">
+        {/* Right panel: Registrations for selected entity */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {!selectedEntity ? (
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState icon="👈" title="Select an entity" subtitle="Choose a legal entity from the left panel" />
+            </div>
+          ) : (
+            <>
+              {/* Entity header */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+                <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4 text-slate-500" />
-                      <h2 className="text-base font-semibold text-slate-800">
-                        {selectedEntity.legalName}
-                      </h2>
-                      <button
-                        onClick={() => { setEditingEntity(selectedEntity); setShowEntityModal(true); }}
-                        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-4 mt-0.5">
-                      {selectedEntity.pan && (
-                        <span className="text-xs text-slate-500">PAN: <span className="font-mono">{selectedEntity.pan}</span></span>
-                      )}
-                      {selectedEntity.tan && (
-                        <span className="text-xs text-slate-500">TAN: <span className="font-mono">{selectedEntity.tan}</span></span>
-                      )}
-                      {selectedEntity.lei && (
-                        <span className="text-xs text-slate-500">LEI: <span className="font-mono">{selectedEntity.lei}</span></span>
-                      )}
+                    <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      {selectedEntity.pan && <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>}
+                      {selectedEntity.tan && <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>}
+                      {selectedEntity.lei && <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>}
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setEditingReg(null); setShowRegModal(true); }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 text-white text-sm
-                               rounded-lg hover:bg-slate-700 transition-colors">
-                    <Plus className="w-4 h-4" />
-                    Add GSTIN
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setEntityModal(selectedEntity)}
+                      className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
+                      <Edit2 size={14} /> Edit Entity
+                    </button>
+                    <button onClick={() => setRegModal('add')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                      <Plus size={14} /> Add GSTIN
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Registrations table */}
-              {filteredRegs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <Globe className="w-10 h-10 mb-3 opacity-40" />
-                  <p className="text-sm font-medium">No registrations for this entity</p>
-                  <p className="text-xs mt-1">Add a GSTIN registration to get started</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Abbr</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">GSTIN</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Location</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Address</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Licences</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                      {filteredRegs.map(reg => (
-                        <RegistrationRow
-                          key={reg.id}
-                          reg={reg}
-                          onEdit={r => { setEditingReg(r); setShowRegModal(true); }}
-                          onToggleActive={handleToggleActive}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400">
-              <Building2 className="w-12 h-12 mb-3 opacity-30" />
-              <p className="text-sm">Select a legal entity to view registrations</p>
-            </div>
+              {/* Registrations grid */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {regLoading ? (
+                  <LoadingSpinner />
+                ) : entityRegs.length === 0 ? (
+                  <EmptyState icon="🏛️" title="No registrations" subtitle="Add a GSTIN registration for this entity" />
+                ) : (
+                  <div className="space-y-6">
+                    {activeRegs.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Active ({activeRegs.length})
+                        </p>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          {activeRegs.map(reg => (
+                            <RegistrationDetail key={reg.id} reg={reg}
+                              onEdit={r => setRegModal(r)}
+                              onDeactivate={r => setDeactivateTarget(r)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {inactiveRegs.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Inactive ({inactiveRegs.length})
+                        </p>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          {inactiveRegs.map(reg => (
+                            <RegistrationDetail key={reg.id} reg={reg}
+                              onEdit={() => {}} onDeactivate={() => {}} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── All Registrations Summary (below entity panel) ── */}
-      <div className="border-t border-slate-200 bg-slate-50 px-6 py-2">
-        <div className="flex items-center gap-6 text-xs text-slate-500">
-          <span>{registrations.length} total registrations</span>
-          <span className="text-green-600 font-medium">{registrations.filter(r => r.isActive).length} active</span>
-          <span className="text-slate-400">{registrations.filter(r => !r.isActive).length} inactive</span>
-        </div>
-      </div>
-
-      {/* ── Modals ── */}
-      {showEntityModal && (
-        <LegalEntityModal
-          entity={editingEntity}
-          onClose={() => { setShowEntityModal(false); setEditingEntity(null); }}
-          onSaved={() => {
-            setShowEntityModal(false); setEditingEntity(null);
-            showMsg(editingEntity ? 'Entity updated.' : 'Entity created.');
-            fetchData();
-          }}
-        />
+      {/* Modals */}
+      {entityModal && (
+        <EntityModal
+          entity={entityModal === 'add' ? null : entityModal}
+          onClose={() => setEntityModal(null)}
+          onSaved={handleSaved} />
       )}
-
-      {showRegModal && (
+      {regModal && (
         <RegistrationModal
-          registration={editingReg}
-          entities={entities}
-          onClose={() => { setShowRegModal(false); setEditingReg(null); }}
-          onSaved={() => {
-            setShowRegModal(false); setEditingReg(null);
-            showMsg(editingReg ? 'Registration updated.' : 'Registration created.');
-            fetchData();
-          }}
-        />
+          registration={regModal === 'add' ? null : regModal}
+          entityId={effectiveId}
+          onClose={() => setRegModal(null)}
+          onSaved={handleSaved} />
       )}
-
-      {deactivatingReg && (
-        <DeactivateDialog
-          registration={deactivatingReg}
-          onClose={() => setDeactivatingReg(null)}
-          onDeactivated={() => {
-            setDeactivatingReg(null);
-            showMsg(`${deactivatingReg.abbr} deactivated.`);
-            fetchData();
-          }}
-        />
+      {deactivateTarget && (
+        <DeactivateModal
+          reg={deactivateTarget}
+          onClose={() => setDeactivateTarget(null)}
+          onDone={handleSaved} />
       )}
     </div>
   );
