@@ -37,17 +37,21 @@ export default function InventoryAnalytics() {
     []
   );
 
+  // Guard against null API responses (useFetch default [] is bypassed when API returns null)
+  const safeInventory = Array.isArray(inventory) ? inventory : [];
+  const safeLowStock = Array.isArray(lowStock) ? lowStock : [];
+
   // Calculate statistics
   const stats = {
-    totalItems: inventory.length,
-    lowStockCount: lowStock.length,
-    avgStockValue: inventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0) / inventory.length || 0,
-    totalValue: inventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0),
-    criticalItems: lowStock.filter((item) => (item.quantity || 0) <= (item.minQuantity || 0) * 0.5).length,
+    totalItems: safeInventory.length,
+    lowStockCount: safeLowStock.length,
+    avgStockValue: safeInventory.length > 0 ? safeInventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0) / safeInventory.length : 0,
+    totalValue: safeInventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0),
+    criticalItems: safeLowStock.filter((item) => (item.quantity || 0) <= (item.minQuantity || 0) * 0.5).length,
   };
 
   // Filter inventory
-  const filteredInventory = inventory.filter((item) => {
+  const filteredInventory = safeInventory.filter((item) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -59,9 +63,9 @@ export default function InventoryAnalytics() {
 
   // Categorize stock levels
   const stockLevels = {
-    critical: inventory.filter((i) => (i.quantity || 0) <= (i.minQuantity || 0)),
-    low: inventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) && (i.quantity || 0) <= (i.minQuantity || 0) * 1.5),
-    adequate: inventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) * 1.5),
+    critical: safeInventory.filter((i) => (i.quantity || 0) <= (i.minQuantity || 0)),
+    low: safeInventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) && (i.quantity || 0) <= (i.minQuantity || 0) * 1.5),
+    adequate: safeInventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) * 1.5),
   };
 
   const getCategoryBadge = (quantity, minQuantity) => {

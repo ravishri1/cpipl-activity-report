@@ -137,6 +137,8 @@ export default function ExpenseApproval() {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || `Failed to ${status} expense`);
+      fetchExpenses(); // Refresh list in case of stale status (race condition)
+      setReviewModal(null);
     } finally {
       setActionLoading(null);
     }

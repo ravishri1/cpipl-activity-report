@@ -104,7 +104,7 @@ export default function MyInsuranceCard() {
             <div className="flex items-center gap-2 mb-2">
               <FileText className="w-6 h-6" />
               <h2 className="text-2xl font-bold">
-                {card.cardType.charAt(0).toUpperCase() + card.cardType.slice(1)} Insurance Card
+                {(card.cardType || 'other').charAt(0).toUpperCase() + (card.cardType || 'other').slice(1)} Insurance Card
               </h2>
             </div>
             <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${statusBadge.bg} ${statusBadge.text_color}`}>

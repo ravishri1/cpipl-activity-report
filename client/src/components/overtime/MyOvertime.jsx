@@ -161,7 +161,7 @@ export default function MyOvertime() {
       {/* Requests Table */}
       {requests.length === 0 ? (
         <EmptyState
-          icon={<Clock className="w-8 h-8 text-slate-300" />}
+          icon={Clock}
           title="No overtime requests"
           subtitle="Submit a request when you work extra hours"
         />

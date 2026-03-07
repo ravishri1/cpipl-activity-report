@@ -59,7 +59,7 @@ export default function MyPointsDashboard() {
             <div>
               <p className="text-blue-600 text-sm font-semibold mb-1">Total Points</p>
               <p className="text-4xl font-bold text-blue-900">{pointData.totalPoints}</p>
-              {pointData.stats.rank && (
+              {pointData.stats?.rank && (
                 <p className="text-blue-700 text-sm mt-2">
                   Rank: <strong>#{pointData.stats.rank}</strong> of {pointData.stats.totalPlayers}
                 </p>
@@ -76,7 +76,7 @@ export default function MyPointsDashboard() {
               <p className="text-green-600 text-sm font-semibold mb-1">Completion Points</p>
               <p className="text-4xl font-bold text-green-900">{pointData.completionPoints}</p>
               <p className="text-green-700 text-xs mt-2">
-                {pointData.stats.trainingsWithinDeadline}/{pointData.stats.trainingsCompleted} on-time
+                {pointData.stats?.trainingsWithinDeadline ?? 0}/{pointData.stats?.trainingsCompleted ?? 0} on-time
               </p>
             </div>
             <BookOpen className="w-10 h-10 text-green-500" />
@@ -90,7 +90,7 @@ export default function MyPointsDashboard() {
               <p className="text-purple-600 text-sm font-semibold mb-1">Contribution Points</p>
               <p className="text-4xl font-bold text-purple-900">{pointData.contributionPoints}</p>
               <p className="text-purple-700 text-xs mt-2">
-                {pointData.stats.contributionsApproved} approved
+                {pointData.stats?.contributionsApproved ?? 0} approved
               </p>
             </div>
             <Award className="w-10 h-10 text-purple-500" />
@@ -102,19 +102,19 @@ export default function MyPointsDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <p className="text-gray-600 text-sm mb-1">Trainings Completed</p>
-          <p className="text-2xl font-bold text-gray-900">{pointData.stats.trainingsCompleted}</p>
+          <p className="text-2xl font-bold text-gray-900">{pointData.stats?.trainingsCompleted ?? 0}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <p className="text-gray-600 text-sm mb-1">Within Deadline</p>
-          <p className="text-2xl font-bold text-green-600">{pointData.stats.trainingsWithinDeadline}</p>
+          <p className="text-2xl font-bold text-green-600">{pointData.stats?.trainingsWithinDeadline ?? 0}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <p className="text-gray-600 text-sm mb-1">Approved Contributions</p>
-          <p className="text-2xl font-bold text-purple-600">{pointData.stats.contributionsApproved}</p>
+          <p className="text-2xl font-bold text-purple-600">{pointData.stats?.contributionsApproved ?? 0}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <p className="text-gray-600 text-sm mb-1">Pending Contributions</p>
-          <p className="text-2xl font-bold text-amber-600">{pointData.stats.contributionsPending}</p>
+          <p className="text-2xl font-bold text-amber-600">{pointData.stats?.contributionsPending ?? 0}</p>
         </div>
       </div>
 

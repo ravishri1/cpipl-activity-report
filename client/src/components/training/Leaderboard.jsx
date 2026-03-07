@@ -67,14 +67,14 @@ export default function Leaderboard() {
 
       {/* Leaderboard Table */}
       <div className="space-y-2 mb-8">
-        {leaderboard.leaders.length === 0 ? (
+        {(leaderboard.leaders || []).length === 0 ? (
           <EmptyState
             icon="🏆"
             title="Leaderboard coming soon"
             subtitle="No learning points have been awarded yet"
           />
         ) : (
-          leaderboard.leaders.map((leader, idx) => {
+          (leaderboard.leaders || []).map((leader, idx) => {
             const rank = idx + 1;
             const isYou = leader.userId === leaderboard.currentUserId;
 

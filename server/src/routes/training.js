@@ -287,7 +287,7 @@ router.get('/my-assignments', asyncHandler(async (req, res) => {
 router.get('/team-progress', asyncHandler(async (req, res) => {
   const reportees = await req.prisma.user.findMany({
     where: { reportingManagerId: req.user.id },
-    select: { id: true, name: true, email: true, points: true }
+    select: { id: true, name: true, email: true }
   });
 
   const progress = [];
