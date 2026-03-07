@@ -245,8 +245,8 @@ router.get('/due-soon', asyncHandler(async (req, res) => {
   res.json(renewals.map(enrichRenewal));
 }));
 
-// GET /api/renewals/:id
-router.get('/:id', asyncHandler(async (req, res) => {
+// GET /api/renewals/:id  (numeric only — keeps /email-scans from being shadowed)
+router.get('/:id(\\d+)', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   const renewal = await req.prisma.renewal.findUnique({
     where: { id },
@@ -291,7 +291,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/renewals/:id
-router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   const { history, category, paymentAccount, daysLeft, trafficLight, ...data } = req.body;
 
@@ -316,14 +316,14 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/renewals/:id
-router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
+router.delete('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   await req.prisma.renewal.delete({ where: { id } });
   res.json({ success: true });
 }));
 
 // POST /api/renewals/:id/mark-paid  — advance renewalDate by billing cycle
-router.post('/:id/mark-paid', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/:id(\\d+)/mark-paid', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   const existing = await req.prisma.renewal.findUnique({ where: { id } });
   if (!existing) throw notFound('Renewal');
@@ -361,7 +361,7 @@ router.post('/:id/mark-paid', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/renewals/:id/reconcile
-router.post('/:id/reconcile', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/:id(\\d+)/reconcile', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -383,7 +383,7 @@ router.post('/:id/reconcile', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/renewals/:id/history
-router.get('/:id/history', asyncHandler(async (req, res) => {
+router.get('/:id(\\d+)/history', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   const history = await req.prisma.renewalHistory.findMany({
     where: { renewalId: id },
