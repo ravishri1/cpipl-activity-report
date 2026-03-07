@@ -1,6 +1,6 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Target, Plus, CheckCircle, X, Edit2 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
