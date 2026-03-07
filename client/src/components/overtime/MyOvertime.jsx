@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Clock, Plus, X, CheckCircle, XCircle, AlertCircle, Gift } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import { formatDate } from '../../utils/formatters';
