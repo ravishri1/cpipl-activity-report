@@ -133,6 +133,13 @@ export const ERROR_SEVERITY_STYLES = {
   unknown:  'bg-slate-100 text-slate-500 border-slate-200',
 };
 
+// ═══ Overtime-specific ═══
+export const OVERTIME_STATUS_STYLES = {
+  pending:  'bg-amber-100 text-amber-700 border-amber-200',
+  approved: 'bg-green-100 text-green-700 border-green-200',
+  rejected: 'bg-red-100 text-red-700 border-red-200',
+};
+
 // ═══ Compliance Certificate-specific ═══
 export const COMPLIANCE_STATUS_STYLES = {
   VALID:    'bg-green-100 text-green-700 border-green-200',

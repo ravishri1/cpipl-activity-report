@@ -178,6 +178,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/activity-reports', label: 'Activity Reports', icon: ClipboardEdit },
         { to: '/attendance', label: 'Attendance', icon: Clock },
         { to: '/leave', label: 'Leave', icon: CalendarOff },
+        { to: '/overtime', label: 'Overtime', icon: Clock },
         { to: '/expenses', label: 'Expenses', icon: Wallet },
         { to: '/payslips', label: 'Payslips', icon: IndianRupee },
         { to: '/my-workspace', label: 'My Workspace', icon: Boxes },
@@ -249,6 +250,7 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
           { to: '/admin/salary-setup', label: 'Salary Setup', icon: Banknote },
           { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
+          { to: '/admin/overtime', label: 'Overtime Manager', icon: Clock },
         ],
       },
       {
