@@ -22,6 +22,7 @@ model User {
   selfReactivationCount     Int      @default(0)    // resets monthly, max 3 self-unlocks
   selfReactivationMonth     String?                 // "YYYY-MM" to track reset
   googleId           String?  @unique
+  clerkId            String?  @unique  // Clerk user ID — cached to avoid Clerk API calls on every request
   importedFromGoogle Boolean  @default(false)
   totalPoints        Int      @default(0) // cached leaderboard score
   createdAt          DateTime @default(now())

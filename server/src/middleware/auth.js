@@ -96,20 +96,52 @@ async function authenticate(req, res, next) {
       return res.status(401).json({ error: 'Invalid session.' });
     }
 
-    // Look up Clerk user to get email
-    const clerkUser = await clerk.users.getUser(clerkUserId);
-    const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+    // FAST PATH: Look up user by cached clerkId (no Clerk API call needed)
+    let dbUser = await req.prisma.user.findFirst({ where: { clerkId: clerkUserId } });
+    let clerkUser = null;
 
-    if (!email) {
-      return res.status(401).json({ error: 'No email found in Clerk account.' });
+    if (!dbUser) {
+      // SLOW PATH (first login only): Call Clerk API to get email, then cache clerkId
+      // Wrap in timeout to prevent hanging if Clerk API is slow/rate-limited
+      clerkUser = await Promise.race([
+        clerk.users.getUser(clerkUserId),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Clerk API timeout — try again')), 7000)
+        ),
+      ]);
+
+      const email = clerkUser.emailAddresses?.[0]?.emailAddress;
+      if (!email) {
+        return res.status(401).json({ error: 'No email found in Clerk account.' });
+      }
+
+      dbUser = await req.prisma.user.findUnique({ where: { email } });
+
+      if (dbUser) {
+        // Cache the clerkId so future lookups bypass the Clerk API entirely
+        req.prisma.user.update({
+          where: { id: dbUser.id },
+          data: { clerkId: clerkUserId },
+        }).catch(() => {}); // Fire-and-forget, non-blocking
+      }
     }
-
-    // Find user in our database
-    const dbUser = await req.prisma.user.findUnique({ where: { email } });
 
     if (!dbUser) {
       // User might not be synced yet — set minimal info for sync endpoint
-      req.user = { clerkId: clerkUserId, email, name: clerkUser.fullName || clerkUser.firstName || '' };
+      // clerkUser may or may not have been fetched above
+      if (!clerkUser) {
+        clerkUser = await Promise.race([
+          clerk.users.getUser(clerkUserId),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Clerk API timeout')), 7000)
+          ),
+        ]);
+      }
+      req.user = {
+        clerkId: clerkUserId,
+        email: clerkUser.emailAddresses?.[0]?.emailAddress || '',
+        name: clerkUser.fullName || clerkUser.firstName || '',
+      };
       req.clerkUser = clerkUser;
       return next();
     }
@@ -141,7 +173,7 @@ async function authenticate(req, res, next) {
           department: dbUser.department,
           isHibernated: true,
         };
-        req.clerkUser = clerkUser;
+        if (clerkUser) req.clerkUser = clerkUser;
         return next();
       }
       return res.status(403).json({
@@ -163,7 +195,7 @@ async function authenticate(req, res, next) {
       employmentStatus: empStatus,
       isSeparated,
     };
-    req.clerkUser = clerkUser;
+    if (clerkUser) req.clerkUser = clerkUser;
 
     // Fire-and-forget: update last activity timestamp (throttled — only if >1hr old)
     if (!dbUser.lastActivityAt || (Date.now() - new Date(dbUser.lastActivityAt).getTime()) > 3600000) {
