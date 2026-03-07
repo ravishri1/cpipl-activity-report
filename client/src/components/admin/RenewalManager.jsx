@@ -93,7 +93,7 @@ function RenewalModal({ renewal, categories, accounts, onClose, onSaved }) {
     if (!body.startDate) delete body.startDate;
 
     await execute(
-      () => isEdit ? api.put(`/api/renewals/${renewal.id}`, body) : api.post('/api/renewals', body),
+      () => isEdit ? api.put(`/renewals/${renewal.id}`, body) : api.post('/renewals', body),
       isEdit ? 'Renewal updated!' : 'Renewal created!'
     );
     onSaved();
@@ -296,7 +296,7 @@ function MarkPaidModal({ renewal, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     await execute(
-      () => api.post(`/api/renewals/${renewal.id}/mark-paid`, {
+      () => api.post(`/renewals/${renewal.id}/mark-paid`, {
         amount: amount ? parseFloat(amount) : undefined,
         paidOn,
         notes,
@@ -348,7 +348,7 @@ function MarkPaidModal({ renewal, onClose, onSaved }) {
 // ─── HISTORY DRAWER ─────────────────────────────────────────────────────────────
 function HistoryDrawer({ renewal, onClose }) {
 
-  const { data: history, loading } = useFetch(`/api/renewals/${renewal.id}/history`, []);
+  const { data: history, loading } = useFetch(`/renewals/${renewal.id}/history`, []);
 
   const ACTION_COLORS = {
     created:    'bg-blue-100 text-blue-700',
@@ -440,7 +440,7 @@ export default function RenewalManager() {
   const [scanResult, setScanResult] = useState(null);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
-  const { data: summary, refetch: refetchSummary } = useFetch('/api/renewals/summary', {});
+  const { data: summary, refetch: refetchSummary } = useFetch('/renewals/summary', {});
 
   const renewalsUrl = (() => {
     const p = new URLSearchParams();
@@ -448,28 +448,28 @@ export default function RenewalManager() {
     if (filterStatus) p.set('status', filterStatus);
     if (filterLight)  p.set('trafficLight', filterLight);
     if (search)       p.set('search', search);
-    return `/api/renewals?${p.toString()}`;
+    return `/renewals?${p.toString()}`;
   })();
   const { data: renewals, loading: loadingRenewals, refetch: refetchRenewals } = useFetch(renewalsUrl, []);
 
-  const { data: categories, refetch: refetchCats } = useFetch('/api/renewals/categories', []);
-  const { data: accounts,   refetch: refetchAccts } = useFetch('/api/renewals/accounts', []);
-  const { data: scans,      refetch: refetchScans } = useFetch('/api/renewals/email-scans?status=pending', []);
+  const { data: categories, refetch: refetchCats } = useFetch('/renewals/categories', []);
+  const { data: accounts,   refetch: refetchAccts } = useFetch('/renewals/accounts', []);
+  const { data: scans,      refetch: refetchScans } = useFetch('/renewals/email-scans?status=pending', []);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function refetchAll() { refetchRenewals(); refetchSummary(); }
 
   async function handleDeleteCat(id) {
     if (!window.confirm('Delete this category?')) return;
-    await execute(() => api.delete(`/api/renewals/categories/${id}`), 'Category deleted');
+    await execute(() => api.delete(`/renewals/categories/${id}`), 'Category deleted');
     refetchCats();
   }
 
   async function handleSaveCat() {
     if (editCat) {
-      await execute(() => api.put(`/api/renewals/categories/${editCat.id}`, catForm), 'Category updated');
+      await execute(() => api.put(`/renewals/categories/${editCat.id}`, catForm), 'Category updated');
     } else {
-      await execute(() => api.post('/api/renewals/categories', catForm), 'Category created');
+      await execute(() => api.post('/renewals/categories', catForm), 'Category created');
     }
     setCatModal(false); setEditCat(null); setCatForm({ name: '', icon: '' });
     refetchCats();
@@ -477,15 +477,15 @@ export default function RenewalManager() {
 
   async function handleDeleteAcct(id) {
     if (!window.confirm('Delete this account?')) return;
-    await execute(() => api.delete(`/api/renewals/accounts/${id}`), 'Account deleted');
+    await execute(() => api.delete(`/renewals/accounts/${id}`), 'Account deleted');
     refetchAccts();
   }
 
   async function handleSaveAcct() {
     if (editAcct) {
-      await execute(() => api.put(`/api/renewals/accounts/${editAcct.id}`, acctForm), 'Account updated');
+      await execute(() => api.put(`/renewals/accounts/${editAcct.id}`, acctForm), 'Account updated');
     } else {
-      await execute(() => api.post('/api/renewals/accounts', acctForm), 'Account created');
+      await execute(() => api.post('/renewals/accounts', acctForm), 'Account created');
     }
     setAcctModal(false); setEditAcct(null); setAcctForm({ code: '', type: '', name: '', identifier: '' });
     refetchAccts();
@@ -494,7 +494,7 @@ export default function RenewalManager() {
   async function handleScanEmail() {
     setScanning(true); setScanResult(null);
     try {
-      const res = await api.post('/api/renewals/scan-email');
+      const res = await api.post('/renewals/scan-email');
       setScanResult(res.data);
       refetchScans();
     } catch {
@@ -505,7 +505,7 @@ export default function RenewalManager() {
   }
 
   async function handleDismissScan(id) {
-    await execute(() => api.post(`/api/renewals/email-scans/${id}/dismiss`), 'Dismissed');
+    await execute(() => api.post(`/renewals/email-scans/${id}/dismiss`), 'Dismissed');
     refetchScans();
   }
 
