@@ -318,6 +318,7 @@ router.get('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(
     where,
     select: {
       id: true, name: true, email: true, role: true, department: true,
+      employeeId: true, designation: true,
       isActive: true, isHibernated: true, lastActivityAt: true, createdAt: true,
     },
     orderBy: { name: 'asc' },

@@ -146,6 +146,7 @@ export default function MyExpenses() {
         receiptUrl: '',
       });
       setShowForm(false);
+      setActiveTab('pending');
       fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -232,6 +233,24 @@ export default function MyExpenses() {
             Submit New Expense
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Receipt Upload + AI Extraction — at top so data auto-fills fields below */}
+            <ReceiptUploader
+              onExtracted={(extracted, driveUrl) => {
+                if (driveUrl) setForm(prev => ({ ...prev, receiptUrl: driveUrl }));
+                if (extracted) {
+                  setForm(prev => ({
+                    ...prev,
+                    title: extracted.vendor && !prev.title ? `${extracted.vendor} - ${extracted.description || 'Expense'}` : prev.title,
+                    amount: extracted.amount && !prev.amount ? String(extracted.amount) : prev.amount,
+                    date: extracted.date || prev.date,
+                    category: extracted.category || prev.category,
+                    description: extracted.description && !prev.description ? extracted.description : prev.description,
+                  }));
+                }
+              }}
+              receiptUrl={form.receiptUrl}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Title */}
               <div>
@@ -318,24 +337,6 @@ export default function MyExpenses() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
               />
             </div>
-
-            {/* Receipt Upload + AI Extraction */}
-            <ReceiptUploader
-              onExtracted={(extracted, driveUrl) => {
-                if (driveUrl) setForm(prev => ({ ...prev, receiptUrl: driveUrl }));
-                if (extracted) {
-                  setForm(prev => ({
-                    ...prev,
-                    title: extracted.vendor && !prev.title ? `${extracted.vendor} - ${extracted.description || 'Expense'}` : prev.title,
-                    amount: extracted.amount && !prev.amount ? String(extracted.amount) : prev.amount,
-                    date: extracted.date || prev.date,
-                    category: extracted.category || prev.category,
-                    description: extracted.description && !prev.description ? extracted.description : prev.description,
-                  }));
-                }
-              }}
-              receiptUrl={form.receiptUrl}
-            />
 
             <div className="flex justify-end gap-3 pt-2">
               <button

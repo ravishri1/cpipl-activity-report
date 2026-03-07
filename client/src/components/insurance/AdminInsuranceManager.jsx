@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Search, Filter, Trash2, Edit2, Eye, Download, Plus } from 'lucide-react';
+import { Upload, Search, Filter, Trash2, Edit2, Eye, Download, Plus, Loader2, CheckCircle } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -155,8 +155,8 @@ export default function AdminInsuranceManager() {
                 <tr key={card.id} className="hover:bg-slate-50 transition">
                   <td className="px-6 py-3">
                     <div>
-                      <p className="font-medium text-slate-900">{card.user.name}</p>
-                      <p className="text-sm text-slate-500">{card.user.employeeId}</p>
+                      <p className="font-medium text-slate-900">{card.user?.name || 'Unknown'}</p>
+                      <p className="text-sm text-slate-500">{card.user?.employeeId || ''}</p>
                     </div>
                   </td>
                   <td className="px-6 py-3">
@@ -258,7 +258,8 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
   });
 
   const [fileSelected, setFileSelected] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [fileUploadDone, setFileUploadDone] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [searchingEmployees, setSearchingEmployees] = useState(false);
 
@@ -280,7 +281,7 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
     }
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -295,30 +296,37 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
     }
 
     setFileSelected(file);
-    setFormData(prev => ({
-      ...prev,
-      fileName: file.name,
-      mimeType: file.type
-    }));
-  };
+    setFileUploadDone(false);
+    setFormData(prev => ({ ...prev, fileName: file.name, mimeType: file.type, fileUrl: '' }));
 
-  const handleUploadFile = async () => {
-    if (!fileSelected) {
-      alert('Please select a file');
-      return;
+    // Upload file to Google Drive immediately so we have a real URL
+    setFileUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/files/upload', fd);
+      const driveUrl = res.data?.file?.driveUrl || res.data?.driveUrl || '';
+      if (!driveUrl) throw new Error('No URL returned from upload');
+      setFormData(prev => ({ ...prev, fileUrl: driveUrl }));
+      setFileUploadDone(true);
+    } catch (uploadErr) {
+      console.error('File upload failed:', uploadErr);
+      alert('Failed to upload file: ' + (uploadErr.response?.data?.error || uploadErr.message));
+      setFileSelected(null);
+    } finally {
+      setFileUploading(false);
     }
-
-    // TODO: Implement file upload to storage (Vercel Blob, Firebase, etc)
-    // For now, we'll use a placeholder URL
-    const fileUrl = URL.createObjectURL(fileSelected);
-    setFormData(prev => ({ ...prev, fileUrl }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.userId || !formData.fileUrl) {
-      alert('Please select an employee and upload a file');
+    if (!formData.userId) {
+      alert('Please select an employee');
+      return;
+    }
+    if (!formData.fileUrl) {
+      alert('Please select and wait for the file to finish uploading');
       return;
     }
 
@@ -465,18 +473,35 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
           {/* File Upload */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Upload File * (PDF or Image)</label>
-            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-400 transition">
+            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition ${fileUploadDone ? 'border-green-400 bg-green-50' : 'border-slate-300 hover:border-blue-400'}`}>
               <input
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg"
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-input"
+                disabled={fileUploading}
               />
-              <label htmlFor="file-input" className="cursor-pointer">
-                <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="font-medium text-slate-900">{fileSelected?.name || 'Click to upload or drag and drop'}</p>
-                <p className="text-sm text-slate-500">PDF or images (PNG, JPEG) - Max 10MB</p>
+              <label htmlFor="file-input" className={fileUploading ? 'cursor-wait' : 'cursor-pointer'}>
+                {fileUploading ? (
+                  <>
+                    <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-2 animate-spin" />
+                    <p className="font-medium text-blue-700">Uploading {fileSelected?.name}…</p>
+                    <p className="text-sm text-blue-500">Please wait</p>
+                  </>
+                ) : fileUploadDone ? (
+                  <>
+                    <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                    <p className="font-medium text-green-700">{fileSelected?.name}</p>
+                    <p className="text-sm text-green-600">File uploaded ✓ — click to replace</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <p className="font-medium text-slate-900">{fileSelected?.name || 'Click to upload or drag and drop'}</p>
+                    <p className="text-sm text-slate-500">PDF or images (PNG, JPEG) - Max 10MB</p>
+                  </>
+                )}
               </label>
             </div>
           </div>
@@ -492,10 +517,10 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={uploading || !formData.userId || !formData.fileUrl}
+              disabled={uploading || fileUploading || !formData.userId || !formData.fileUrl}
               className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
             >
-              {uploading ? 'Uploading...' : 'Upload Card'}
+              {uploading ? 'Saving…' : 'Upload Card'}
             </button>
           </div>
         </form>
@@ -517,8 +542,8 @@ function InsuranceDetailPanel({ card, onClose }) {
         <div className="p-6 space-y-6">
           <div>
             <p className="text-sm text-slate-600 font-medium">Employee</p>
-            <p className="text-lg font-semibold text-slate-900">{card.user.name}</p>
-            <p className="text-sm text-slate-600">{card.user.employeeId}</p>
+            <p className="text-lg font-semibold text-slate-900">{card.user?.name || 'Unknown'}</p>
+            <p className="text-sm text-slate-600">{card.user?.employeeId || ''}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

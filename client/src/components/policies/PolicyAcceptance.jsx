@@ -667,7 +667,7 @@ export default function PolicyAcceptance() {
     fetchPolicies();
   }, [fetchPolicies]);
 
-  const acceptedCount = policies.filter((p) => !!p.acceptedAt).length;
+  const acceptedCount = policies.filter((p) => !!(p.acceptedAt || p.acceptance?.acceptedAt)).length;
   const totalCount = policies.length;
   const allAccepted = totalCount > 0 && acceptedCount === totalCount;
 

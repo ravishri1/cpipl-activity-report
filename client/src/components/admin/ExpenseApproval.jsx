@@ -117,8 +117,8 @@ export default function ExpenseApproval() {
   const filteredExpenses = expenses.filter((e) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    const empName = (e.employee?.name || e.employeeName || '').toLowerCase();
-    const empId = (e.employee?.employeeId || e.employeeId || '').toLowerCase();
+    const empName = (e.user?.name || e.employee?.name || e.employeeName || '').toLowerCase();
+    const empId = (e.user?.employeeId || e.employee?.employeeId || e.employeeId || '').toLowerCase();
     const title = (e.title || '').toLowerCase();
     return empName.includes(q) || empId.includes(q) || title.includes(q);
   });
@@ -335,10 +335,10 @@ export default function ExpenseApproval() {
                       <td className="px-4 py-3">
                         <div>
                           <p className="font-medium text-slate-800 text-sm">
-                            {expense.employee?.name || expense.employeeName || 'Unknown'}
+                            {expense.user?.name || expense.employee?.name || expense.employeeName || 'Unknown'}
                           </p>
                           <p className="text-xs text-slate-400">
-                            {expense.employee?.employeeId || expense.employeeId || ''}
+                            {expense.user?.employeeId || expense.employee?.employeeId || expense.employeeId || ''}
                           </p>
                         </div>
                       </td>
@@ -385,12 +385,16 @@ export default function ExpenseApproval() {
                           {expense.status === 'pending' && (
                             <>
                               <button
-                                onClick={() => openReviewModal(expense, 'approved')}
+                                onClick={() => handleReview(expense.id, 'approved')}
                                 disabled={actionLoading === expense.id}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
                                 title="Approve"
                               >
-                                <CheckCircle className="w-3.5 h-3.5" />
+                                {actionLoading === expense.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                )}
                                 Approve
                               </button>
                               <button
@@ -541,7 +545,7 @@ export default function ExpenseApproval() {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                {reviewModal.expense.employee?.name || reviewModal.expense.employeeName} -{' '}
+                {reviewModal.expense.user?.name || reviewModal.expense.employee?.name || reviewModal.expense.employeeName} -{' '}
                 {formatDate(reviewModal.expense.date)}
               </p>
             </div>

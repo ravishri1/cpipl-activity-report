@@ -20,9 +20,9 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_TABS = [
-  { value: 'all',       label: 'All',       icon: <BarChart3 className="w-3.5 h-3.5" /> },
   { value: 'new',       label: 'New',       icon: <AlertTriangle className="w-3.5 h-3.5" /> },
   { value: 'reviewing', label: 'Reviewing', icon: <Clock className="w-3.5 h-3.5" /> },
+  { value: 'all',       label: 'All',       icon: <BarChart3 className="w-3.5 h-3.5" /> },
   { value: 'fixed',     label: 'Fixed',     icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   { value: 'dismissed', label: 'Dismissed', icon: <XCircle className="w-3.5 h-3.5" /> },
 ];
@@ -387,7 +387,7 @@ function ErrorRow({ report, onSelect }) {
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
 export default function ErrorReportsPanel() {
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('new');
   const [typeFilter,   setTypeFilter]   = useState('all');
   const [selected,     setSelected]     = useState(null);
   const [listKey,      setListKey]      = useState(0); // bump to force refetch
