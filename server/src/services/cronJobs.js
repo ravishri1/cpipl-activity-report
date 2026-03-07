@@ -16,6 +16,7 @@ const { runTrainingDeadlineCheck }  = require('./notifications/trainingDeadlineS
 const { runSeparationAlert }        = require('./notifications/separationAlertService');
 const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
 const { runComplianceAlerts }       = require('./notifications/complianceAlertService');
+const { runRenewalAlerts }          = require('./notifications/renewalAlertService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -258,6 +259,19 @@ function initCronJobs(prisma) {
     }
   });
   console.log('  -> Compliance certificate alert scheduled: 0 10 * * 1-6 (10:00 Mon-Sat)');
+
+  // Renewal & subscription alerts: 9:00 AM IST daily (Mon-Sat)
+  // Sends alerts for renewals due within their alertDaysBefore window
+  cron.schedule('0 9 * * 1-6', async () => {
+    console.log(`[CRON] Renewal alert triggered at ${new Date().toLocaleString()}`);
+    try {
+      const count = await runRenewalAlerts(prisma);
+      console.log(`[CRON] Renewal alert complete: ${count} renewal(s) need attention.`);
+    } catch (err) {
+      console.error('[CRON] Renewal alert failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Renewal alert scheduled: 0 9 * * 1-6 (9:00 AM IST Mon-Sat)');
 }
 
 module.exports = { initCronJobs };

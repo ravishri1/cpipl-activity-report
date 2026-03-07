@@ -197,6 +197,8 @@ model User {
   confirmationExtensions    ConfirmationExtension[]       @relation("ConfirmationExtensions")
   extensionsGranted         ConfirmationExtension[]       @relation("ConfirmationExtensionsBy")
   contractsCreated          CompanyContract[]             @relation("ContractCreator")
+  statementUploads          MonthlyStatement[]            @relation("StatementUploader")
+  renewalHistory            RenewalHistory[]              @relation("RenewalHistoryPerformer")
 
   @@index([department])
   @@index([isActive])
@@ -2395,4 +2397,116 @@ model CityCode {
   id       Int    @id @default(autoincrement())
   cityName String @unique // "Mumbai"
   code     String @unique // "MUM"
+}
+
+// --- Renewals & Expense Control Center ----------------------------------------
+
+model RenewalCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique  // "Software & AI", "Domains & SSL", etc.
+  icon      String?           // emoji or lucide icon name
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  renewals  Renewal[]
+}
+
+model PaymentAccount {
+  id          Int      @id @default(autoincrement())
+  accountCode String   @unique  // CC-01, NB-01, CASH-01
+  type        String            // credit_card | net_banking | cash
+  name        String            // "HDFC Corporate Card"
+  identifier  String?           // masked last 4 digits or account suffix
+  company     String?           // which company this account belongs to
+  currency    String   @default("INR")  // INR | USD
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  renewals    Renewal[]
+  statements  MonthlyStatement[]
+}
+
+model Renewal {
+  id               Int      @id @default(autoincrement())
+  categoryId       Int?
+  itemName         String
+  vendorName       String?
+  assignedTo       String?  // responsible person name / email
+
+  // Login credentials
+  loginUrl         String?
+  loginUsername    String?
+  loginPassword    String?  // stored as-is (AES encryption optional future)
+  accountNumber    String?
+
+  // Dates & billing
+  startDate        String?  // YYYY-MM-DD
+  renewalDate      String?  // YYYY-MM-DD — next due date
+  billingCycle     String   @default("yearly")  // monthly|quarterly|half_yearly|yearly|one_time
+
+  // Finance
+  amount           Float?
+  currency         String   @default("INR")  // INR | USD
+  paymentMedium    String?  // credit_card | net_banking | cash
+  paymentAccountId Int?
+  referenceNumber  String?
+
+  // Alerts
+  alertDaysBefore  Int      @default(15)
+  alertRecipients  String?  // CSV: "CEO,Accounts,IT"
+
+  // Documents & notes
+  documentPath     String?  // Drive URL
+  notes            String?
+
+  // State
+  status           String   @default("active")   // active|expired|cancelled|on_hold
+  reconciled       String   @default("pending")  // yes|no|pending
+  reconciledDate   String?
+  lastRenewedDate  String?
+  lastPaidAmount   Float?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  category         RenewalCategory? @relation(fields: [categoryId], references: [id])
+  paymentAccount   PaymentAccount?  @relation(fields: [paymentAccountId], references: [id])
+  history          RenewalHistory[]
+
+  @@index([categoryId])
+  @@index([renewalDate])
+  @@index([status])
+  @@index([paymentAccountId])
+}
+
+model MonthlyStatement {
+  id               Int      @id @default(autoincrement())
+  month            String            // "2026-03"
+  paymentAccountId Int
+  filePath         String?           // Drive URL
+  uploadedBy       Int
+  uploadedAt       DateTime @default(now())
+  status           String   @default("uploaded")  // uploaded|processing|done
+  notes            String?
+
+  paymentAccount   PaymentAccount @relation(fields: [paymentAccountId], references: [id])
+  uploader         User           @relation("StatementUploader", fields: [uploadedBy], references: [id])
+
+  @@index([paymentAccountId])
+  @@index([month])
+}
+
+model RenewalHistory {
+  id          Int      @id @default(autoincrement())
+  renewalId   Int
+  action      String   // created|updated|paid|renewed|reconciled|locked
+  oldValue    String?
+  newValue    String?
+  performedBy Int
+  createdAt   DateTime @default(now())
+
+  renewal     Renewal @relation(fields: [renewalId], references: [id], onDelete: Cascade)
+  performer   User    @relation("RenewalHistoryPerformer", fields: [performedBy], references: [id])
+
+  @@index([renewalId])
 }
