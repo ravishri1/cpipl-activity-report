@@ -28,7 +28,7 @@ export default function MyOvertime() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ date: '', hours: '', reason: '' });
 
-  const { data: requests, loading, error, refetch } = useFetch('/api/overtime/my', []);
+  const { data: requests, loading, error, refetch } = useFetch('/overtime/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -36,7 +36,7 @@ export default function MyOvertime() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     await execute(
-      () => api.post('/api/overtime', form),
+      () => api.post('/overtime', form),
       'Overtime request submitted!'
     );
     setForm({ date: '', hours: '', reason: '' });

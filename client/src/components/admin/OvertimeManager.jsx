@@ -35,7 +35,7 @@ function ReviewModal({ request, onClose, onReviewed }) {
 
   const handleSubmit = async () => {
     await execute(
-      () => api.put(`/api/overtime/${request.id}/review`, { status: decision, compOffEarned: compOff }),
+      () => api.put(`/overtime/${request.id}/review`, { status: decision, compOffEarned: compOff }),
       `Request ${decision}`
     );
     onReviewed();
@@ -189,7 +189,7 @@ function RequestsTable({ requests, onReview, showReview }) {
 function SummaryTab() {
   const thisMonth = new Date().toISOString().slice(0, 7);
   const [month, setMonth] = useState(thisMonth);
-  const { data: summary, loading, error } = useFetch(`/api/overtime/summary?month=${month}`, null);
+  const { data: summary, loading, error } = useFetch(`/overtime/summary?month=${month}`, null);
 
   return (
     <div className="space-y-4">
@@ -277,14 +277,14 @@ export default function OvertimeManager() {
 
   // Pending tab
   const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } =
-    useFetch('/api/overtime/pending', []);
+    useFetch('/overtime/pending', []);
 
   // All tab
   const allParams = new URLSearchParams();
   if (filters.status) allParams.set('status', filters.status);
   if (filters.month)  allParams.set('month', filters.month);
   const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } =
-    useFetch(`/api/overtime/all?${allParams}`, []);
+    useFetch(`/overtime/all?${allParams}`, []);
 
   const handleReviewed = () => {
     refetchPending();

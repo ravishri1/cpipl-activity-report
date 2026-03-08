@@ -86,7 +86,7 @@ function TextField({ label, name, form, onChange, placeholder }) {
 }
 
 export default function InvestmentDeclaration() {
-  const { data: declarations, loading, error, refetch } = useFetch('/api/investment-declarations/my', []);
+  const { data: declarations, loading, error, refetch } = useFetch('/investment-declarations/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -114,9 +114,9 @@ export default function InvestmentDeclaration() {
     const payload = { ...form };
     Object.keys(totals).forEach(k => { payload[k] = totals[k]; });
     if (editId) {
-      await execute(() => api.put(`/api/investment-declarations/${editId}`, payload), 'Declaration saved!');
+      await execute(() => api.put(`/investment-declarations/${editId}`, payload), 'Declaration saved!');
     } else {
-      await execute(() => api.post('/api/investment-declarations', payload), 'Declaration created!');
+      await execute(() => api.post('/investment-declarations', payload), 'Declaration created!');
     }
     refetch();
     setShowForm(false);
@@ -124,7 +124,7 @@ export default function InvestmentDeclaration() {
 
   async function handleSubmit(id) {
     if (!window.confirm('Submit this declaration for HR approval? You cannot edit after submission.')) return;
-    await execute(() => api.post(`/api/investment-declarations/${id}/submit`), 'Submitted for approval!');
+    await execute(() => api.post(`/investment-declarations/${id}/submit`), 'Submitted for approval!');
     refetch();
   }
 

@@ -42,7 +42,7 @@ function RenewModal({ cert, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     await execute(
-      () => api.post(`/api/compliance/certificates/${cert.id}/renew`, {
+      () => api.post(`/compliance/certificates/${cert.id}/renew`, {
         renewedDate,
         newExpiryDate: newExpiryDate || undefined,
       }),
@@ -133,7 +133,7 @@ function AddCertModal({ registrations, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     await execute(
-      () => api.post('/api/compliance/certificates', {
+      () => api.post('/compliance/certificates', {
         ...form,
         companyRegistrationId: parseInt(form.companyRegistrationId),
         reminderDays: parseInt(form.reminderDays),
@@ -233,8 +233,8 @@ function AddCertModal({ registrations, onClose, onSaved }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ComplianceTracker() {
-  const { data: certs, loading, error, refetch } = useFetch('/api/compliance/certificates', []);
-  const { data: registrations } = useFetch('/api/company-master/registrations', []);
+  const { data: certs, loading, error, refetch } = useFetch('/compliance/certificates', []);
+  const { data: registrations } = useFetch('/company-master/registrations', []);
   const { execute } = useApi();
 
   const [filterEntity, setFilterEntity] = useState('');
@@ -268,7 +268,7 @@ export default function ComplianceTracker() {
 
   const handleDelete = async (cert) => {
     if (!window.confirm(`Delete ${cert.certificateType} — ${cert.certificateNo}?`)) return;
-    await execute(() => api.delete(`/api/compliance/certificates/${cert.id}`), 'Certificate deleted');
+    await execute(() => api.delete(`/compliance/certificates/${cert.id}`), 'Certificate deleted');
     refetch();
   };
 

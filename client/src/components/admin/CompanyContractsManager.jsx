@@ -187,8 +187,8 @@ function RenewalModal({ initial, categories, accounts, onClose, onSaved }) {
     delete payload.history; delete payload.daysLeft; delete payload.trafficLight;
 
     const fn = form.id
-      ? () => api.put(`/api/renewals/${form.id}`, payload)
-      : () => api.post('/api/renewals', payload);
+      ? () => api.put(`/renewals/${form.id}`, payload)
+      : () => api.post('/renewals', payload);
     await execute(fn, form.id ? 'Updated!' : 'Created!');
     onSaved();
   };
@@ -383,8 +383,8 @@ function AccountModal({ initial, onClose, onSaved }) {
 
   const handleSave = async () => {
     const fn = form.id
-      ? () => api.put(`/api/renewals/accounts/${form.id}`, form)
-      : () => api.post('/api/renewals/accounts', form);
+      ? () => api.put(`/renewals/accounts/${form.id}`, form)
+      : () => api.post('/renewals/accounts', form);
     await execute(fn, form.id ? 'Updated!' : 'Created!');
     onSaved();
   };
@@ -448,8 +448,8 @@ function CategoryModal({ initial, onClose, onSaved }) {
   const handleSave = async () => {
     const payload = { ...form, sortOrder: parseInt(form.sortOrder) || 0 };
     const fn = form.id
-      ? () => api.put(`/api/renewals/categories/${form.id}`, payload)
-      : () => api.post('/api/renewals/categories', payload);
+      ? () => api.put(`/renewals/categories/${form.id}`, payload)
+      : () => api.post('/renewals/categories', payload);
     await execute(fn, form.id ? 'Updated!' : 'Created!');
     onSaved();
   };
@@ -496,7 +496,7 @@ function MarkPaidModal({ renewal, onClose, onSaved }) {
 
   const handleConfirm = async () => {
     await execute(
-      () => api.post(`/api/renewals/${renewal.id}/mark-paid`, { amount: parseFloat(amount) || renewal.amount }),
+      () => api.post(`/renewals/${renewal.id}/mark-paid`, { amount: parseFloat(amount) || renewal.amount }),
       'Marked as paid! Next renewal date updated.'
     );
     onSaved();
@@ -544,9 +544,9 @@ export default function CompanyContractsManager() {
   const [search,        setSearch]        = useState('');
   const [modal,         setModal]         = useState(null);        // { type, data? }
 
-  const { data: categories, refetch: refetchCats } = useFetch('/api/renewals/categories', []);
-  const { data: accounts,   refetch: refetchAccts } = useFetch('/api/renewals/accounts', []);
-  const { data: summary,    refetch: refetchSummary } = useFetch('/api/renewals/summary', null);
+  const { data: categories, refetch: refetchCats } = useFetch('/renewals/categories', []);
+  const { data: accounts,   refetch: refetchAccts } = useFetch('/renewals/accounts', []);
+  const { data: summary,    refetch: refetchSummary } = useFetch('/renewals/summary', null);
 
   const queryParts = [];
   if (activeCatId)  queryParts.push(`categoryId=${activeCatId}`);
@@ -554,7 +554,7 @@ export default function CompanyContractsManager() {
   if (search)       queryParts.push(`search=${encodeURIComponent(search)}`);
   const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
 
-  const { data: renewals, loading, error, refetch: refetchRenewals } = useFetch(`/api/renewals${queryStr}`, []);
+  const { data: renewals, loading, error, refetch: refetchRenewals } = useFetch(`/renewals${queryStr}`, []);
 
   const { execute } = useApi();
 
@@ -565,25 +565,25 @@ export default function CompanyContractsManager() {
 
   const handleDelete = async (r) => {
     if (!window.confirm(`Delete "${r.itemName}"? This cannot be undone.`)) return;
-    await execute(() => api.delete(`/api/renewals/${r.id}`), 'Deleted');
+    await execute(() => api.delete(`/renewals/${r.id}`), 'Deleted');
     refetchAll();
   };
 
   const handleDeleteAccount = async (a) => {
     if (!window.confirm(`Delete account "${a.name}"?`)) return;
-    await execute(() => api.delete(`/api/renewals/accounts/${a.id}`), 'Deleted');
+    await execute(() => api.delete(`/renewals/accounts/${a.id}`), 'Deleted');
     refetchAccts();
   };
 
   const handleDeleteCat = async (c) => {
     if (!window.confirm(`Delete category "${c.name}"?`)) return;
-    await execute(() => api.delete(`/api/renewals/categories/${c.id}`), 'Deleted');
+    await execute(() => api.delete(`/renewals/categories/${c.id}`), 'Deleted');
     refetchCats(); refetchSummary();
   };
 
   const handleReconcile = async (r) => {
     if (!window.confirm(`Mark "${r.itemName}" as reconciled?`)) return;
-    await execute(() => api.post(`/api/renewals/${r.id}/reconcile`), 'Reconciled!');
+    await execute(() => api.post(`/renewals/${r.id}/reconcile`), 'Reconciled!');
     refetchAll();
   };
 

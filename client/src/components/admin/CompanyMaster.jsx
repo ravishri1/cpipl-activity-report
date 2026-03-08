@@ -46,9 +46,9 @@ function EntityModal({ entity, onClose, onSaved }) {
       lei: form.lei || null,
     };
     if (entity) {
-      await execute(() => api.put(`/api/company-master/legal-entities/${entity.id}`, payload), 'Entity updated!');
+      await execute(() => api.put(`/company-master/legal-entities/${entity.id}`, payload), 'Entity updated!');
     } else {
-      await execute(() => api.post('/api/company-master/legal-entities', payload), 'Entity created!');
+      await execute(() => api.post('/company-master/legal-entities', payload), 'Entity created!');
     }
     onSaved();
     onClose();
@@ -140,9 +140,9 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
     };
     let result;
     if (registration) {
-      result = await execute(() => api.put(`/api/company-master/registrations/${registration.id}`, payload), 'Registration updated!');
+      result = await execute(() => api.put(`/company-master/registrations/${registration.id}`, payload), 'Registration updated!');
     } else {
-      result = await execute(() => api.post('/api/company-master/registrations', payload), 'Registration created!');
+      result = await execute(() => api.post('/company-master/registrations', payload), 'Registration created!');
     }
     if (result?.abbr) setAbbrPreview(result.abbr);
     onSaved();
@@ -304,7 +304,7 @@ function DeactivateModal({ reg, onClose, onDone }) {
 
   const fetchPreview = async () => {
     const res = await execute(
-      () => api.put(`/api/company-master/registrations/${reg.id}`, { isActive: false }),
+      () => api.put(`/company-master/registrations/${reg.id}`, { isActive: false }),
       null
     );
     if (res?.preview) setPreview(res);
@@ -314,7 +314,7 @@ function DeactivateModal({ reg, onClose, onDone }) {
 
   const handleConfirm = async () => {
     await execute(
-      () => api.put(`/api/company-master/registrations/${reg.id}?confirm=true`, { isActive: false }),
+      () => api.put(`/company-master/registrations/${reg.id}?confirm=true`, { isActive: false }),
       'Registration deactivated'
     );
     onDone();
@@ -362,9 +362,9 @@ function DeactivateModal({ reg, onClose, onDone }) {
 
 export default function CompanyMaster() {
   const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
-    useFetch('/api/company-master/legal-entities', []);
+    useFetch('/company-master/legal-entities', []);
   const { data: registrations, loading: regLoading, refetch: refetchRegs } =
-    useFetch('/api/company-master/registrations', []);
+    useFetch('/company-master/registrations', []);
 
   const [selectedEntityId, setSelectedEntityId] = useState(null);
   const [entityModal, setEntityModal] = useState(null); // null | 'add' | entity object

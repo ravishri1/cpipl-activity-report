@@ -1516,7 +1516,7 @@ function PermissionsTab({ userId }) {
 
   useEffect(() => {
     setLoadingPerms(true);
-    api.get(`/api/users/${userId}/section-permissions`)
+    api.get(`/users/${userId}/section-permissions`)
       .then(res => setDenied(res.data.deniedSections || []))
       .catch(err => setPermError(err.response?.data?.error || 'Failed to load permissions'))
       .finally(() => setLoadingPerms(false));
@@ -1542,7 +1542,7 @@ function PermissionsTab({ userId }) {
     setPermError(null);
     setPermSuccess(false);
     try {
-      await api.put(`/api/users/${userId}/section-permissions`, { deniedSections: denied });
+      await api.put(`/users/${userId}/section-permissions`, { deniedSections: denied });
       setPermSuccess(true);
       setTimeout(() => setPermSuccess(false), 3000);
     } catch (err) {

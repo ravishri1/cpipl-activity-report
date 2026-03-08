@@ -11,7 +11,7 @@ import { LOAN_STATUS_STYLES, REPAYMENT_STATUS_STYLES } from '../../utils/constan
 import { Banknote, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function MyLoans() {
-  const { data: loans, loading, error, refetch } = useFetch('/api/loans/my', []);
+  const { data: loans, loading, error, refetch } = useFetch('/loans/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
@@ -22,7 +22,7 @@ export default function MyLoans() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(() => api.post('/api/loans/request', form), 'Loan request submitted!');
+    await execute(() => api.post('/loans/request', form), 'Loan request submitted!');
     setShowModal(false); refetch();
   };
 

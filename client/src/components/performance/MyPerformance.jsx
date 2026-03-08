@@ -17,8 +17,8 @@ const EMPTY_GOAL = { title: '', description: '', targetDate: '', weightage: '' }
 
 export default function MyPerformance() {
   const [tab, setTab] = useState(TAB_GOALS);
-  const { data: goals, loading: gLoading, error: gError, refetch: refetchGoals } = useFetch('/api/performance/goals/my', []);
-  const { data: reviews, loading: rLoading, error: rError, refetch: refetchReviews } = useFetch('/api/performance/reviews/my', []);
+  const { data: goals, loading: gLoading, error: gError, refetch: refetchGoals } = useFetch('/performance/goals/my', []);
+  const { data: reviews, loading: rLoading, error: rError, refetch: refetchReviews } = useFetch('/performance/reviews/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
 
   const [showGoalForm, setShowGoalForm] = useState(false);
@@ -35,21 +35,21 @@ export default function MyPerformance() {
 
   async function saveGoal() {
     if (editGoalId) {
-      await execute(() => api.put(`/api/performance/goals/${editGoalId}`, goalForm), 'Goal updated!');
+      await execute(() => api.put(`/performance/goals/${editGoalId}`, goalForm), 'Goal updated!');
     } else {
-      await execute(() => api.post('/api/performance/goals', goalForm), 'Goal added!');
+      await execute(() => api.post('/performance/goals', goalForm), 'Goal added!');
     }
     setShowGoalForm(false); setEditGoalId(null); refetchGoals();
   }
 
   async function updateGoalStatus(id, status) {
-    await execute(() => api.put(`/api/performance/goals/${id}`, { status }), 'Goal status updated!');
+    await execute(() => api.put(`/performance/goals/${id}`, { status }), 'Goal status updated!');
     refetchGoals();
   }
 
   async function submitSelfReview() {
     await execute(
-      () => api.post(`/api/performance/reviews/${selfReviewId}/self-review`, { selfReview: selfReviewText, selfRating: parseFloat(selfRating) }),
+      () => api.post(`/performance/reviews/${selfReviewId}/self-review`, { selfReview: selfReviewText, selfRating: parseFloat(selfRating) }),
       'Self review submitted!'
     );
     setSelfReviewId(null); setSelfReviewText(''); setSelfRating(''); refetchReviews();

@@ -156,9 +156,9 @@ export default function RecruitmentManager() {
   const [jobStatusFilter, setJobStatusFilter] = useState('open');
   const [stageFilter, setStageFilter] = useState('');
   const { data: jobs, loading: jobsLoading, error: jobsError, refetch: refetchJobs } =
-    useFetch(`/api/recruitment/jobs?status=${jobStatusFilter}`, []);
+    useFetch(`/recruitment/jobs?status=${jobStatusFilter}`, []);
   const { data: candidates, loading: candsLoading, error: candsError, refetch: refetchCands } =
-    useFetch(`/api/recruitment/candidates${stageFilter ? `?stage=${stageFilter}` : ''}`, []);
+    useFetch(`/recruitment/candidates${stageFilter ? `?stage=${stageFilter}` : ''}`, []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const [showJobForm, setShowJobForm] = useState(false);
@@ -167,26 +167,26 @@ export default function RecruitmentManager() {
 
   async function saveJob(form) {
     if (editJob) {
-      await execute(() => api.put(`/api/recruitment/jobs/${editJob.id}`, form), 'Job updated!');
+      await execute(() => api.put(`/recruitment/jobs/${editJob.id}`, form), 'Job updated!');
     } else {
-      await execute(() => api.post('/api/recruitment/jobs', form), 'Job created!');
+      await execute(() => api.post('/recruitment/jobs', form), 'Job created!');
     }
     setShowJobForm(false); setEditJob(null); refetchJobs();
   }
 
   async function closeJob(id) {
     if (!window.confirm('Close this job opening?')) return;
-    await execute(() => api.put(`/api/recruitment/jobs/${id}`, { status: 'closed' }), 'Job closed.');
+    await execute(() => api.put(`/recruitment/jobs/${id}`, { status: 'closed' }), 'Job closed.');
     refetchJobs();
   }
 
   async function addCandidate(form) {
-    await execute(() => api.post('/api/recruitment/candidates', form), 'Candidate added!');
+    await execute(() => api.post('/recruitment/candidates', form), 'Candidate added!');
     setShowCandForm(false); refetchCands();
   }
 
   async function moveStage(candidateId, newStage) {
-    await execute(() => api.put(`/api/recruitment/candidates/${candidateId}/stage`, { stage: newStage }), 'Stage updated!');
+    await execute(() => api.put(`/recruitment/candidates/${candidateId}/stage`, { stage: newStage }), 'Stage updated!');
     refetchCands();
   }
 

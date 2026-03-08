@@ -13,7 +13,7 @@ import { DECLARATION_STATUS_STYLES } from '../../utils/constants';
 export default function InvestmentDeclarations() {
   const [statusFilter, setStatusFilter] = useState('submitted');
   const { data: declarations, loading, error, refetch } =
-    useFetch(`/api/investment-declarations?status=${statusFilter}`, []);
+    useFetch(`/investment-declarations?status=${statusFilter}`, []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
   const [expanded, setExpanded] = useState(null);
   const [rejectId, setRejectId] = useState(null);
@@ -21,13 +21,13 @@ export default function InvestmentDeclarations() {
 
   async function handleApprove(id) {
     if (!window.confirm('Approve this investment declaration?')) return;
-    await execute(() => api.post(`/api/investment-declarations/${id}/approve`), 'Declaration approved!');
+    await execute(() => api.post(`/investment-declarations/${id}/approve`), 'Declaration approved!');
     refetch();
   }
 
   async function handleReject() {
     await execute(
-      () => api.post(`/api/investment-declarations/${rejectId}/reject`, { rejectionNote: rejectNote }),
+      () => api.post(`/investment-declarations/${rejectId}/reject`, { rejectionNote: rejectNote }),
       'Declaration rejected.'
     );
     setRejectId(null);

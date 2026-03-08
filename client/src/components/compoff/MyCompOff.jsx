@@ -11,8 +11,8 @@ import { COMP_OFF_STATUS_STYLES } from '../../utils/constants';
 import { AlarmClock, Plus, Calendar, X } from 'lucide-react';
 
 export default function MyCompOff() {
-  const { data: balance, loading: balLoading, refetch: refetchBal } = useFetch('/api/comp-off/balance', null);
-  const { data: requests, loading, error, refetch } = useFetch('/api/comp-off/my', []);
+  const { data: balance, loading: balLoading, refetch: refetchBal } = useFetch('/comp-off/balance', null);
+  const { data: requests, loading, error, refetch } = useFetch('/comp-off/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [showModal, setShowModal] = useState(false);
   const [type, setType] = useState('earn');
@@ -23,7 +23,7 @@ export default function MyCompOff() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(() => api.post('/api/comp-off/request', { ...form, type }), 'Request submitted!');
+    await execute(() => api.post('/comp-off/request', { ...form, type }), 'Request submitted!');
     setShowModal(false);
     refetch(); refetchBal();
   };

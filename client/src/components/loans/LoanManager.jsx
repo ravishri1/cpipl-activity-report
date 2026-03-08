@@ -12,7 +12,7 @@ import { Banknote, CheckCircle, XCircle, DollarSign, ChevronDown, ChevronUp, X }
 
 export default function LoanManager() {
   const [statusFilter, setStatusFilter] = useState('pending');
-  const { data: loans, loading, error, refetch } = useFetch(`/api/loans?status=${statusFilter}`, []);
+  const { data: loans, loading, error, refetch } = useFetch(`/loans?status=${statusFilter}`, []);
   const { execute, loading: acting, error: actErr, success, clearMessages } = useApi();
   const [expandedId, setExpandedId] = useState(null);
   const [rejectId, setRejectId] = useState(null);
@@ -22,26 +22,26 @@ export default function LoanManager() {
 
   const handleApprove = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/api/loans/${id}/approve`), 'Loan approved!');
+    await execute(() => api.put(`/loans/${id}/approve`), 'Loan approved!');
     refetch();
   };
 
   const handleDisburse = async (id) => {
     clearMessages();
     const disbursedDate = new Date().toISOString().slice(0, 10);
-    await execute(() => api.put(`/api/loans/${id}/disburse`, { disbursedDate }), 'Loan disbursed!');
+    await execute(() => api.put(`/loans/${id}/disburse`, { disbursedDate }), 'Loan disbursed!');
     refetch();
   };
 
   const handleReject = async () => {
     clearMessages();
-    await execute(() => api.put(`/api/loans/${rejectId}/reject`, { note: rejectNote }), 'Loan rejected.');
+    await execute(() => api.put(`/loans/${rejectId}/reject`, { note: rejectNote }), 'Loan rejected.');
     setRejectId(null); setRejectNote(''); refetch();
   };
 
   const handlePay = async () => {
     clearMessages();
-    await execute(() => api.put(`/api/loans/repayment/${payModal.id}/pay`, { paidDate }), 'Payment recorded!');
+    await execute(() => api.put(`/loans/repayment/${payModal.id}/pay`, { paidDate }), 'Payment recorded!');
     setPayModal(null); refetch();
   };
 

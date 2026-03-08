@@ -12,20 +12,20 @@ import { AlarmClock, CheckCircle, XCircle, Filter } from 'lucide-react';
 
 export default function CompOffManager() {
   const [statusFilter, setStatusFilter] = useState('pending');
-  const { data: requests, loading, error, refetch } = useFetch(`/api/comp-off?status=${statusFilter}`, []);
+  const { data: requests, loading, error, refetch } = useFetch(`/comp-off?status=${statusFilter}`, []);
   const { execute, loading: acting, error: actErr, success, clearMessages } = useApi();
   const [rejectId, setRejectId] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
 
   const handleApprove = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/api/comp-off/${id}/approve`), 'Request approved!');
+    await execute(() => api.put(`/comp-off/${id}/approve`), 'Request approved!');
     refetch();
   };
 
   const handleReject = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/api/comp-off/${id}/reject`, { note: rejectNote }), 'Request rejected.');
+    await execute(() => api.put(`/comp-off/${id}/reject`, { note: rejectNote }), 'Request rejected.');
     setRejectId(null); setRejectNote(''); refetch();
   };
 

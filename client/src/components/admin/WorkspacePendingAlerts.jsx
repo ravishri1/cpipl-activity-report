@@ -25,7 +25,7 @@ const urgencyLabel = (days) => {
 };
 
 export default function WorkspacePendingAlerts() {
-  const { data: pending, loading, refetch } = useFetch('/api/users/workspace-pending', []);
+  const { data: pending, loading, refetch } = useFetch('/users/workspace-pending', []);
   const { execute, loading: marking } = useApi();
   const [expanded, setExpanded] = useState(false);
   const [markingId, setMarkingId] = useState(null);
@@ -38,7 +38,7 @@ export default function WorkspacePendingAlerts() {
   const handleMarkDone = async (userId) => {
     setMarkingId(userId);
     await execute(
-      () => api.put(`/api/users/${userId}/workspace-done`),
+      () => api.put(`/users/${userId}/workspace-done`),
       'Workspace account marked as suspended.'
     );
     setMarkingId(null);

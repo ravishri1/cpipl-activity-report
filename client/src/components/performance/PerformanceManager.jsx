@@ -21,10 +21,10 @@ export default function PerformanceManager() {
   const [tab, setTab] = useState(TAB_REVIEWS);
   const [statusFilter, setStatusFilter] = useState('');
   const { data: reviews, loading: rLoading, error: rError, refetch: refetchReviews } =
-    useFetch(`/api/performance/reviews${statusFilter ? `?status=${statusFilter}` : ''}`, []);
+    useFetch(`/performance/reviews${statusFilter ? `?status=${statusFilter}` : ''}`, []);
   const { data: goals, loading: gLoading, error: gError, refetch: refetchGoals } =
-    useFetch('/api/performance/goals', []);
-  const { data: users } = useFetch('/api/users/directory', []);
+    useFetch('/performance/goals', []);
+  const { data: users } = useFetch('/users/directory', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -37,7 +37,7 @@ export default function PerformanceManager() {
   function setRField(k, v) { setReviewForm(f => ({ ...f, [k]: v })); }
 
   async function createReview() {
-    await execute(() => api.post('/api/performance/reviews', reviewForm), 'Review cycle created!');
+    await execute(() => api.post('/performance/reviews', reviewForm), 'Review cycle created!');
     setShowReviewForm(false); setReviewForm(EMPTY_REVIEW); refetchReviews();
   }
 
@@ -54,7 +54,7 @@ export default function PerformanceManager() {
     } else if (stage === 'manager_review') {
       setRatingModal({ reviewId, field: 'manager' });
     } else {
-      await execute(() => api.post(`/api/performance/reviews/${reviewId}/${ep}`, {}), 'Stage advanced!');
+      await execute(() => api.post(`/performance/reviews/${reviewId}/${ep}`, {}), 'Stage advanced!');
       refetchReviews();
     }
   }
@@ -65,7 +65,7 @@ export default function PerformanceManager() {
       ? { managerRating: parseFloat(ratingVal), managerFeedback: feedbackText }
       : { finalRating: parseFloat(ratingVal), incrementRecommendation: feedbackText };
     const ep = field === 'manager' ? 'manager-review' : 'complete';
-    await execute(() => api.post(`/api/performance/reviews/${reviewId}/${ep}`, payload), 'Rating submitted!');
+    await execute(() => api.post(`/performance/reviews/${reviewId}/${ep}`, payload), 'Rating submitted!');
     setRatingModal(null); setRatingVal(''); setFeedbackText(''); refetchReviews();
   }
 

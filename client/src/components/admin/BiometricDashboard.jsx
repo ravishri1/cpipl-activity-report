@@ -86,11 +86,11 @@ function StatCard({ icon: Icon, label, value, color = 'blue', sub }) {
 
 // ─── Tab: Status Overview ─────────────────────────────────────────────────────
 function StatusTab() {
-  const { data: status, loading, error, refetch } = useFetch('/api/biometric/status', null);
+  const { data: status, loading, error, refetch } = useFetch('/biometric/status', null);
   const { execute, loading: syncing } = useApi();
 
   const handleRematch = async () => {
-    await execute(() => api.post('/api/biometric/rematch'), 'Re-match complete!');
+    await execute(() => api.post('/biometric/rematch'), 'Re-match complete!');
     refetch();
   };
 
@@ -169,11 +169,11 @@ function PunchLogTab() {
     limit: 50,
   }).toString();
 
-  const { data, loading, error } = useFetch(`/api/biometric/punches?${query}`, { punches: [], total: 0 });
+  const { data, loading, error } = useFetch(`/biometric/punches?${query}`, { punches: [], total: 0 });
   const { execute, loading: reprocessing } = useApi();
 
   const handleReprocess = async (id) => {
-    await execute(() => api.post(`/api/biometric/punches/${id}/reprocess`), 'Reprocessed!');
+    await execute(() => api.post(`/biometric/punches/${id}/reprocess`), 'Reprocessed!');
   };
 
   return (
@@ -287,7 +287,7 @@ function UnmatchedTab({ employees }) {
   const [search, setSearch] = useState('');
 
   const query = date ? `?date=${date}` : '';
-  const { data: unmatched, loading, error, refetch } = useFetch(`/api/biometric/unmatched${query}`, []);
+  const { data: unmatched, loading, error, refetch } = useFetch(`/biometric/unmatched${query}`, []);
   const { execute, loading: assigning, error: assignErr, success, clearMessages } = useApi();
 
   const filtered = unmatched.filter(u =>
@@ -309,10 +309,10 @@ function UnmatchedTab({ employees }) {
     const res = await execute(
       async () => {
         // Get one punch id for this enroll number
-        const punch = await api.get(`/api/biometric/punches?enrollNumber=${assignModal.enrollNumber}&matchStatus=unmatched&limit=1`);
+        const punch = await api.get(`/biometric/punches?enrollNumber=${assignModal.enrollNumber}&matchStatus=unmatched&limit=1`);
         const punchId = punch.data.punches?.[0]?.id;
         if (!punchId) throw new Error('No unmatched punch found');
-        return api.post(`/api/biometric/punches/${punchId}/assign`, {
+        return api.post(`/biometric/punches/${punchId}/assign`, {
           userId: selectedUser,
           saveMapping,
         });
@@ -450,7 +450,7 @@ function UnmatchedTab({ employees }) {
 
 // ─── Tab: Devices ─────────────────────────────────────────────────────────────
 function DevicesTab() {
-  const { data: devices, loading, error, refetch } = useFetch('/api/biometric/devices', []);
+  const { data: devices, loading, error, refetch } = useFetch('/biometric/devices', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', device? }
   const emptyForm = { name: '', serialNumber: '', location: '', ipAddress: '', esslUrl: '', apiUser: '', apiPassword: '', apiKey: '', companyCode: '', syncIntervalMin: 5, forceDirection: '' };
@@ -465,9 +465,9 @@ function DevicesTab() {
 
   const handleSave = async () => {
     if (modal.mode === 'add') {
-      await execute(() => api.post('/api/biometric/devices', form), 'Device added!');
+      await execute(() => api.post('/biometric/devices', form), 'Device added!');
     } else {
-      await execute(() => api.put(`/api/biometric/devices/${modal.device.id}`, form), 'Device updated!');
+      await execute(() => api.put(`/biometric/devices/${modal.device.id}`, form), 'Device updated!');
     }
     refetch();
     setModal(null);
@@ -475,12 +475,12 @@ function DevicesTab() {
 
   const handleDelete = async (id) => {
     if (!confirm('Remove this device? Punch history will be deleted.')) return;
-    await execute(() => api.delete(`/api/biometric/devices/${id}`), 'Device removed!');
+    await execute(() => api.delete(`/biometric/devices/${id}`), 'Device removed!');
     refetch();
   };
 
   const handleToggle = async (d) => {
-    await execute(() => api.put(`/api/biometric/devices/${d.id}`, { isActive: !d.isActive }),
+    await execute(() => api.put(`/biometric/devices/${d.id}`, { isActive: !d.isActive }),
       d.isActive ? 'Device deactivated' : 'Device activated');
     refetch();
   };
@@ -631,7 +631,7 @@ function DevicesTab() {
 
 // ─── Tab: Employee Mappings ───────────────────────────────────────────────────
 function MappingsTab() {
-  const { data: employees, loading, error, refetch } = useFetch('/api/biometric/mappings', []);
+  const { data: employees, loading, error, refetch } = useFetch('/biometric/mappings', []);
   const { execute, loading: saving } = useApi();
   const [search, setSearch] = useState('');
   const [editId, setEditId] = useState(null);
@@ -648,7 +648,7 @@ function MappingsTab() {
   const cancelEdit = () => { setEditId(null); setEditVal(''); };
 
   const saveMapping = async (userId) => {
-    await execute(() => api.put(`/api/biometric/mappings/${userId}`, { bioDeviceId: editVal || null }), 'Mapping saved!');
+    await execute(() => api.put(`/biometric/mappings/${userId}`, { bioDeviceId: editVal || null }), 'Mapping saved!');
     cancelEdit();
     refetch();
   };
@@ -744,7 +744,7 @@ export default function BiometricDashboard() {
   const [activeTab, setActiveTab] = useState('status');
 
   // Fetch employees for unmatched tab's assign modal
-  const { data: employees } = useFetch('/api/biometric/mappings', []);
+  const { data: employees } = useFetch('/biometric/mappings', []);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
