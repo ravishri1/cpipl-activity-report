@@ -433,7 +433,7 @@ export default function RenewalManager() {
   // ── Account inline modal ───────────────────────────────────────────────────
   const [acctModal, setAcctModal] = useState(false);
   const [editAcct, setEditAcct]   = useState(null);
-  const [acctForm, setAcctForm]   = useState({ code: '', type: '', name: '', identifier: '' });
+  const [acctForm, setAcctForm]   = useState({ accountCode: '', type: '', name: '', identifier: '' });
 
   // ── Email scan state ───────────────────────────────────────────────────────
   const [scanning, setScanning]     = useState(false);
@@ -487,7 +487,7 @@ export default function RenewalManager() {
     } else {
       await execute(() => api.post('/renewals/accounts', acctForm), 'Account created');
     }
-    setAcctModal(false); setEditAcct(null); setAcctForm({ code: '', type: '', name: '', identifier: '' });
+    setAcctModal(false); setEditAcct(null); setAcctForm({ accountCode: '', type: '', name: '', identifier: '' });
     refetchAccts();
   }
 
@@ -829,7 +829,7 @@ export default function RenewalManager() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <h2 className="font-semibold text-slate-700">Payment Accounts</h2>
               <button
-                onClick={() => { setEditAcct(null); setAcctForm({ code: '', type: '', name: '', identifier: '' }); setAcctModal(true); }}
+                onClick={() => { setEditAcct(null); setAcctForm({ accountCode: '', type: '', name: '', identifier: '' }); setAcctModal(true); }}
                 className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
               >
                 <Plus className="w-4 h-4" /> Add
@@ -856,7 +856,7 @@ export default function RenewalManager() {
                       <td className="px-4 py-2">
                         <div className="flex justify-end gap-1">
                           <button
-                            onClick={() => { setEditAcct(a); setAcctForm({ code: a.code, type: a.type || '', name: a.name, identifier: a.identifier || '' }); setAcctModal(true); }}
+                            onClick={() => { setEditAcct(a); setAcctForm({ accountCode: a.accountCode, type: a.type || '', name: a.name, identifier: a.identifier || '' }); setAcctModal(true); }}
                             className="p-1 text-slate-400 hover:text-blue-600 rounded"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -910,10 +910,10 @@ export default function RenewalManager() {
           {/* ─── Account add/edit modal ─── */}
           {acctModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+              <form onSubmit={e => { e.preventDefault(); handleSaveAcct(); }} className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
                 <h3 className="font-semibold text-slate-800">{editAcct ? 'Edit Account' : 'Add Account'}</h3>
                 {[
-                  { key: 'code', label: 'Code', placeholder: 'HDFC-CC' },
+                  { key: 'accountCode', label: 'Code', placeholder: 'HDFC-CC' },
                   { key: 'name', label: 'Name', placeholder: 'HDFC Credit Card' },
                   { key: 'type', label: 'Type', placeholder: 'credit_card / bank / upi / wallet' },
                   { key: 'identifier', label: 'Last 4 / UPI ID', placeholder: '1234' },
@@ -929,10 +929,10 @@ export default function RenewalManager() {
                   </div>
                 ))}
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => { setAcctModal(false); setEditAcct(null); }} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                  <button onClick={handleSaveAcct} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700">Save</button>
+                  <button type="button" onClick={() => { setAcctModal(false); setEditAcct(null); }} className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+                  <button type="submit" className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700">Save</button>
                 </div>
-              </div>
+              </form>
             </div>
           )}
         </div>
