@@ -49,7 +49,7 @@ export default function MyPerformance() {
 
   async function submitSelfReview() {
     await execute(
-      () => api.post(`/performance/reviews/${selfReviewId}/self-review`, { selfReview: selfReviewText, selfRating: parseFloat(selfRating) }),
+      () => api.put(`/performance/reviews/${selfReviewId}/self`, { selfComments: selfReviewText, selfRating: parseFloat(selfRating) }),
       'Self review submitted!'
     );
     setSelfReviewId(null); setSelfReviewText(''); setSelfRating(''); refetchReviews();

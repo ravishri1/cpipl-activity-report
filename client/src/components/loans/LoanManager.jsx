@@ -29,19 +29,19 @@ export default function LoanManager() {
   const handleDisburse = async (id) => {
     clearMessages();
     const disbursedDate = new Date().toISOString().slice(0, 10);
-    await execute(() => api.put(`/loans/${id}/disburse`, { disbursedDate }), 'Loan disbursed!');
+    await execute(() => api.put(`/loans/${id}/disburse`, { disbursedOn: disbursedDate }), 'Loan disbursed!');
     refetch();
   };
 
   const handleReject = async () => {
     clearMessages();
-    await execute(() => api.put(`/loans/${rejectId}/reject`, { note: rejectNote }), 'Loan rejected.');
+    await execute(() => api.put(`/loans/${rejectId}/reject`, { notes: rejectNote }), 'Loan rejected.');
     setRejectId(null); setRejectNote(''); refetch();
   };
 
   const handlePay = async () => {
     clearMessages();
-    await execute(() => api.put(`/loans/repayment/${payModal.id}/pay`, { paidDate }), 'Payment recorded!');
+    await execute(() => api.put(`/loans/repayments/${payModal.id}/mark-paid`, { paidOn: paidDate }), 'Payment recorded!');
     setPayModal(null); refetch();
   };
 
@@ -89,15 +89,15 @@ export default function LoanManager() {
                 <div className="flex items-center gap-5">
                   <div className="text-right">
                     <p className="text-xs text-slate-500">Amount</p>
-                    <p className="font-bold text-slate-800">{formatINR(loan.amount)}</p>
+                    <p className="font-bold text-slate-800">{formatINR(loan.principalAmount)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-500">Tenure</p>
-                    <p className="font-semibold text-slate-700">{loan.tenure} mo</p>
+                    <p className="font-semibold text-slate-700">{loan.tenureMonths} mo</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-slate-500">Outstanding</p>
-                    <p className="font-bold text-emerald-700">{formatINR(loan.outstandingBalance || 0)}</p>
+                    <p className="font-bold text-emerald-700">{formatINR(loan.balanceAmount || 0)}</p>
                   </div>
                   <StatusBadge status={loan.status} styles={LOAN_STATUS_STYLES} />
                   <div className="flex items-center gap-1.5">
@@ -134,10 +134,10 @@ export default function LoanManager() {
                       ))}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {loan.repayments.map(rep => (
+                      {loan.repayments.map((rep, idx) => (
                         <tr key={rep.id} className="text-sm">
-                          <td className="px-4 py-2 text-slate-500">{rep.installmentNumber}</td>
-                          <td className="px-4 py-2 text-slate-700">{formatDate(rep.dueDate)}</td>
+                          <td className="px-4 py-2 text-slate-500">{idx + 1}</td>
+                          <td className="px-4 py-2 text-slate-700">{formatDate(rep.month)}</td>
                           <td className="px-4 py-2 font-medium">{formatINR(rep.amount)}</td>
                           <td className="px-4 py-2"><StatusBadge status={rep.status} styles={REPAYMENT_STATUS_STYLES} /></td>
                           <td className="px-4 py-2">

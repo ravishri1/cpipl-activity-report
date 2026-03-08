@@ -33,6 +33,24 @@ router.get('/goals', asyncHandler(async (req, res) => {
   res.json(goals);
 }));
 
+// GET /goals/my — own goals only (always filtered to current user)
+router.get('/goals/my', asyncHandler(async (req, res) => {
+  const { year, quarter, status } = req.query;
+  const where = { userId: req.user.id };
+  if (year) where.year = parseInt(year);
+  if (quarter) where.quarter = parseInt(quarter);
+  if (status) where.status = status;
+  const goals = await req.prisma.performanceGoal.findMany({
+    where,
+    include: {
+      user: { select: { id: true, name: true, employeeId: true } },
+      setter: { select: { id: true, name: true } }
+    },
+    orderBy: [{ year: 'desc' }, { createdAt: 'desc' }]
+  });
+  res.json(goals);
+}));
+
 // GET /goals/:id — single goal
 router.get('/goals/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
@@ -106,6 +124,24 @@ router.get('/reviews', asyncHandler(async (req, res) => {
   res.json(reviews);
 }));
 
+// GET /reviews/my — own reviews (as employee or reviewer)
+router.get('/reviews/my', asyncHandler(async (req, res) => {
+  const { year, quarter, status } = req.query;
+  const where = { OR: [{ userId: req.user.id }, { reviewedBy: req.user.id }] };
+  if (year) where.year = parseInt(year);
+  if (quarter) where.quarter = parseInt(quarter);
+  if (status) where.status = status;
+  const reviews = await req.prisma.performanceReview.findMany({
+    where,
+    include: {
+      user: { select: { id: true, name: true, employeeId: true, designation: true } },
+      reviewer: { select: { id: true, name: true } }
+    },
+    orderBy: [{ year: 'desc' }, { createdAt: 'desc' }]
+  });
+  res.json(reviews);
+}));
+
 // GET /reviews/:id
 router.get('/reviews/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
@@ -127,6 +163,20 @@ router.post('/reviews', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'reviewedBy', 'year', 'cycleType');
   const review = await req.prisma.performanceReview.create({ data: req.body });
   res.status(201).json(review);
+}));
+
+// PUT /reviews/:id/self-review — alias for /self (frontend compatibility)
+router.put('/reviews/:id/self-review', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const review = await req.prisma.performanceReview.findUnique({ where: { id } });
+  if (!review) throw notFound('Review');
+  if (review.userId !== req.user.id) throw forbidden();
+  if (review.status !== 'pending') throw badRequest('Self review already submitted');
+  const updated = await req.prisma.performanceReview.update({
+    where: { id },
+    data: { selfRating: req.body.selfRating, selfComments: req.body.selfComments || req.body.selfReview, status: 'self_review' }
+  });
+  res.json(updated);
 }));
 
 // PUT /reviews/:id/self — employee submits self review

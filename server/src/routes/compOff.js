@@ -9,6 +9,15 @@ router.use(authenticate);
 
 function isAdminRole(u) { return u.role === 'admin' || u.role === 'sub_admin' || u.role === 'team_lead'; }
 
+// GET /api/comp-off/balance/me — current user's own balance
+router.get('/balance/me', asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+  let bal = await req.prisma.compOffBalance.findUnique({ where: { userId_year: { userId, year } } });
+  if (!bal) bal = { userId, year, earned: 0, used: 0, balance: 0 };
+  res.json(bal);
+}));
+
 // GET /api/comp-off/balance/:userId
 router.get('/balance/:userId', asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);

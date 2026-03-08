@@ -11,7 +11,7 @@ import { COMP_OFF_STATUS_STYLES } from '../../utils/constants';
 import { AlarmClock, Plus, Calendar, X } from 'lucide-react';
 
 export default function MyCompOff() {
-  const { data: balance, loading: balLoading, refetch: refetchBal } = useFetch('/comp-off/balance', null);
+  const { data: balance, loading: balLoading, refetch: refetchBal } = useFetch('/comp-off/balance/me', null);
   const { data: requests, loading, error, refetch } = useFetch('/comp-off/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [showModal, setShowModal] = useState(false);
@@ -23,7 +23,13 @@ export default function MyCompOff() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(() => api.post('/comp-off/request', { ...form, type }), 'Request submitted!');
+    const payload = {
+      type,
+      workDate: type === 'earn' ? form.workedDate : form.preferredDate,
+      days: type === 'earn' ? form.daysEarned : form.daysToRedeem,
+      reason: form.reason,
+    };
+    await execute(() => api.post('/comp-off', payload), 'Request submitted!');
     setShowModal(false);
     refetch(); refetchBal();
   };
@@ -92,8 +98,8 @@ export default function MyCompOff() {
                       {r.type === 'earn' ? 'Earn' : 'Redeem'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-700">{formatDate(r.workedDate || r.preferredDate)}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-slate-800">{r.daysEarned || r.daysToRedeem || 1}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700">{formatDate(r.workDate)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-800">{r.days}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 max-w-[200px] truncate">{r.reason || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} styles={COMP_OFF_STATUS_STYLES} /></td>
                   <td className="px-4 py-3 text-sm text-slate-500">{formatDate(r.createdAt)}</td>

@@ -15,7 +15,7 @@ import {
 const TAB_REVIEWS = 'reviews';
 const TAB_GOALS = 'goals';
 
-const EMPTY_REVIEW = { userId: '', cycleType: 'annual', periodStart: '', periodEnd: '' };
+const EMPTY_REVIEW = { userId: '', reviewedBy: '', cycleType: 'annual', year: new Date().getFullYear(), periodStart: '', periodEnd: '' };
 
 export default function PerformanceManager() {
   const [tab, setTab] = useState(TAB_REVIEWS);
@@ -37,35 +37,26 @@ export default function PerformanceManager() {
   function setRField(k, v) { setReviewForm(f => ({ ...f, [k]: v })); }
 
   async function createReview() {
-    await execute(() => api.post('/performance/reviews', reviewForm), 'Review cycle created!');
+    const year = reviewForm.periodStart ? new Date(reviewForm.periodStart).getFullYear() : reviewForm.year;
+    await execute(() => api.post('/performance/reviews', { ...reviewForm, year }), 'Review cycle created!');
     setShowReviewForm(false); setReviewForm(EMPTY_REVIEW); refetchReviews();
   }
 
   async function advanceStage(reviewId, stage) {
-    const endpointMap = {
-      manager_review: 'manager-review',
-      hr_review: 'hr-review',
-      completed: 'complete',
-    };
-    const ep = endpointMap[stage];
-    if (!ep) return;
     if (stage === 'completed') {
       setRatingModal({ reviewId, field: 'final' });
     } else if (stage === 'manager_review') {
       setRatingModal({ reviewId, field: 'manager' });
-    } else {
-      await execute(() => api.post(`/performance/reviews/${reviewId}/${ep}`, {}), 'Stage advanced!');
-      refetchReviews();
     }
   }
 
   async function submitRating() {
     const { reviewId, field } = ratingModal;
     const payload = field === 'manager'
-      ? { managerRating: parseFloat(ratingVal), managerFeedback: feedbackText }
-      : { finalRating: parseFloat(ratingVal), incrementRecommendation: feedbackText };
-    const ep = field === 'manager' ? 'manager-review' : 'complete';
-    await execute(() => api.post(`/performance/reviews/${reviewId}/${ep}`, payload), 'Rating submitted!');
+      ? { managerRating: parseFloat(ratingVal), managerComments: feedbackText }
+      : { finalRating: parseFloat(ratingVal), incrementPercent: parseFloat(feedbackText) || null };
+    const ep = field === 'manager' ? 'manager' : 'complete';
+    await execute(() => api.put(`/performance/reviews/${reviewId}/${ep}`, payload), 'Rating submitted!');
     setRatingModal(null); setRatingVal(''); setFeedbackText(''); refetchReviews();
   }
 
@@ -128,6 +119,14 @@ export default function PerformanceManager() {
                 {(users || []).map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>)}
               </select>
             </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Reviewer (Manager) *</label>
+              <select value={reviewForm.reviewedBy} onChange={e => setRField('reviewedBy', e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">Select reviewer...</option>
+                {(users || []).map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>)}
+              </select>
+            </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Cycle Type</label>
               <select value={reviewForm.cycleType} onChange={e => setRField('cycleType', e.target.value)}
@@ -135,7 +134,11 @@ export default function PerformanceManager() {
                 {REVIEW_CYCLE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
               </select>
             </div>
-            <div />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Year</label>
+              <input type="number" value={reviewForm.year} onChange={e => setRField('year', parseInt(e.target.value))}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" min="2020" max="2099" />
+            </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Period Start</label>
               <input type="date" value={reviewForm.periodStart} onChange={e => setRField('periodStart', e.target.value)}
@@ -148,7 +151,7 @@ export default function PerformanceManager() {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
-            <button onClick={createReview} disabled={saving || !reviewForm.userId}
+            <button onClick={createReview} disabled={saving || !reviewForm.userId || !reviewForm.reviewedBy}
               className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
               {saving ? 'Creating...' : 'Create Review Cycle'}
             </button>
@@ -179,13 +182,7 @@ export default function PerformanceManager() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
-                    {r.status === 'pending' && (
-                      <button onClick={() => advanceStage(r.id, 'self_review')}
-                        className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs hover:bg-amber-100">
-                        Open Self Review
-                      </button>
-                    )}
-                    {r.status === 'self_review' && r.selfReview && (
+                    {r.status === 'self_review' && r.selfComments && (
                       <button onClick={() => advanceStage(r.id, 'manager_review')}
                         className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs hover:bg-green-100">
                         Submit Manager Review
@@ -205,16 +202,16 @@ export default function PerformanceManager() {
                 </div>
                 {expanded === r.id && (
                   <div className="border-t border-slate-100 p-5 bg-slate-50 space-y-3 text-sm">
-                    {r.selfReview && (
+                    {r.selfComments && (
                       <div className="p-3 bg-blue-50 rounded-lg">
                         <p className="text-xs font-semibold text-blue-700 mb-1">Self Review ({r.selfRating}/5)</p>
-                        <p className="text-blue-800">{r.selfReview}</p>
+                        <p className="text-blue-800">{r.selfComments}</p>
                       </div>
                     )}
-                    {r.managerFeedback && (
+                    {r.managerComments && (
                       <div className="p-3 bg-green-50 rounded-lg">
                         <p className="text-xs font-semibold text-green-700 mb-1">Manager Feedback ({r.managerRating}/5)</p>
-                        <p className="text-green-800">{r.managerFeedback}</p>
+                        <p className="text-green-800">{r.managerComments}</p>
                       </div>
                     )}
                     {r.incrementRecommendation && (
@@ -223,7 +220,7 @@ export default function PerformanceManager() {
                         <p className="text-purple-800">{r.incrementRecommendation}</p>
                       </div>
                     )}
-                    {!r.selfReview && !r.managerFeedback && <p className="text-slate-400 text-xs">No review details yet.</p>}
+                    {!r.selfComments && !r.managerFeedback && <p className="text-slate-400 text-xs">No review details yet.</p>}
                   </div>
                 )}
               </div>
