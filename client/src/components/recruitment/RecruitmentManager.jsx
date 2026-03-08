@@ -156,7 +156,7 @@ export default function RecruitmentManager() {
   const [jobStatusFilter, setJobStatusFilter] = useState('open');
   const [stageFilter, setStageFilter] = useState('');
   const { data: jobs, loading: jobsLoading, error: jobsError, refetch: refetchJobs } =
-    useFetch(`/recruitment/jobs?status=${jobStatusFilter}`, []);
+    useFetch(`/recruitment/openings?status=${jobStatusFilter}`, []);
   const { data: candidates, loading: candsLoading, error: candsError, refetch: refetchCands } =
     useFetch(`/recruitment/candidates${stageFilter ? `?stage=${stageFilter}` : ''}`, []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
@@ -167,16 +167,16 @@ export default function RecruitmentManager() {
 
   async function saveJob(form) {
     if (editJob) {
-      await execute(() => api.put(`/recruitment/jobs/${editJob.id}`, form), 'Job updated!');
+      await execute(() => api.put(`/recruitment/openings/${editJob.id}`, form), 'Job updated!');
     } else {
-      await execute(() => api.post('/recruitment/jobs', form), 'Job created!');
+      await execute(() => api.post('/recruitment/openings', form), 'Job created!');
     }
     setShowJobForm(false); setEditJob(null); refetchJobs();
   }
 
   async function closeJob(id) {
     if (!window.confirm('Close this job opening?')) return;
-    await execute(() => api.put(`/recruitment/jobs/${id}`, { status: 'closed' }), 'Job closed.');
+    await execute(() => api.put(`/recruitment/openings/${id}`, { status: 'closed' }), 'Job closed.');
     refetchJobs();
   }
 

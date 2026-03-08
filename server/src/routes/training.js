@@ -62,19 +62,23 @@ router.get('/modules', asyncHandler(async (req, res) => {
     orderBy: [{ isMandatory: 'desc' }, { createdAt: 'desc' }]
   });
 
-  // Enrich with user's assignment info
+  // Enrich with user's assignment info and attempts
   const enriched = await Promise.all(modules.map(async (module) => {
-    const assignment = await req.prisma.trainingAssignment.findFirst({
-      where: {
-        moduleId: module.id,
-        assignedToId: req.user.id
-      }
-    });
+    const [assignment, myAttempts] = await Promise.all([
+      req.prisma.trainingAssignment.findFirst({
+        where: { moduleId: module.id, assignedToId: req.user.id }
+      }),
+      req.prisma.trainingAttempt.findMany({
+        where: { moduleId: module.id, userId: req.user.id },
+        orderBy: { completedAt: 'desc' }
+      })
+    ]);
     return {
       ...module,
       userAssignment: assignment,
+      myAttempts,
       completionPointsValue: module.completionPointsValue || 25,
-      daysUntilDeadline: assignment?.completionDeadline 
+      daysUntilDeadline: assignment?.completionDeadline
         ? Math.ceil((new Date(assignment.completionDeadline) - new Date()) / (1000 * 60 * 60 * 24))
         : null
     };
@@ -490,6 +494,153 @@ router.put('/contributions/:id', requireAdmin, asyncHandler(async (req, res) => 
   });
 
   res.json(updated);
+}));
+
+// ═══════════════════════════════════════════════
+// EXAM ATTEMPTS
+// ═══════════════════════════════════════════════
+
+// GET /modules/admin — all modules for admin (including inactive, all scopes)
+router.get('/modules/admin', requireAdmin, asyncHandler(async (req, res) => {
+  const modules = await req.prisma.trainingModule.findMany({
+    include: {
+      creator: { select: { id: true, name: true } },
+      exams: { include: { _count: { select: { attempts: true } } } },
+      _count: { select: { contributions: true, assignments: true, attempts: true } }
+    },
+    orderBy: [{ isMandatory: 'desc' }, { createdAt: 'desc' }]
+  });
+  res.json(modules);
+}));
+
+// POST /attempts — Submit exam attempt (must come before /:id routes)
+router.post('/attempts', asyncHandler(async (req, res) => {
+  const { examId, answers, timeSpent } = req.body;
+  if (!examId) throw badRequest('examId is required');
+
+  const exam = await req.prisma.trainingExam.findUnique({
+    where: { id: parseInt(examId) }
+  });
+  if (!exam) throw notFound('Exam');
+
+  // Parse questions and calculate score
+  let questions = [];
+  try { questions = JSON.parse(exam.questions); } catch { questions = []; }
+  let parsedAnswers = {};
+  try { parsedAnswers = typeof answers === 'string' ? JSON.parse(answers) : (answers || {}); } catch { parsedAnswers = {}; }
+
+  let earned = 0;
+  const pointsPerQ = questions.length > 0 ? Math.floor(exam.totalPoints / questions.length) : 0;
+  questions.forEach((q, idx) => {
+    const userAns = String(parsedAnswers[idx] ?? parsedAnswers[String(idx)] ?? '').trim().toLowerCase();
+    const correct = String(q.correctAnswer ?? q.correct ?? '').trim().toLowerCase();
+    if (userAns === correct) earned += pointsPerQ;
+  });
+
+  const scorePercent = exam.totalPoints > 0 ? Math.round((earned / exam.totalPoints) * 100) : 0;
+  const passed = scorePercent >= 70; // 70% pass threshold
+
+  const attempt = await req.prisma.trainingAttempt.create({
+    data: {
+      moduleId: exam.moduleId,
+      userId: req.user.id,
+      answers: typeof answers === 'string' ? answers : JSON.stringify(answers),
+      score: scorePercent,
+      totalPoints: earned,
+      passed,
+      completedAt: new Date(),
+      timeSpent: timeSpent ? parseInt(timeSpent) : null,
+    }
+  });
+
+  // Award points on first pass
+  if (passed) {
+    const prevPass = await req.prisma.trainingAttempt.count({
+      where: { moduleId: exam.moduleId, userId: req.user.id, passed: true, id: { not: attempt.id } }
+    });
+    if (prevPass === 0) {
+      const module = await req.prisma.trainingModule.findUnique({ where: { id: exam.moduleId } });
+      const pts = module?.completionPointsValue || 25;
+      await awardPoints(req.user.id, pts, `Passed exam: ${module?.title || 'Training'}`, req.prisma);
+    }
+  }
+
+  res.status(201).json({ ...attempt, scorePercent, passed });
+}));
+
+// GET /attempts/module/:id — Admin: get all attempts for a module
+router.get('/attempts/module/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const moduleId = parseId(req.params.id);
+  const attempts = await req.prisma.trainingAttempt.findMany({
+    where: { moduleId },
+    include: { module: { select: { title: true } } },
+    orderBy: { completedAt: 'desc' }
+  });
+  // Enrich with user info
+  const userIds = [...new Set(attempts.map(a => a.userId))];
+  const users = await req.prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, employeeId: true, department: true }
+  });
+  const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+  res.json(attempts.map(a => ({ ...a, user: userMap[a.userId] || null })));
+}));
+
+// GET /my-progress — User's training progress summary
+router.get('/my-progress', asyncHandler(async (req, res) => {
+  const [modules, attempts, assignments] = await Promise.all([
+    req.prisma.trainingModule.count({ where: { isActive: true } }),
+    req.prisma.trainingAttempt.findMany({ where: { userId: req.user.id, passed: true } }),
+    req.prisma.trainingAssignment.findMany({
+      where: { assignedToId: req.user.id },
+      include: { module: { select: { isMandatory: true } } }
+    })
+  ]);
+
+  const passedModuleIds = new Set(attempts.map(a => a.moduleId));
+  const mandatoryPending = assignments.filter(
+    a => a.module?.isMandatory && !passedModuleIds.has(a.moduleId)
+  ).length;
+  const completed = passedModuleIds.size;
+  const scores = attempts.map(a => a.score || 0);
+  const overallScore = scores.length > 0
+    ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
+    : null;
+
+  res.json({ totalModules: modules, completed, mandatoryPending, overallScore });
+}));
+
+// GET /dashboard — Admin training dashboard stats
+router.get('/dashboard', requireAdmin, asyncHandler(async (req, res) => {
+  const [totalModules, activeModules, mandatoryModules, totalAttempts] = await Promise.all([
+    req.prisma.trainingModule.count(),
+    req.prisma.trainingModule.count({ where: { isActive: true } }),
+    req.prisma.trainingModule.count({ where: { isMandatory: true, isActive: true } }),
+    req.prisma.trainingAttempt.count(),
+  ]);
+
+  const passedAttempts = await req.prisma.trainingAttempt.count({ where: { passed: true } });
+  const avgPassRate = totalAttempts > 0 ? Math.round((passedAttempts / totalAttempts) * 100) : 0;
+
+  // Completion rates per module (top 10)
+  const modules = await req.prisma.trainingModule.findMany({
+    where: { isActive: true },
+    include: { _count: { select: { attempts: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+  const completionRates = await Promise.all(modules.map(async (mod) => {
+    const passed = await req.prisma.trainingAttempt.count({ where: { moduleId: mod.id, passed: true } });
+    return {
+      moduleId: mod.id,
+      title: mod.title,
+      totalAttempts: mod._count.attempts,
+      passed,
+      passRate: mod._count.attempts > 0 ? Math.round((passed / mod._count.attempts) * 100) : 0,
+    };
+  }));
+
+  res.json({ totalModules, activeModules, mandatoryModules, totalAttempts, avgPassRate, completionRates });
 }));
 
 // ═══════════════════════════════════════════════
