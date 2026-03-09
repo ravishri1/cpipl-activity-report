@@ -15,6 +15,7 @@ import {
   Upload,
   Brain,
   ChevronDown,
+  ChevronRight,
   X,
   ShieldCheck,
   BarChart3,
@@ -61,35 +62,35 @@ import { useState } from 'react';
 export default function Sidebar({ isOpen, onClose }) {
   const { user, isStrictAdmin, isTeamLead, isSeparated, deniedSections } = useAuth();
   const location = useLocation();
-  const [expandedSections, setExpandedSections] = useState({
+  const [expanded, setExpanded] = useState({
+    // Level-1 sections
     overview: true,
     myWork: true,
+    myWorkspace: true,
     myTeam: true,
     team: true,
     people: false,
     timePay: false,
     organization: false,
+    // Level-2 groups inside My Work
+    timeAttendance: true,
+    moneyBenefits: false,
+    performanceGrowth: false,
+    supportPolicies: false,
+    // Level-2 groups inside My Workspace
+    personal: true,
   });
 
   const isActive = (path) => location.pathname === path;
 
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  const toggle = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const handleLinkClick = () => {
+    if (window.innerWidth < 1024) onClose?.();
   };
 
   // ── Separated employee: minimal menu only ───────────────────────
   if (isSeparated) {
-    const separatedSections = [
-      {
-        key: 'limitedAccess',
-        label: 'Available',
-        items: [
-          { to: '/payslips', label: 'My Payslips', icon: IndianRupee },
-          { to: '/my-support', label: 'My Support', icon: LifeBuoy },
-        ],
-      },
-    ];
-
     return (
       <>
         {isOpen && (
@@ -116,226 +117,183 @@ export default function Sidebar({ isOpen, onClose }) {
             </div>
           </div>
           <nav className="flex-1 overflow-y-auto py-2 px-2">
-            {/* Info notice */}
             <div className="mx-1 mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
                 Your employment has ended. You have limited access to payslips and support.
               </p>
             </div>
-            {separatedSections.map((section) => (
-              <div key={section.key} className="mb-1">
-                <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  {section.label}
-                </div>
-                <div className="space-y-0.5">
-                  {section.items.map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => window.innerWidth < 1024 && onClose?.()}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                        isActive(item.to)
-                          ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      }`}
-                    >
-                      <item.icon className={`w-4 h-4 flex-shrink-0 ${
-                        isActive(item.to) ? 'text-blue-600' : 'text-slate-400'
-                      }`} />
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
+            <div className="mb-1">
+              <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Available
               </div>
-            ))}
-          </nav>
-          <div className="border-t border-slate-100 px-3 py-3">
-            <div className="flex items-center gap-2.5">
-              {user?.driveProfilePhotoUrl ? (
-                <img src={user.driveProfilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                  {user?.name?.charAt(0)?.toUpperCase() || '?'}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-700 truncate">{user?.name}</p>
-                <p className="text-[10px] text-amber-600 font-medium">Separated</p>
+              <div className="space-y-0.5">
+                {[
+                  { to: '/payslips', label: 'My Payslips', icon: IndianRupee },
+                  { to: '/my-support', label: 'My Support', icon: LifeBuoy },
+                ].map((item) => (
+                  <NavItem key={item.to} item={item} isActive={isActive(item.to)} onClick={handleLinkClick} />
+                ))}
               </div>
             </div>
-          </div>
+          </nav>
+          <UserFooter user={user} label="Separated" labelClass="text-amber-600" />
         </aside>
       </>
     );
   }
 
-  // ── Build navigation sections based on role ───────────────────────
-  const navSections = [
+  // ── Item lists ────────────────────────────────────────────────────
+  const overviewItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/announcements', label: 'Announcements', icon: Megaphone },
+  ];
+
+  // My Work → Level-2 groups
+  const myWorkGroups = [
     {
-      key: 'overview',
-      label: 'Overview',
+      key: 'timeAttendance',
+      label: 'Time & Attendance',
+      icon: Clock,
       items: [
-        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { to: '/announcements', label: 'Announcements', icon: Megaphone },
+        { to: '/activity-reports',           label: 'Activity Reports',      icon: ClipboardEdit },
+        { to: '/attendance',                  label: 'Attendance',            icon: Clock },
+        { to: '/leave',                       label: 'Leave',                 icon: CalendarOff },
+        { to: '/overtime',                    label: 'Overtime',              icon: Clock },
+        { to: '/my-comp-off',                 label: 'Comp-Off',              icon: AlarmClock },
+        { to: '/attendance-regularization',   label: 'Regularization',        icon: ClipboardEdit },
       ],
     },
     {
-      key: 'myWork',
-      label: 'My Work',
+      key: 'moneyBenefits',
+      label: 'Money & Benefits',
+      icon: IndianRupee,
       items: [
-        { to: '/activity-reports', label: 'Activity Reports', icon: ClipboardEdit },
-        { to: '/attendance', label: 'Attendance', icon: Clock },
-        { to: '/leave', label: 'Leave', icon: CalendarOff },
-        { to: '/overtime', label: 'Overtime', icon: Clock },
-        { to: '/my-comp-off', label: 'Comp-Off', icon: AlarmClock },
-        { to: '/attendance-regularization', label: 'Regularization', icon: ClipboardEdit },
-        { to: '/my-loans', label: 'My Loans', icon: Banknote },
-        { to: '/my-investment', label: 'Investment Declaration', icon: Calculator },
-        { to: '/my-performance', label: 'My Performance', icon: Target },
-        { to: '/expenses', label: 'Expenses', icon: Wallet },
-        { to: '/payslips', label: 'Payslips', icon: IndianRupee },
-        { to: '/my-workspace', label: 'My Workspace', icon: Boxes },
+        { to: '/payslips',        label: 'Payslips',               icon: IndianRupee },
+        { to: '/expenses',        label: 'Expenses',               icon: Wallet },
+        { to: '/my-loans',        label: 'My Loans',               icon: Banknote },
+        { to: '/my-investment',   label: 'Investment Declaration', icon: Calculator },
+      ],
+    },
+    {
+      key: 'performanceGrowth',
+      label: 'Performance & Growth',
+      icon: TrendingUp,
+      items: [
+        { to: '/my-performance',           label: 'My Performance',       icon: Target },
+        { to: '/training/my-assignments',  label: 'My Training',          icon: GraduationCap },
+        { to: '/training/library',         label: 'Training Library',     icon: BookOpen },
+        { to: '/training/contribute',      label: 'Contribute Training',  icon: Brain },
+        { to: '/training/leaderboard',     label: 'Training Leaderboard', icon: Crown },
+      ],
+    },
+    {
+      key: 'supportPolicies',
+      label: 'Support & Policies',
+      icon: ShieldCheck,
+      items: [
         { to: '/my-compliance', label: 'Compliance', icon: ShieldCheck },
-        { to: '/my-support', label: 'My Support', icon: LifeBuoy },
-        { to: '/training/my-assignments', label: 'My Training', icon: GraduationCap },
-        { to: '/training/library', label: 'Training Library', icon: BookOpen },
-        { to: '/training/contribute', label: 'Contribute Training', icon: Brain },
-        { to: '/training/leaderboard', label: 'Training Leaderboard', icon: Crown },
-        { to: '/my-files', label: 'My Files', icon: FolderOpen },
-        { to: '/wiki', label: 'Knowledge Base', icon: BookOpen },
+        { to: '/my-support',    label: 'My Support', icon: LifeBuoy },
+        { to: '/wiki',          label: 'Knowledge Base', icon: BookOpen },
       ],
     },
   ];
 
-  // ── Team Lead: "My Team" section ──────────────────────────────────
-  if (isTeamLead) {
-    navSections.push({
-      key: 'myTeam',
-      label: 'My Team',
-      teamLeadOnly: true,
+  // My Workspace → Level-2 groups
+  const myWorkspaceGroups = [
+    {
+      key: 'personal',
+      label: 'Personal',
+      icon: Boxes,
       items: [
-        { to: '/my-team', label: 'Team Overview', icon: UsersRound },
-        { to: '/training/manage', label: 'Team Training', icon: GraduationCap },
-        { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
-        { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
-        { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
+        { to: '/my-workspace',       label: 'My Assets', icon: Package },
+        { to: '/training/my-points', label: 'My Points', icon: Trophy },
+        { to: '/my-files',           label: 'My Files',  icon: FolderOpen },
       ],
-    });
-  }
+    },
+  ];
 
-  // ── Common: Team directory section ────────────────────────────────
-  navSections.push({
-    key: 'team',
-    label: 'Team',
-    items: [
-      ...(isStrictAdmin || isTeamLead ? [{ to: '/directory', label: 'Directory', icon: Users }] : []),
-      { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-    ],
-  });
+  const teamItems = [
+    ...(isStrictAdmin || isTeamLead ? [{ to: '/directory', label: 'Directory', icon: Users }] : []),
+    { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+  ];
 
-  // ── Admin-only sections ───────────────────────────────────────────
-  if (isStrictAdmin) {
-    navSections.push(
-      {
-        key: 'people',
-        label: 'People',
-        adminOnly: true,
-        items: [
-          { to: '/admin/team', label: 'Team Management', icon: Users },
-          { to: '/admin/recruitment', label: 'Recruitment', icon: Briefcase },
-          { to: '/admin/branches', label: 'Branch Manager', icon: Building2 },
-          { to: '/admin/confirmations', label: 'Confirmations', icon: BadgeCheck },
-          { to: '/admin/onboarding', label: 'Onboarding', icon: UserPlus },
-          { to: '/admin/separations', label: 'Separations', icon: UserMinus },
-          { to: '/admin/import', label: 'Import Employees', icon: Upload },
-          { to: '/admin/ai-extract', label: 'AI Extract', icon: Brain },
-        ],
-      },
-      {
-        key: 'timePay',
-        label: 'Time & Pay',
-        adminOnly: true,
-        items: [
-          { to: '/admin/attendance', label: 'Team Attendance', icon: CheckSquare },
-          { to: '/admin/biometric', label: 'Biometric', icon: Fingerprint },
-          { to: '/admin/shifts', label: 'Shift Management', icon: Clock },
-          { to: '/admin/leave-requests', label: 'Leave Requests', icon: ClipboardCheck },
-          { to: '/admin/holidays', label: 'Holidays', icon: CalendarDays },
-          { to: '/admin/payroll', label: 'Payroll', icon: CreditCard },
-          { to: '/admin/salary-setup', label: 'Salary Setup', icon: Banknote },
-          { to: '/admin/expense-claims', label: 'Expense Claims', icon: Receipt },
-          { to: '/admin/overtime', label: 'Overtime Manager', icon: Clock },
-          { to: '/admin/comp-off', label: 'Comp-Off Manager', icon: AlarmClock },
-          { to: '/admin/regularization', label: 'Regularization', icon: ClipboardEdit },
-          { to: '/admin/loans', label: 'Loan Manager', icon: Banknote },
-          { to: '/admin/investment-declarations', label: 'Investment Declarations', icon: Calculator },
-        ],
-      },
-      {
-        key: 'organization',
-        label: 'Organization',
-        adminOnly: true,
-        items: [
-          { to: '/admin/company-master', label: 'Company Master', icon: Building2 },
-          { to: '/admin/compliance', label: 'Compliance Tracker', icon: BadgeCheck },
-          { to: '/admin/renewals', label: 'Renewal Manager', icon: RefreshCw },
-          { to: '/admin/performance', label: 'Performance Management', icon: Target },
-          { to: '/admin/assets', label: 'Asset Manager', icon: Package },
-          { to: '/admin/asset-lifecycle', label: 'Asset Lifecycle', icon: Activity },
-          { to: '/admin/predictive-maintenance', label: 'Predictive Maintenance', icon: HeartPulse },
-          { to: '/admin/hr-analytics', label: 'HR Analytics', icon: LineChart },
-          { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
-          { to: '/admin/procurement', label: 'Procurement', icon: ShoppingCart },
-          { to: '/admin/order-approvals', label: 'Order Approvals', icon: ClipboardCheck },
-          { to: '/admin/inventory', label: 'Inventory', icon: Boxes },
-          { to: '/admin/insurance', label: 'Insurance Management', icon: Heart },
-          { to: '/admin/contracts', label: 'Company Contracts', icon: ScrollText },
-          { to: '/admin/letters', label: 'Letters', icon: Mail },
-          { to: '/admin/policies', label: 'Policy Manager', icon: ShieldCheck },
-          { to: '/admin/policy-scorecard', label: 'Policy Scorecard', icon: BarChart3 },
-          { to: '/admin/surveys', label: 'Survey Manager', icon: ClipboardList },
-          { to: '/admin/tickets', label: 'Helpdesk', icon: LifeBuoy },
-          { to: '/admin/training', label: 'Training Manager', icon: GraduationCap },
-          { to: '/admin/suggestions', label: 'Suggestions', icon: MessageSquare },
-          { to: '/admin/reports', label: 'HR Reports', icon: PieChart },
-          { to: '/admin/error-reports', label: 'Error Reports', icon: Bug },
-          { to: '/admin/settings', label: 'Settings', icon: Settings },
-        ],
-      }
-    );
-  }
+  const myTeamItems = [
+    { to: '/my-team',                label: 'Team Overview',    icon: UsersRound },
+    { to: '/training/manage',        label: 'Team Training',    icon: GraduationCap },
+    { to: '/admin/attendance',       label: 'Team Attendance',  icon: CheckSquare },
+    { to: '/admin/leave-requests',   label: 'Leave Requests',   icon: ClipboardCheck },
+    { to: '/admin/expense-claims',   label: 'Expense Claims',   icon: Receipt },
+  ];
 
-  const handleLinkClick = () => {
-    // Close sidebar on mobile after navigation
-    if (window.innerWidth < 1024) {
-      onClose?.();
-    }
-  };
+  const peopleItems = [
+    { to: '/admin/team',         label: 'Team Management',    icon: Users },
+    { to: '/admin/recruitment',  label: 'Recruitment',        icon: Briefcase },
+    { to: '/admin/branches',     label: 'Branch Manager',     icon: Building2 },
+    { to: '/admin/confirmations',label: 'Confirmations',      icon: BadgeCheck },
+    { to: '/admin/onboarding',   label: 'Onboarding',         icon: UserPlus },
+    { to: '/admin/separations',  label: 'Separations',        icon: UserMinus },
+    { to: '/admin/import',       label: 'Import Employees',   icon: Upload },
+    { to: '/admin/ai-extract',   label: 'AI Extract',         icon: Brain },
+  ];
 
-  // Section header color: admin=amber, teamLead=emerald, default=slate
-  const getSectionColor = (section) => {
-    if (section.adminOnly) return 'text-amber-500';
-    if (section.teamLeadOnly) return 'text-emerald-500';
-    return 'text-slate-400';
-  };
+  const timePayItems = [
+    { to: '/admin/attendance',               label: 'Team Attendance',        icon: CheckSquare },
+    { to: '/admin/biometric',                label: 'Biometric',              icon: Fingerprint },
+    { to: '/admin/shifts',                   label: 'Shift Management',       icon: Clock },
+    { to: '/admin/leave-requests',           label: 'Leave Requests',         icon: ClipboardCheck },
+    { to: '/admin/holidays',                 label: 'Holidays',               icon: CalendarDays },
+    { to: '/admin/payroll',                  label: 'Payroll',                icon: CreditCard },
+    { to: '/admin/salary-setup',             label: 'Salary Setup',           icon: Banknote },
+    { to: '/admin/expense-claims',           label: 'Expense Claims',         icon: Receipt },
+    { to: '/admin/overtime',                 label: 'Overtime Manager',       icon: Clock },
+    { to: '/admin/comp-off',                 label: 'Comp-Off Manager',       icon: AlarmClock },
+    { to: '/admin/regularization',           label: 'Regularization',         icon: ClipboardEdit },
+    { to: '/admin/loans',                    label: 'Loan Manager',           icon: Banknote },
+    { to: '/admin/investment-declarations',  label: 'Investment Declarations',icon: Calculator },
+  ];
+
+  const organizationItems = [
+    { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
+    { to: '/admin/compliance',              label: 'Compliance Tracker',      icon: BadgeCheck },
+    { to: '/admin/renewals',                label: 'Renewal Manager',         icon: RefreshCw },
+    { to: '/admin/performance',             label: 'Performance Management',  icon: Target },
+    { to: '/admin/assets',                  label: 'Asset Manager',           icon: Package },
+    { to: '/admin/asset-lifecycle',         label: 'Asset Lifecycle',         icon: Activity },
+    { to: '/admin/predictive-maintenance',  label: 'Predictive Maintenance',  icon: HeartPulse },
+    { to: '/admin/hr-analytics',            label: 'HR Analytics',            icon: LineChart },
+    { to: '/admin/vendor-analytics',        label: 'Vendor Analytics',        icon: TrendingUp },
+    { to: '/admin/procurement',             label: 'Procurement',             icon: ShoppingCart },
+    { to: '/admin/order-approvals',         label: 'Order Approvals',         icon: ClipboardCheck },
+    { to: '/admin/inventory',               label: 'Inventory',               icon: Boxes },
+    { to: '/admin/insurance',               label: 'Insurance Management',    icon: Heart },
+    { to: '/admin/contracts',               label: 'Company Contracts',       icon: ScrollText },
+    { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
+    { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
+    { to: '/admin/policy-scorecard',        label: 'Policy Scorecard',        icon: BarChart3 },
+    { to: '/admin/surveys',                 label: 'Survey Manager',          icon: ClipboardList },
+    { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
+    { to: '/admin/training',                label: 'Training Manager',        icon: GraduationCap },
+    { to: '/admin/suggestions',             label: 'Suggestions',             icon: MessageSquare },
+    { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
+    { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },
+    { to: '/admin/settings',                label: 'Settings',                icon: Settings },
+  ];
+
+  // Helper: filter denied items
+  const filterItems = (items) => items.filter((item) => !deniedSections.includes(item.to));
 
   return (
     <>
-      {/* Mobile overlay */}
       {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/30 z-40 lg:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={onClose} />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 z-50 h-full w-60 bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:z-auto ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Mobile close button */}
+        {/* Mobile close */}
         <div className="flex items-center justify-between h-14 px-4 border-b border-slate-100 lg:hidden">
           <span className="font-semibold text-slate-800 text-sm">Navigation</span>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
@@ -343,7 +301,7 @@ export default function Sidebar({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Brand — desktop only */}
+        {/* Brand — desktop */}
         <div className="hidden lg:flex items-center gap-2.5 h-14 px-4 border-b border-slate-100">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-sm">
             <FileText className="w-4 h-4 text-white" />
@@ -356,45 +314,216 @@ export default function Sidebar({ isOpen, onClose }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2 px-2">
-          {navSections.map((section) => {
-            const isExpanded = expandedSections[section.key];
-            // Filter out denied items for this user (section permissions)
-            const visibleItems = section.items.filter((item) => !deniedSections.includes(item.to));
-            // Hide entire section if all items are denied
-            if (visibleItems.length === 0) return null;
+
+          {/* ── Overview (flat) ─────────────────────────────── */}
+          <FlatSection
+            label="Overview"
+            sectionKey="overview"
+            items={filterItems(overviewItems)}
+            expanded={expanded.overview}
+            onToggle={() => toggle('overview')}
+            isActive={isActive}
+            onLinkClick={handleLinkClick}
+          />
+
+          {/* ── My Work (nested groups) ─────────────────────── */}
+          <GroupedSection
+            label="My Work"
+            sectionKey="myWork"
+            groups={myWorkGroups}
+            expanded={expanded}
+            onToggleSection={() => toggle('myWork')}
+            onToggleGroup={(key) => toggle(key)}
+            isActive={isActive}
+            onLinkClick={handleLinkClick}
+            filterItems={filterItems}
+          />
+
+          {/* ── My Workspace (nested groups) ───────────────── */}
+          <GroupedSection
+            label="My Workspace"
+            sectionKey="myWorkspace"
+            groups={myWorkspaceGroups}
+            expanded={expanded}
+            onToggleSection={() => toggle('myWorkspace')}
+            onToggleGroup={(key) => toggle(key)}
+            isActive={isActive}
+            onLinkClick={handleLinkClick}
+            filterItems={filterItems}
+          />
+
+          {/* ── My Team (team lead, flat) ───────────────────── */}
+          {isTeamLead && (
+            <FlatSection
+              label="My Team"
+              sectionKey="myTeam"
+              items={filterItems(myTeamItems)}
+              expanded={expanded.myTeam}
+              onToggle={() => toggle('myTeam')}
+              isActive={isActive}
+              onLinkClick={handleLinkClick}
+              labelClass="text-emerald-500"
+            />
+          )}
+
+          {/* ── Team (flat) ─────────────────────────────────── */}
+          {filterItems(teamItems).length > 0 && (
+            <FlatSection
+              label="Team"
+              sectionKey="team"
+              items={filterItems(teamItems)}
+              expanded={expanded.team}
+              onToggle={() => toggle('team')}
+              isActive={isActive}
+              onLinkClick={handleLinkClick}
+            />
+          )}
+
+          {/* ── Admin sections (flat) ───────────────────────── */}
+          {isStrictAdmin && (
+            <>
+              <FlatSection
+                label="People"
+                sectionKey="people"
+                items={filterItems(peopleItems)}
+                expanded={expanded.people}
+                onToggle={() => toggle('people')}
+                isActive={isActive}
+                onLinkClick={handleLinkClick}
+                labelClass="text-amber-500"
+              />
+              <FlatSection
+                label="Time & Pay"
+                sectionKey="timePay"
+                items={filterItems(timePayItems)}
+                expanded={expanded.timePay}
+                onToggle={() => toggle('timePay')}
+                isActive={isActive}
+                onLinkClick={handleLinkClick}
+                labelClass="text-amber-500"
+              />
+              <FlatSection
+                label="Organization"
+                sectionKey="organization"
+                items={filterItems(organizationItems)}
+                expanded={expanded.organization}
+                onToggle={() => toggle('organization')}
+                isActive={isActive}
+                onLinkClick={handleLinkClick}
+                labelClass="text-amber-500"
+              />
+            </>
+          )}
+        </nav>
+
+        <UserFooter user={user} />
+      </aside>
+    </>
+  );
+}
+
+// ── Shared sub-components ────────────────────────────────────────────
+
+function NavItem({ item, isActive, onClick, indent = false }) {
+  return (
+    <Link
+      to={item.to}
+      onClick={onClick}
+      className={`flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
+        indent ? 'px-3 py-1.5 ml-1' : 'px-3 py-2'
+      } ${
+        isActive
+          ? 'bg-blue-50 text-blue-700 border border-blue-100'
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+      }`}
+    >
+      <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+      {item.label}
+    </Link>
+  );
+}
+
+function FlatSection({ label, sectionKey, items, expanded, onToggle, isActive, onLinkClick, labelClass = 'text-slate-400' }) {
+  if (!items.length) return null;
+  return (
+    <div className="mb-1">
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:text-slate-600 ${labelClass}`}
+      >
+        <span>{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+      </button>
+      {expanded && (
+        <div className="space-y-0.5">
+          {items.map((item) => (
+            <NavItem key={item.to} item={item} isActive={isActive(item.to)} onClick={onLinkClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupedSection({ label, sectionKey, groups, expanded, onToggleSection, onToggleGroup, isActive, onLinkClick, filterItems }) {
+  const sectionExpanded = expanded[sectionKey];
+
+  // Check if any group has visible items
+  const hasAnyItems = groups.some((g) => filterItems(g.items).length > 0);
+  if (!hasAnyItems) return null;
+
+  return (
+    <div className="mb-1">
+      {/* Level-1 section header */}
+      <button
+        onClick={onToggleSection}
+        className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+      >
+        <span>{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${sectionExpanded ? '' : '-rotate-90'}`} />
+      </button>
+
+      {sectionExpanded && (
+        <div className="space-y-0.5">
+          {groups.map((group) => {
+            const visibleItems = filterItems(group.items);
+            if (!visibleItems.length) return null;
+            const groupExpanded = expanded[group.key];
+            const hasActiveItem = visibleItems.some((item) => isActive(item.to));
 
             return (
-              <div key={section.key} className="mb-1">
-                {/* Section header */}
+              <div key={group.key}>
+                {/* Level-2 group header */}
                 <button
-                  onClick={() => toggleSection(section.key)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider hover:text-slate-600 ${getSectionColor(section)}`}
+                  onClick={() => onToggleGroup(group.key)}
+                  className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                    hasActiveItem
+                      ? 'text-blue-700 bg-blue-50/50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
-                  <span>{section.label}</span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 transition-transform ${
-                      isExpanded ? '' : '-rotate-90'
-                    }`}
-                  />
+                  <div className="flex items-center gap-2">
+                    <group.icon className={`w-3.5 h-3.5 flex-shrink-0 ${hasActiveItem ? 'text-blue-500' : 'text-slate-400'}`} />
+                    <span>{group.label}</span>
+                  </div>
+                  <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${groupExpanded ? '' : '-rotate-90'}`} />
                 </button>
 
-                {/* Section items */}
-                {isExpanded && (
-                  <div className="space-y-0.5">
+                {/* Level-3 items */}
+                {groupExpanded && (
+                  <div className="ml-3 mt-0.5 pl-3 border-l border-slate-100 space-y-0.5">
                     {visibleItems.map((item) => (
                       <Link
                         key={item.to}
                         to={item.to}
-                        onClick={handleLinkClick}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                        onClick={onLinkClick}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
                           isActive(item.to)
                             ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
                         }`}
                       >
-                        <item.icon className={`w-4 h-4 flex-shrink-0 ${
-                          isActive(item.to) ? 'text-blue-600' : 'text-slate-400'
-                        }`} />
+                        <item.icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive(item.to) ? 'text-blue-600' : 'text-slate-400'}`} />
                         {item.label}
                       </Link>
                     ))}
@@ -403,30 +532,37 @@ export default function Sidebar({ isOpen, onClose }) {
               </div>
             );
           })}
-        </nav>
-
-        {/* User info — bottom of sidebar */}
-        <div className="border-t border-slate-100 px-3 py-3">
-          <div className="flex items-center gap-2.5">
-            {user?.driveProfilePhotoUrl ? (
-              <img src={user.driveProfilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {user?.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-slate-700 truncate">{user?.name}</p>
-              <div className="flex items-center gap-1.5">
-                <p className="text-[10px] text-slate-400 capitalize">{user?.role?.replace('_', ' ')}</p>
-                {user?.department && (
-                  <span className="text-[9px] text-slate-300">• {user.department}</span>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
-      </aside>
-    </>
+      )}
+    </div>
+  );
+}
+
+function UserFooter({ user, label, labelClass = 'text-slate-400' }) {
+  return (
+    <div className="border-t border-slate-100 px-3 py-3">
+      <div className="flex items-center gap-2.5">
+        {user?.driveProfilePhotoUrl ? (
+          <img src={user.driveProfilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {user?.name?.charAt(0)?.toUpperCase() || '?'}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-slate-700 truncate">{user?.name}</p>
+          {label ? (
+            <p className={`text-[10px] font-medium ${labelClass}`}>{label}</p>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] text-slate-400 capitalize">{user?.role?.replace('_', ' ')}</p>
+              {user?.department && (
+                <span className="text-[9px] text-slate-300">• {user.department}</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
