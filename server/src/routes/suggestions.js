@@ -94,19 +94,4 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: 'Suggestion removed' });
 }));
 
-// ─── 6. GET /stats ─── Summary stats (admin)
-router.get('/stats', requireAdmin, asyncHandler(async (req, res) => {
-  const [total, byStatus, byCategory] = await Promise.all([
-    req.prisma.suggestion.count({ where: { isActive: true } }),
-    req.prisma.suggestion.groupBy({ by: ['status'], where: { isActive: true }, _count: true }),
-    req.prisma.suggestion.groupBy({ by: ['category'], where: { isActive: true }, _count: true }),
-  ]);
-
-  res.json({
-    total,
-    byStatus: Object.fromEntries(byStatus.map(s => [s.status, s._count])),
-    byCategory: Object.fromEntries(byCategory.map(c => [c.category, c._count])),
-  });
-}));
-
 module.exports = router;
