@@ -363,30 +363,16 @@ router.get('/my-assignments', asyncHandler(async (req, res) => {
 
 // GET my reportees' training progress (for managers)
 router.get('/team-progress', asyncHandler(async (req, res) => {
-  const reportees = await req.prisma.user.findMany({
-    where: { reportingManagerId: req.user.id },
-    select: { id: true, name: true, email: true }
+  const assignments = await req.prisma.trainingAssignment.findMany({
+    where: {
+      assignedTo: { reportingManagerId: req.user.id }
+    },
+    include: {
+      module: { select: { title: true, isMandatory: true, completionPointsValue: true } },
+      assignedTo: { select: { id: true, name: true, email: true } }
+    }
   });
-
-  const progress = [];
-  for (const reportee of reportees) {
-    const assignments = await req.prisma.trainingAssignment.findMany({
-      where: { assignedToId: reportee.id },
-      include: {
-        module: { select: { title: true, isMandatory: true, completionPointsValue: true } }
-      }
-    });
-
-    progress.push({
-      employee: reportee,
-      assignments,
-      totalAssigned: assignments.length,
-      completed: assignments.filter(a => a.status === 'completed').length,
-      pointsEarned: assignments.reduce((sum, a) => sum + (a.pointsAwarded || 0), 0)
-    });
-  }
-
-  res.json(progress);
+  res.json(assignments);
 }));
 
 // PUT update assignment status

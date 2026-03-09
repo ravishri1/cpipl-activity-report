@@ -80,7 +80,7 @@ export default function MyCompOff() {
       )}
 
       {success && <AlertMessage type="success" message={success} />}
-      {error && <AlertMessage type="error" message={error} />}
+      {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -134,7 +134,7 @@ export default function MyCompOff() {
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><X className="w-4 h-4 text-slate-500" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {saveErr && <AlertMessage type="error" message={saveErr} />}
+              {saveErr && <AlertMessage type="error" message={typeof saveErr === 'string' ? saveErr : (saveErr?.message || 'An error occurred')} />}
               {type === 'earn' ? (
                 <>
                   <div>

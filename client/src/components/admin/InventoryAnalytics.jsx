@@ -165,7 +165,7 @@ export default function InventoryAnalytics() {
         {loading ? (
           <LoadingSpinner />
         ) : error ? (
-          <AlertMessage type="error" message={error} />
+          <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />
         ) : (
           <>
             {/* Overview Tab */}

@@ -93,7 +93,7 @@ export default function TrainingManager() {
   const loading = loadingTeam || loadingModules;
 
   if (loading) return <LoadingSpinner />;
-  if (teamError) return <AlertMessage type="error" message={teamError} />;
+  if (teamError) return <AlertMessage type="error" message={typeof teamError === 'string' ? teamError : (teamError?.message || 'An error occurred')} />;
 
   return (
     <div className="p-6">
