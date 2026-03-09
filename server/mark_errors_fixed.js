@@ -12,6 +12,8 @@ const FIXED_COMPONENTS = [
   'Dashboard',
   'OvertimeManager',
   'MyLoans',
+  'InventoryAnalytics',
+  'MyCompOff',
 ];
 
 async function main() {
@@ -30,7 +32,16 @@ async function main() {
   conditions.push({ path: { contains: '/api/overtime' } });
   conditions.push({ path: { contains: '/api/loans' } });
   conditions.push({ path: { contains: '/api/training' } });
+  conditions.push({ path: { contains: '/training/' } });
   conditions.push({ path: { contains: '/api/dashboard' } });
+  // Bug #62: recruitment candidates — wrong Prisma relation names fixed
+  conditions.push({ path: { contains: '/recruitment/candidates' } });
+  // Bug #43: renewals search — mode:insensitive removed (SQLite incompatible)
+  conditions.push({ path: { contains: '/renewals' } });
+  // Systemic: mode:insensitive removed from assets, insurance, users search
+  conditions.push({ path: { contains: '/assets' } });
+  conditions.push({ path: { contains: '/insurance' } });
+  conditions.push({ path: { contains: '/users' } });
 
   const result = await prisma.errorReport.updateMany({
     where: {

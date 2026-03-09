@@ -146,9 +146,9 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   if (assignedTo) where.assignedTo = parseInt(assignedTo);
   if (search) {
     where.OR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { serialNumber: { contains: search, mode: 'insensitive' } },
-      { assetTag: { contains: search, mode: 'insensitive' } },
+      { name: { contains: search } },
+      { serialNumber: { contains: search } },
+      { assetTag: { contains: search } },
     ];
   }
 

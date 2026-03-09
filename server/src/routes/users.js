@@ -97,10 +97,10 @@ router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async
   if (req.query.company && req.query.company !== 'all') where.companyId = parseInt(req.query.company);
   if (req.query.search) {
     where.OR = [
-      { name: { contains: req.query.search, mode: 'insensitive' } },
-      { email: { contains: req.query.search, mode: 'insensitive' } },
-      { designation: { contains: req.query.search, mode: 'insensitive' } },
-      { employeeId: { contains: req.query.search, mode: 'insensitive' } },
+      { name: { contains: req.query.search } },
+      { email: { contains: req.query.search } },
+      { designation: { contains: req.query.search } },
+      { employeeId: { contains: req.query.search } },
     ];
   }
 

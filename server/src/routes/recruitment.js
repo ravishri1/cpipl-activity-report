@@ -73,8 +73,8 @@ router.get('/candidates', requireAdmin, asyncHandler(async (req, res) => {
     include: {
       jobOpening: { select: { id: true, title: true, department: true } },
       interviews: { orderBy: { scheduledAt: 'desc' } },
-      offer: true,
-      referredBy: { select: { id: true, name: true } }
+      offers: true,
+      referrer: { select: { id: true, name: true } }
     },
     orderBy: { createdAt: 'desc' }
   });
@@ -88,8 +88,8 @@ router.get('/candidates/:id', requireAdmin, asyncHandler(async (req, res) => {
     include: {
       jobOpening: true,
       interviews: { include: { conductor: { select: { id: true, name: true } } }, orderBy: { scheduledAt: 'asc' } },
-      offer: true,
-      referredBy: { select: { id: true, name: true } }
+      offers: true,
+      referrer: { select: { id: true, name: true } }
     }
   });
   if (!candidate) throw notFound('Candidate');

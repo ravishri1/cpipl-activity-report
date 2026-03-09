@@ -159,8 +159,8 @@ router.get('/', asyncHandler(async (req, res) => {
   if (req.query.status)     where.status = req.query.status;
   if (req.query.search) {
     where.OR = [
-      { itemName:   { contains: req.query.search, mode: 'insensitive' } },
-      { vendorName: { contains: req.query.search, mode: 'insensitive' } },
+      { itemName:   { contains: req.query.search } },
+      { vendorName: { contains: req.query.search } },
     ];
   }
 

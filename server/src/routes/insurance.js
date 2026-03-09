@@ -78,9 +78,9 @@ router.get('', requireAdmin, asyncHandler(async (req, res) => {
   if (search) {
     where.user = {
       OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { employeeId: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+        { name: { contains: search } },
+        { employeeId: { contains: search } },
+        { email: { contains: search } }
       ]
     };
   }
