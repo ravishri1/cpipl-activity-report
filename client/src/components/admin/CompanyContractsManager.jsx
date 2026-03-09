@@ -682,7 +682,7 @@ export default function CompanyContractsManager() {
             </div>
 
             {loading && <LoadingSpinner />}
-            {error && <AlertMessage type="error" message={error} />}
+            {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
             {!loading && renewals.length === 0 && (
               <EmptyState icon={<RefreshCw className="w-8 h-8" />} title="No renewals found" subtitle="Add your first renewal to get started" />
             )}

@@ -385,12 +385,12 @@ export default function TrainingManager() {
     try {
       setError('');
       const res = await api.get('/training/modules/admin');
-      setModules(res.data);
+      setModules(Array.isArray(res.data) ? res.data : (res.data?.modules || []));
     } catch (err) {
       // Fallback to regular endpoint if admin endpoint not available
       try {
         const res = await api.get('/training/modules');
-        setModules(res.data);
+        setModules(Array.isArray(res.data) ? res.data : (res.data?.modules || []));
       } catch (err2) {
         setError(err2.response?.data?.error || 'Failed to fetch training modules.');
       }

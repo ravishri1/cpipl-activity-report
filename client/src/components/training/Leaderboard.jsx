@@ -33,7 +33,7 @@ export default function Leaderboard() {
   };
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <AlertMessage type="error" message={error} />;
+  if (error) return <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -74,7 +74,7 @@ export default function Leaderboard() {
             subtitle="No learning points have been awarded yet"
           />
         ) : (
-          (leaderboard.leaders || []).map((leader, idx) => {
+          (leaderboard.leaders || []).filter(Boolean).map((leader, idx) => {
             const rank = idx + 1;
             const isYou = leader.userId === leaderboard.currentUserId;
 

@@ -310,6 +310,8 @@ export default function Dashboard() {
 
   const { summary, reported, notReported, ignoredReminder, emailDataDate } = data;
 
+  if (!summary) return <div className="text-center text-gray-500 mt-8">Loading dashboard data…</div>;
+
   const handleThumbsUp = async (reportId) => {
     const member = reported.find((m) => m.reportId === reportId);
     if (!member) return;

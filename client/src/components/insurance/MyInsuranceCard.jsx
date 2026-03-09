@@ -21,8 +21,10 @@ export default function MyInsuranceCard() {
   }, [card]);
 
   if (loading) return <LoadingSpinner />;
-  
-  if (error && error.includes('No insurance card')) {
+
+  const errorMessage = typeof error === 'string' ? error : (error?.message || '');
+
+  if (error && errorMessage.includes('No insurance card')) {
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <EmptyState 
@@ -35,7 +37,7 @@ export default function MyInsuranceCard() {
   }
 
   if (error) {
-    return <AlertMessage type="error" message={error} />;
+    return <AlertMessage type="error" message={errorMessage} />;
   }
 
   if (!card) {

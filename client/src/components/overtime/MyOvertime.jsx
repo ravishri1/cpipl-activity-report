@@ -31,6 +31,7 @@ export default function MyOvertime() {
   const { data: requests, loading, error, refetch } = useFetch('/overtime/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
 
+  const safeRequests = Array.isArray(requests) ? requests : [];
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
@@ -44,11 +45,11 @@ export default function MyOvertime() {
     refetch();
   };
 
-  const totalApprovedHours = requests
+  const totalApprovedHours = safeRequests
     .filter(r => r.status === 'approved')
     .reduce((sum, r) => sum + r.hours, 0);
 
-  const compOffs = requests.filter(r => r.compOffEarned).length;
+  const compOffs = safeRequests.filter(r => r.compOffEarned).length;
 
   if (loading) return <LoadingSpinner />;
 
@@ -69,7 +70,7 @@ export default function MyOvertime() {
       </div>
 
       {/* Alerts */}
-      {error && <AlertMessage type="error" message={error} />}
+      {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
       {success && <AlertMessage type="success" message={success} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
 
@@ -77,7 +78,7 @@ export default function MyOvertime() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 mb-1">Total Requests</p>
-          <p className="text-2xl font-bold text-slate-800">{requests.length}</p>
+          <p className="text-2xl font-bold text-slate-800">{safeRequests.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500 mb-1">Approved Hours</p>
@@ -159,7 +160,7 @@ export default function MyOvertime() {
       )}
 
       {/* Requests Table */}
-      {requests.length === 0 ? (
+      {safeRequests.length === 0 ? (
         <EmptyState
           icon={Clock}
           title="No overtime requests"
@@ -180,7 +181,7 @@ export default function MyOvertime() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {requests.map(r => (
+                {safeRequests.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-800">{formatDate(r.date)}</td>
                     <td className="px-4 py-3">

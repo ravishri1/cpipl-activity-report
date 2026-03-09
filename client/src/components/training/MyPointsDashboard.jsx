@@ -29,16 +29,16 @@ export default function MyPointsDashboard() {
     if (!pointData.pointHistory) return [];
     
     if (filter === 'completion') {
-      return pointData.pointHistory.filter(p => (p.description || '').includes('Training Completion'));
+      return pointData.pointHistory.filter(p => p && (p.description || '').includes('Training Completion'));
     }
     if (filter === 'contribution') {
-      return pointData.pointHistory.filter(p => (p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution'));
+      return pointData.pointHistory.filter(p => p && ((p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution')));
     }
     return pointData.pointHistory;
   }, [pointData.pointHistory, filter]);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <AlertMessage type="error" message={error} />;
+  if (error) return <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -124,8 +124,8 @@ export default function MyPointsDashboard() {
         <div className="flex border-b border-gray-200 bg-gray-50">
           {[
             { value: 'all', label: 'All Points', count: pointData.pointHistory?.length || 0 },
-            { value: 'completion', label: 'Completions', count: pointData.pointHistory?.filter(p => (p.description || '').includes('Training Completion')).length || 0 },
-            { value: 'contribution', label: 'Contributions', count: pointData.pointHistory?.filter(p => (p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution')).length || 0 },
+            { value: 'completion', label: 'Completions', count: pointData.pointHistory?.filter(p => p && (p.description || '').includes('Training Completion')).length || 0 },
+            { value: 'contribution', label: 'Contributions', count: pointData.pointHistory?.filter(p => p && ((p.description || '').includes('Training Value Added') || (p.description || '').includes('Contribution'))).length || 0 },
           ].map(tab => (
             <button
               key={tab.value}

@@ -47,7 +47,7 @@ export default function MyLoans() {
       </div>
 
       {success && <AlertMessage type="success" message={success} />}
-      {error && <AlertMessage type="error" message={error} />}
+      {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
 
       {loans.length === 0 ? (
         <EmptyState icon="💰" title="No loans" subtitle="You have no active or past loan records" />

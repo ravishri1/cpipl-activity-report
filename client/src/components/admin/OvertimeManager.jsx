@@ -103,7 +103,7 @@ function ReviewModal({ request, onClose, onReviewed }) {
             </label>
           )}
 
-          {error && <AlertMessage type="error" message={error} />}
+          {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
 
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm hover:bg-slate-50">
@@ -205,7 +205,7 @@ function SummaryTab() {
       </div>
 
       {loading && <LoadingSpinner />}
-      {error && <AlertMessage type="error" message={error} />}
+      {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
 
       {summary && (
         <>
@@ -333,7 +333,7 @@ export default function OvertimeManager() {
       {tab === 'pending' && (
         <>
           {pendingLoading && <LoadingSpinner />}
-          {pendingErr && <AlertMessage type="error" message={pendingErr} />}
+          {pendingErr && <AlertMessage type="error" message={typeof pendingErr === 'string' ? pendingErr : (pendingErr?.message || 'An error occurred')} />}
           {!pendingLoading && (
             <RequestsTable
               requests={pending}
@@ -376,7 +376,7 @@ export default function OvertimeManager() {
             )}
           </div>
           {allLoading && <LoadingSpinner />}
-          {allErr && <AlertMessage type="error" message={allErr} />}
+          {allErr && <AlertMessage type="error" message={typeof allErr === 'string' ? allErr : (allErr?.message || 'An error occurred')} />}
           {!allLoading && (
             <RequestsTable
               requests={all}
