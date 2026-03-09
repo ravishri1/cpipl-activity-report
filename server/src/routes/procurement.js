@@ -521,6 +521,25 @@ router.put('/vendors/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
+/**
+ * DELETE /api/procurement/vendors/:id
+ * Delete vendor — blocked if vendor has procurement or purchase orders (Admin only)
+ */
+router.delete('/vendors/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const vendor = await req.prisma.vendor.findUnique({ where: { id } });
+  if (!vendor) throw notFound('Vendor');
+
+  const orderCount = await req.prisma.procurementOrder.count({ where: { vendorId: id } });
+  if (orderCount > 0) {
+    throw conflict(`Cannot delete vendor with ${orderCount} existing order(s). Set status to "inactive" instead.`);
+  }
+
+  await req.prisma.vendor.delete({ where: { id } });
+  res.json({ message: 'Vendor deleted.' });
+}));
+
 // ═══════════════════════════════════════════════
 // INVENTORY ENDPOINTS
 // ═══════════════════════════════════════════════
