@@ -59,7 +59,6 @@ const OrderApprovalQueue = lazy(() => import('./components/admin/OrderApprovalQu
 const InventoryAnalytics = lazy(() => import('./components/admin/InventoryAnalytics'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
-const PredictiveMaintenanceDashboard = lazy(() => import('./components/predictive/PredictiveMaintenanceDashboard'));
 const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
 const BranchManager = lazy(() => import('./components/admin/BranchManager'));
 const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
@@ -87,6 +86,7 @@ const AttendanceRegularization = lazy(() => import('./components/attendance/Atte
 const RegularizationManager = lazy(() => import('./components/admin/RegularizationManager'));
 const AssetLifecycleDashboard = lazy(() => import('./components/admin/AssetLifecycleDashboard'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/admin/PredictiveMaintenanceDashboard'));
+const HRAnalyticsDashboard = lazy(() => import('./components/admin/HRAnalyticsDashboard'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -220,11 +220,11 @@ function AppRoutes() {
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/asset-lifecycle" element={<SeparatedRoute><AdminRoute><AssetLifecycleDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/hr-analytics" element={<SeparatedRoute><AdminRoute><HRAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/vendor-analytics" element={<SeparatedRoute><AdminRoute><VendorAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/procurement" element={<SeparatedRoute><AdminRoute><ProcurementManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/order-approvals" element={<SeparatedRoute><AdminRoute><OrderApprovalQueue /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/inventory" element={<SeparatedRoute><AdminRoute><InventoryAnalytics /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/contracts" element={<SeparatedRoute><AdminRoute><CompanyContractsManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
