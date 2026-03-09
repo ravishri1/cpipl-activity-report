@@ -234,7 +234,7 @@ export default function SeparationManager() {
         exitInterviewDone: data.exitInterviewDone || false,
         exitInterviewNotes: data.exitInterviewNotes || '',
         fnfAmount: data.fnfAmount || '',
-        fnfPaidDate: data.fnfPaidDate ? data.fnfPaidDate.split('T')[0] : '',
+        fnfPaidDate: data.fnfPaidOn ? data.fnfPaidOn.split('T')[0] : '',
         status: data.status,
       });
       setShowDetailPanel(true);
@@ -250,7 +250,7 @@ export default function SeparationManager() {
         exitInterviewDone: detailEdits.exitInterviewDone,
         exitInterviewNotes: detailEdits.exitInterviewNotes,
         fnfAmount: detailEdits.fnfAmount ? parseFloat(detailEdits.fnfAmount) : null,
-        fnfPaidDate: detailEdits.fnfPaidDate || null,
+        fnfPaidOn: detailEdits.fnfPaidDate || null,
         status: detailEdits.status,
       });
       fetchSeparations();

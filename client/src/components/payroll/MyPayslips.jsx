@@ -363,10 +363,10 @@ function PayslipDetail({ payslip, onBack }) {
             />
             <div>
               <p className="text-xs font-medium text-slate-500 mb-1">Shift</p>
-              {payslip.user?.shift ? (
+              {payslip.user?.shiftAssignments?.[0]?.shift ? (
                 <div className="text-sm font-medium text-slate-700">
-                  <p>{payslip.user.shift.name}</p>
-                  <p className="text-xs text-slate-500">{payslip.user.shift.startTime} - {payslip.user.shift.endTime}</p>
+                  <p>{payslip.user.shiftAssignments[0].shift.name}</p>
+                  <p className="text-xs text-slate-500">{payslip.user.shiftAssignments[0].shift.startTime} - {payslip.user.shiftAssignments[0].shift.endTime}</p>
                 </div>
               ) : (
                 <p className="text-sm font-medium text-slate-500">—</p>

@@ -640,19 +640,19 @@ export default function TrainingManager() {
                     {item.title}
                   </span>
                   <span className="text-xs font-bold text-slate-700">
-                    {item.completionRate ?? 0}%
+                    {item.passRate ?? 0}%
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      (item.completionRate ?? 0) >= 80
+                      (item.passRate ?? 0) >= 80
                         ? 'bg-green-500'
-                        : (item.completionRate ?? 0) >= 50
+                        : (item.passRate ?? 0) >= 50
                           ? 'bg-amber-500'
                           : 'bg-red-400'
                     }`}
-                    style={{ width: `${Math.min(item.completionRate ?? 0, 100)}%` }}
+                    style={{ width: `${Math.min(item.passRate ?? 0, 100)}%` }}
                   />
                 </div>
               </div>
@@ -783,7 +783,7 @@ export default function TrainingManager() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="text-xs text-slate-600 font-medium">
-                          {mod.exam?.questionCount ?? mod._count?.examQuestions ?? 0}
+                          {mod.exam?.questions?.length ?? 0}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">

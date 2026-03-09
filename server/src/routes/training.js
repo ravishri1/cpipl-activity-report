@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
@@ -87,6 +87,33 @@ router.get('/modules', asyncHandler(async (req, res) => {
   res.json(enriched);
 }));
 
+// GET /modules/admin — all modules for admin (must be registered BEFORE /modules/:id)
+router.get('/modules/admin', requireAdmin, asyncHandler(async (req, res) => {
+  const modules = await req.prisma.trainingModule.findMany({
+    include: {
+      creator: { select: { id: true, name: true } },
+      exams: true,
+      _count: { select: { contributions: true, assignments: true, attempts: true } }
+    },
+    orderBy: [{ isMandatory: 'desc' }, { createdAt: 'desc' }]
+  });
+
+  // Normalize: expose first exam as `exam` (singular, with parsed questions array)
+  // Frontend accesses mod.exam?.questions and mod.exam?.timeLimit
+  const normalized = modules.map(mod => {
+    const rawExam = mod.exams && mod.exams[0] ? mod.exams[0] : null;
+    let exam = null;
+    if (rawExam) {
+      let questions = [];
+      try { questions = JSON.parse(rawExam.questions); } catch { questions = []; }
+      exam = { ...rawExam, questions };
+    }
+    return { ...mod, exam };
+  });
+
+  res.json(normalized);
+}));
+
 // GET single training module with contributions
 router.get('/modules/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
@@ -162,6 +189,18 @@ router.post('/modules', requireAdmin, asyncHandler(async (req, res) => {
     }
   });
 
+  // Create exam if questions provided
+  if (Array.isArray(req.body.examQuestions) && req.body.examQuestions.length > 0) {
+    await req.prisma.trainingExam.create({
+      data: {
+        moduleId: module.id,
+        questions: JSON.stringify(req.body.examQuestions),
+        totalPoints: req.body.examQuestions.reduce((s, q) => s + (q.points || 1), 0),
+        timeLimit: req.body.timeLimit ? parseInt(req.body.timeLimit, 10) : null,
+      }
+    });
+  }
+
   res.status(201).json(module);
 }));
 
@@ -187,7 +226,42 @@ router.put('/modules/:id', requireAdmin, asyncHandler(async (req, res) => {
     include: { creator: { select: { id: true, name: true } } }
   });
 
+  // Upsert exam if questions provided
+  if (Array.isArray(req.body.examQuestions) && req.body.examQuestions.length > 0) {
+    const existingExam = await req.prisma.trainingExam.findFirst({ where: { moduleId: id } });
+    if (existingExam) {
+      await req.prisma.trainingExam.update({
+        where: { id: existingExam.id },
+        data: {
+          questions: JSON.stringify(req.body.examQuestions),
+          totalPoints: req.body.examQuestions.reduce((s, q) => s + (q.points || 1), 0),
+          timeLimit: req.body.timeLimit !== undefined
+            ? (req.body.timeLimit ? parseInt(req.body.timeLimit, 10) : null)
+            : existingExam.timeLimit,
+        }
+      });
+    } else {
+      await req.prisma.trainingExam.create({
+        data: {
+          moduleId: id,
+          questions: JSON.stringify(req.body.examQuestions),
+          totalPoints: req.body.examQuestions.reduce((s, q) => s + (q.points || 1), 0),
+          timeLimit: req.body.timeLimit ? parseInt(req.body.timeLimit, 10) : null,
+        }
+      });
+    }
+  }
+
   res.json(updated);
+}));
+
+// DELETE training module
+router.delete('/modules/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const module = await req.prisma.trainingModule.findUnique({ where: { id } });
+  if (!module) throw notFound('Training Module');
+  await req.prisma.trainingModule.delete({ where: { id } });
+  res.json({ message: 'Training module deleted successfully' });
 }));
 
 // POST publish training module (set publishedAt)
@@ -499,19 +573,6 @@ router.put('/contributions/:id', requireAdmin, asyncHandler(async (req, res) => 
 // ═══════════════════════════════════════════════
 // EXAM ATTEMPTS
 // ═══════════════════════════════════════════════
-
-// GET /modules/admin — all modules for admin (including inactive, all scopes)
-router.get('/modules/admin', requireAdmin, asyncHandler(async (req, res) => {
-  const modules = await req.prisma.trainingModule.findMany({
-    include: {
-      creator: { select: { id: true, name: true } },
-      exams: { include: { _count: { select: { attempts: true } } } },
-      _count: { select: { contributions: true, assignments: true, attempts: true } }
-    },
-    orderBy: [{ isMandatory: 'desc' }, { createdAt: 'desc' }]
-  });
-  res.json(modules);
-}));
 
 // POST /attempts — Submit exam attempt (must come before /:id routes)
 router.post('/attempts', asyncHandler(async (req, res) => {

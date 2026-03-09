@@ -176,10 +176,10 @@ const PayslipDetail = ({ payslip }) => {
 
   const deductions = [
     { label: 'Employee PF', value: payslip.employeePf },
-    { label: 'ESI', value: payslip.esi },
+    { label: 'ESI', value: payslip.employeeEsi },
     { label: 'Professional Tax (PT)', value: payslip.professionalTax },
     { label: 'TDS / Income Tax', value: payslip.tds },
-    { label: 'Other Deductions', value: payslip.otherDeduction },
+    { label: 'Other Deductions', value: payslip.otherDeductions },
     { label: 'LOP Deduction', value: payslip.lopDeduction, highlight: true },
   ];
 
@@ -373,35 +373,35 @@ const PayRegister = ({ month }) => {
 
   if (!registerData) return null;
 
-  const { summary, departments } = registerData;
+  const { totals, departments } = registerData;
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      {summary && (
+      {totals && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             icon={TrendingUp}
             label="Total Gross Pay"
-            value={formatCurrency(summary.totalGross)}
+            value={formatCurrency(totals.totalGross)}
             color="green"
           />
           <StatCard
             icon={TrendingDown}
             label="Total Deductions"
-            value={formatCurrency(summary.totalDeductions)}
+            value={formatCurrency(totals.totalDeductions)}
             color="amber"
           />
           <StatCard
             icon={IndianRupee}
             label="Total Net Pay"
-            value={formatCurrency(summary.totalNetPay)}
+            value={formatCurrency(totals.totalNetPay)}
             color="blue"
           />
           <StatCard
             icon={AlertTriangle}
             label="Total LOP Deduction"
-            value={formatCurrency(summary.totalLopDeduction)}
+            value={formatCurrency(totals.totalLopDeduction)}
             color="purple"
           />
         </div>
@@ -449,16 +449,16 @@ const PayRegister = ({ month }) => {
                       {dept.department || 'Unassigned'}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-600">
-                      {dept.employeeCount}
+                      {dept.count}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-900 font-medium">
-                      {formatCurrency(dept.totalGross)}
+                      {formatCurrency(dept.gross)}
                     </td>
                     <td className="px-4 py-3 text-right text-red-600 font-medium">
-                      {formatCurrency(dept.totalDeductions)}
+                      {formatCurrency(dept.deductions)}
                     </td>
                     <td className="px-5 py-3 text-right text-green-600 font-bold">
-                      {formatCurrency(dept.totalNetPay)}
+                      {formatCurrency(dept.netPay)}
                     </td>
                   </tr>
                 ))}
@@ -471,14 +471,14 @@ const PayRegister = ({ month }) => {
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-slate-900">
                       {departments.reduce(
-                        (sum, d) => sum + (d.employeeCount || 0),
+                        (sum, d) => sum + (d.count || 0),
                         0
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-slate-900">
                       {formatCurrency(
                         departments.reduce(
-                          (sum, d) => sum + (d.totalGross || 0),
+                          (sum, d) => sum + (d.gross || 0),
                           0
                         )
                       )}
@@ -486,7 +486,7 @@ const PayRegister = ({ month }) => {
                     <td className="px-4 py-3 text-right font-bold text-red-600">
                       {formatCurrency(
                         departments.reduce(
-                          (sum, d) => sum + (d.totalDeductions || 0),
+                          (sum, d) => sum + (d.deductions || 0),
                           0
                         )
                       )}
@@ -494,7 +494,7 @@ const PayRegister = ({ month }) => {
                     <td className="px-5 py-3 text-right font-bold text-green-600">
                       {formatCurrency(
                         departments.reduce(
-                          (sum, d) => sum + (d.totalNetPay || 0),
+                          (sum, d) => sum + (d.netPay || 0),
                           0
                         )
                       )}
@@ -583,7 +583,7 @@ export default function PayrollDashboard() {
   const handlePublish = async (payslipId) => {
     setPublishingId(payslipId);
     try {
-      await api.post(`/payroll/payslips/${payslipId}/publish`);
+      await api.put(`/payroll/payslip/${payslipId}/publish`);
       showToast('Payslip published successfully', 'success');
       fetchPayslips();
     } catch (err) {
@@ -926,10 +926,10 @@ export default function PayrollDashboard() {
 
                           {/* Shift */}
                           <td className="px-4 py-3">
-                            {payslip.user?.shift ? (
+                            {payslip.user?.shiftAssignments?.[0]?.shift ? (
                               <div className="flex flex-col gap-0.5">
-                                <p className="font-medium text-slate-700 text-xs">{payslip.user.shift.name}</p>
-                                <p className="text-xs text-slate-500">{payslip.user.shift.startTime} - {payslip.user.shift.endTime}</p>
+                                <p className="font-medium text-slate-700 text-xs">{payslip.user.shiftAssignments[0].shift.name}</p>
+                                <p className="text-xs text-slate-500">{payslip.user.shiftAssignments[0].shift.startTime} - {payslip.user.shiftAssignments[0].shift.endTime}</p>
                               </div>
                             ) : (
                               <span className="text-xs text-slate-400">—</span>

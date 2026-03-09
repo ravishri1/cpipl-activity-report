@@ -82,7 +82,8 @@ router.get('/orders', asyncHandler(async (req, res) => {
       include: {
         vendor: true,
         creator: { select: { id: true, name: true, email: true } },
-        approver: { select: { id: true, name: true, email: true } }
+        approver: { select: { id: true, name: true, email: true } },
+        lineItems: true
       }
     }),
     req.prisma.procurementOrder.count({ where })

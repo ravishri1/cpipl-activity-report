@@ -38,16 +38,16 @@ export default function InventoryAnalytics() {
   );
 
   // Guard against null API responses (useFetch default [] is bypassed when API returns null)
-  const safeInventory = Array.isArray(inventory) ? inventory : [];
+  const safeInventory = Array.isArray(inventory) ? inventory : (inventory?.data ?? []);
   const safeLowStock = Array.isArray(lowStock) ? lowStock : [];
 
   // Calculate statistics
   const stats = {
     totalItems: safeInventory.length,
     lowStockCount: safeLowStock.length,
-    avgStockValue: safeInventory.length > 0 ? safeInventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0) / safeInventory.length : 0,
-    totalValue: safeInventory.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0),
-    criticalItems: safeLowStock.filter((item) => (item.quantity || 0) <= (item.minQuantity || 0) * 0.5).length,
+    avgStockValue: safeInventory.length > 0 ? safeInventory.reduce((sum, item) => sum + (item.quantityOnHand * (item.unitPrice || 0)), 0) / safeInventory.length : 0,
+    totalValue: safeInventory.reduce((sum, item) => sum + (item.quantityOnHand * (item.unitPrice || 0)), 0),
+    criticalItems: safeLowStock.filter((item) => (item.quantityOnHand || 0) <= (item.reorderLevel || 0) * 0.5).length,
   };
 
   // Filter inventory
@@ -63,9 +63,9 @@ export default function InventoryAnalytics() {
 
   // Categorize stock levels
   const stockLevels = {
-    critical: safeInventory.filter((i) => (i.quantity || 0) <= (i.minQuantity || 0)),
-    low: safeInventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) && (i.quantity || 0) <= (i.minQuantity || 0) * 1.5),
-    adequate: safeInventory.filter((i) => (i.quantity || 0) > (i.minQuantity || 0) * 1.5),
+    critical: safeInventory.filter((i) => (i.quantityOnHand || 0) <= (i.reorderLevel || 0)),
+    low: safeInventory.filter((i) => (i.quantityOnHand || 0) > (i.reorderLevel || 0) && (i.quantityOnHand || 0) <= (i.reorderLevel || 0) * 1.5),
+    adequate: safeInventory.filter((i) => (i.quantityOnHand || 0) > (i.reorderLevel || 0) * 1.5),
   };
 
   const getCategoryBadge = (quantity, minQuantity) => {
@@ -187,10 +187,10 @@ export default function InventoryAnalytics() {
                 ) : (
                   <div className="space-y-3">
                     {filteredInventory.map((item) => {
-                      const badge = getCategoryBadge(item.quantity || 0, item.minQuantity || 0);
+                      const badge = getCategoryBadge(item.quantityOnHand || 0, item.reorderLevel || 0);
                       const stockPercentage =
-                        item.maxQuantity > 0
-                          ? ((item.quantity || 0) / item.maxQuantity) * 100
+                        item.reorderQuantity > 0
+                          ? ((item.quantityOnHand || 0) / item.reorderQuantity) * 100
                           : 0;
                       return (
                         <div
@@ -212,7 +212,7 @@ export default function InventoryAnalytics() {
                             <div className="flex justify-between text-xs text-slate-600 mb-1">
                               <span>Stock Level</span>
                               <span>
-                                {item.quantity} / {item.maxQuantity} units
+                                {item.quantityOnHand || 0} / {item.reorderQuantity || 0} units
                               </span>
                             </div>
                             <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -233,7 +233,7 @@ export default function InventoryAnalytics() {
                           <div className="grid grid-cols-3 gap-3 text-sm">
                             <div>
                               <p className="text-slate-600">Min Stock</p>
-                              <p className="font-medium">{item.minQuantity}</p>
+                              <p className="font-medium">{item.reorderLevel}</p>
                             </div>
                             <div>
                               <p className="text-slate-600">Unit Price</p>
@@ -241,7 +241,7 @@ export default function InventoryAnalytics() {
                             </div>
                             <div>
                               <p className="text-slate-600">Stock Value</p>
-                              <p className="font-medium">₹{(item.quantity * (item.unitPrice || 0)).toLocaleString('en-IN')}</p>
+                              <p className="font-medium">₹{((item.quantityOnHand || 0) * (item.unitPrice || 0)).toLocaleString('en-IN')}</p>
                             </div>
                           </div>
                         </div>
@@ -279,7 +279,7 @@ export default function InventoryAnalytics() {
                               <div>
                                 <h4 className="font-medium text-red-900">{item.itemName}</h4>
                                 <p className="text-sm text-red-700 mt-1">
-                                  Current: {item.quantity} units | Min: {item.minQuantity}
+                                  Current: {item.quantityOnHand || 0} units | Min: {item.reorderLevel || 0}
                                 </p>
                               </div>
                               <button className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
@@ -307,7 +307,7 @@ export default function InventoryAnalytics() {
                               <div>
                                 <h4 className="font-medium text-yellow-900">{item.itemName}</h4>
                                 <p className="text-sm text-yellow-700 mt-1">
-                                  Current: {item.quantity} units | Min: {item.minQuantity}
+                                  Current: {item.quantityOnHand || 0} units | Min: {item.reorderLevel || 0}
                                 </p>
                               </div>
                               <button className="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700">
@@ -382,11 +382,11 @@ export default function InventoryAnalytics() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h4 className="font-semibold text-blue-900 mb-2">Most Valuable Items</h4>
                     <div className="space-y-1 text-sm">
-                      {[...inventory]
+                      {[...safeInventory]
                         .sort(
                           (a, b) =>
-                            (b.quantity * (b.unitPrice || 0)) -
-                            (a.quantity * (a.unitPrice || 0))
+                            ((b.quantityOnHand || 0) * (b.unitPrice || 0)) -
+                            ((a.quantityOnHand || 0) * (a.unitPrice || 0))
                         )
                         .slice(0, 3)
                         .map((item) => (
@@ -397,7 +397,7 @@ export default function InventoryAnalytics() {
                             <span>{item.itemName}</span>
                             <span className="font-medium">
                               ₹
-                              {(item.quantity * (item.unitPrice || 0)).toLocaleString(
+                              {((item.quantityOnHand || 0) * (item.unitPrice || 0)).toLocaleString(
                                 'en-IN'
                               )}
                             </span>
@@ -409,8 +409,8 @@ export default function InventoryAnalytics() {
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                     <h4 className="font-semibold text-purple-900 mb-2">Fast Moving Items</h4>
                     <div className="space-y-1 text-sm">
-                      {[...inventory]
-                        .sort((a, b) => (a.quantity || 0) - (b.quantity || 0))
+                      {[...safeInventory]
+                        .sort((a, b) => (a.quantityOnHand || 0) - (b.quantityOnHand || 0))
                         .slice(0, 3)
                         .map((item) => (
                           <div
@@ -418,7 +418,7 @@ export default function InventoryAnalytics() {
                             className="flex justify-between text-purple-700"
                           >
                             <span>{item.itemName}</span>
-                            <span className="font-medium">{item.quantity} units</span>
+                            <span className="font-medium">{item.quantityOnHand || 0} units</span>
                           </div>
                         ))}
                     </div>

@@ -162,7 +162,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
   const [newComment, setNewComment] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [assigneeId, setAssigneeId] = useState(ticket.assignedToId || '');
+  const [assigneeId, setAssigneeId] = useState(ticket.assignedTo || '');
   const [resolution, setResolution] = useState('');
   const [showResolve, setShowResolve] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -207,7 +207,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
     try {
       setActionLoading(true);
       await api.put(`/tickets/${ticket.id}/assign`, {
-        assignedToId: parseInt(assigneeId),
+        assignedTo: parseInt(assigneeId),
       });
       onUpdate();
     } catch {
@@ -281,7 +281,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
               <p className="text-xs text-slate-500 mb-1">Requester</p>
               <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" />
-                {ticket.requester?.name || ticket.requesterName || 'Unknown'}
+                {ticket.user?.name || 'Unknown'}
               </p>
             </div>
             <div className="bg-slate-50 rounded-lg p-3">
@@ -455,7 +455,7 @@ function TicketDetailPanel({ ticket, onClose, onUpdate, users }) {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-700">
-                          {c.author?.name || c.authorName || 'Unknown'}
+                          {c.user?.name || 'Unknown'}
                         </span>
                         {c.isInternal && (
                           <span className="px-1.5 py-0.5 bg-yellow-200 text-yellow-800 text-[10px] font-semibold rounded uppercase flex items-center gap-0.5">
@@ -552,7 +552,7 @@ export default function TicketManager() {
         open: data.open ?? 0,
         inProgress: data.inProgress ?? data.in_progress ?? 0,
         resolvedThisMonth: data.resolvedThisMonth ?? 0,
-        avgResolutionTime: data.avgResolutionTime ?? '0h',
+        avgResolutionTime: data.avgResolutionHours != null ? `${data.avgResolutionHours}h` : '0h',
       });
     } catch {
       // stats may not be available
@@ -621,7 +621,7 @@ export default function TicketManager() {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const subject = (t.subject || '').toLowerCase();
-    const requester = (t.requester?.name || t.requesterName || '').toLowerCase();
+    const requester = (t.user?.name || '').toLowerCase();
     return subject.includes(q) || requester.includes(q);
   });
 
@@ -797,7 +797,7 @@ export default function TicketManager() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">
-                      {ticket.requester?.name || ticket.requesterName || '-'}
+                      {ticket.user?.name || '-'}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -828,7 +828,7 @@ export default function TicketManager() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">
-                      {ticket.assignedTo?.name || ticket.assignedToName || (
+                      {ticket.assignee?.name || (
                         <span className="text-slate-400 italic">Unassigned</span>
                       )}
                     </td>

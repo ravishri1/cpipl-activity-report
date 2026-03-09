@@ -14,7 +14,6 @@ function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_
 // GET /templates — List active letter templates (admin only)
 router.get('/templates', requireAdmin, asyncHandler(async (req, res) => {
   const templates = await req.prisma.letterTemplate.findMany({
-    where: { isActive: true },
     orderBy: { createdAt: 'desc' },
   });
   res.json(templates);

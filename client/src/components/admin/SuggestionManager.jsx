@@ -213,14 +213,14 @@ function ReplyPanel({ suggestion, onClose, onUpdate, addToast }) {
               <p className="text-xs text-slate-500 mb-1">Submitted By</p>
               <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" />
-                {suggestion.submitter?.name || suggestion.submitterName || 'Unknown'}
+                {suggestion.submittedBy?.name || 'Unknown'}
               </p>
             </div>
             <div className="bg-slate-50 rounded-lg p-3">
               <p className="text-xs text-slate-500 mb-1">Department</p>
               <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" />
-                {suggestion.submitter?.department || suggestion.department || 'N/A'}
+                {suggestion.submittedBy?.department || 'N/A'}
               </p>
             </div>
             <div className="bg-slate-50 rounded-lg p-3">
@@ -587,12 +587,12 @@ export default function SuggestionManager() {
                       <div className="flex items-center gap-4 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <User className="w-3.5 h-3.5" />
-                          {suggestion.submitter?.name || suggestion.submitterName || 'Unknown'}
+                          {suggestion.submittedBy?.name || 'Unknown'}
                         </span>
-                        {(suggestion.submitter?.department || suggestion.department) && (
+                        {suggestion.submittedBy?.department && (
                           <span className="flex items-center gap-1">
                             <Building2 className="w-3.5 h-3.5" />
-                            {suggestion.submitter?.department || suggestion.department}
+                            {suggestion.submittedBy.department}
                           </span>
                         )}
                         <span className="flex items-center gap-1">

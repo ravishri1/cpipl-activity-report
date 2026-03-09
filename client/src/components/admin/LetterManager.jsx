@@ -858,7 +858,7 @@ export default function LetterManager() {
                 onClick={() =>
                   setPreviewLetter({
                     content: generatedLetter.content,
-                    templateName: generatedLetter.templateName || 'Generated Letter',
+                    templateName: generatedLetter.template?.name || 'Generated Letter',
                   })
                 }
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white rounded-lg hover:bg-slate-50 border border-slate-200 transition-colors"
@@ -926,26 +926,26 @@ export default function LetterManager() {
                     <tr key={letter.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-3">
                         <span className="font-medium text-slate-800">
-                          {letter.templateName || letter.template?.name || 'Letter'}
+                          {letter.template?.name || 'Letter'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            TYPE_COLORS[letter.type || letter.template?.type] || TYPE_COLORS.custom
+                            TYPE_COLORS[letter.letterType || letter.template?.type] || TYPE_COLORS.custom
                           }`}
                         >
-                          {getTypeLabel(letter.type || letter.template?.type || 'custom')}
+                          {getTypeLabel(letter.letterType || letter.template?.type || 'custom')}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{formatDate(letter.createdAt)}</td>
+                      <td className="px-4 py-3 text-slate-500">{formatDate(letter.generatedAt)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() =>
                               setPreviewLetter({
                                 content: letter.content,
-                                templateName: letter.templateName || letter.template?.name || 'Letter',
+                                templateName: letter.template?.name || 'Letter',
                               })
                             }
                             title="View letter"
@@ -960,7 +960,7 @@ export default function LetterManager() {
                                 <!DOCTYPE html>
                                 <html>
                                 <head>
-                                  <title>${letter.templateName || 'Letter'}</title>
+                                  <title>${letter.template?.name || 'Letter'}</title>
                                   <style>
                                     @page { size: A4; margin: 15mm; }
                                     body { margin: 0; padding: 0; font-family: Arial, sans-serif; }

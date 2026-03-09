@@ -45,14 +45,14 @@ export default function VendorRankingsList({ rankings = [], selectedVendorId, on
 
   const filteredAndSorted = useMemo(() => {
     let filtered = rankings.filter(v =>
-      (v.vendorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       v.category?.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      v.performanceScore
+      (v.vendor?.vendorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+       v.vendor?.category?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      v.trustScore !== undefined
     );
 
     filtered.sort((a, b) => {
-      const scoreA = a.performanceScore;
-      const scoreB = b.performanceScore;
+      const scoreA = a;
+      const scoreB = b;
 
       switch (sortBy) {
         case 'trust_score':
@@ -64,7 +64,7 @@ export default function VendorRankingsList({ rankings = [], selectedVendorId, on
         case 'cost_accuracy':
           return (scoreB.costAccuracyPercent || 0) - (scoreA.costAccuracyPercent || 0);
         case 'name':
-          return (a.vendorName || '').localeCompare(b.vendorName || '');
+          return (a.vendor?.vendorName || '').localeCompare(b.vendor?.vendorName || '');
         default:
           return 0;
       }
@@ -136,14 +136,14 @@ export default function VendorRankingsList({ rankings = [], selectedVendorId, on
         ) : (
           <div className="space-y-2 p-4">
             {filteredAndSorted.map((vendor, index) => {
-              const score = vendor.performanceScore;
-              const tier = vendor.tier?.toLowerCase() || 'bronze';
+              const score = vendor;
+              const tier = vendor.vendorTier?.toLowerCase() || 'bronze';
               const tierColor = TIER_COLORS[tier];
-              const isSelected = selectedVendorId === vendor.id;
+              const isSelected = selectedVendorId === vendor.vendorId;
 
               return (
                 <button
-                  key={vendor.id}
+                  key={vendor.vendorId}
                   onClick={() => onSelectVendor(vendor)}
                   className={`w-full text-left p-4 rounded-lg border-2 transition ${
                     isSelected
@@ -156,10 +156,10 @@ export default function VendorRankingsList({ rankings = [], selectedVendorId, on
                       <span className="text-2xl">{TIER_ICONS[tier]}</span>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-gray-900">
-                          {index + 1}. {vendor.vendorName}
+                          {index + 1}. {vendor.vendor?.vendorName}
                         </p>
                         <p className="text-xs text-gray-600 mt-0.5">
-                          {vendor.category || 'Uncategorized'} {vendor.location && `• ${vendor.location}`}
+                          {vendor.vendor?.category || 'Uncategorized'} {vendor.vendor?.location && `• ${vendor.vendor?.location}`}
                         </p>
                       </div>
                       {isSelected && (

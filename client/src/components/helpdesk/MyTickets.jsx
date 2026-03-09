@@ -277,8 +277,8 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
   const fetchComments = useCallback(async () => {
     try {
       setLoadingComments(true);
-      const res = await api.get(`/tickets/${ticket.id}/comments`);
-      setComments(res.data.comments || res.data || []);
+      const res = await api.get(`/tickets/${ticket.id}`);
+      setComments(res.data.comments || []);
     } catch {
       setComments([]);
     } finally {
@@ -311,7 +311,7 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
   const handleReopen = async () => {
     try {
       setActionLoading(true);
-      await api.put(`/tickets/${ticket.id}/status`, { status: 'open' });
+      await api.put(`/tickets/${ticket.id}/reopen`);
       onUpdate();
     } catch {
       // handled by parent
@@ -386,10 +386,10 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
             <Calendar className="w-3.5 h-3.5" />
             Created {formatDateTime(ticket.createdAt)}
           </span>
-          {ticket.assignedTo?.name && (
+          {ticket.assignee?.name && (
             <span className="flex items-center gap-1">
               <User className="w-3.5 h-3.5" />
-              Assigned to {ticket.assignedTo.name}
+              Assigned to {ticket.assignee.name}
             </span>
           )}
         </div>
@@ -419,7 +419,7 @@ function TicketDetail({ ticket, onBack, onUpdate }) {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-medium text-slate-700">
-                    {c.author?.name || c.authorName || 'Support'}
+                    {c.user?.name || 'Support'}
                   </span>
                   <span className="text-xs text-slate-400">
                     {formatDateTime(c.createdAt)}

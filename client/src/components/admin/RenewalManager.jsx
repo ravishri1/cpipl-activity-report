@@ -201,7 +201,7 @@ function RenewalModal({ renewal, categories, accounts, onClose, onSaved }) {
               <label className="block text-xs font-medium text-slate-600 mb-1">Payment Account</label>
               <select className={sel} value={form.paymentAccountId} onChange={e => set('paymentAccountId', e.target.value)}>
                 <option value="">— None —</option>
-                {(accounts || []).map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                {(accounts || []).map(a => <option key={a.id} value={a.id}>{a.accountCode} — {a.name}</option>)}
               </select>
             </div>
           </div>
@@ -384,13 +384,7 @@ function HistoryDrawer({ renewal, onClose }) {
                       </span>
                       <span className="text-xs text-slate-400">{formatDate(h.createdAt)}</span>
                     </div>
-                    {h.notes && <p className="text-sm text-slate-600">{h.notes}</p>}
-                    {h.amountPaid != null && (
-                      <p className="text-sm text-green-700 font-medium mt-1">
-                        Paid: {h.currency === 'USD' ? `$${h.amountPaid}` : `₹${formatINR(h.amountPaid)}`}
-                      </p>
-                    )}
-                    {h.user && <p className="text-xs text-slate-400 mt-1">by {h.user.name}</p>}
+                    {h.performer && <p className="text-xs text-slate-400 mt-1">by {h.performer.name}</p>}
                   </div>
                 </div>
               ))}
@@ -444,7 +438,7 @@ export default function RenewalManager() {
 
   const renewalsUrl = (() => {
     const p = new URLSearchParams();
-    if (filterCat)    p.set('category', filterCat);
+    if (filterCat)    p.set('categoryId', filterCat);
     if (filterStatus) p.set('status', filterStatus);
     if (filterLight)  p.set('trafficLight', filterLight);
     if (search)       p.set('search', search);
@@ -850,7 +844,7 @@ export default function RenewalManager() {
                 <tbody className="divide-y divide-slate-50">
                   {accounts.map(a => (
                     <tr key={a.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-mono text-xs text-slate-600">{a.code}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-slate-600">{a.accountCode}</td>
                       <td className="px-4 py-2 text-slate-700">{a.name}</td>
                       <td className="px-4 py-2 text-slate-500 capitalize text-xs">{a.type}</td>
                       <td className="px-4 py-2">

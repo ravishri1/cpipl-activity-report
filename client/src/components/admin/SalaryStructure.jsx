@@ -746,16 +746,16 @@ export default function SalaryStructure() {
                                         })
                                       : '—'}
                                   </span>
-                                  {rev.oldCtcAnnual != null && rev.newCtcAnnual != null && (
+                                  {rev.oldCtc != null && rev.newCtc != null && (
                                     <span className="text-xs text-slate-400">
-                                      {formatCurrency(rev.oldCtcAnnual)}{' '}
+                                      {formatCurrency(rev.oldCtc)}{' '}
                                       <span className="mx-1">→</span>{' '}
                                       <span className="font-medium text-slate-600">
-                                        {formatCurrency(rev.newCtcAnnual)}
+                                        {formatCurrency(rev.newCtc)}
                                       </span>
                                     </span>
                                   )}
-                                  {rev.ctcAnnual != null && rev.oldCtcAnnual == null && (
+                                  {rev.ctcAnnual != null && rev.oldCtc == null && (
                                     <span className="text-xs text-slate-500">
                                       CTC: {formatCurrency(rev.ctcAnnual)}
                                     </span>
@@ -764,9 +764,9 @@ export default function SalaryStructure() {
                                 {rev.notes && (
                                   <p className="text-xs text-slate-400 mt-0.5">{rev.notes}</p>
                                 )}
-                                {rev.revisedBy && (
+                                {rev.revisedByUser && (
                                   <p className="text-xs text-slate-400 mt-0.5">
-                                    By: {rev.revisedBy.name || rev.revisedBy}
+                                    By: {rev.revisedByUser?.name}
                                   </p>
                                 )}
                               </div>

@@ -717,6 +717,10 @@ model Payslip {
   otherAllowanceLabel  String?
   grossEarnings        Float    @default(0)
 
+  // Employer Contributions (snapshot for CTC/payslip display)
+  employerPf           Float    @default(0)
+  employerEsi          Float    @default(0)
+
   // Deductions
   employeePf           Float    @default(0)
   employeeEsi          Float    @default(0)
@@ -727,6 +731,9 @@ model Payslip {
   totalDeductions      Float    @default(0)
 
   netPay               Float    @default(0)
+
+  // Metadata snapshot
+  companyName          String?                         // company name at time of generation
 
   // Attendance
   workingDays          Int      @default(0)
@@ -860,6 +867,7 @@ model Asset {
   assetTag       String?   @unique                       // "AST-001" office tracking tag
   category       String    @default("personal")          // personal (assigned to person), office (shared/office use), infrastructure
   purchaseDate   String?                                 // "YYYY-MM-DD"
+  purchasePrice  Float?                                  // original purchase cost (manually entered)
   value          Float?
   warrantyExpiry String?                                 // "YYYY-MM-DD" — warranty end date
   warrantyVendor String?                                 // vendor/brand for warranty claims

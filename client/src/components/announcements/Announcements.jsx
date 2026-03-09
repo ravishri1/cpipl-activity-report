@@ -361,7 +361,7 @@ function CelebrationCard({ person, type }) {
             }`}
           >
             {isBirthday
-              ? formatBirthday(person.dateOfBirth)
+              ? formatBirthday(person.date)
               : `${person.years} year${person.years !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -538,7 +538,7 @@ export default function Announcements() {
         priority: formData.priority,
       };
       if (formData.expiryDate) {
-        payload.expiryDate = formData.expiryDate;
+        payload.expiresAt = formData.expiryDate;
       }
 
       if (editingAnnouncement) {
@@ -598,8 +598,8 @@ export default function Announcements() {
         content: editingAnnouncement.content || '',
         category: editingAnnouncement.category || 'general',
         priority: editingAnnouncement.priority || 'normal',
-        expiryDate: editingAnnouncement.expiryDate
-          ? editingAnnouncement.expiryDate.slice(0, 10)
+        expiryDate: editingAnnouncement.expiresAt
+          ? editingAnnouncement.expiresAt.slice(0, 10)
           : '',
       }
     : INITIAL_FORM;

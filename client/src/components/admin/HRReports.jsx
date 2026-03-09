@@ -135,7 +135,7 @@ function MonthPicker({ value, onChange }) {
 function HeadcountCard({ data, loading }) {
   if (!data) return <CardShell title="Headcount Overview" icon={Users} loading={loading}><EmptyState /></CardShell>;
 
-  const { total, byDepartment, byType, byCompany } = data;
+  const { totalActive: total, byDepartment, byEmploymentType: byType, byCompany } = data;
   const deptEntries = byDepartment ? Object.entries(byDepartment).sort((a, b) => b[1] - a[1]) : [];
   const typeEntries = byType ? Object.entries(byType) : [];
   const companyEntries = byCompany ? Object.entries(byCompany).sort((a, b) => b[1] - a[1]) : [];
@@ -304,7 +304,7 @@ function AttendanceCard({ data, loading, month, onMonthChange }) {
     );
   }
 
-  const { summary, byDepartment } = data;
+  const { statusCounts: summary, byDepartment } = data;
   const total = summary
     ? (summary.present || 0) + (summary.absent || 0) + (summary.late || 0) +
       (summary.half_day || 0) + (summary.on_leave || 0)
@@ -507,7 +507,7 @@ function DiversityCard({ genderData, ageData, tenureData, loading }) {
   if (!hasAny) return <CardShell title="Workforce Diversity" icon={BarChart3} loading={loading}><EmptyState /></CardShell>;
 
   // Gender
-  const genderEntries = genderData ? Object.entries(genderData).filter(([k]) => k !== 'total') : [];
+  const genderEntries = genderData ? Object.entries(genderData).filter(([k]) => k !== 'total' && k !== 'percentages') : [];
   const genderTotal = genderEntries.reduce((s, [, v]) => s + v, 0);
 
   const genderColorMap = {
@@ -530,7 +530,7 @@ function DiversityCard({ genderData, ageData, tenureData, loading }) {
   const gDonutStyle = genderTotal > 0 ? { background: `conic-gradient(${gConicStops})` } : { background: '#e2e8f0' };
 
   // Age buckets
-  const ageBuckets = ageData ? Object.entries(ageData).sort((a, b) => {
+  const ageBuckets = ageData ? (ageData.distribution || []).map(d => [d.range, d.count]).sort((a, b) => {
     const orderKey = (k) => {
       const match = k.match(/\d+/);
       return match ? parseInt(match[0]) : 999;
@@ -540,7 +540,7 @@ function DiversityCard({ genderData, ageData, tenureData, loading }) {
   const maxAge = ageBuckets.length > 0 ? Math.max(...ageBuckets.map(([, v]) => v)) : 1;
 
   // Tenure buckets
-  const tenureBuckets = tenureData ? Object.entries(tenureData).sort((a, b) => {
+  const tenureBuckets = tenureData ? (tenureData.distribution || []).map(d => [d.range, d.count]).sort((a, b) => {
     const orderKey = (k) => {
       const match = k.match(/\d+/);
       return match ? parseInt(match[0]) : 999;
@@ -622,9 +622,9 @@ function DiversityCard({ genderData, ageData, tenureData, loading }) {
 function BirthdayCard({ data, loading }) {
   if (!data) return <CardShell title="Birthday Calendar" icon={Cake} loading={loading}><EmptyState /></CardShell>;
 
-  const { birthdays, anniversaries } = data;
+  const { birthdays } = data;
   const birthdayList = birthdays || [];
-  const anniversaryList = anniversaries || [];
+  const anniversaryList = [];
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -939,7 +939,7 @@ export default function HRReports() {
             <div>
               <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Total Employees</p>
               <p className="text-2xl font-bold text-slate-800 mt-1">
-                {formatNumber(headcount?.total || 0)}
+                {formatNumber(headcount?.totalActive || 0)}
               </p>
             </div>
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -978,7 +978,7 @@ export default function HRReports() {
             <div>
               <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Anniversaries</p>
               <p className="text-2xl font-bold text-slate-800 mt-1">
-                {formatNumber(birthdayData?.anniversaries?.length || 0)}
+                {formatNumber(0)}
               </p>
             </div>
             <div className="p-2 bg-amber-50 rounded-lg">

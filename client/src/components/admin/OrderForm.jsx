@@ -10,7 +10,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
   const [formData, setFormData] = useState({
     vendorId: '',
     totalAmount: '',
-    deliveryAddress: '',
+    deliveryDate: '',
     notes: '',
     createdDate: new Date().toISOString().split('T')[0],
   });
@@ -45,7 +45,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
       setFormData({
         vendorId: res.data.vendorId,
         totalAmount: res.data.totalAmount,
-        deliveryAddress: res.data.deliveryAddress || '',
+        deliveryDate: res.data.deliveryDate || '',
         notes: res.data.notes || '',
         createdDate: res.data.createdDate,
       });
@@ -61,7 +61,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
     setFormData({
       vendorId: '',
       totalAmount: '',
-      deliveryAddress: '',
+      deliveryDate: '',
       notes: '',
       createdDate: new Date().toISOString().split('T')[0],
     });
@@ -154,7 +154,7 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
     const payload = {
       vendorId: parseInt(formData.vendorId),
       totalAmount: parseFloat(formData.totalAmount),
-      deliveryAddress: formData.deliveryAddress,
+      deliveryDate: formData.deliveryDate,
       notes: formData.notes,
       createdDate: formData.createdDate,
       status: 'draft',
@@ -275,14 +275,13 @@ export default function OrderForm({ isOpen, onClose, orderId, onSuccess }) {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Delivery Address
+                    Expected Delivery Date
                   </label>
                   <input
-                    type="text"
-                    name="deliveryAddress"
-                    value={formData.deliveryAddress}
+                    type="date"
+                    name="deliveryDate"
+                    value={formData.deliveryDate}
                     onChange={handleChange}
-                    placeholder="Delivery location"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

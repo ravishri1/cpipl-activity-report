@@ -184,10 +184,10 @@ router.get('/:id/results', requireAdmin, asyncHandler(async (req, res) => {
     if (q.type === 'multiple_choice' || q.type === 'rating' || q.type === 'yes_no') {
       const counts = {};
       questionAnswers.forEach(ans => { const key = String(ans); counts[key] = (counts[key] || 0) + 1; });
-      return { questionIndex: index, question: q.question, type: q.type, options: q.options || null, answerCounts: counts, totalAnswered: questionAnswers.length };
+      return { questionIndex: index, text: q.text, type: q.type, options: q.options || null, answerCounts: counts, responses: questionAnswers, totalAnswered: questionAnswers.length };
     }
 
-    return { questionIndex: index, question: q.question, type: q.type, textAnswers: questionAnswers, totalAnswered: questionAnswers.length };
+    return { questionIndex: index, text: q.text, type: q.type, textAnswers: questionAnswers, responses: questionAnswers, totalAnswered: questionAnswers.length };
   });
 
   res.json({ surveyId: survey.id, title: survey.title, totalResponses, totalEmployees, responseRate, questions: aggregated });

@@ -93,7 +93,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true } } },
+    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive);
   if (activeSalaries.length === 0) throw badRequest('No active employees with salary structures');
@@ -161,10 +161,12 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         specialAllowance: sal.specialAllowance, medicalAllowance: sal.medicalAllowance,
         conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
         otherAllowanceLabel: sal.otherAllowanceLabel, grossEarnings,
+        employerPf: sal.employerPf, employerEsi: sal.employerEsi,
         employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
         professionalTax: sal.professionalTax, tds: sal.tds,
         otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
+        companyName: sal.user.company?.name || null,
         status: 'generated', generatedAt: new Date(),
       },
     });
@@ -220,7 +222,23 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
       user: {
         select: {
           id: true, name: true, email: true, employeeId: true, designation: true, department: true,
-        }
+          shiftAssignments: {
+            where: {
+              status: 'active',
+              effectiveFrom: { lte: new Date().toISOString().slice(0, 10) },
+              OR: [
+                { effectiveTo: null },
+                { effectiveTo: { gte: new Date().toISOString().slice(0, 10) } },
+              ],
+            },
+            take: 1,
+            select: {
+              shift: {
+                select: { id: true, name: true, startTime: true, endTime: true },
+              },
+            },
+          },
+        },
       },
     },
     orderBy: { month: 'desc' },

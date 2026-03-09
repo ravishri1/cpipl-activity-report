@@ -20,6 +20,20 @@ import {
 
 const CATEGORIES = ['Documents', 'IT Setup', 'HR Formalities', 'Training'];
 
+const CATEGORY_MAP = {
+  'Documents': 'documents',
+  'IT Setup': 'it_setup',
+  'HR Formalities': 'hr_formalities',
+  'Training': 'training',
+};
+
+const REVERSE_CATEGORY_MAP = {
+  'documents': 'Documents',
+  'it_setup': 'IT Setup',
+  'hr_formalities': 'HR Formalities',
+  'training': 'Training',
+};
+
 const CATEGORY_CONFIG = {
   Documents: { color: 'blue', icon: FileText, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700', bar: 'bg-blue-500' },
   'IT Setup': { color: 'purple', icon: Monitor, bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700', bar: 'bg-purple-500' },
@@ -173,7 +187,7 @@ export default function OnboardingManager() {
       await api.post(`/lifecycle/onboarding/${selectedUserId}`, {
         tasks: [{
           task: taskForm.task.trim(),
-          category: taskForm.category,
+          category: CATEGORY_MAP[taskForm.category] || taskForm.category,
           dueDate: taskForm.dueDate || null,
           assignedTo: taskForm.assignedTo || null,
         }],
@@ -199,7 +213,8 @@ export default function OnboardingManager() {
     const groups = {};
     CATEGORIES.forEach((cat) => { groups[cat] = []; });
     checklist.forEach((task) => {
-      const cat = CATEGORIES.includes(task.category) ? task.category : 'HR Formalities';
+      const displayCat = REVERSE_CATEGORY_MAP[task.category] || task.category;
+      const cat = CATEGORIES.includes(displayCat) ? displayCat : 'HR Formalities';
       groups[cat].push(task);
     });
     return groups;
@@ -337,10 +352,10 @@ export default function OnboardingManager() {
                       {joinee.department && (
                         <span className="bg-slate-200 px-2 py-0.5 rounded">{joinee.department}</span>
                       )}
-                      {joinee.joiningDate && (
+                      {joinee.dateOfJoining && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {formatDate(joinee.joiningDate)}
+                          {formatDate(joinee.dateOfJoining)}
                         </span>
                       )}
                     </div>

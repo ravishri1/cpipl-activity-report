@@ -131,6 +131,52 @@ router.post('/:id/comment', asyncHandler(async (req, res) => {
 }));
 
 // ─── 5. PUT /:id/assign ─── Assign ticket (admin only)
+// GET /:id/comments — fetch comments for a ticket
+router.get('/:id/comments', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const ticket = await req.prisma.ticket.findUnique({ where: { id } });
+  if (!ticket) throw notFound('Ticket');
+  if (!isAdminRole(req.user) && ticket.userId !== req.user.id) throw forbidden();
+  const where = { ticketId: id };
+  if (!isAdminRole(req.user)) where.isInternal = false;
+  const comments = await req.prisma.ticketComment.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, role: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json({ comments });
+}));
+
+// PUT /:id/status — generic status change (resolve/close/reopen via single endpoint)
+router.put('/:id/status', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { status, resolution } = req.body;
+  requireEnum(status, VALID_STATUSES, 'status');
+  const ticket = await req.prisma.ticket.findUnique({ where: { id } });
+  if (!ticket) throw notFound('Ticket');
+  if (!isAdminRole(req.user) && ticket.userId !== req.user.id) throw forbidden();
+  if (status === 'closed' && !isAdminRole(req.user)) throw forbidden('Only admins can close tickets');
+  const data = { status };
+  if (status === 'resolved') {
+    data.resolution = resolution?.trim() || null;
+    data.resolvedAt = new Date();
+  }
+  if (status === 'open') { data.resolution = null; data.resolvedAt = null; }
+  const updated = await req.prisma.ticket.update({
+    where: { id }, data,
+    include: { user: { select: { id: true, name: true } }, assignee: { select: { id: true, name: true } } },
+  });
+  if (status === 'resolved' && ticket.userId !== req.user.id) {
+    notifyUsers(req.prisma, {
+      userIds: [ticket.userId], type: 'ticket',
+      title: `Ticket Resolved: #${id}`,
+      message: `Your ticket "${ticket.subject}" has been resolved`,
+      link: `/tickets/${id}`,
+    });
+  }
+  res.json(updated);
+}));
+
 router.put('/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { assignedTo, priority } = req.body;

@@ -42,9 +42,12 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const ASSET_TYPES = [
-  'laptop', 'desktop', 'phone', 'tablet', 'id_card', 'access_card',
-  'monitor', 'keyboard', 'mouse', 'headset', 'printer', 'scanner',
-  'router', 'switch', 'server', 'projector', 'camera', 'furniture', 'other',
+  'laptop', 'desktop', 'phone', 'tablet', 'simcard',
+  'monitor', 'keyboard', 'mouse', 'headset', 'webcam',
+  'printer', 'scanner', 'projector', 'camera',
+  'router', 'switch', 'server',
+  'charger', 'ac_remote', 'dongle', 'ups', 'cable', 'adapter',
+  'id_card', 'access_card', 'furniture', 'other',
 ];
 
 const ASSET_TYPE_LABELS = {
@@ -52,19 +55,27 @@ const ASSET_TYPE_LABELS = {
   desktop: 'Desktop',
   phone: 'Phone',
   tablet: 'Tablet',
-  id_card: 'ID Card',
-  access_card: 'Access Card',
+  simcard: 'SIM Card',
   monitor: 'Monitor',
   keyboard: 'Keyboard',
   mouse: 'Mouse',
   headset: 'Headset',
+  webcam: 'Webcam',
   printer: 'Printer',
   scanner: 'Scanner',
+  projector: 'Projector',
+  camera: 'Camera',
   router: 'Router',
   switch: 'Switch',
   server: 'Server',
-  projector: 'Projector',
-  camera: 'Camera',
+  charger: 'Charger',
+  ac_remote: 'AC Remote',
+  dongle: 'Dongle',
+  ups: 'UPS',
+  cable: 'Cable',
+  adapter: 'Adapter',
+  id_card: 'ID Card',
+  access_card: 'Access Card',
   furniture: 'Furniture',
   other: 'Other',
 };

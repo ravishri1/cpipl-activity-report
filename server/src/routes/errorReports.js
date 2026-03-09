@@ -228,6 +228,7 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
         errorMessage: true, status: true, aiAnalysis: true, aiModel: true,
         resolution: true, resolvedAt: true, createdAt: true,
         occurrenceCount: true, lastOccurredAt: true,
+        affectedUsers: true, stackTrace: true, componentStack: true,
         resolver: { select: { id: true, name: true } },
       },
     }),

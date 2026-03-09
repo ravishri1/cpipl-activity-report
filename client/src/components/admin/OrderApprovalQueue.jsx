@@ -200,8 +200,8 @@ export default function OrderApprovalQueue() {
                       <p className="font-medium">{formatDate(order.createdDate)}</p>
                     </div>
                     <div>
-                      <p className="text-slate-600">Delivery Address</p>
-                      <p className="font-medium">{order.deliveryAddress || '-'}</p>
+                      <p className="text-slate-600">Delivery Date</p>
+                      <p className="font-medium">{order.deliveryDate ? formatDate(order.deliveryDate) : '-'}</p>
                     </div>
                   </div>
 

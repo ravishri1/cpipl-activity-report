@@ -19,7 +19,7 @@ router.get('/my', asyncHandler(async (req, res) => {
     }
   });
 
-  if (!card) return res.json({ card: null });
+  if (!card) return res.json(null);
 
   // Update viewedAt if user is viewing for the first time
   if (!card.isViewed) {

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -15,14 +15,14 @@ export default function MyLoans() {
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-  const [form, setForm] = useState({ loanType: 'personal', amount: '', tenure: 12, reason: '', requestedDate: '' });
+  const [form, setForm] = useState({ loanType: 'personal', principalAmount: '', tenureMonths: 12, purpose: '' });
 
   const sf = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const emi = form.amount && form.tenure ? (parseFloat(form.amount) / parseInt(form.tenure)).toFixed(2) : '—';
+  const emi = form.principalAmount && form.tenureMonths ? (parseFloat(form.principalAmount) / parseInt(form.tenureMonths)).toFixed(2) : '—';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(() => api.post('/loans/request', form), 'Loan request submitted!');
+    await execute(() => api.post('/loans', form), 'Loan request submitted!');
     setShowModal(false); refetch();
   };
 
@@ -60,13 +60,13 @@ export default function MyLoans() {
                 <div className="flex items-center gap-4">
                   <div>
                     <p className="font-semibold text-slate-800 capitalize">{loan.loanType} Loan</p>
-                    <p className="text-xs text-slate-500">Requested {formatDate(loan.requestedDate)}</p>
+                    <p className="text-xs text-slate-500">Requested {formatDate(loan.createdAt)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
                     <p className="text-sm text-slate-500">Amount</p>
-                    <p className="font-bold text-slate-800">{formatINR(loan.amount)}</p>
+                    <p className="font-bold text-slate-800">{formatINR(loan.principalAmount)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-slate-500">EMI</p>
@@ -74,7 +74,7 @@ export default function MyLoans() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-slate-500">Balance</p>
-                    <p className="font-bold text-emerald-700">{formatINR(loan.outstandingBalance || 0)}</p>
+                    <p className="font-bold text-emerald-700">{formatINR(loan.balanceAmount || 0)}</p>
                   </div>
                   <StatusBadge status={loan.status} styles={LOAN_STATUS_STYLES} />
                   <button onClick={() => setExpandedId(expandedId === loan.id ? null : loan.id)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
@@ -91,17 +91,17 @@ export default function MyLoans() {
                   </div>
                   <table className="w-full">
                     <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-                      <tr>{['#', 'Due Date', 'Amount', 'Paid On', 'Status'].map(h => (
+                      <tr>{['#', 'Month', 'Amount', 'Paid On', 'Status'].map(h => (
                         <th key={h} className="px-4 py-2 text-left font-medium">{h}</th>
                       ))}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {loan.repayments.map(rep => (
+                      {loan.repayments.map((rep, idx) => (
                         <tr key={rep.id} className="text-sm">
-                          <td className="px-4 py-2 text-slate-500">{rep.installmentNumber}</td>
-                          <td className="px-4 py-2 text-slate-700">{formatDate(rep.dueDate)}</td>
+                          <td className="px-4 py-2 text-slate-500">{idx + 1}</td>
+                          <td className="px-4 py-2 text-slate-700">{rep.month}</td>
                           <td className="px-4 py-2 font-medium text-slate-800">{formatINR(rep.amount)}</td>
-                          <td className="px-4 py-2 text-slate-500">{rep.paidDate ? formatDate(rep.paidDate) : '—'}</td>
+                          <td className="px-4 py-2 text-slate-500">{rep.paidOn ? formatDate(rep.paidOn) : '—'}</td>
                           <td className="px-4 py-2"><StatusBadge status={rep.status} styles={REPAYMENT_STATUS_STYLES} /></td>
                         </tr>
                       ))}
@@ -134,24 +134,20 @@ export default function MyLoans() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
-                <input type="number" min={1000} value={form.amount} onChange={e => sf('amount', e.target.value)} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="50000" />
+                <input type="number" min={1000} value={form.principalAmount} onChange={e => sf('principalAmount', e.target.value)} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="50000" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tenure (months)</label>
-                <select value={form.tenure} onChange={e => sf('tenure', parseInt(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <select value={form.tenureMonths} onChange={e => sf('tenureMonths', parseInt(e.target.value))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
                   {[3, 6, 9, 12, 18, 24, 36].map(t => <option key={t} value={t}>{t} months</option>)}
                 </select>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                <p className="text-sm text-emerald-700">Estimated EMI: <strong>{form.amount ? `₹${emi}` : '—'}</strong> / month</p>
+                <p className="text-sm text-emerald-700">Estimated EMI: <strong>{form.principalAmount ? `₹${emi}` : '—'}</strong> / month</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
-                <textarea value={form.reason} onChange={e => sf('reason', e.target.value)} rows={3} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none" placeholder="Brief reason for loan…" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Requested Date</label>
-                <input type="date" value={form.requestedDate} onChange={e => sf('requestedDate', e.target.value)} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Purpose</label>
+                <textarea value={form.purpose} onChange={e => sf('purpose', e.target.value)} rows={3} required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none" placeholder="Brief reason for loan…" />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Cancel</button>

@@ -19,13 +19,13 @@ export default function CompOffManager() {
 
   const handleApprove = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/comp-off/${id}/approve`), 'Request approved!');
+    await execute(() => api.put(`/comp-off/${id}/review`, { status: 'approved' }), 'Request approved!');
     refetch();
   };
 
   const handleReject = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/comp-off/${id}/reject`, { note: rejectNote }), 'Request rejected.');
+    await execute(() => api.put(`/comp-off/${id}/review`, { status: 'rejected', reviewNote: rejectNote }), 'Request rejected.');
     setRejectId(null); setRejectNote(''); refetch();
   };
 
@@ -81,8 +81,8 @@ export default function CompOffManager() {
                       {r.type === 'earn' ? 'Earn' : 'Redeem'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-700">{formatDate(r.workedDate || r.preferredDate)}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-slate-800">{r.daysEarned || r.daysToRedeem || 1}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700">{formatDate(r.workDate)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-800">{r.days}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 max-w-[180px] truncate">{r.reason || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} styles={COMP_OFF_STATUS_STYLES} /></td>
                   <td className="px-4 py-3">

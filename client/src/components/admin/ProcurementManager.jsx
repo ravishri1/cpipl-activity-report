@@ -430,8 +430,8 @@ export default function ProcurementManager() {
                         <p className="text-sm text-slate-600">Code: {item.itemCode}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold">{item.quantity} units</p>
-                        <p className="text-xs text-slate-500">Min: {item.minQuantity}</p>
+                        <p className="text-sm font-semibold">{item.quantityOnHand} units</p>
+                        <p className="text-xs text-slate-500">Min: {item.reorderLevel}</p>
                       </div>
                     </div>
                   </div>

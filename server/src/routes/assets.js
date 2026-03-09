@@ -12,9 +12,12 @@ function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_
 
 // Valid types and statuses
 const VALID_TYPES = [
-  'laptop', 'phone', 'simcard', 'mouse', 'charger', 'monitor', 'keyboard',
-  'headset', 'id_card', 'access_card', 'scanner', 'ac_remote', 'printer',
-  'webcam', 'dongle', 'ups', 'cable', 'adapter', 'other',
+  'laptop', 'desktop', 'phone', 'tablet', 'simcard',
+  'monitor', 'keyboard', 'mouse', 'headset', 'webcam',
+  'printer', 'scanner', 'projector', 'camera',
+  'router', 'switch', 'server',
+  'charger', 'ac_remote', 'dongle', 'ups', 'cable', 'adapter',
+  'id_card', 'access_card', 'furniture', 'other',
 ];
 const VALID_STATUSES = ['available', 'assigned', 'maintenance', 'retired', 'lost'];
 const VALID_CATEGORIES = ['personal', 'office', 'infrastructure'];
@@ -160,7 +163,7 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
 // â”€â”€â”€ 8. POST / â”€â”€â”€ Create asset with enhanced fields (admin)
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'type');
-  const { name, type, serialNumber, assetTag, category, purchaseDate, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, isMandatoryReturn, assignedTo, location } = req.body;
+  const { name, type, serialNumber, assetTag, category, purchaseDate, purchasePrice, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, isMandatoryReturn, assignedTo, location } = req.body;
 
   requireEnum(type, VALID_TYPES, 'type');
   if (category) requireEnum(category, VALID_CATEGORIES, 'category');
@@ -169,6 +172,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
     name, type,
     serialNumber: serialNumber || null, assetTag: assetTag || null,
     category: category || 'personal', purchaseDate: purchaseDate || null,
+    purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
     value: value ? parseFloat(value) : null, warrantyExpiry: warrantyExpiry || null,
     warrantyVendor: warrantyVendor || null, condition: condition || 'good',
     notes: notes || null, companyId: companyId ? parseInt(companyId) : null,
@@ -297,7 +301,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const asset = await req.prisma.asset.findUnique({ where: { id } });
   if (!asset) throw notFound('Asset');
 
-  const { name, type, serialNumber, assetTag, category, purchaseDate, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, status, isMandatoryReturn, location } = req.body;
+  const { name, type, serialNumber, assetTag, category, purchaseDate, purchasePrice, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, status, isMandatoryReturn, location } = req.body;
 
   if (type) requireEnum(type, VALID_TYPES, 'type');
   if (status) requireEnum(status, VALID_STATUSES, 'status');
@@ -311,6 +315,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   if (assetTag !== undefined) data.assetTag = assetTag || null;
   if (category !== undefined) data.category = category;
   if (purchaseDate !== undefined) data.purchaseDate = purchaseDate || null;
+  if (purchasePrice !== undefined) data.purchasePrice = purchasePrice ? parseFloat(purchasePrice) : null;
   if (value !== undefined) data.value = value ? parseFloat(value) : null;
   if (warrantyExpiry !== undefined) data.warrantyExpiry = warrantyExpiry || null;
   if (warrantyVendor !== undefined) data.warrantyVendor = warrantyVendor || null;
@@ -437,6 +442,7 @@ router.get('/repairs', requireAdmin, asyncHandler(async (req, res) => {
       asset: { select: { id: true, name: true, serialNumber: true } },
       initiator: { select: { id: true, name: true, email: true } },
       completer: { select: { id: true, name: true, email: true } },
+      timeline: { orderBy: { changedAt: 'desc' } },
     },
     orderBy: [{ expectedReturnDate: 'asc' }, { createdAt: 'desc' }],
   });

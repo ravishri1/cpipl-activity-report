@@ -82,31 +82,13 @@ function ExamTimer({ timeLimit, onTimeUp }) {
 // ---- Exam UI Component ----
 
 function ExamView({ module, onClose, onCompleted }) {
-  const [exam, setExam] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [exam] = useState(module.exams?.[0] || null);
+  const [loading] = useState(false);
+  const [error, setError] = useState(module.exams?.[0] ? '' : 'No exam available for this module.');
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const startTimeRef = useRef(Date.now());
-
-  const fetchExam = useCallback(async () => {
-    try {
-      setError('');
-      const res = await api.get(`/training/exams/${module.id}`);
-      setExam(res.data);
-      setAnswers({});
-      startTimeRef.current = Date.now();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load exam.');
-    } finally {
-      setLoading(false);
-    }
-  }, [module.id]);
-
-  useEffect(() => {
-    fetchExam();
-  }, [fetchExam]);
 
   const handleAnswer = (questionIndex, optionIndex) => {
     if (result) return;
