@@ -53,6 +53,7 @@ import {
   Briefcase,
   RefreshCw,
   Activity,
+  HeartPulse,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -280,6 +281,7 @@ export default function Sidebar({ isOpen, onClose }) {
           { to: '/admin/performance', label: 'Performance Management', icon: Target },
           { to: '/admin/assets', label: 'Asset Manager', icon: Package },
           { to: '/admin/asset-lifecycle', label: 'Asset Lifecycle', icon: Activity },
+          { to: '/admin/predictive-maintenance', label: 'Predictive Maintenance', icon: HeartPulse },
           { to: '/admin/vendor-analytics', label: 'Vendor Analytics', icon: TrendingUp },
           { to: '/admin/procurement', label: 'Procurement', icon: ShoppingCart },
           { to: '/admin/order-approvals', label: 'Order Approvals', icon: ClipboardCheck },
