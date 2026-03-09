@@ -81,6 +81,36 @@ router.post(
   })
 );
 
+// GET /api/shifts/my - Get current user's shift info
+router.get(
+  '/my',
+  asyncHandler(async (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get current active shift
+    const assignment = await req.prisma.shiftAssignment.findFirst({
+      where: {
+        userId: req.user.id,
+        status: 'active',
+        effectiveFrom: { lte: today },
+        OR: [
+          { effectiveTo: null },
+          { effectiveTo: { gte: today } }
+        ]
+      },
+      include: {
+        shift: { select: { id: true, name: true, startTime: true, endTime: true, breakDuration: true, flexibility: true } }
+      },
+      orderBy: { effectiveFrom: 'desc' }
+    });
+
+    res.json({
+      current: assignment,
+      userShift: req.user.shift // Fallback to default shift
+    });
+  })
+);
+
 // GET /api/shifts/:id - Get shift details
 router.get(
   '/:id',
@@ -367,40 +397,6 @@ router.delete(
     });
 
     res.json({ message: 'Shift assignment cancelled' });
-  })
-);
-
-// ═══════════════════════════════════════════════
-// SHIFT CHANGE REQUESTS (for employees)
-// ═══════════════════════════════════════════════
-
-// GET /api/shifts/my - Get current user's shift info
-router.get(
-  '/my',
-  asyncHandler(async (req, res) => {
-    const today = new Date().toISOString().split('T')[0];
-
-    // Get current active shift
-    const assignment = await req.prisma.shiftAssignment.findFirst({
-      where: {
-        userId: req.user.id,
-        status: 'active',
-        effectiveFrom: { lte: today },
-        OR: [
-          { effectiveTo: null },
-          { effectiveTo: { gte: today } }
-        ]
-      },
-      include: {
-        shift: { select: { id: true, name: true, startTime: true, endTime: true, breakDuration: true, flexibility: true } }
-      },
-      orderBy: { effectiveFrom: 'desc' }
-    });
-
-    res.json({
-      current: assignment,
-      userShift: req.user.shift // Fallback to default shift
-    });
   })
 );
 

@@ -21,13 +21,13 @@ export default function InvestmentDeclarations() {
 
   async function handleApprove(id) {
     if (!window.confirm('Approve this investment declaration?')) return;
-    await execute(() => api.post(`/investment-declarations/${id}/approve`), 'Declaration approved!');
+    await execute(() => api.put(`/investment-declarations/${id}/approve`), 'Declaration approved!');
     refetch();
   }
 
   async function handleReject() {
     await execute(
-      () => api.post(`/investment-declarations/${rejectId}/reject`, { rejectionNote: rejectNote }),
+      () => api.put(`/investment-declarations/${rejectId}/reject`, { notes: rejectNote }),
       'Declaration rejected.'
     );
     setRejectId(null);

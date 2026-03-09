@@ -114,7 +114,7 @@ export default function InvestmentDeclaration() {
     const payload = { ...form };
     Object.keys(totals).forEach(k => { payload[k] = totals[k]; });
     if (editId) {
-      await execute(() => api.put(`/investment-declarations/${editId}`, payload), 'Declaration saved!');
+      await execute(() => api.post('/investment-declarations', payload), 'Declaration saved!');
     } else {
       await execute(() => api.post('/investment-declarations', payload), 'Declaration created!');
     }
@@ -124,7 +124,7 @@ export default function InvestmentDeclaration() {
 
   async function handleSubmit(id) {
     if (!window.confirm('Submit this declaration for HR approval? You cannot edit after submission.')) return;
-    await execute(() => api.post(`/investment-declarations/${id}/submit`), 'Submitted for approval!');
+    await execute(() => api.put(`/investment-declarations/${id}/submit`), 'Submitted for approval!');
     refetch();
   }
 
