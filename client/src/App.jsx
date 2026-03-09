@@ -83,6 +83,8 @@ const RecruitmentManager = lazy(() => import('./components/recruitment/Recruitme
 const MyPerformance = lazy(() => import('./components/performance/MyPerformance'));
 const PerformanceManager = lazy(() => import('./components/performance/PerformanceManager'));
 const RenewalManager = lazy(() => import('./components/admin/RenewalManager'));
+const AttendanceRegularization = lazy(() => import('./components/attendance/AttendanceRegularization'));
+const RegularizationManager = lazy(() => import('./components/admin/RegularizationManager'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -178,6 +180,7 @@ function AppRoutes() {
                   <Route path="/my-compliance" element={<SeparatedRoute><MyCompliance /></SeparatedRoute>} />
                   <Route path="/overtime" element={<SeparatedRoute><MyOvertime /></SeparatedRoute>} />
                   <Route path="/my-comp-off" element={<SeparatedRoute><MyCompOff /></SeparatedRoute>} />
+                  <Route path="/attendance-regularization" element={<SeparatedRoute><AttendanceRegularization /></SeparatedRoute>} />
                   <Route path="/my-loans" element={<SeparatedRoute><MyLoans /></SeparatedRoute>} />
                   <Route path="/my-investment" element={<SeparatedRoute><InvestmentDeclaration /></SeparatedRoute>} />
                   <Route path="/my-performance" element={<SeparatedRoute><MyPerformance /></SeparatedRoute>} />
@@ -228,6 +231,7 @@ function AppRoutes() {
                   <Route path="/admin/compliance" element={<SeparatedRoute><AdminRoute><ComplianceTracker /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/overtime" element={<SeparatedRoute><AdminRoute><OvertimeManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/comp-off" element={<SeparatedRoute><AdminRoute><CompOffManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/regularization" element={<SeparatedRoute><AdminRoute><RegularizationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/loans" element={<SeparatedRoute><AdminRoute><LoanManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/investment-declarations" element={<SeparatedRoute><AdminRoute><InvestmentDeclarations /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/recruitment" element={<SeparatedRoute><AdminRoute><RecruitmentManager /></AdminRoute></SeparatedRoute>} />
