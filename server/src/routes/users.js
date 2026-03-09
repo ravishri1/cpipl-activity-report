@@ -365,7 +365,6 @@ router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler
       const tempPassword = await createWorkspaceUser(user.name, normalizedEmail);
       workspaceResult.success = true;
       workspaceResult.tempPassword = tempPassword; // shown to admin once; employee resets on first login
-      console.log(`Google Workspace account created for: ${normalizedEmail}`);
     } catch (err) {
       // Non-blocking: user record is already saved; admin can create Workspace account manually
       workspaceResult.success = false;

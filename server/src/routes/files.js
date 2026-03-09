@@ -338,14 +338,10 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
 
       // Update user's Drive profile photo with direct image URL
       const directUrl = getDirectImageUrl(result.fileId);
-      console.log(`[BULK-PHOTOS] Updating user ${user.id} (${user.name}) with photo URL: ${directUrl}`);
-      
-      const updateResult = await req.prisma.user.update({
+      await req.prisma.user.update({
         where: { id: user.id },
         data: { driveProfilePhotoUrl: directUrl },
       });
-      
-      console.log(`[BULK-PHOTOS] Update complete. driveProfilePhotoUrl is now: ${updateResult.driveProfilePhotoUrl}`);
 
       summary.uploaded++;
 
