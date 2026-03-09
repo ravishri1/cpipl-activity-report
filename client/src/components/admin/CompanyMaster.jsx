@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -310,7 +310,7 @@ function DeactivateModal({ reg, onClose, onDone }) {
     if (res?.preview) setPreview(res);
   };
 
-  useState(() => { fetchPreview(); }, []);
+  useEffect(() => { fetchPreview(); }, []);
 
   const handleConfirm = async () => {
     await execute(

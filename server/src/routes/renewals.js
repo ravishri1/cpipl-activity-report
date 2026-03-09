@@ -431,23 +431,6 @@ router.get('/email-scans', requireAdmin, asyncHandler(async (req, res) => {
   res.json(scans);
 }));
 
-// POST /api/renewals/email-scans/:id/link — link scan to an existing renewal or create new
-router.post('/email-scans/:id/link', requireAdmin, asyncHandler(async (req, res) => {
-  const id = parseInt(req.params.id);
-  const { renewalId } = req.body;
-  const scan = await req.prisma.emailRenewalScan.update({
-    where: { id },
-    data: {
-      status:     'linked',
-      renewalId:  renewalId ? parseInt(renewalId) : null,
-      reviewedBy: req.user.id,
-      reviewedAt: new Date(),
-    },
-    include: { renewal: { select: { id: true, itemName: true } } },
-  });
-  res.json(scan);
-}));
-
 // POST /api/renewals/email-scans/:id/dismiss — dismiss a scan (not a renewal)
 router.post('/email-scans/:id/dismiss', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
