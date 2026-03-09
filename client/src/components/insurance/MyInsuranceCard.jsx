@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Download, Eye, AlertCircle, FileText, Calendar } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -9,17 +9,16 @@ import EmptyState from '../shared/EmptyState';
 
 export default function MyInsuranceCard() {
   const { data: card, loading, error, refetch } = useFetch('/insurance/my', null);
-  const [markingViewed, setMarkingViewed] = useState(false);
+  const hasMarkedViewed = useRef(false);
 
-  // Mark as viewed when first loaded
+  // Mark as viewed once when card first loads (useRef prevents re-trigger on re-renders)
   useEffect(() => {
-    if (card && !card.isViewed && !markingViewed) {
-      setMarkingViewed(true);
+    if (card && !card.isViewed && !hasMarkedViewed.current) {
+      hasMarkedViewed.current = true;
       api.post('/insurance/mark-viewed')
-        .catch(err => console.error('Failed to mark card as viewed:', err))
-        .finally(() => setMarkingViewed(false));
+        .catch(err => console.error('Failed to mark card as viewed:', err));
     }
-  }, [card, markingViewed]);
+  }, [card]);
 
   if (loading) return <LoadingSpinner />;
   
