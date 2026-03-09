@@ -16,6 +16,8 @@ export default function AdminInsuranceManager() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCard, setEditingCard] = useState(null);
 
   const { data: result, loading, error, refetch } = useFetch(
     `/insurance?search=${searchQuery}&cardType=${cardTypeFilter}&isActive=${isActiveFilter}`,
@@ -187,6 +189,16 @@ export default function AdminInsuranceManager() {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => {
+                          setEditingCard(card);
+                          setShowEditModal(true);
+                        }}
+                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                        title="Edit Card"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <a
                         href={card.fileUrl}
                         target="_blank"
@@ -235,6 +247,19 @@ export default function AdminInsuranceManager() {
         <InsuranceDetailPanel
           card={selectedCard}
           onClose={() => setShowDetailPanel(false)}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && editingCard && (
+        <InsuranceEditModal
+          card={editingCard}
+          onClose={() => { setShowEditModal(false); setEditingCard(null); }}
+          onSuccess={() => {
+            setShowEditModal(false);
+            setEditingCard(null);
+            refetch();
+          }}
         />
       )}
     </div>
@@ -524,6 +549,165 @@ function InsuranceUploadModal({ onClose, onSuccess }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Edit Modal Component
+function InsuranceEditModal({ card, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    cardType: card.cardType || 'health',
+    providerName: card.providerName || '',
+    policyNumber: card.policyNumber || '',
+    coverageAmount: card.coverageAmount || '',
+    effectiveFrom: card.effectiveFrom || '',
+    effectiveTo: card.effectiveTo || '',
+    notes: card.notes || '',
+    isActive: card.isActive !== false,
+  });
+
+  const { execute: updateCard, loading: updating, error } = useApi();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await updateCard(
+      () => api.put(`/insurance/${card.id}`, formData),
+      'Insurance card updated'
+    );
+    if (!error) onSuccess();
+  };
+
+  const setField = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-800">Edit Insurance Card</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+        </div>
+
+        <div className="p-6">
+          {/* Employee (read-only) */}
+          <div className="mb-5 p-3 bg-slate-50 rounded-lg">
+            <p className="text-xs text-slate-500 mb-0.5">Employee</p>
+            <p className="font-semibold text-slate-800">{card.user?.name || 'Unknown'}</p>
+            <p className="text-sm text-slate-500">{card.user?.employeeId || ''}</p>
+          </div>
+
+          {error && <AlertMessage type="error" message={error} />}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Card Type</label>
+                <select
+                  value={formData.cardType}
+                  onChange={e => setField('cardType', e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="health">Health</option>
+                  <option value="life">Life</option>
+                  <option value="accidental">Accidental</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Provider Name</label>
+                <input
+                  type="text"
+                  value={formData.providerName}
+                  onChange={e => setField('providerName', e.target.value)}
+                  placeholder="e.g. Star Health"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Policy Number</label>
+                <input
+                  type="text"
+                  value={formData.policyNumber}
+                  onChange={e => setField('policyNumber', e.target.value)}
+                  placeholder="Policy #"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Coverage Amount (₹)</label>
+                <input
+                  type="number"
+                  value={formData.coverageAmount}
+                  onChange={e => setField('coverageAmount', e.target.value)}
+                  placeholder="e.g. 500000"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Effective From</label>
+                <input
+                  type="date"
+                  value={formData.effectiveFrom}
+                  onChange={e => setField('effectiveFrom', e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Effective To</label>
+                <input
+                  type="date"
+                  value={formData.effectiveTo}
+                  onChange={e => setField('effectiveTo', e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+              <textarea
+                value={formData.notes}
+                onChange={e => setField('notes', e.target.value)}
+                rows={3}
+                placeholder="Additional notes..."
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={formData.isActive}
+                onChange={e => setField('isActive', e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-slate-700">Card is Active</label>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="submit"
+                disabled={updating}
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updating ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Changes'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2.5 border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

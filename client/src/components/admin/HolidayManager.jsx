@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import {
   CalendarDays, Plus, Trash2, Sun, Star,
-  ChevronLeft, ChevronRight, X, Building2, Globe,
+  ChevronLeft, ChevronRight, X, Building2, Globe, Pencil,
 } from 'lucide-react';
 
 // ─── Branch Holidays Tab ──────────────────────────────────────────────────────
@@ -214,6 +214,71 @@ function BranchHolidaysTab() {
   );
 }
 
+// ─── Edit Holiday Modal ───────────────────────────────────────────────────────
+function EditHolidayModal({ holiday, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: holiday.name, date: holiday.date, isOptional: holiday.isOptional });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setError('');
+    try {
+      await api.put(`/holidays/${holiday.id}`, form);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update holiday.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+          <h3 className="text-base font-semibold text-slate-800">Edit Holiday</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100">
+            <X className="w-4 h-4 text-slate-400" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && <div className="text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg">{error}</div>}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Holiday Name</label>
+            <input type="text" value={form.name} required
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
+            <input type="date" value={form.date} required
+              onChange={e => setForm({ ...form, date: e.target.value })}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={form.isOptional}
+              onChange={e => setForm({ ...form, isOptional: e.target.checked })}
+              className="rounded border-slate-300" />
+            Optional holiday
+          </label>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Global Holidays Tab ──────────────────────────────────────────────────────
 function GlobalHolidaysTab() {
   const [holidays, setHolidays] = useState([]);
@@ -223,6 +288,7 @@ function GlobalHolidaysTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
+  const [editingHoliday, setEditingHoliday] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -321,6 +387,18 @@ function GlobalHolidaysTab() {
         </div>
       )}
 
+      {/* Edit holiday modal */}
+      {editingHoliday && (
+        <EditHolidayModal
+          holiday={editingHoliday}
+          onClose={() => setEditingHoliday(null)}
+          onSaved={() => {
+            api.get(`/holidays?year=${year}`).then(r => setHolidays(r.data));
+            setEditingHoliday(null);
+          }}
+        />
+      )}
+
       {/* Holiday table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-hidden">
         {loading ? (
@@ -364,10 +442,18 @@ function GlobalHolidaysTab() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
-                      <button onClick={() => handleDelete(h.id, h.name)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setEditingHoliday(h)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600"
+                          title="Edit">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(h.id, h.name)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                          title="Delete">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

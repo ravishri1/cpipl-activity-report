@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Plus, Users, Briefcase, ChevronRight, X, ArrowRight } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, X, ArrowRight, Pencil, Trash2, Calendar } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -15,6 +15,23 @@ import {
 
 const TAB_JOBS = 'jobs';
 const TAB_CANDIDATES = 'candidates';
+const TAB_INTERVIEWS = 'interviews';
+const TAB_OFFERS = 'offers';
+
+const INTERVIEW_RESULT_STYLES = {
+  pending:  'bg-slate-100 text-slate-600 border-slate-200',
+  passed:   'bg-green-100 text-green-700 border-green-200',
+  failed:   'bg-red-100 text-red-700 border-red-200',
+  on_hold:  'bg-amber-100 text-amber-700 border-amber-200',
+};
+
+const OFFER_STATUS_STYLES = {
+  draft:     'bg-slate-100 text-slate-600 border-slate-200',
+  sent:      'bg-blue-100 text-blue-700 border-blue-200',
+  accepted:  'bg-green-100 text-green-700 border-green-200',
+  declined:  'bg-red-100 text-red-700 border-red-200',
+  withdrawn: 'bg-slate-100 text-slate-500 border-slate-200',
+};
 
 const EMPTY_JOB = {
   title: '', department: '', location: '', jobType: 'full_time',
@@ -151,6 +168,131 @@ function CandidateFormModal({ jobs, onClose, onSave, saving }) {
   );
 }
 
+function ScheduleInterviewModal({ candidates, users, editInterview, onClose, onSave, saving }) {
+  const EMPTY = { candidateId: '', round: 1, scheduledAt: '', mode: 'online', conductorId: '', notes: '' };
+  const [form, setForm] = useState(editInterview ? {
+    candidateId: editInterview.candidateId,
+    round: editInterview.round,
+    scheduledAt: editInterview.scheduledAt ? editInterview.scheduledAt.slice(0, 16) : '',
+    mode: editInterview.mode || 'online',
+    conductorId: editInterview.conductorId || '',
+    notes: editInterview.notes || '',
+  } : EMPTY);
+  function setField(k, v) { setForm(f => ({ ...f, [k]: v })); }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-slate-800">{editInterview ? 'Edit Interview' : 'Schedule Interview'}</h3>
+          <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {!editInterview && (
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Candidate</label>
+              <select value={form.candidateId} onChange={e => setField('candidateId', e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">Select candidate...</option>
+                {candidates.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} — {c.jobOpening?.title || 'No job'}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Round</label>
+            <input type="number" min="1" value={form.round} onChange={e => setField('round', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Mode</label>
+            <select value={form.mode} onChange={e => setField('mode', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              {['online','on_site','phone'].map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Scheduled At</label>
+            <input type="datetime-local" value={form.scheduledAt} onChange={e => setField('scheduledAt', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Interviewer</label>
+            <select value={form.conductorId} onChange={e => setField('conductorId', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Select interviewer...</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <textarea value={form.notes || ''} onChange={e => setField('notes', e.target.value)} rows={2}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={() => onSave(form)} disabled={saving}
+            className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+            {saving ? 'Saving...' : editInterview ? 'Update Interview' : 'Schedule Interview'}
+          </button>
+          <button onClick={onClose} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateOfferModal({ candidates, onClose, onSave, saving }) {
+  const EMPTY_OFFER = { candidateId: '', ctcOffered: '', joiningDate: '', notes: '' };
+  const [form, setForm] = useState(EMPTY_OFFER);
+  function setField(k, v) { setForm(f => ({ ...f, [k]: v })); }
+  const eligible = candidates.filter(c => ['shortlisted','interview','offered'].includes(c.stage));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-slate-800">Create Offer</h3>
+          <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Candidate</label>
+            <select value={form.candidateId} onChange={e => setField('candidateId', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+              <option value="">Select candidate...</option>
+              {eligible.map(c => (
+                <option key={c.id} value={c.id}>{c.name} — {c.jobOpening?.title || 'No job'}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">CTC Offered (₹)</label>
+            <input type="number" value={form.ctcOffered} onChange={e => setField('ctcOffered', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. 500000" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Joining Date</label>
+            <input type="date" value={form.joiningDate} onChange={e => setField('joiningDate', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <textarea value={form.notes || ''} onChange={e => setField('notes', e.target.value)} rows={2}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={() => onSave(form)} disabled={saving}
+            className="flex-1 py-2.5 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50">
+            {saving ? 'Creating...' : 'Create Offer'}
+          </button>
+          <button onClick={onClose} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RecruitmentManager() {
   const [tab, setTab] = useState(TAB_JOBS);
   const [jobStatusFilter, setJobStatusFilter] = useState('open');
@@ -159,11 +301,19 @@ export default function RecruitmentManager() {
     useFetch(`/recruitment/openings?status=${jobStatusFilter}`, []);
   const { data: candidates, loading: candsLoading, error: candsError, refetch: refetchCands } =
     useFetch(`/recruitment/candidates${stageFilter ? `?stage=${stageFilter}` : ''}`, []);
+  const { data: interviews, loading: intvLoading, error: intvError, refetch: refetchIntvs } =
+    useFetch('/recruitment/interviews', []);
+  const { data: offers, loading: offersLoading, error: offersError, refetch: refetchOffers } =
+    useFetch('/recruitment/offers', []);
+  const { data: users } = useFetch('/users?status=active', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJob, setEditJob] = useState(null);
   const [showCandForm, setShowCandForm] = useState(false);
+  const [showInterviewForm, setShowInterviewForm] = useState(false);
+  const [editInterview, setEditInterview] = useState(null);
+  const [showOfferForm, setShowOfferForm] = useState(false);
 
   async function saveJob(form) {
     if (editJob) {
@@ -190,8 +340,33 @@ export default function RecruitmentManager() {
     refetchCands();
   }
 
-  const loading = tab === TAB_JOBS ? jobsLoading : candsLoading;
-  const error = tab === TAB_JOBS ? jobsError : candsError;
+  async function scheduleInterview(form) {
+    if (editInterview) {
+      await execute(() => api.put(`/recruitment/interviews/${editInterview.id}`, form), 'Interview updated!');
+    } else {
+      await execute(() => api.post('/recruitment/interviews', form), 'Interview scheduled!');
+    }
+    setShowInterviewForm(false); setEditInterview(null); refetchIntvs();
+  }
+
+  async function deleteInterview(id) {
+    if (!window.confirm('Delete this interview?')) return;
+    await execute(() => api.delete(`/recruitment/interviews/${id}`), 'Interview deleted.');
+    refetchIntvs();
+  }
+
+  async function createOffer(form) {
+    await execute(() => api.post('/recruitment/offers', form), 'Offer created!');
+    setShowOfferForm(false); refetchOffers(); refetchCands();
+  }
+
+  async function updateOfferStatus(id, status) {
+    await execute(() => api.put(`/recruitment/offers/${id}`, { status }), 'Offer updated!');
+    refetchOffers(); refetchCands();
+  }
+
+  const loading = tab === TAB_JOBS ? jobsLoading : tab === TAB_CANDIDATES ? candsLoading : tab === TAB_INTERVIEWS ? intvLoading : offersLoading;
+  const error = tab === TAB_JOBS ? jobsError : tab === TAB_CANDIDATES ? candsError : tab === TAB_INTERVIEWS ? intvError : offersError;
 
   return (
     <div className="p-6">
@@ -214,11 +389,23 @@ export default function RecruitmentManager() {
                 <Plus className="w-4 h-4" /> Add Candidate
               </button>
             )}
+            {tab === TAB_INTERVIEWS && (
+              <button onClick={() => { setEditInterview(null); setShowInterviewForm(true); }}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+                <Plus className="w-4 h-4" /> Schedule Interview
+              </button>
+            )}
+            {tab === TAB_OFFERS && (
+              <button onClick={() => setShowOfferForm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700">
+                <Plus className="w-4 h-4" /> Create Offer
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex bg-slate-100 rounded-lg p-1">
-            {[{ id: TAB_JOBS, label: 'Job Openings', icon: Briefcase }, { id: TAB_CANDIDATES, label: 'Candidates', icon: Users }].map(t => (
+            {[{ id: TAB_JOBS, label: 'Job Openings', icon: Briefcase }, { id: TAB_CANDIDATES, label: 'Candidates', icon: Users }, { id: TAB_INTERVIEWS, label: 'Interviews', icon: Calendar }, { id: TAB_OFFERS, label: 'Offers', icon: ChevronRight }].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
                 <t.icon className="w-4 h-4" /> {t.label}
@@ -334,8 +521,100 @@ export default function RecruitmentManager() {
         </>
       )}
 
+      {!loading && tab === TAB_INTERVIEWS && (
+        <>
+          {interviews.length === 0 && <EmptyState icon="📅" title="No interviews" subtitle="Schedule interviews for shortlisted candidates" />}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  {['Candidate','Email','Round','Scheduled At','Mode','Interviewer','Result','Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-600">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {interviews.map(iv => (
+                  <tr key={iv.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium text-slate-800">{iv.candidate?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{iv.candidate?.email || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">Round {iv.round}</td>
+                    <td className="px-4 py-3 text-slate-600">{iv.scheduledAt ? formatDate(iv.scheduledAt) : '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 capitalize">{iv.mode?.replace('_', ' ') || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{iv.conductor?.name || '—'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={iv.result || 'pending'} styles={INTERVIEW_RESULT_STYLES} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { setEditInterview(iv); setShowInterviewForm(true); }}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => deleteInterview(iv.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {!loading && tab === TAB_OFFERS && (
+        <>
+          {offers.length === 0 && <EmptyState icon="📄" title="No offers" subtitle="Create offers for shortlisted candidates" />}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  {['Candidate','Email','CTC Offered','Joining Date','Status','Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-600">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {offers.map(offer => (
+                  <tr key={offer.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium text-slate-800">{offer.candidate?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{offer.candidate?.email || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-slate-800">₹{Number(offer.ctcOffered || 0).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3 text-slate-600">{offer.joiningDate ? formatDate(offer.joiningDate) : '—'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={offer.status} styles={OFFER_STATUS_STYLES} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        {offer.status === 'draft' && (
+                          <button onClick={() => updateOfferStatus(offer.id, 'sent')}
+                            className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs hover:bg-blue-100">Send</button>
+                        )}
+                        {offer.status === 'sent' && (
+                          <>
+                            <button onClick={() => updateOfferStatus(offer.id, 'accepted')}
+                              className="px-2 py-1 bg-green-50 text-green-600 rounded text-xs hover:bg-green-100">Accept</button>
+                            <button onClick={() => updateOfferStatus(offer.id, 'declined')}
+                              className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs hover:bg-red-100">Decline</button>
+                          </>
+                        )}
+                        {['draft','sent'].includes(offer.status) && (
+                          <button onClick={() => updateOfferStatus(offer.id, 'withdrawn')}
+                            className="px-2 py-1 bg-slate-50 text-slate-600 rounded text-xs hover:bg-slate-100">Withdraw</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {showJobForm && <JobFormModal job={editJob} onClose={() => { setShowJobForm(false); setEditJob(null); }} onSave={saveJob} saving={saving} />}
       {showCandForm && <CandidateFormModal jobs={jobs} onClose={() => setShowCandForm(false)} onSave={addCandidate} saving={saving} />}
+      {showInterviewForm && <ScheduleInterviewModal candidates={candidates} users={users} editInterview={editInterview} onClose={() => { setShowInterviewForm(false); setEditInterview(null); }} onSave={scheduleInterview} saving={saving} />}
+      {showOfferForm && <CreateOfferModal candidates={candidates} onClose={() => setShowOfferForm(false)} onSave={createOffer} saving={saving} />}
     </div>
   );
 }

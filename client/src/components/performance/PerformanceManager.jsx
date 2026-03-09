@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Plus, Star, ChevronDown, ChevronUp, X, Target } from 'lucide-react';
+import { Plus, Star, ChevronDown, ChevronUp, X, Target, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -58,6 +58,18 @@ export default function PerformanceManager() {
     const ep = field === 'manager' ? 'manager' : 'complete';
     await execute(() => api.put(`/performance/reviews/${reviewId}/${ep}`, payload), 'Rating submitted!');
     setRatingModal(null); setRatingVal(''); setFeedbackText(''); refetchReviews();
+  }
+
+  async function handleDeleteReview(id) {
+    if (!window.confirm('Delete this review cycle? This cannot be undone.')) return;
+    await execute(() => api.delete(`/performance/reviews/${id}`), 'Review deleted.');
+    refetchReviews();
+  }
+
+  async function handleDeleteGoal(id) {
+    if (!window.confirm('Delete this goal? This cannot be undone.')) return;
+    await execute(() => api.delete(`/performance/goals/${id}`), 'Goal deleted.');
+    refetchGoals();
   }
 
   const loading = tab === TAB_REVIEWS ? rLoading : gLoading;
@@ -198,6 +210,11 @@ export default function PerformanceManager() {
                       className="p-1.5 text-slate-400 hover:text-slate-600">
                       {expanded === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
+                    <button onClick={() => handleDeleteReview(r.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                      title="Delete review cycle">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
                 {expanded === r.id && (
@@ -236,7 +253,7 @@ export default function PerformanceManager() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  {['Employee', 'Goal', 'Status', 'Weightage', 'Target Date', 'Added'].map(h => (
+                  {['Employee', 'Goal', 'Status', 'Weightage', 'Target Date', 'Added', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-600">{h}</th>
                   ))}
                 </tr>
@@ -258,6 +275,13 @@ export default function PerformanceManager() {
                     <td className="px-4 py-3 text-slate-600">{g.weightage ? `${g.weightage}%` : '—'}</td>
                     <td className="px-4 py-3 text-slate-500">{g.targetDate ? formatDate(g.targetDate) : '—'}</td>
                     <td className="px-4 py-3 text-slate-500">{formatDate(g.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handleDeleteGoal(g.id)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                        title="Delete goal">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

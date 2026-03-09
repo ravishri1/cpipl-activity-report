@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Trash2 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -18,6 +18,12 @@ export default function InvestmentDeclarations() {
   const [expanded, setExpanded] = useState(null);
   const [rejectId, setRejectId] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this investment declaration? This cannot be undone.')) return;
+    await execute(() => api.delete(`/investment-declarations/${id}`), 'Declaration deleted.');
+    refetch();
+  }
 
   async function handleApprove(id) {
     if (!window.confirm('Approve this investment declaration?')) return;
@@ -102,18 +108,24 @@ export default function InvestmentDeclarations() {
               {expanded === d.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               {expanded === d.id ? 'Hide details' : 'View all sections'}
             </button>
-            {d.status === 'submitted' && (
-              <div className="flex gap-2">
-                <button onClick={() => { setRejectId(d.id); setRejectNote(''); }}
-                  className="flex items-center gap-1 px-3 py-1.5 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">
-                  <XCircle className="w-4 h-4" /> Reject
-                </button>
-                <button onClick={() => handleApprove(d.id)} disabled={saving}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
-                  <CheckCircle className="w-4 h-4" /> Approve
-                </button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              {d.status === 'submitted' && (
+                <>
+                  <button onClick={() => { setRejectId(d.id); setRejectNote(''); }}
+                    className="flex items-center gap-1 px-3 py-1.5 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">
+                    <XCircle className="w-4 h-4" /> Reject
+                  </button>
+                  <button onClick={() => handleApprove(d.id)} disabled={saving}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
+                    <CheckCircle className="w-4 h-4" /> Approve
+                  </button>
+                </>
+              )}
+              <button onClick={() => handleDelete(d.id)} disabled={saving}
+                className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 text-slate-500 rounded-lg text-sm hover:bg-red-50 hover:border-red-300 hover:text-red-600 disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> Delete
+              </button>
+            </div>
           </div>
 
           {expanded === d.id && (

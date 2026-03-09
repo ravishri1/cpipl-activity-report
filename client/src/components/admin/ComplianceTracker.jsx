@@ -6,7 +6,7 @@ import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
-import { ShieldCheck, Plus, RefreshCw, Filter } from 'lucide-react';
+import { ShieldCheck, Plus, RefreshCw, Filter, Pencil } from 'lucide-react';
 import { COMPLIANCE_STATUS_STYLES, CERTIFICATE_TYPES, RENEWAL_FREQUENCIES } from '../../utils/constants';
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
@@ -230,6 +230,120 @@ function AddCertModal({ registrations, onClose, onSaved }) {
   );
 }
 
+// ─── Edit Certificate Modal ───────────────────────────────────────────────────
+
+function EditCertModal({ cert, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
+  const [form, setForm] = useState({
+    certificateType: cert.certificateType || '',
+    certificateNo: cert.certificateNo || '',
+    issueDate: cert.issueDate || '',
+    expiryDate: cert.expiryDate || '',
+    renewalFrequency: cert.renewalFrequency || 'YEARLY',
+    reminderDays: String(cert.reminderDays ?? 30),
+    documentUrl: cert.documentUrl || '',
+    notes: cert.notes || '',
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await execute(
+      () => api.put(`/compliance/certificates/${cert.id}`, {
+        ...form,
+        reminderDays: parseInt(form.reminderDays),
+        issueDate: form.issueDate || null,
+        expiryDate: form.expiryDate || null,
+        documentUrl: form.documentUrl || null,
+        notes: form.notes || null,
+      }),
+      'Certificate updated!'
+    );
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Edit Compliance Certificate</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <div className="bg-blue-50 mx-6 mt-4 rounded-lg p-3 text-sm">
+          <p className="font-medium text-blue-800">{cert.companyRegistration?.abbr} — {cert.companyRegistration?.officeCity}</p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {error && <AlertMessage type="error" message={error} />}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Certificate Type *</label>
+              <select value={form.certificateType} onChange={e => set('certificateType', e.target.value)}
+                required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select type...</option>
+                {CERTIFICATE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Certificate Number *</label>
+              <input value={form.certificateNo} onChange={e => set('certificateNo', e.target.value)}
+                required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Issue Date</label>
+              <input type="date" value={form.issueDate} onChange={e => set('issueDate', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+              <input type="date" value={form.expiryDate} onChange={e => set('expiryDate', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Frequency *</label>
+              <select value={form.renewalFrequency} onChange={e => set('renewalFrequency', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {RENEWAL_FREQUENCIES.map(f => <option key={f} value={f}>{f.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reminder (days before)</label>
+              <input type="number" min="1" max="365" value={form.reminderDays}
+                onChange={e => set('reminderDays', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Document URL</label>
+            <input value={form.documentUrl} onChange={e => set('documentUrl', e.target.value)}
+              placeholder="https://..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
+              rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ComplianceTracker() {
@@ -242,6 +356,7 @@ export default function ComplianceTracker() {
   const [filterStatus, setFilterStatus] = useState('');
   const [renewModal, setRenewModal] = useState(null);
   const [addModal, setAddModal] = useState(false);
+  const [editModal, setEditModal] = useState(null);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <AlertMessage type="error" message={error} />;
@@ -376,6 +491,10 @@ export default function ComplianceTracker() {
                           <RefreshCw size={11} /> Renew
                         </button>
                       )}
+                      <button onClick={() => setEditModal(cert)}
+                        className="text-xs text-blue-500 hover:underline flex items-center gap-1">
+                        <Pencil size={11} /> Edit
+                      </button>
                       <button onClick={() => handleDelete(cert)}
                         className="text-xs text-red-400 hover:underline">
                         Delete
@@ -395,6 +514,9 @@ export default function ComplianceTracker() {
       )}
       {addModal && (
         <AddCertModal registrations={registrations} onClose={() => setAddModal(false)} onSaved={refetch} />
+      )}
+      {editModal && (
+        <EditCertModal cert={editModal} onClose={() => setEditModal(null)} onSaved={refetch} />
       )}
     </div>
   );

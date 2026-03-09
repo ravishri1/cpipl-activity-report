@@ -8,7 +8,7 @@ import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
 import StatusBadge from '../shared/StatusBadge';
 import { COMP_OFF_STATUS_STYLES } from '../../utils/constants';
-import { AlarmClock, Plus, Calendar, X } from 'lucide-react';
+import { AlarmClock, Plus, Calendar, X, Trash2 } from 'lucide-react';
 
 export default function MyCompOff() {
   const { data: balance, loading: balLoading, refetch: refetchBal } = useFetch('/comp-off/balance/me', null);
@@ -31,6 +31,12 @@ export default function MyCompOff() {
     };
     await execute(() => api.post('/comp-off', payload), 'Request submitted!');
     setShowModal(false);
+    refetch(); refetchBal();
+  };
+
+  const handleCancel = async (id) => {
+    if (!window.confirm('Cancel this comp-off request?')) return;
+    await execute(() => api.delete(`/comp-off/${id}`), 'Request cancelled');
     refetch(); refetchBal();
   };
 
@@ -86,7 +92,7 @@ export default function MyCompOff() {
         ) : (
           <table className="w-full">
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-              <tr>{['Type', 'Date', 'Days', 'Reason', 'Status', 'Applied'].map(h => (
+              <tr>{['Type', 'Date', 'Days', 'Reason', 'Status', 'Applied', 'Actions'].map(h => (
                 <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
               ))}</tr>
             </thead>
@@ -103,6 +109,15 @@ export default function MyCompOff() {
                   <td className="px-4 py-3 text-sm text-slate-600 max-w-[200px] truncate">{r.reason || '—'}</td>
                   <td className="px-4 py-3"><StatusBadge status={r.status} styles={COMP_OFF_STATUS_STYLES} /></td>
                   <td className="px-4 py-3 text-sm text-slate-500">{formatDate(r.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    {r.status === 'pending' && (
+                      <button onClick={() => handleCancel(r.id)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600"
+                        title="Cancel request">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
