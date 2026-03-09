@@ -240,7 +240,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
 
 // ─── Registration Detail Panel ────────────────────────────────────────────────
 
-function RegistrationDetail({ reg, onEdit, onDeactivate }) {
+function RegistrationDetail({ reg, onEdit, onDeactivate, onReactivate }) {
   const fields = [
     { label: 'GSTIN', value: reg.gstin, mono: true },
     { label: 'State Code', value: reg.stateCode },
@@ -254,17 +254,23 @@ function RegistrationDetail({ reg, onEdit, onDeactivate }) {
   ].filter(f => f.value);
 
   return (
-    <div className={`border rounded-xl p-4 ${reg.isActive ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200 opacity-70'}`}>
+    <div className={`border rounded-xl p-4 transition-all ${
+      reg.isActive
+        ? 'bg-white border-gray-200'
+        : 'bg-gray-100 border-gray-300 grayscale opacity-75'
+    }`}>
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-mono font-semibold text-blue-700 text-sm">{reg.abbr}</span>
+            <span className={`font-mono font-semibold text-sm ${reg.isActive ? 'text-blue-700' : 'text-gray-500'}`}>
+              {reg.abbr}
+            </span>
             {!reg.isActive && <Badge color="gray">Inactive</Badge>}
             {reg.placeType === 'Principal' && reg.isActive && <Badge color="blue">Principal</Badge>}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">{reg.officeCity} · {reg.state}</p>
         </div>
-        {reg.isActive && (
+        {reg.isActive ? (
           <div className="flex items-center gap-2">
             <button onClick={() => onEdit(reg)}
               className="text-xs text-blue-600 hover:underline flex items-center gap-1">
@@ -275,18 +281,23 @@ function RegistrationDetail({ reg, onEdit, onDeactivate }) {
               Deactivate
             </button>
           </div>
+        ) : (
+          <button onClick={() => onReactivate(reg)}
+            className="text-xs text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md flex items-center gap-1 transition-colors">
+            ↩ Reactivate
+          </button>
         )}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
         {fields.map(f => (
           <div key={f.label} className="min-w-0">
             <p className="text-xs text-gray-400">{f.label}</p>
-            <p className={`text-xs text-gray-800 truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
+            <p className={`text-xs text-gray-700 truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
           </div>
         ))}
       </div>
       {/* Stats */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-500">
+      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-4 text-xs text-gray-500">
         <span>{reg._count?.users ?? 0} employees</span>
         <span>{reg._count?.assets ?? 0} assets</span>
         <span>{reg._count?.certificates ?? reg.certificates?.length ?? 0} certs</span>
@@ -358,6 +369,49 @@ function DeactivateModal({ reg, onClose, onDone }) {
   );
 }
 
+// ─── Reactivate Confirm Modal ─────────────────────────────────────────────────
+
+function ReactivateModal({ reg, onClose, onDone }) {
+  const { execute, loading, error } = useApi();
+
+  const handleConfirm = async () => {
+    await execute(
+      () => api.put(`/company-master/registrations/${reg.id}`, { isActive: true }),
+      'Registration reactivated'
+    );
+    onDone();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="text-green-500" size={20} />
+          <h3 className="text-lg font-semibold text-gray-900">Reactivate {reg.abbr}?</h3>
+        </div>
+        {error && <AlertMessage type="error" message={error} />}
+        <p className="text-sm text-gray-600 mb-2">
+          This will reactivate the <strong>{reg.abbr}</strong> registration ({reg.officeCity}, {reg.state}).
+        </p>
+        <p className="text-xs text-gray-500 mb-6">
+          Associated employees and assets linked to this registration will resume showing it as active.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            Cancel
+          </button>
+          <button onClick={handleConfirm} disabled={loading}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+            {loading ? 'Reactivating...' : 'Reactivate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CompanyMaster() {
@@ -367,9 +421,10 @@ export default function CompanyMaster() {
     useFetch('/company-master/registrations', []);
 
   const [selectedEntityId, setSelectedEntityId] = useState(null);
-  const [entityModal, setEntityModal] = useState(null); // null | 'add' | entity object
-  const [regModal, setRegModal] = useState(null);       // null | 'add' | registration object
+  const [entityModal, setEntityModal] = useState(null);    // null | 'add' | entity object
+  const [regModal, setRegModal] = useState(null);           // null | 'add' | registration object
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [reactivateTarget, setReactivateTarget] = useState(null);
 
   if (entLoading) return <LoadingSpinner />;
   if (entError) return <AlertMessage type="error" message={entError} />;
@@ -500,7 +555,8 @@ export default function CompanyMaster() {
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                           {inactiveRegs.map(reg => (
                             <RegistrationDetail key={reg.id} reg={reg}
-                              onEdit={() => {}} onDeactivate={() => {}} />
+                              onEdit={() => {}} onDeactivate={() => {}}
+                              onReactivate={r => setReactivateTarget(r)} />
                           ))}
                         </div>
                       </div>
@@ -531,6 +587,12 @@ export default function CompanyMaster() {
         <DeactivateModal
           reg={deactivateTarget}
           onClose={() => setDeactivateTarget(null)}
+          onDone={handleSaved} />
+      )}
+      {reactivateTarget && (
+        <ReactivateModal
+          reg={reactivateTarget}
+          onClose={() => setReactivateTarget(null)}
           onDone={handleSaved} />
       )}
     </div>

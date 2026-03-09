@@ -491,8 +491,13 @@ export default function RenewalManager() {
       const res = await api.post('/renewals/scan-email');
       setScanResult(res.data);
       refetchScans();
-    } catch {
-      setScanResult({ error: 'Scan failed. Check Gmail OAuth token.' });
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Scan failed. Check Gmail OAuth token.';
+      setScanResult({ error: msg });
     } finally {
       setScanning(false);
     }

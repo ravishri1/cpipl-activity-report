@@ -16,6 +16,7 @@ export default function Settings() {
   const [success, setSuccess] = useState('');
   const [googleStatus, setGoogleStatus] = useState({ connected: false, email: null });
   const [googleLoading, setGoogleLoading] = useState(true);
+  const [googleError, setGoogleError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
   // Company management
@@ -317,22 +318,37 @@ export default function Settings() {
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600">Connect your Google account to auto-fill reports from Calendar & Tasks.</p>
-            <button
-              onClick={async () => {
-                try {
-                  const res = await api.get('/google/auth-url');
-                  window.location.href = res.data.url;
-                } catch (err) {
-                  console.error('Google auth error:', err);
-                }
-              }}
-              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 flex items-center gap-1"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Connect Google
-            </button>
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Connect your Google account to auto-fill reports from Calendar &amp; Tasks.</p>
+              <button
+                onClick={async () => {
+                  setGoogleError('');
+                  try {
+                    const res = await api.get('/google/auth-url');
+                    window.location.href = res.data.url;
+                  } catch (err) {
+                    const msg =
+                      err?.response?.data?.error ||
+                      err?.response?.data?.message ||
+                      err?.message ||
+                      'Failed to start Google authorization. Please try again.';
+                    setGoogleError(msg);
+                    console.error('Google auth error:', err);
+                  }
+                }}
+                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 flex items-center gap-1 shrink-0 ml-4"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Connect Google
+              </button>
+            </div>
+            {googleError && (
+              <div className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <span className="mt-0.5">⚠</span>
+                <span>{googleError}</span>
+              </div>
+            )}
           </div>
         )}
       </div>

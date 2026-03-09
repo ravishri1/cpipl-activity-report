@@ -29,10 +29,12 @@ router.get('/callback', async (req, res) => {
     if (isNaN(userId)) return res.status(400).send('Invalid state parameter.');
     const tokens = await exchangeCodeForTokens(code);
     await storeTokens(userId, tokens, req.prisma);
-    res.redirect('http://localhost:3000/submit-report?google=connected');
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    res.redirect(`${clientUrl}/submit-report?google=connected`);
   } catch (err) {
     console.error('OAuth callback error:', err);
-    res.redirect('http://localhost:3000/submit-report?google=error');
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    res.redirect(`${clientUrl}/submit-report?google=error`);
   }
 });
 

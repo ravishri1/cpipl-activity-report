@@ -191,9 +191,10 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Support & Policies',
       icon: ShieldCheck,
       items: [
-        { to: '/my-compliance', label: 'Compliance', icon: ShieldCheck },
-        { to: '/my-support',    label: 'My Support', icon: LifeBuoy },
-        { to: '/wiki',          label: 'Knowledge Base', icon: BookOpen },
+        { to: '/my-compliance', label: 'Compliance',    icon: ShieldCheck },
+        { to: '/surveys',       label: 'Surveys',       icon: ClipboardList },
+        { to: '/my-support',    label: 'My Support',    icon: LifeBuoy },
+        { to: '/wiki',          label: 'Knowledge Base',icon: BookOpen },
       ],
     },
   ];
@@ -232,6 +233,8 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/confirmations',label: 'Confirmations',      icon: BadgeCheck },
     { to: '/admin/onboarding',   label: 'Onboarding',         icon: UserPlus },
     { to: '/admin/separations',  label: 'Separations',        icon: UserMinus },
+    { to: '/admin/surveys',      label: 'Survey Manager',     icon: ClipboardList },
+    { to: '/admin/suggestions',  label: 'Suggestions',        icon: MessageSquare },
     { to: '/admin/import',       label: 'Import Employees',   icon: Upload },
     { to: '/admin/ai-extract',   label: 'AI Extract',         icon: Brain },
   ];
@@ -270,10 +273,8 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
     { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
     { to: '/admin/policy-scorecard',        label: 'Policy Scorecard',        icon: BarChart3 },
-    { to: '/admin/surveys',                 label: 'Survey Manager',          icon: ClipboardList },
     { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
     { to: '/admin/training',                label: 'Training Manager',        icon: GraduationCap },
-    { to: '/admin/suggestions',             label: 'Suggestions',             icon: MessageSquare },
     { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
     { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },
     { to: '/admin/settings',                label: 'Settings',                icon: Settings },

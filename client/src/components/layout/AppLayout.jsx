@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import Breadcrumb from './Breadcrumb';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -38,6 +39,7 @@ export default function AppLayout({ children }) {
           {/* Page content */}
           <main className="flex-1 p-4 lg:p-6 overflow-auto">
             <div className="max-w-7xl mx-auto">
+              <Breadcrumb />
               {children}
             </div>
           </main>
