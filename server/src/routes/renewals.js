@@ -395,9 +395,9 @@ router.get('/:id(\\d+)/history', asyncHandler(async (req, res) => {
 
 // ─── EMAIL RENEWAL SCANS ─────────────────────────────────────────────────────
 
-// POST /api/renewals/scan-email — trigger Gmail inbox scan for renewal emails
+// POST /api/renewals/scan-email — trigger Gmail all-mail scan for renewal emails
 router.post('/scan-email', requireAdmin, asyncHandler(async (req, res) => {
-  const { scanInboxForRenewals } = require('../services/gmailRenewalScanner');
+  const { scanAllMailForRenewals } = require('../services/gmailRenewalScanner');
   // Use the requesting admin's token, or fall back to any admin with a token
   let adminUserId = req.user.id;
   const token = await req.prisma.googleToken.findUnique({ where: { userId: adminUserId } });
@@ -411,7 +411,7 @@ router.post('/scan-email', requireAdmin, asyncHandler(async (req, res) => {
     }
     adminUserId = anyAdmin.userId;
   }
-  const result = await scanInboxForRenewals(req.prisma, adminUserId);
+  const result = await scanAllMailForRenewals(req.prisma, adminUserId);
   res.json(result);
 }));
 

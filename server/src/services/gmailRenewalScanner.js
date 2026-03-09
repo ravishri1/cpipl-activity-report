@@ -1,7 +1,8 @@
 /**
  * Gmail Renewal Scanner
- * Scans the admin's Gmail inbox for renewal/subscription emails,
+ * Scans ALL mail (not just inbox) for renewal/subscription emails,
  * extracts data via Gemini AI, and saves pending scans for admin review.
+ * Spam and Trash are always skipped.
  */
 
 const { google } = require('googleapis');
@@ -107,7 +108,7 @@ Respond ONLY with a JSON object (no markdown, no explanation):
 
 // ─── Main scanner ─────────────────────────────────────────────────────────────
 
-async function scanInboxForRenewals(prisma, adminUserId) {
+async function scanAllMailForRenewals(prisma, adminUserId) {
   const results = { scanned: 0, newFound: 0, alreadyProcessed: 0, errors: [] };
 
   let gmail;
@@ -122,16 +123,25 @@ async function scanInboxForRenewals(prisma, adminUserId) {
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   const afterDate = sixtyDaysAgo.toISOString().slice(0, 10).replace(/-/g, '/');
 
-  const searchQuery = `(renewal OR subscription OR invoice OR billing OR "payment due" OR "expires" OR "auto-renew" OR "renewal notice") after:${afterDate}`;
+  // Search ALL mail (no labelIds = all folders: Primary, Promotions, Updates, Forwarded, etc.)
+  // -in:spam -in:trash skips junk — everything else is fair game
+  const searchQuery = `(renewal OR subscription OR invoice OR billing OR "payment due" OR "expires" OR "auto-renew" OR "renewal notice") after:${afterDate} -in:spam -in:trash`;
 
   let messages = [];
   try {
-    const res = await gmail.users.messages.list({
-      userId: 'me',
-      q: searchQuery,
-      maxResults: 50,
-    });
-    messages = res.data.messages || [];
+    // Paginate through all results — maxResults 500 per page (Gmail API limit)
+    let pageToken = undefined;
+    do {
+      const res = await gmail.users.messages.list({
+        userId:           'me',
+        q:                searchQuery,
+        maxResults:       500,
+        includeSpamTrash: false, // belt-and-suspenders: explicit exclusion
+        ...(pageToken ? { pageToken } : {}),
+      });
+      messages = messages.concat(res.data.messages || []);
+      pageToken = res.data.nextPageToken;
+    } while (pageToken);
   } catch (err) {
     console.error('[GmailScanner] Gmail list error:', err.message);
     results.errors.push(`Gmail API error: ${err.message}`);
@@ -191,4 +201,4 @@ async function scanInboxForRenewals(prisma, adminUserId) {
   return results;
 }
 
-module.exports = { scanInboxForRenewals };
+module.exports = { scanAllMailForRenewals };

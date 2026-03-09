@@ -17,7 +17,7 @@ const { runSeparationAlert }        = require('./notifications/separationAlertSe
 const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
 const { runComplianceAlerts }       = require('./notifications/complianceAlertService');
 const { runRenewalAlerts }          = require('./notifications/renewalAlertService');
-const { scanInboxForRenewals }      = require('./gmailRenewalScanner');
+const { scanAllMailForRenewals }    = require('./gmailRenewalScanner');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -286,7 +286,7 @@ function initCronJobs(prisma) {
         console.log('[CRON] Gmail scan skipped: no admin with Google token found.');
         return;
       }
-      const result = await scanInboxForRenewals(prisma, adminToken.userId);
+      const result = await scanAllMailForRenewals(prisma, adminToken.userId);
       console.log(`[CRON] Gmail renewal scan complete: ${result.newFound} new renewal email(s) found.`);
     } catch (err) {
       console.error('[CRON] Gmail renewal scan failed:', err);
