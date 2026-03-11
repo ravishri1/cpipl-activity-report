@@ -316,11 +316,29 @@ Email:     Gmail SMTP via Nodemailer
 Scheduler: node-cron (runs on backend process)
 ```
 
+**Production URLs:**
+| Purpose | URL |
+|---------|-----|
+| Production App | `https://eod.colorpapers.in` |
+| Vercel Dashboard | `https://cpipl-activity-report.vercel.app` |
+| GitHub Repo | `https://github.com/ravishri1/cpipl-activity-report.git` |
+| Neon DB | `ep-shiny-meadow-ai9ssvlk-pooler.c-4.us-east-1.aws.neon.tech/neondb` |
+| Google Workspace | `me@colorpapers.in` (domain: `colorpapers.in`) |
+
+**Auth:** Clerk SSO — no password-based login for production accounts.
+- Admin: `me@colorpapers.in` (Ravi Pardeep Shrivastav, user id: 1)
+- Vercel deployment URLs have SSO protection — always use `eod.colorpapers.in` for API calls
+
 **File Storage:** All uploads go to Google Drive via `server/src/services/google/googleDrive.js`.
 - Folder structure: `CPIPL HR Files / {EmployeeName} ({EmployeeId}) / ...`
 - Profile photos stored as direct Drive URLs in `User.driveProfilePhotoUrl`
 - File metadata tracked in `DriveFile` model
 - No local disk storage — all files in Google Drive
+
+**Important Notes:**
+- All date fields are `String` type in Prisma (NOT DateTime) — `startsWith:` queries work fine on PostgreSQL
+- `vercel.json` install command auto-runs `npx prisma db push` on every deploy
+- Profile photos go to Google Drive (NOT base64 in database)
 
 ## Crash Recovery
 
