@@ -502,6 +502,7 @@ router.put('/:id/workspace-done', authenticate, requireAdmin, asyncHandler(async
 // ═══════════════════════════════════════════════
 
 // GET /api/users/:id/section-permissions — get denied sections for a user (admin only)
+// null = never configured → default all denied; [] = explicitly all allowed
 router.get('/:id/section-permissions', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const user = await req.prisma.user.findUnique({
@@ -509,7 +510,10 @@ router.get('/:id/section-permissions', authenticate, requireAdmin, asyncHandler(
     select: { id: true, name: true, sectionPermissions: true },
   });
   if (!user) throw notFound('User');
-  res.json({ userId: user.id, name: user.name, deniedSections: user.sectionPermissions || [] });
+  // null means permissions were never set — treat as "all denied" (configured=false)
+  const configured = user.sectionPermissions !== null;
+  const deniedSections = configured ? user.sectionPermissions : [];
+  res.json({ userId: user.id, name: user.name, deniedSections, configured });
 }));
 
 // PUT /api/users/:id/section-permissions — update denied sections for a user (admin only)

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
+import { useFetch } from '../../hooks/useFetch';
 import {
   Building2, Plus, Edit2, Trash2, ChevronLeft, ChevronRight,
   MapPin, Users, Calendar, X, Check, AlertCircle, Loader2,
-  TreePine,
+  TreePine, Tag,
 } from 'lucide-react';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -26,18 +27,42 @@ function InputField({ label, value, onChange, placeholder, required = false }) {
   );
 }
 
+// ─── Auto-label logic (mirrors backend) ─────────────────────────────────────
+function autoLabel(city, state) {
+  const c = (city || '').trim().toLowerCase();
+  const s = (state || '').trim().toLowerCase();
+  if (c === 'mumbai' && s === 'maharashtra') return 'Mumbai HQ';
+  if (c === 'lucknow' && s === 'uttar pradesh') return 'Lucknow';
+  return '';
+}
+
 // ─── Branch Modal (Add / Edit) ───────────────────────────────────────────────
-function BranchModal({ branch, onClose, onSaved }) {
+function BranchModal({ branch, companies, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: branch?.name || '',
+    label: branch?.label || '',
     state: branch?.state || '',
     city: branch?.city || '',
     address: branch?.address || '',
+    companyId: branch?.companyId || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const setField = (key, val) => {
+    setForm(f => {
+      const next = { ...f, [key]: val };
+      // Auto-generate label when city/state change (only if label was empty or auto-generated)
+      if ((key === 'city' || key === 'state') && !branch) {
+        const suggested = autoLabel(
+          key === 'city' ? val : next.city,
+          key === 'state' ? val : next.state
+        );
+        if (suggested) next.label = suggested;
+      }
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.state.trim() || !form.city.trim()) {
@@ -47,10 +72,18 @@ function BranchModal({ branch, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
+      const payload = {
+        name: form.name,
+        label: form.label || form.name,
+        state: form.state,
+        city: form.city,
+        address: form.address || null,
+        companyId: form.companyId ? parseInt(form.companyId) : null,
+      };
       if (branch) {
-        await api.put(`/branches/${branch.id}`, form);
+        await api.put(`/branches/${branch.id}`, payload);
       } else {
-        await api.post('/branches', form);
+        await api.post('/branches', payload);
       }
       onSaved();
     } catch (err) {
@@ -74,10 +107,31 @@ function BranchModal({ branch, onClose, onSaved }) {
           {error && <AlertMessage type="error" message={error} />}
           <InputField label="Branch Name" value={form.name}
             onChange={v => setField('name', v)} placeholder="e.g. Mumbai HQ" required />
-          <InputField label="State" value={form.state}
-            onChange={v => setField('state', v)} placeholder="e.g. Maharashtra" required />
-          <InputField label="City" value={form.city}
-            onChange={v => setField('city', v)} placeholder="e.g. Mumbai" required />
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="State" value={form.state}
+              onChange={v => setField('state', v)} placeholder="e.g. Maharashtra" required />
+            <InputField label="City" value={form.city}
+              onChange={v => setField('city', v)} placeholder="e.g. Mumbai" required />
+          </div>
+          <InputField label="Label" value={form.label}
+            onChange={v => setField('label', v)}
+            placeholder="e.g. Mumbai HQ, E-APOB, I-APOB" />
+          <p className="text-xs text-slate-400 -mt-3">
+            Display label. Auto-fills for Mumbai/Lucknow. Use E-APOB or I-APOB for other CPIPL branches.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+            <select
+              value={form.companyId}
+              onChange={e => setField('companyId', e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">— No company assigned —</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.name} {c.shortName ? `(${c.shortName})` : ''}</option>
+              ))}
+            </select>
+          </div>
           <InputField label="Address" value={form.address}
             onChange={v => setField('address', v)} placeholder="Optional full address" />
         </div>
@@ -269,11 +323,12 @@ function BranchHolidaysPanel({ branch, onClose }) {
 }
 
 // ─── Main BranchManager Component ────────────────────────────────────────────
-export default function BranchManager() {
+export default function BranchManager({ embedded = false }) {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const { data: companies } = useFetch('/companies', []);
 
   // Modal/panel state
   const [showModal, setShowModal] = useState(false);
@@ -328,29 +383,46 @@ export default function BranchManager() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* ── Sticky Header ── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-xl">
-              <Building2 className="w-6 h-6 text-blue-600" />
+      {/* ── Header (only when standalone, not embedded in CompanyMaster) ── */}
+      {!embedded && (
+        <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-xl">
+                <Building2 className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-800">Branch Management</h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Manage office branches and branch-specific holidays
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-800">Branch Management</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Manage office branches and branch-specific holidays
-              </p>
-            </div>
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm
+                         rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-sm">
+              <Plus className="w-4 h-4" />
+              Add Branch
+            </button>
           </div>
-          <button
-            onClick={openAdd}
+        </div>
+      )}
+
+      {/* Embedded header — just Add button */}
+      {embedded && (
+        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100">
+          <p className="text-sm text-slate-500">
+            {branches.length} branch{branches.length !== 1 ? 'es' : ''} configured
+          </p>
+          <button onClick={openAdd}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm
                        rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-sm">
             <Plus className="w-4 h-4" />
             Add Branch
           </button>
         </div>
-      </div>
+      )}
 
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -393,7 +465,9 @@ export default function BranchManager() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Label</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Location</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Company</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Employees</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                   <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
@@ -409,10 +483,29 @@ export default function BranchManager() {
                       )}
                     </td>
                     <td className="px-5 py-4">
+                      {branch.label ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md">
+                          <Tag className="w-3 h-3" />
+                          {branch.label}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
                       <div className="flex items-center gap-1.5 text-slate-600">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         {branch.city}, {branch.state}
                       </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      {branch.company ? (
+                        <span className="text-xs font-medium text-slate-700">
+                          {branch.company.shortName || branch.company.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -477,6 +570,7 @@ export default function BranchManager() {
       {showModal && (
         <BranchModal
           branch={editBranch}
+          companies={companies}
           onClose={() => { setShowModal(false); setEditBranch(null); }}
           onSaved={handleSaved}
         />

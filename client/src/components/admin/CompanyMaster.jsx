@@ -1,11 +1,15 @@
 ﻿import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
-import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle } from 'lucide-react';
+import BranchManager from './BranchManager';
+import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle, GitBranch } from 'lucide-react';
+
+const PLACE_TYPE_OPTIONS = ['Principal', 'E-APOB', 'I-APOB'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -30,6 +34,7 @@ function EntityModal({ entity, onClose, onSaved }) {
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     legalName: entity?.legalName || '',
+    shortName: entity?.shortName || '',
     pan: entity?.pan || '',
     tan: entity?.tan || '',
     lei: entity?.lei || '',
@@ -41,6 +46,7 @@ function EntityModal({ entity, onClose, onSaved }) {
     e.preventDefault();
     const payload = {
       legalName: form.legalName,
+      shortName: form.shortName || null,
       pan: form.pan || null,
       tan: form.tan || null,
       lei: form.lei || null,
@@ -65,11 +71,19 @@ function EntityModal({ entity, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && <AlertMessage type="error" message={error} />}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Legal Name *</label>
-            <input value={form.legalName} onChange={e => set('legalName', e.target.value)}
-              required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Color Papers India Pvt. Ltd." />
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Legal Name *</label>
+              <input value={form.legalName} onChange={e => set('legalName', e.target.value)}
+                required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Color Papers India Pvt. Ltd." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Abbreviation</label>
+              <input value={form.shortName} onChange={e => set('shortName', e.target.value.toUpperCase())}
+                maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="CPIPL" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -116,7 +130,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
     officeCity: registration?.officeCity || '',
     state: registration?.state || '',
     district: registration?.district || '',
-    placeType: registration?.placeType || 'Principal',
+    placeType: registration?.placeType || 'Principal',  // comma-separated
     address: registration?.address || '',
     fssai: registration?.fssai || '',
     udyam: registration?.udyam || '',
@@ -192,12 +206,26 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Place Type</label>
-              <select value={form.placeType} onChange={e => set('placeType', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option>Principal</option>
-                <option>Additional</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Place Type(s)</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {PLACE_TYPE_OPTIONS.map(opt => {
+                  const selected = (form.placeType || '').split(',').map(s => s.trim()).filter(Boolean);
+                  const isChecked = selected.includes(opt);
+                  const toggle = () => {
+                    const next = isChecked
+                      ? selected.filter(s => s !== opt)
+                      : [...selected, opt];
+                    set('placeType', next.join(',') || 'Principal');
+                  };
+                  return (
+                    <label key={opt} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors
+                      ${isChecked ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                      <input type="checkbox" checked={isChecked} onChange={toggle} className="rounded text-blue-600 w-3.5 h-3.5" />
+                      {opt}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <div>
@@ -266,7 +294,9 @@ function RegistrationDetail({ reg, onEdit, onDeactivate, onReactivate }) {
               {reg.abbr}
             </span>
             {!reg.isActive && <Badge color="gray">Inactive</Badge>}
-            {reg.placeType === 'Principal' && reg.isActive && <Badge color="blue">Principal</Badge>}
+            {reg.isActive && (reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
+              <Badge key={t} color={t === 'Principal' ? 'blue' : 'amber'}>{t}</Badge>
+            ))}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">{reg.officeCity} · {reg.state}</p>
         </div>
@@ -415,6 +445,10 @@ function ReactivateModal({ reg, onClose, onDone }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CompanyMaster() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = location.pathname === '/admin/branches' ? 'branches' : 'registrations';
+
   const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
     useFetch('/company-master/legal-entities', []);
   const { data: registrations, loading: regLoading, refetch: refetchRegs } =
@@ -440,24 +474,50 @@ export default function CompanyMaster() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Page Header */}
+      {/* Page Header with Tabs */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <Building2 className="text-blue-600" size={22} />
             <div>
               <h1 className="text-xl font-bold text-gray-900">Company Master</h1>
-              <p className="text-xs text-gray-500">Legal entities and GSTIN registrations</p>
+              <p className="text-xs text-gray-500">Legal entities, GSTIN registrations & branches</p>
             </div>
           </div>
-          <button onClick={() => setEntityModal('add')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-            <Plus size={15} /> Add Entity
+          {activeTab === 'registrations' && (
+            <button onClick={() => setEntityModal('add')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+              <Plus size={15} /> Add Entity
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 border-b border-slate-100 -mb-4 pb-0">
+          <button
+            onClick={() => navigate('/admin/company-master')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === 'registrations'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
+            <span className="flex items-center gap-1.5"><Building2 size={14} /> Registrations</span>
+          </button>
+          <button
+            onClick={() => navigate('/admin/branches')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === 'branches'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
+            <span className="flex items-center gap-1.5"><GitBranch size={14} /> Branches</span>
           </button>
         </div>
       </div>
 
-      {/* Two-panel layout */}
+      {/* Branches tab */}
+      {activeTab === 'branches' && <BranchManager embedded />}
+
+      {/* Registrations tab — Two-panel layout */}
+      {activeTab === 'registrations' && (
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left panel: Legal Entities */}
@@ -479,7 +539,14 @@ export default function CompanyMaster() {
                     onClick={() => setSelectedEntityId(entity.id)}
                     className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100 border border-transparent'}`}>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {entity.shortName && (
+                          <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                            {entity.shortName}
+                          </span>
+                        )}
+                        <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
+                      </div>
                       <ChevronRight size={14} className={`flex-shrink-0 ml-1 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
                     </div>
                     <div className="flex items-center gap-2 mt-1">
@@ -504,12 +571,19 @@ export default function CompanyMaster() {
               {/* Entity header */}
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      {selectedEntity.pan && <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>}
-                      {selectedEntity.tan && <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>}
-                      {selectedEntity.lei && <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>}
+                  <div className="flex items-start gap-3">
+                    {selectedEntity.shortName && (
+                      <span className="flex-shrink-0 inline-flex items-center justify-center bg-blue-600 text-white text-lg font-bold px-3 py-1.5 rounded-lg tracking-wide">
+                        {selectedEntity.shortName}
+                      </span>
+                    )}
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                        {selectedEntity.pan && <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>}
+                        {selectedEntity.tan && <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>}
+                        {selectedEntity.lei && <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -568,6 +642,7 @@ export default function CompanyMaster() {
           )}
         </div>
       </div>
+      )}
 
       {/* Modals */}
       {entityModal && (

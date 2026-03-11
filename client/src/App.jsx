@@ -60,7 +60,7 @@ const InventoryAnalytics = lazy(() => import('./components/admin/InventoryAnalyt
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
-const BranchManager = lazy(() => import('./components/admin/BranchManager'));
+// BranchManager is now embedded inside CompanyMaster (no direct route)
 const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
 const BiometricDashboard = lazy(() => import('./components/admin/BiometricDashboard'));
 const CompanyContractsManager = lazy(() => import('./components/admin/CompanyContractsManager'));
@@ -216,7 +216,7 @@ function AppRoutes() {
                   <Route path="/admin/shifts" element={<SeparatedRoute><AdminRoute><ShiftManagement /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/import" element={<SeparatedRoute><AdminRoute><EmployeeImport /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyScorecard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/assets" element={<SeparatedRoute><AdminRoute><AssetManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/asset-lifecycle" element={<SeparatedRoute><AdminRoute><AssetLifecycleDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
@@ -228,7 +228,7 @@ function AppRoutes() {
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/contracts" element={<SeparatedRoute><AdminRoute><CompanyContractsManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/branches" element={<SeparatedRoute><AdminRoute><BranchManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/branches" element={<SeparatedRoute><AdminRoute><CompanyMaster /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/confirmations" element={<SeparatedRoute><AdminRoute><ConfirmationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/biometric" element={<SeparatedRoute><AdminRoute><BiometricDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/company-master" element={<SeparatedRoute><AdminRoute><CompanyMaster /></AdminRoute></SeparatedRoute>} />

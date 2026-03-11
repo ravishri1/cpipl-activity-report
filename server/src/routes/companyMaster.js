@@ -40,18 +40,20 @@ router.get('/legal-entities', asyncHandler(async (req, res) => {
 // POST /api/company-master/legal-entities
 router.post('/legal-entities', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'legalName');
-  const { legalName, pan, tan, lei } = req.body;
-  const entity = await req.prisma.legalEntity.create({ data: { legalName, pan, tan, lei } });
+  const { legalName, shortName, pan, tan, lei } = req.body;
+  const entity = await req.prisma.legalEntity.create({
+    data: { legalName, shortName: shortName?.trim() || null, pan, tan, lei },
+  });
   res.status(201).json(entity);
 }));
 
 // PUT /api/company-master/legal-entities/:id
 router.put('/legal-entities/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { legalName, pan, tan, lei } = req.body;
+  const { legalName, shortName, pan, tan, lei } = req.body;
   const entity = await req.prisma.legalEntity.update({
     where: { id },
-    data: { legalName, pan, tan, lei },
+    data: { legalName, shortName: shortName !== undefined ? (shortName?.trim() || null) : undefined, pan, tan, lei },
   });
   res.json(entity);
 }));

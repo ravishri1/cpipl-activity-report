@@ -584,6 +584,7 @@ model Company {
   purchaseOrders   PurchaseOrder[]
   costCenterEmployees  User[]       @relation("CostCenter")
   contracts        CompanyContract[]
+  branches         Branch[]
 }
 
 // ═══════════════════════════════════════════════
@@ -2177,12 +2178,15 @@ model ErrorReport {
 model Branch {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  label     String?                              // display label: "Mumbai HQ", "Lucknow", "E-APOB"
   state     String
   city      String
   address   String?
+  companyId Int?                                  // optional link to Company
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  company   Company?  @relation(fields: [companyId], references: [id])
   users     User[]
   holidays  BranchHoliday[]
 }
@@ -2365,6 +2369,7 @@ model BiometricPunch {
 model LegalEntity {
   id        Int      @id @default(autoincrement())
   legalName String   // "Color Papers India Pvt. Ltd."
+  shortName String?  // Company abbreviation: "CPIPL", "Gimmick"
   pan       String?  @unique
   tan       String?  @unique
   lei       String?  // Legal Entity Identifier (yearly renewal)
@@ -2384,7 +2389,7 @@ model CompanyRegistration {
   district       String?
   stateCode      String  // gstin[0:1] as "09" (preserve leading zero)
   regNo          Int     // gstin[12] as integer
-  placeType      String  @default("Principal") // "Principal" or "Additional"
+  placeType      String  @default("Principal") // Comma-separated: "Principal", "E-APOB", "I-APOB"
   address        String? // full registered address
   fssai          String? // FSSAI licence number
   udyam          String? // Udyam registration number

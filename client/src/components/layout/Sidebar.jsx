@@ -57,29 +57,45 @@ import {
   HeartPulse,
   LineChart,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+
+const SIDEBAR_STORAGE_KEY = 'cpipl-sidebar-expanded';
+const DEFAULT_EXPANDED = {
+  // Level-1 sections
+  overview: true,
+  myWork: true,
+  myWorkspace: true,
+  myTeam: true,
+  team: true,
+  people: false,
+  timePay: false,
+  organization: false,
+  // Level-2 groups inside My Work
+  timeAttendance: true,
+  moneyBenefits: false,
+  performanceGrowth: false,
+  supportPolicies: false,
+  // Level-2 groups inside My Workspace
+  personal: true,
+};
+
+function getInitialExpanded() {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (stored) return { ...DEFAULT_EXPANDED, ...JSON.parse(stored) };
+  } catch { /* ignore parse errors */ }
+  return DEFAULT_EXPANDED;
+}
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user, isStrictAdmin, isTeamLead, isSeparated, deniedSections } = useAuth();
   const location = useLocation();
-  const [expanded, setExpanded] = useState({
-    // Level-1 sections
-    overview: true,
-    myWork: true,
-    myWorkspace: true,
-    myTeam: true,
-    team: true,
-    people: false,
-    timePay: false,
-    organization: false,
-    // Level-2 groups inside My Work
-    timeAttendance: true,
-    moneyBenefits: false,
-    performanceGrowth: false,
-    supportPolicies: false,
-    // Level-2 groups inside My Workspace
-    personal: true,
-  });
+  const [expanded, setExpanded] = useState(getInitialExpanded);
+
+  // Persist sidebar state to localStorage whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(expanded)); } catch { /* ignore */ }
+  }, [expanded]);
 
   const isActive = (path) => location.pathname === path;
 
@@ -229,7 +245,6 @@ export default function Sidebar({ isOpen, onClose }) {
   const peopleItems = [
     { to: '/admin/team',         label: 'Team Management',    icon: Users },
     { to: '/admin/recruitment',  label: 'Recruitment',        icon: Briefcase },
-    { to: '/admin/branches',     label: 'Branch Manager',     icon: Building2 },
     { to: '/admin/confirmations',label: 'Confirmations',      icon: BadgeCheck },
     { to: '/admin/onboarding',   label: 'Onboarding',         icon: UserPlus },
     { to: '/admin/separations',  label: 'Separations',        icon: UserMinus },
@@ -272,7 +287,6 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/contracts',               label: 'Company Contracts',       icon: ScrollText },
     { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
     { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
-    { to: '/admin/policy-scorecard',        label: 'Policy Scorecard',        icon: BarChart3 },
     { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
     { to: '/admin/training',                label: 'Training Manager',        icon: GraduationCap },
     { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },

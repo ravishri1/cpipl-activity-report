@@ -7,11 +7,21 @@ const { requireFields, parseId } = require('../utils/validate');
 const router = express.Router();
 router.use(authenticate);
 
-// ── GET /api/branches — list all branches with employee count ──
+// ── Auto-label logic based on city/state ──────────────────────────────────
+function autoLabel(city, state) {
+  const c = (city || '').trim().toLowerCase();
+  const s = (state || '').trim().toLowerCase();
+  if (c === 'mumbai' && s === 'maharashtra') return 'Mumbai HQ';
+  if (c === 'lucknow' && s === 'uttar pradesh') return 'Lucknow';
+  return null; // caller decides fallback
+}
+
+// ── GET /api/branches — list all branches with employee count + company ──
 router.get('/', asyncHandler(async (req, res) => {
   const branches = await req.prisma.branch.findMany({
     orderBy: { name: 'asc' },
     include: {
+      company: { select: { id: true, name: true, shortName: true } },
       _count: { select: { users: true } },
     },
   });
@@ -21,10 +31,23 @@ router.get('/', asyncHandler(async (req, res) => {
 // ── POST /api/branches — create branch (admin only) ──
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'state', 'city');
-  const { name, state, city, address } = req.body;
+  const { name, state, city, address, label, companyId } = req.body;
+
+  const generatedLabel = label?.trim() || autoLabel(city, state) || name.trim();
 
   const branch = await req.prisma.branch.create({
-    data: { name: name.trim(), state: state.trim(), city: city.trim(), address: address?.trim() },
+    data: {
+      name: name.trim(),
+      state: state.trim(),
+      city: city.trim(),
+      address: address?.trim() || null,
+      label: generatedLabel,
+      companyId: companyId ? parseInt(companyId) : null,
+    },
+    include: {
+      company: { select: { id: true, name: true, shortName: true } },
+      _count: { select: { users: true } },
+    },
   });
   res.status(201).json(branch);
 }));
@@ -32,16 +55,23 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
 // ── PUT /api/branches/:id — update branch details (admin only) ──
 router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { name, state, city, address, isActive } = req.body;
+  const { name, state, city, address, isActive, label, companyId } = req.body;
+
+  const data = {};
+  if (name !== undefined) data.name = name.trim();
+  if (state !== undefined) data.state = state.trim();
+  if (city !== undefined) data.city = city.trim();
+  if (address !== undefined) data.address = address?.trim() || null;
+  if (isActive !== undefined) data.isActive = isActive;
+  if (label !== undefined) data.label = label?.trim() || null;
+  if (companyId !== undefined) data.companyId = companyId ? parseInt(companyId) : null;
 
   const branch = await req.prisma.branch.update({
     where: { id },
-    data: {
-      ...(name !== undefined && { name: name.trim() }),
-      ...(state !== undefined && { state: state.trim() }),
-      ...(city !== undefined && { city: city.trim() }),
-      ...(address !== undefined && { address: address?.trim() }),
-      ...(isActive !== undefined && { isActive }),
+    data,
+    include: {
+      company: { select: { id: true, name: true, shortName: true } },
+      _count: { select: { users: true } },
     },
   });
   res.json(branch);

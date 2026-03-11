@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { UserButton } from '@clerk/clerk-react';
 import { FileText, Menu } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import Breadcrumb from './Breadcrumb';
 
 export default function TopBar({ onMenuToggle }) {
   const { user, isAdmin } = useAuth();
@@ -26,6 +27,11 @@ export default function TopBar({ onMenuToggle }) {
             </div>
             <span className="font-bold text-slate-800 text-sm">CPIPL HR</span>
           </Link>
+
+          {/* Breadcrumb — inline in header */}
+          <div className="hidden lg:block">
+            <Breadcrumb />
+          </div>
         </div>
 
         {/* Right: notification bell + user info + Clerk button */}

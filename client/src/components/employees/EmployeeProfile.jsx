@@ -1462,7 +1462,6 @@ const PERMISSION_SECTIONS = [
     label: 'People (Admin)',
     items: [
       { to: '/admin/team', label: 'Team Management' },
-      { to: '/admin/branches', label: 'Branches' },
       { to: '/admin/confirmations', label: 'Confirmations' },
       { to: '/admin/onboarding', label: 'Onboarding' },
       { to: '/admin/separations', label: 'Separations' },
@@ -1485,6 +1484,8 @@ const PERMISSION_SECTIONS = [
   {
     label: 'Organization (Admin)',
     items: [
+      { to: '/admin/company-master', label: 'Company Master' },
+      { to: '/admin/branches', label: 'Branches' },
       { to: '/admin/assets', label: 'Assets' },
       { to: '/admin/vendor-analytics', label: 'Vendor Analytics' },
       { to: '/admin/procurement', label: 'Procurement' },
@@ -1494,8 +1495,7 @@ const PERMISSION_SECTIONS = [
       { to: '/admin/insurance', label: 'Insurance' },
       { to: '/admin/contracts', label: 'Contracts' },
       { to: '/admin/letters', label: 'Letters' },
-      { to: '/admin/policies', label: 'Policies (Admin)' },
-      { to: '/admin/policy-scorecard', label: 'Policy Scorecard' },
+      { to: '/admin/policies', label: 'Policy Manager' },
       { to: '/admin/surveys', label: 'Surveys (Admin)' },
       { to: '/admin/tickets', label: 'Tickets (Admin)' },
       { to: '/admin/training', label: 'Training (Admin)' },
@@ -1509,6 +1509,7 @@ const PERMISSION_SECTIONS = [
 
 function PermissionsTab({ userId }) {
   const [denied, setDenied] = useState([]);
+  const [configured, setConfigured] = useState(true);
   const [loadingPerms, setLoadingPerms] = useState(true);
   const [saving, setSaving] = useState(false);
   const [permError, setPermError] = useState(null);
@@ -1517,7 +1518,17 @@ function PermissionsTab({ userId }) {
   useEffect(() => {
     setLoadingPerms(true);
     api.get(`/users/${userId}/section-permissions`)
-      .then(res => setDenied(res.data.deniedSections || []))
+      .then(res => {
+        const isConfigured = res.data.configured !== false;
+        setConfigured(isConfigured);
+        if (!isConfigured) {
+          // Never configured → default all sections as denied
+          const allRoutes = PERMISSION_SECTIONS.flatMap(s => s.items.map(i => i.to));
+          setDenied(allRoutes);
+        } else {
+          setDenied(res.data.deniedSections || []);
+        }
+      })
       .catch(err => setPermError(err.response?.data?.error || 'Failed to load permissions'))
       .finally(() => setLoadingPerms(false));
   }, [userId]);
@@ -1566,7 +1577,8 @@ function PermissionsTab({ userId }) {
             Section Permissions
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Checked items are <span className="text-red-500 font-medium">hidden</span> from this user's navigation. Leave all unchecked for full access.
+            Checked items are <span className="text-red-500 font-medium">hidden</span> from this user's navigation. Uncheck to grant access.
+            {!configured && <span className="text-amber-500 font-medium ml-1">(New user — all restricted by default. Uncheck sections to grant access.)</span>}
           </p>
         </div>
         <button

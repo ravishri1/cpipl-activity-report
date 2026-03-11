@@ -1,6 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
+// ── Parent section landing routes ─────────────────────────────────────
+const PARENT_ROUTES = {
+  'My Work':        '/activity-reports',
+  'Organization':   '/admin/company-master',
+  'Company Master': '/admin/company-master',
+  'Training':       '/training/my-assignments',
+  'Team':           '/directory',
+  'My Info':        '/payslips',
+};
+
 // ── Route map: pathname → { label, parent? } ──────────────────────────
 // parent = the section label shown as the middle breadcrumb crumb
 const ROUTE_MAP = {
@@ -59,7 +69,7 @@ const ROUTE_MAP = {
   '/admin/holidays':                { label: 'Holidays',                  parent: 'Organization' },
   '/admin/shifts':                  { label: 'Shifts',                    parent: 'Organization' },
   '/admin/import':                  { label: 'Import Employees',          parent: 'Organization' },
-  '/admin/branches':                { label: 'Branches',                  parent: 'Organization' },
+  '/admin/branches':                { label: 'Branches',                  parent: 'Company Master' },
   '/admin/confirmations':           { label: 'Confirmations',             parent: 'Organization' },
   '/admin/biometric':               { label: 'Biometric',                 parent: 'Organization' },
   '/admin/separations':             { label: 'Separations',               parent: 'Organization' },
@@ -117,11 +127,11 @@ export default function Breadcrumb() {
 
   // Build crumb list: Home > [Parent] > Current
   const crumbs = [{ label: 'Home', to: '/dashboard', isHome: true }];
-  if (route.parent) crumbs.push({ label: route.parent });
+  if (route.parent) crumbs.push({ label: route.parent, to: PARENT_ROUTES[route.parent] });
   crumbs.push({ label: route.label });
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs mb-4 select-none">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs select-none">
       {crumbs.map((crumb, i) => {
         const isLast = i === crumbs.length - 1;
         return (

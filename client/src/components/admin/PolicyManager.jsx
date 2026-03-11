@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import {
   Shield, FileText, Users, CheckCircle, XCircle, Plus, Edit,
   Eye, ChevronDown, Search, Filter, AlertTriangle,
   X, Loader2, ChevronUp, ToggleLeft, ToggleRight, Trash2,
   GripVertical, Save, Clock, GitCompare, TrendingUp,
-  AlertOctagon, ArrowRight, Building2, History,
+  AlertOctagon, ArrowRight, Building2, History, BarChart3,
 } from 'lucide-react';
+import PolicyScorecard from './PolicyScorecard';
 
 const CATEGORIES = [
   { value: 'general', label: 'General', color: 'bg-slate-100 text-slate-700' },
@@ -30,6 +32,10 @@ function getScoreColor(score) {
 }
 
 export default function PolicyManager() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = location.pathname === '/admin/policy-scorecard' ? 'scorecard' : 'policies';
+
   // ── List state ──
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -200,20 +206,55 @@ export default function PolicyManager() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between -mx-6 -mt-6 mb-2">
-        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <Shield className="w-6 h-6 text-blue-600" />
-          Policy Management
-        </h1>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Policy
-        </button>
+      {/* ── Header with Tabs ── */}
+      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 -mx-6 -mt-6 mb-2">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <Shield className="w-6 h-6 text-blue-600" />
+            Policy Management
+          </h1>
+          {activeTab === 'policies' && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Policy
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 border-b border-slate-100 -mb-4 pb-0">
+          <button
+            onClick={() => navigate('/admin/policies')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'policies'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            Policies
+          </button>
+          <button
+            onClick={() => navigate('/admin/policy-scorecard')}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'scorecard'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Scorecard
+          </button>
+        </div>
       </div>
+
+      {/* ── Scorecard Tab ── */}
+      {activeTab === 'scorecard' && <PolicyScorecard />}
+
+      {/* ── Policies Tab ── */}
+      {activeTab !== 'scorecard' && (<>
+
 
       {/* ── Conflict Detection Banner ── */}
       {conflicts.length > 0 && (
@@ -397,6 +438,7 @@ export default function PolicyManager() {
       {showFilters && (
         <div className="fixed inset-0 z-10" onClick={() => setShowFilters(false)} />
       )}
+      </>)}
     </div>
   );
 }
