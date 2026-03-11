@@ -8,6 +8,9 @@ const { normalizeEmail, normalizeName } = require('../utils/normalize');
 const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 const { processProfilePhoto } = require('../services/photoProcessor');
 const { createWorkspaceUser, unsuspendWorkspaceUser } = require('../services/google/googleWorkspace');
+const {
+  getDriveClient, ensureEmployeeFolder, uploadFile, getDirectImageUrl,
+} = require('../services/google/googleDrive');
 
 const router = express.Router();
 
@@ -36,12 +39,12 @@ async function logChanges(prisma, { userId, changedBy, section, changes, action 
 }
 
 // ═══════════════════════════════════════════════
-// Photo Upload (base64 — no external storage needed)
+// Photo Upload (base64 input → Google Drive storage)
 // ═══════════════════════════════════════════════
 
-// POST /api/users/:id/photo — Upload profile photo as base64 (self or admin)
-// Photo is automatically processed: background whitened, cropped to headshot,
-// enhanced; male profiles also get glasses/cap removed via AI.
+// POST /api/users/:id/photo — Upload profile photo (self or admin)
+// Accepts base64 data URL from frontend, processes via AI + Sharp pipeline,
+// then stores in Google Drive (NOT in database) to save Neon storage.
 router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHandler(async (req, res) => {
   const targetId = parseId(req.params.id);
   const isSelf = req.user.id === targetId;
@@ -50,40 +53,60 @@ router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHan
 
   const { photo } = req.body;
   if (!photo || !photo.startsWith('data:image/')) throw badRequest('Invalid image data.');
-  // No manual size check — sharp compresses the output to well under 500 KB
 
-  // Look up existing photo + gender for conditional AI processing
-  const existing = await req.prisma.user.findUnique({
+  // Look up existing info for AI processing + Drive folder
+  const user = await req.prisma.user.findUnique({
     where:  { id: targetId },
-    select: { profilePhotoUrl: true, gender: true },
+    select: { id: true, name: true, employeeId: true, driveFolderId: true, gender: true, profilePhotoUrl: true, driveProfilePhotoUrl: true },
   });
+  if (!user) throw notFound('User');
 
   // Decode base64 data URL → buffer
   const commaIdx = photo.indexOf(',');
-  const inputMime = photo.slice(5, photo.indexOf(';'));          // "data:image/jpeg;base64,…"
+  const inputMime = photo.slice(5, photo.indexOf(';'));
   const inputBuf  = Buffer.from(photo.slice(commaIdx + 1), 'base64');
 
   // Run through AI + sharp pipeline
   const { buffer: processed, mimeType: outMime } = await processProfilePhoto(
-    inputBuf, inputMime, { gender: existing?.gender ?? null }
+    inputBuf, inputMime, { gender: user.gender ?? null }
   );
 
-  // Re-encode to base64 data URL for storage
-  const processedPhoto = `data:${outMime};base64,${processed.toString('base64')}`;
+  // Upload to Google Drive (same pattern as /api/files/upload-profile-photo)
+  const uploadName = `profile-${user.employeeId || user.id}.jpg`;
+  const drive = await getDriveClient();
+  const folderId = await ensureEmployeeFolder(drive, user, req.prisma);
+  const result = await uploadFile(drive, folderId, uploadName, outMime, processed);
 
-  const user = await req.prisma.user.update({
+  // Create DriveFile record for tracking
+  await req.prisma.driveFile.create({
+    data: {
+      userId: targetId,
+      driveFileId: result.fileId,
+      driveFolderId: folderId,
+      fileName: uploadName,
+      mimeType: outMime,
+      fileSize: processed.length,
+      driveUrl: result.webViewLink,
+      thumbnailUrl: result.thumbnailLink || null,
+      category: 'photo',
+      description: 'Profile photo',
+    },
+  });
+
+  // Set Drive URL and clear old base64 to free DB space
+  const directPhotoUrl = getDirectImageUrl(result.fileId);
+  await req.prisma.user.update({
     where: { id: targetId },
-    data:  { profilePhotoUrl: processedPhoto },
-    select: { id: true, profilePhotoUrl: true },
+    data: { driveProfilePhotoUrl: directPhotoUrl, profilePhotoUrl: null },
   });
 
   await logChanges(req.prisma, {
     userId: targetId, changedBy: req.user.id, section: 'photo',
-    changes: [{ field: 'profilePhotoUrl', oldValue: existing?.profilePhotoUrl ? '(had photo)' : null, newValue: '(photo updated)' }],
-    action: existing?.profilePhotoUrl ? 'update' : 'add',
+    changes: [{ field: 'driveProfilePhotoUrl', oldValue: user.driveProfilePhotoUrl || null, newValue: directPhotoUrl }],
+    action: user.driveProfilePhotoUrl ? 'update' : 'add',
   });
 
-  res.json({ profilePhotoUrl: user.profilePhotoUrl });
+  res.json({ driveProfilePhotoUrl: directPhotoUrl });
 }));
 
 // ═══════════════════════════════════════════════

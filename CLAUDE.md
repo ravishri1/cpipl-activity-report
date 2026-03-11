@@ -6,16 +6,20 @@
 
 | Layer | Tech | Notes |
 |-------|------|-------|
-| Backend | Node.js + Express + Prisma ORM | Port 5000, SQLite |
+| Backend | Node.js + Express + Prisma ORM | Port 5000 |
 | Frontend | React (Vite) + Tailwind CSS | Port 3000, proxied to backend |
-| Database | SQLite | `server/prisma/dev.db` |
-| Schema | Prisma | `server/prisma/schema.prisma` (40 models) |
+| Database | PostgreSQL (Neon) | Connection via `DATABASE_URL` env var |
+| File Storage | Google Drive API | Service account with domain-wide delegation |
+| Schema | Prisma | `server/prisma/schema.prisma` (70+ models) |
+| Deployment | Vercel (serverless) | Auto-deploy from GitHub `main` branch |
+| CI/CD | GitHub Actions | Backend, frontend, and production workflows |
 
 ## Key Paths
 
 ```
 server/src/app.js              ← Express app, all routes registered here
-server/src/routes/*.js          ← 28 route files (all use asyncHandler)
+server/src/routes/*.js          ← 30+ route files (all use asyncHandler)
+server/src/routes/files.js      ← File upload/download (Google Drive)
 server/src/middleware/auth.js    ← authenticate, requireAdmin
 server/src/middleware/errorHandler.js ← Central error handler
 server/src/utils/asyncHandler.js ← Wraps async handlers (eliminates try-catch)
@@ -23,6 +27,9 @@ server/src/utils/httpErrors.js   ← badRequest, notFound, forbidden, conflict
 server/src/utils/validate.js     ← requireFields, requireEnum, parseId
 server/src/services/cronJobs.js  ← node-cron scheduler
 server/src/services/emailService.js ← Nodemailer (Gmail SMTP)
+server/src/services/google/     ← Google Drive, Calendar, Chat, Workspace integrations
+api/index.js                    ← Vercel serverless entry point (wraps Express)
+vercel.json                     ← Vercel build/deploy config, rewrites, security headers
 client/src/hooks/               ← useApi, useFetch, useForm
 client/src/utils/formatters.js   ← formatDate, formatINR, capitalize
 client/src/utils/constants.js    ← Shared color maps (status badges)
@@ -206,7 +213,7 @@ handleSubmit(async () => { await api.post('/api/path', form); });
 | DB fields | camelCase | `dateOfJoining` |
 | Enum values | snake_case | `full_time`, `notice_period` |
 
-## Database Models (40 total)
+## Database Models (70+ total)
 
 **Core:** User, Company, Setting
 **Reports:** DailyReport, ReportTask, Reminder
@@ -220,11 +227,108 @@ handleSubmit(async () => { await api.post('/api/path', form); });
 **Engagement:** Survey, SurveyResponse, Ticket, TicketComment
 **Misc:** GoogleToken, EmailActivity, ChatActivity, PointLog, ThumbsUp, Appreciation, AppreciationBudget, ShiftDefinition, OvertimeRequest, OtpVerification, WikiArticle, Suggestion, TrainingModule, TrainingExam, TrainingAttempt, Policy, PolicySection, PolicyAcceptance, PolicyVersion
 
+## Mandatory Completion Checklist (NEVER skip)
+
+Before telling the user "done" or "complete", **verify EVERY item**:
+
+### For ANY feature that has a Save/Edit/Delete button:
+1. **Endpoint exists** — The exact API path used in frontend (`api.put('/api/xyz/:id')`) has a matching `router.put('/:id')` in the backend route file
+2. **Route registered** — The route file is imported and mounted in `server/src/app.js` (`app.use('/api/xyz', xyzRoutes)`)
+3. **Payload matches** — Fields sent from frontend form match what backend reads from `req.body`
+4. **Prisma model fields exist** — Every field in `req.body` exists in the Prisma schema model
+5. **refetch() called** — After every successful `execute()`, call `refetch()` to reload the list/data
+6. **Modal closes** — After save, reset form state AND close the modal/form
+7. **Error shown** — `{saveErr && <AlertMessage type="error" message={saveErr} />}` is in JSX
+
+### The #1 Bug Pattern (fix EVERY time):
+```jsx
+// WRONG — shows success but data doesn't refresh
+const handleSave = async () => {
+  await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
+};
+
+// CORRECT — data refreshes after save
+const handleSave = async () => {
+  await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
+  refetch();          // ← RELOAD data
+  setEditing(null);   // ← CLOSE modal
+  reset();            // ← RESET form
+};
+```
+
+### For ANY new Prisma model/field:
+1. Added to `schema.prisma`
+2. Run `npx prisma db push` or create migration
+3. Verify with `npx prisma studio`
+
+## Token Optimization Rules (for AI assistants)
+
+### DO:
+- **Read CLAUDE.md first** — it has all patterns, don't explore files
+- **Ask for the FULL requirement upfront** — don't accept incremental "also add X" messages
+- **Build backend + frontend + schema together** in ONE response
+- **Copy existing patterns exactly** — don't reinvent
+- **Use the scaffold script** at `scripts/scaffold.js` for new CRUD features
+
+### DON'T:
+- Don't explore files to "understand the codebase" — CLAUDE.md has everything
+- Don't read more than 2-3 files per feature — patterns are documented above
+- Don't ask clarifying questions unless truly ambiguous — follow existing patterns
+- Don't write code in multiple rounds — deliver complete working code in ONE pass
+- Don't refactor existing code unless explicitly asked
+
+### When User Says "add X feature":
+1. Check if similar feature exists in the route map above
+2. Read ONLY that similar route file + component (2 files max)
+3. Copy the pattern, change names/fields
+4. Deliver: schema change + route file + component + app.js registration — ALL at once
+5. Run completion checklist above
+6. Run `node scripts/audit.js` to verify no broken connections
+
+## Automated Testing
+
+```bash
+# Run after EVERY feature change — finds broken buttons, missing routes, missing refetch
+node scripts/audit.js
+```
+
+This checks:
+- Every `api.get/post/put/delete()` in frontend has a matching backend route
+- Every `execute()` call is followed by `refetch()`
+- Every `useApi()` error is displayed in JSX
+- No manual useState+useEffect where useFetch should be used
+
+**Rule: Zero HIGH severity warnings allowed. Fix before marking done.**
+
+## Deployment Architecture
+
+```
+GitHub (main branch)
+  └→ Push triggers Vercel auto-deploy
+      ├→ Install: cd server && npm install && npx prisma generate && npx prisma db push
+      ├→ Build:   cd client && npm install && npx vite build
+      ├→ Output:  client/dist (static SPA)
+      └→ Rewrites: /api/* → serverless function (api/index.js wraps Express)
+
+Database:  Neon PostgreSQL (pooled + direct connections)
+Storage:   Google Drive (service account at me@colorpapers.in workspace)
+Email:     Gmail SMTP via Nodemailer
+Scheduler: node-cron (runs on backend process)
+```
+
+**File Storage:** All uploads go to Google Drive via `server/src/services/google/googleDrive.js`.
+- Folder structure: `CPIPL HR Files / {EmployeeName} ({EmployeeId}) / ...`
+- Profile photos stored as direct Drive URLs in `User.driveProfilePhotoUrl`
+- File metadata tracked in `DriveFile` model
+- No local disk storage — all files in Google Drive
+
 ## Crash Recovery
 
 All code is git-tracked. After any major work:
 ```bash
 cd "D:\Activity Report Software"
 git add -A && git commit -m "description"
+git push origin main  # auto-deploys to Vercel
 ```
 Recovery: clone from git, run `npm install` in both `server/` and `client/`, then `npx prisma generate`.
+Schema sync: `cd server && npx prisma db push` (pushes schema to Neon PostgreSQL).

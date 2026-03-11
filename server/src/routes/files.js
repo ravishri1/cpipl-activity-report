@@ -435,4 +435,81 @@ router.post('/fix-photo-urls', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: `Fixed ${fixed} photo URLs out of ${users.length} total.` });
 }));
 
+// ─── 11. POST /api/files/migrate-base64-photos — Move base64 photos from DB to Google Drive ───
+// Finds all users with base64-encoded profilePhotoUrl (no Drive URL yet),
+// uploads each to Google Drive, sets driveProfilePhotoUrl, and clears the base64 to free DB space.
+router.post('/migrate-base64-photos', requireAdmin, asyncHandler(async (req, res) => {
+  const users = await req.prisma.user.findMany({
+    where: {
+      profilePhotoUrl: { startsWith: 'data:image/' },
+      driveProfilePhotoUrl: null,
+    },
+    select: { id: true, name: true, employeeId: true, driveFolderId: true, gender: true, profilePhotoUrl: true },
+  });
+
+  if (users.length === 0) return res.json({ message: 'No base64 photos to migrate.', migrated: 0, skipped: 0, failed: 0 });
+
+  const drive = await getDriveClient();
+  let migrated = 0, failed = 0;
+  const errors = [];
+
+  for (const user of users) {
+    try {
+      // Decode base64 data URL → buffer
+      const photo = user.profilePhotoUrl;
+      const commaIdx = photo.indexOf(',');
+      const inputMime = photo.slice(5, photo.indexOf(';'));
+      const inputBuf = Buffer.from(photo.slice(commaIdx + 1), 'base64');
+
+      // Process through AI + Sharp pipeline
+      const { buffer: processed, mimeType: outMime } = await processProfilePhoto(
+        inputBuf, inputMime, { gender: user.gender ?? null }
+      );
+
+      // Upload to Google Drive
+      const uploadName = `profile-${user.employeeId || user.id}.jpg`;
+      const folderId = await ensureEmployeeFolder(drive, user, req.prisma);
+      const result = await uploadFile(drive, folderId, uploadName, outMime, processed);
+
+      // Create DriveFile record
+      await req.prisma.driveFile.create({
+        data: {
+          userId: user.id,
+          driveFileId: result.fileId,
+          driveFolderId: folderId,
+          fileName: uploadName,
+          mimeType: outMime,
+          fileSize: processed.length,
+          driveUrl: result.webViewLink,
+          thumbnailUrl: result.thumbnailLink || null,
+          category: 'photo',
+          description: 'Profile photo (migrated from base64)',
+        },
+      });
+
+      // Set Drive URL and clear base64 to free DB space
+      const directPhotoUrl = getDirectImageUrl(result.fileId);
+      await req.prisma.user.update({
+        where: { id: user.id },
+        data: { driveProfilePhotoUrl: directPhotoUrl, profilePhotoUrl: null },
+      });
+
+      migrated++;
+      // Throttle: 200ms between uploads to avoid Drive API rate limits
+      await new Promise(r => setTimeout(r, 200));
+    } catch (err) {
+      failed++;
+      errors.push({ userId: user.id, name: user.name, error: err.message });
+    }
+  }
+
+  res.json({
+    message: `Migration complete: ${migrated} migrated, ${failed} failed out of ${users.length} total.`,
+    migrated,
+    failed,
+    skipped: 0,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+}));
+
 module.exports = router;
