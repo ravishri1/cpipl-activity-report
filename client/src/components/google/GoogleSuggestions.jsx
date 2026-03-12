@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { Calendar, CheckSquare, Loader2, Plus, ExternalLink, RefreshCw, Mail, MessageSquare } from 'lucide-react';
+import { Calendar, CheckSquare, Loader2, Plus, ExternalLink, RefreshCw, Mail, MessageSquare, Unplug } from 'lucide-react';
 
 export default function GoogleSuggestions({ onAddTasks }) {
   const [connected, setConnected] = useState(null);
   const [data, setData] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [fetched, setFetched] = useState(false);
   const [connectError, setConnectError] = useState('');
@@ -33,6 +34,22 @@ export default function GoogleSuggestions({ onAddTasks }) {
     } catch (err) {
       console.error('Google auth error:', err);
       setConnectError(err.response?.data?.error || 'Failed to connect Google. Please try again.');
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm('Disconnect your Google account? You can reconnect anytime.')) return;
+    setDisconnecting(true);
+    try {
+      await api.delete('/google/disconnect');
+      setConnected(false);
+      setData(null);
+      setFetched(false);
+      setSelected(new Set());
+    } catch (err) {
+      console.error('Google disconnect error:', err);
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -166,14 +183,25 @@ export default function GoogleSuggestions({ onAddTasks }) {
           <Calendar className="w-4 h-4 text-blue-500" />
           Google Workspace
         </p>
-        <button
-          onClick={fetchAutoTasks}
-          disabled={loadingData}
-          className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 flex items-center gap-1 disabled:opacity-50"
-        >
-          {loadingData ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          {fetched ? 'Refresh' : 'Load Activities'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchAutoTasks}
+            disabled={loadingData}
+            className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 flex items-center gap-1 disabled:opacity-50"
+          >
+            {loadingData ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {fetched ? 'Refresh' : 'Load Activities'}
+          </button>
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="text-xs text-slate-400 hover:text-red-500 px-2 py-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1 transition-colors disabled:opacity-50"
+            title="Disconnect Google account"
+          >
+            {disconnecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unplug className="w-3 h-3" />}
+            Disconnect
+          </button>
+        </div>
       </div>
 
       {fetched && (

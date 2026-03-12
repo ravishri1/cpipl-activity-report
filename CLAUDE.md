@@ -440,6 +440,22 @@ Scheduler: node-cron (runs on backend process)
 - `vercel.json` install command auto-runs `npx prisma db push` on every deploy
 - Profile photos go to Google Drive (NOT base64 in database)
 
+**Environment Variables (must be set in BOTH `server/.env` AND Vercel dashboard):**
+
+| Var | Purpose | Where Set |
+|-----|---------|-----------|
+| `DATABASE_URL` / `DIRECT_URL` | Neon PostgreSQL | `.env` + Vercel |
+| `CLERK_SECRET_KEY` / `CLERK_JWT_KEY` | Clerk auth backend | `.env` + Vercel |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk auth frontend (build-time) | `.env` + Vercel |
+| `GOOGLE_CLIENT_ID` | Google OAuth2 user consent | `.env` + Vercel |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth2 secret | `.env` + Vercel |
+| `GOOGLE_REDIRECT_URI` | OAuth2 callback URL | `.env` (localhost) + Vercel (eod.colorpapers.in) |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` / `_PATH` | Service account for Drive/Workspace | `_PATH` local, `_KEY` (JSON string) Vercel |
+| `GOOGLE_ADMIN_EMAIL` | Service account delegation email | `.env` + Vercel |
+| `GOOGLE_WORKSPACE_DOMAIN` | Workspace domain | `.env` + Vercel |
+
+**When adding new env vars:** Always set in BOTH local `.env` AND Vercel dashboard. Use `vercel env add VARNAME production` for CLI, or Vercel Dashboard → Settings → Environment Variables.
+
 ## Crash Recovery
 
 All code is git-tracked. After any major work:
