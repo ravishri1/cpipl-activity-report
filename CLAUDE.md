@@ -107,6 +107,12 @@ module.exports = router;
 | Prisma P2003 | 400 | Foreign key constraint |
 | Unknown error | 500 | Logged to console |
 
+**Structured Logging:** Every error is logged with:
+- Timestamp, level (ERROR for 500+, WARN for 4xx), HTTP method, URL, userId
+- Request body for mutating requests (sensitive fields auto-redacted: password, token, aadhaar, PAN, bank details)
+- Prisma error code when applicable
+- Full stack trace only for 500 errors
+
 ## API Route Map (all prefixed `/api/`)
 
 | Path | File | Key Features |
@@ -155,22 +161,49 @@ import StatusBadge from '../shared/StatusBadge';
 import { LEAVE_STATUS_STYLES } from '../../utils/constants';
 
 export default function MyComponent() {
-  const { data: items, loading, error, refetch } = useFetch('/api/items/my', []);
+  const { data: items, loading, error: fetchErr, refetch } = useFetch('/api/items/my', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
+  // ⚠️ CRITICAL: execute() THROWS on error — ALWAYS use try-catch
+  const handleSave = async (form) => {
+    try {
+      await execute(() => api.post('/api/items', form), 'Created!');
+      refetch();              // ← only runs on success
+      setShowForm(false);     // ← only runs on success
+    } catch {
+      // Error already displayed by useApi hook
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this item?')) return; // ← ALWAYS confirm deletes
+    try {
+      await execute(() => api.delete(`/api/items/${id}`), 'Deleted!');
+      refetch();
+    } catch {
+      // Error already displayed by useApi hook
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
-  if (error) return <AlertMessage type="error" message={error} />;
-  if (items.length === 0) return <EmptyState icon="📋" title="No items" subtitle="Nothing here yet" />;
 
   return (
     <div className="p-6">
+      {/* ⚠️ Display ALL error sources */}
+      {fetchErr && <AlertMessage type="error" message={fetchErr} />}
+      {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
-      {items.map(item => (
-        <div key={item.id}>
-          <StatusBadge status={item.status} styles={LEAVE_STATUS_STYLES} />
-          <span>{formatDate(item.createdAt)}</span>
-        </div>
-      ))}
+
+      {items.length === 0 ? (
+        <EmptyState icon="📋" title="No items" subtitle="Nothing here yet" />
+      ) : (
+        items.map(item => (
+          <div key={item.id}>
+            <StatusBadge status={item.status} styles={LEAVE_STATUS_STYLES} />
+            <span>{formatDate(item.createdAt)}</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -180,12 +213,44 @@ export default function MyComponent() {
 
 - **ALWAYS** use `useFetch()` for GET-on-mount — never manual useState+useEffect
 - **ALWAYS** use `useApi()` for mutations (POST/PUT/DELETE)
+- **ALWAYS** wrap `await execute()` in try-catch — execute THROWS on error
+- **ALWAYS** put refetch/close/reset INSIDE the try block — not after it
+- **ALWAYS** capture and display `error` from every `useFetch()` call
+- **ALWAYS** use `window.confirm()` before any delete operation
 - **ALWAYS** use `<LoadingSpinner />` — never inline spinner divs
 - **ALWAYS** use `<AlertMessage />` — never inline error/success banners
 - **ALWAYS** use `<StatusBadge />` with constants — never duplicate color maps
 - **ALWAYS** use `formatDate()` / `formatINR()` from formatters — never local copies
 - **ALWAYS** import from `../../utils/constants` for status color maps
 - API base: `api.get('/api/...')` via axios instance in `services/api.js`
+
+### Frontend Error Handling (CRITICAL — most common bug source)
+
+Every component that makes API calls must handle errors at 3 levels:
+
+1. **useFetch errors** — capture and display:
+```jsx
+const { data, loading, error: fetchErr } = useFetch('/api/items', []);
+// In JSX:
+{fetchErr && <AlertMessage type="error" message={fetchErr} />}
+```
+
+2. **useApi execute errors** — always try-catch:
+```jsx
+const handleSave = async () => {
+  try {
+    await execute(() => api.post('/api/items', form), 'Created!');
+    refetch();       // success-only
+    setShowForm(false); // success-only
+  } catch {
+    // useApi hook already sets error state — empty catch is correct
+  }
+};
+```
+
+3. **Render-level errors** — ErrorBoundary wraps the entire app (`client/src/components/shared/ErrorBoundary.jsx`), catches React render crashes, and reports to `/api/error-reports`.
+
+**Empty states:** When a dependency fetch returns empty data (e.g., no training modules exist for a contribution form), show a helpful message instead of a broken form.
 
 ## Shared Hooks Reference
 
@@ -194,6 +259,9 @@ export default function MyComponent() {
 const { data, loading, error, refetch } = useFetch('/api/path', defaultValue);
 
 // useApi — for button-triggered actions
+// ⚠️ CRITICAL: execute() THROWS on API error (re-throws after setting error state)
+// Code after await execute() ONLY runs on success
+// ALWAYS wrap in try-catch if there's post-success logic (refetch, close modal, reset form)
 const { data, loading, error, success, execute, clearMessages } = useApi(defaultValue);
 await execute(() => api.post('/api/path', body), 'Created!');
 
@@ -236,25 +304,50 @@ Before telling the user "done" or "complete", **verify EVERY item**:
 2. **Route registered** — The route file is imported and mounted in `server/src/app.js` (`app.use('/api/xyz', xyzRoutes)`)
 3. **Payload matches** — Fields sent from frontend form match what backend reads from `req.body`
 4. **Prisma model fields exist** — Every field in `req.body` exists in the Prisma schema model
-5. **refetch() called** — After every successful `execute()`, call `refetch()` to reload the list/data
-6. **Modal closes** — After save, reset form state AND close the modal/form
-7. **Error shown** — `{saveErr && <AlertMessage type="error" message={saveErr} />}` is in JSX
+5. **try-catch wraps execute()** — Every `await execute()` is inside try-catch (execute THROWS on error)
+6. **refetch() called** — Inside the try block after `execute()`, call `refetch()` to reload data
+7. **Modal closes** — Inside the try block, reset form state AND close the modal/form
+8. **Error shown** — `{saveErr && <AlertMessage type="error" message={saveErr} />}` is in JSX
+9. **Delete confirms** — Every `api.delete()` call has `window.confirm()` before execution
+10. **useFetch error captured** — Every `useFetch()` destructures `error` and displays it via `<AlertMessage />`
 
-### The #1 Bug Pattern (fix EVERY time):
+### The #1 Bug Pattern — Missing try-catch on execute() (fix EVERY time):
+
+`execute()` in `useApi` hook **THROWS on API error**. Without try-catch, any code after
+`await execute()` (refetch, close modal, reset form) is silently skipped on error,
+AND React may show an unhandled promise rejection.
+
 ```jsx
-// WRONG — shows success but data doesn't refresh
+// ❌ WRONG — on API error, refetch/close/reset are skipped AND unhandled rejection
 const handleSave = async () => {
   await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
+  refetch();
+  setEditing(null);
+  reset();
 };
 
-// CORRECT — data refreshes after save
+// ✅ CORRECT — try-catch ensures graceful error handling
 const handleSave = async () => {
-  await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
-  refetch();          // ← RELOAD data
-  setEditing(null);   // ← CLOSE modal
-  reset();            // ← RESET form
+  try {
+    await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
+    refetch();          // ← RELOAD data (only on success)
+    setEditing(null);   // ← CLOSE modal (only on success)
+    reset();            // ← RESET form (only on success)
+  } catch {
+    // Error already displayed by useApi hook (sets error state automatically)
+  }
+};
+
+// ❌ ALSO WRONG — no refetch after success
+const handleSave = async () => {
+  try {
+    await execute(() => api.put(`/api/items/${id}`, form), 'Updated!');
+    // Missing refetch()! Data won't refresh.
+  } catch {}
 };
 ```
+
+**Rule: EVERY `await execute()` call MUST be inside try-catch with refetch() in the try block.**
 
 ### For ANY new Prisma model/field:
 1. Added to `schema.prisma`
@@ -297,6 +390,13 @@ This checks:
 - Every `execute()` call is followed by `refetch()`
 - Every `useApi()` error is displayed in JSX
 - No manual useState+useEffect where useFetch should be used
+
+**Manual audit checklist (things audit.js doesn't catch):**
+- Every `await execute()` is wrapped in try-catch (execute THROWS on error)
+- Every `useFetch()` error is captured and displayed via `<AlertMessage />`
+- Every `api.delete()` has `window.confirm()` before execution
+- Empty states shown when dependency data is unavailable (e.g., no modules for contribution form)
+- Form modals include both success and error `<AlertMessage />` components
 
 **Rule: Zero HIGH severity warnings allowed. Fix before marking done.**
 
