@@ -22,6 +22,10 @@ router.get('/auth-url', authenticate, requireActiveEmployee, asyncHandler(async 
 // GET /api/google/callback — OAuth2 callback (no auth, uses redirects)
 // Intentional try-catch: errors must redirect, not return JSON
 router.get('/callback', async (req, res) => {
+  // Derive client URL: explicit env var > production default > localhost fallback
+  const clientUrl = process.env.CLIENT_URL?.trim()
+    || (process.env.VERCEL ? 'https://eod.colorpapers.in' : 'http://localhost:3000');
+
   try {
     const { code, state } = req.query;
     if (!code || !state) return res.status(400).send('Missing authorization code or state.');
@@ -29,11 +33,9 @@ router.get('/callback', async (req, res) => {
     if (isNaN(userId)) return res.status(400).send('Invalid state parameter.');
     const tokens = await exchangeCodeForTokens(code);
     await storeTokens(userId, tokens, req.prisma);
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     res.redirect(`${clientUrl}/submit-report?google=connected`);
   } catch (err) {
     console.error('OAuth callback error:', err);
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     res.redirect(`${clientUrl}/submit-report?google=error`);
   }
 });
