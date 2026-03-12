@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import {
   Save, CheckCircle, ExternalLink, Unlink, Loader2,
-  Building2, Plus, Pencil, Brain, Eye, EyeOff,
+  Building2, Plus, Pencil, Brain, Eye, EyeOff, Camera, RotateCcw,
 } from 'lucide-react';
 
 export default function Settings() {
@@ -11,6 +11,10 @@ export default function Settings() {
     escalation_time: '11:00',
     team_lead_email: '',
     gemini_api_key: '',
+    requesty_api_key: '',
+    photo_ai_model: '',
+    photo_ai_prompt: '',
+    photo_ai_prompt_male_extra: '',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -18,6 +22,7 @@ export default function Settings() {
   const [googleLoading, setGoogleLoading] = useState(true);
   const [googleError, setGoogleError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showRequestyKey, setShowRequestyKey] = useState(false);
 
   // Company management
   const [companies, setCompanies] = useState([]);
@@ -179,10 +184,47 @@ export default function Settings() {
           <Brain className="w-5 h-5 text-purple-600" />
           AI Configuration
         </h2>
-        <p className="text-xs text-slate-500 mb-4">Configure Google Gemini API for AI-powered resume extraction.</p>
+        <p className="text-xs text-slate-500 mb-4">
+          Requesty AI is the primary gateway (cost-ordered model routing). Gemini is the direct fallback.
+        </p>
 
+        {/* Requesty API Key (primary) */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Gemini API Key</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Requesty AI API Key
+            <span className="ml-1.5 text-xs font-normal text-purple-500">(primary gateway)</span>
+          </label>
+          <div className="relative">
+            <input
+              type={showRequestyKey ? 'text' : 'password'}
+              value={settings.requesty_api_key}
+              onChange={(e) => setSettings({ ...settings, requesty_api_key: e.target.value })}
+              className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
+              placeholder="sk-..."
+            />
+            <button
+              type="button"
+              onClick={() => setShowRequestyKey(!showRequestyKey)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+            >
+              {showRequestyKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Get your key from{' '}
+            <a href="https://app.requesty.ai" target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">
+              Requesty.ai
+            </a>
+            {' '}— routes to 433+ models with automatic cost optimization.
+          </p>
+        </div>
+
+        {/* Gemini API Key (fallback) */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Gemini API Key
+            <span className="ml-1.5 text-xs font-normal text-slate-400">(direct fallback)</span>
+          </label>
           <div className="relative">
             <input
               type={showApiKey ? 'text' : 'password'}
@@ -204,6 +246,7 @@ export default function Settings() {
             <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">
               Google AI Studio
             </a>
+            {' '}— used when Requesty is unavailable.
           </p>
         </div>
 
@@ -211,8 +254,11 @@ export default function Settings() {
           onClick={async () => {
             setLoading(true);
             try {
-              await api.put('/settings', { gemini_api_key: settings.gemini_api_key });
-              setSuccess('AI key saved!');
+              await api.put('/settings', {
+                requesty_api_key: settings.requesty_api_key,
+                gemini_api_key: settings.gemini_api_key,
+              });
+              setSuccess('AI keys saved!');
               setTimeout(() => setSuccess(''), 3000);
             } catch (err) {
               console.error(err);
@@ -224,8 +270,118 @@ export default function Settings() {
           className="mt-3 bg-purple-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
         >
           <Save className="w-4 h-4" />
-          Save API Key
+          Save AI Keys
         </button>
+      </div>
+
+      {/* ═══ Profile Photo AI Settings ═══ */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
+          <Camera className="w-5 h-5 text-teal-600" />
+          Profile Photo AI
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Configure the AI model and prompt used to process employee profile photos (background removal, headshot framing, cleanup). Leave blank to use defaults.
+        </p>
+
+        {/* AI Model for Image Editing */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            AI Model (via Requesty)
+            <span className="ml-1.5 text-xs font-normal text-slate-400">(blank = default chain)</span>
+          </label>
+          <input
+            type="text"
+            value={settings.photo_ai_model}
+            onChange={(e) => setSettings({ ...settings, photo_ai_model: e.target.value })}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none font-mono text-sm"
+            placeholder="google/gemini-2.0-flash-exp"
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Requesty model ID for image editing. Default chain: <code className="bg-slate-100 px-1 rounded">google/gemini-2.0-flash-exp</code> → <code className="bg-slate-100 px-1 rounded">google/gemini-2.0-flash-001</code>.
+            {' '}Browse models at{' '}
+            <a href="https://app.requesty.ai/models" target="_blank" rel="noreferrer" className="text-teal-600 hover:underline">Requesty.ai</a>.
+          </p>
+        </div>
+
+        {/* Base Prompt */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Base Prompt
+            <span className="ml-1.5 text-xs font-normal text-slate-400">(applies to all photos)</span>
+          </label>
+          <textarea
+            value={settings.photo_ai_prompt}
+            onChange={(e) => setSettings({ ...settings, photo_ai_prompt: e.target.value })}
+            rows={6}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm leading-relaxed"
+            placeholder="You are a professional headshot photo editor. Edit this photo to:&#10;1. Remove the background and replace it with a solid plain white background.&#10;2. Frame the subject as a professional portrait headshot...&#10;..."
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Main instructions sent to the AI for every profile photo. Leave blank to use the built-in default prompt.
+          </p>
+        </div>
+
+        {/* Male-Specific Extra Instructions */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Male-Specific Extra Instructions
+            <span className="ml-1.5 text-xs font-normal text-slate-400">(appended only for male employees)</span>
+          </label>
+          <textarea
+            value={settings.photo_ai_prompt_male_extra}
+            onChange={(e) => setSettings({ ...settings, photo_ai_prompt_male_extra: e.target.value })}
+            rows={3}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm leading-relaxed"
+            placeholder="5. Remove any glasses or sunglasses from the person's face — inpaint the eyes naturally.&#10;6. Remove any cap, hat, or headwear — reveal the natural hair/head beneath."
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Extra instructions appended after the base prompt for male employees (e.g., glasses/cap removal). Leave blank to use the built-in default.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 mt-3">
+          <button
+            onClick={async () => {
+              setLoading(true);
+              try {
+                await api.put('/settings', {
+                  photo_ai_model: settings.photo_ai_model,
+                  photo_ai_prompt: settings.photo_ai_prompt,
+                  photo_ai_prompt_male_extra: settings.photo_ai_prompt_male_extra,
+                });
+                setSuccess('Photo AI settings saved!');
+                setTimeout(() => setSuccess(''), 3000);
+              } catch (err) {
+                console.error(err);
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+            className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            Save Photo AI Settings
+          </button>
+          <button
+            onClick={() => {
+              setSettings((prev) => ({
+                ...prev,
+                photo_ai_model: '',
+                photo_ai_prompt: '',
+                photo_ai_prompt_male_extra: '',
+              }));
+            }}
+            className="text-slate-500 hover:text-slate-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 border border-slate-200 hover:border-slate-300"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset to Defaults
+          </button>
+        </div>
+        <p className="text-xs text-slate-400 mt-2">
+          💡 Reset clears the fields — the system will use built-in defaults. Click "Save" after resetting.
+        </p>
       </div>
 
       {/* ═══ Company Management ═══ */}

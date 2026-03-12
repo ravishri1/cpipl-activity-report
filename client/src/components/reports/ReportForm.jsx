@@ -263,29 +263,32 @@ export default function ReportForm() {
           </div>
         )}
 
-        {/* Google Workspace Suggestions (Calendar, Tasks, Email, Chat) */}
-        {!existingReport && (
-          <GoogleSuggestions
-            onAddTasks={(items) => {
-              if (mode === 'quick') {
-                const text = items.map((i) => i.description).join('\n');
-                setQuickText((prev) => (prev ? prev + '\n' + text : text));
-              } else {
-                // Add each item as a separate task row
-                const newTasks = items.map((i) => ({ description: i.description, hours: '' }));
-                // Fill empty task slots first, then append
-                const updated = [...tasks];
-                let remaining = [...newTasks];
-                for (let i = 0; i < updated.length && remaining.length > 0; i++) {
-                  if (!updated[i].description.trim()) {
-                    updated[i] = remaining.shift();
-                  }
+        {/* Google Workspace Suggestions (Calendar, Tasks, Email, Chat) — always visible for connect/disconnect */}
+        <GoogleSuggestions
+          onAddTasks={(items) => {
+            if (mode === 'quick') {
+              const text = items.map((i) => i.description).join('\n');
+              setQuickText((prev) => (prev ? prev + '\n' + text : text));
+            } else {
+              // Add each item as a separate task row
+              const newTasks = items.map((i) => ({ description: i.description, hours: '' }));
+              // Fill empty task slots first, then append
+              const updated = [...tasks];
+              let remaining = [...newTasks];
+              for (let i = 0; i < updated.length && remaining.length > 0; i++) {
+                if (!updated[i].description.trim()) {
+                  updated[i] = remaining.shift();
                 }
-                setTasks([...updated, ...remaining]);
               }
-            }}
-          />
-        )}
+              setTasks([...updated, ...remaining]);
+            }
+          }}
+          onAddPlan={(items) => {
+            // Append unreplied email items to Plan for Tomorrow
+            const lines = items.map((i) => `- ${i.description}`).join('\n');
+            setPlanTomorrow((prev) => (prev.trim() ? prev.trim() + '\n' + lines : lines));
+          }}
+        />
 
         <form onSubmit={handleSubmit}>
           {mode === 'quick' ? (

@@ -68,7 +68,7 @@ router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHan
 
   // Run through AI + sharp pipeline
   const { buffer: processed, mimeType: outMime } = await processProfilePhoto(
-    inputBuf, inputMime, { gender: user.gender ?? null }
+    inputBuf, inputMime, { gender: user.gender ?? null, prisma: req.prisma }
   );
 
   // Upload to Google Drive (same pattern as /api/files/upload-profile-photo)

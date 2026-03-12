@@ -6,7 +6,9 @@ const { badRequest, forbidden } = require('../utils/httpErrors');
 const { normalizeName } = require('../utils/normalize');
 const { generateAuthUrl, exchangeCodeForTokens, storeTokens } = require('../services/google/googleAuth');
 const { fetchGoogleWorkspaceUsers } = require('../services/google/googleWorkspace');
-const { fetchTodayCalendarEvents, fetchTodayTasks } = require('../services/google/googleCalendar');
+const { fetchTodayCalendarEvents, fetchTodayTasks, upsertGoogleTask } = require('../services/google/googleCalendar');
+const { buildEmailSummary, filterHandledThreads } = require('../services/google/googleGmail');
+const { getAuthedClientForUser } = require('../services/google/googleAuth');
 
 const router = express.Router();
 
@@ -46,7 +48,17 @@ router.get('/status', authenticate, requireActiveEmployee, asyncHandler(async (r
     where: { userId: req.user.id },
     select: { scopes: true, expiresAt: true },
   });
-  res.json({ connected: !!token, scopes: token?.scopes || '', expiresAt: token?.expiresAt || null });
+  const scopes = token?.scopes || '';
+  const hasGmailScope = scopes.includes('gmail.readonly');
+  const hasTasksWriteScope = scopes.includes('/auth/tasks') && !scopes.includes('tasks.readonly');
+  res.json({
+    connected: !!token,
+    scopes,
+    expiresAt: token?.expiresAt || null,
+    hasGmailScope,
+    hasTasksWriteScope,
+    needsReconnect: !!token && !hasGmailScope,
+  });
 }));
 
 // DELETE /api/google/disconnect
@@ -124,7 +136,7 @@ router.get('/tasks', authenticate, requireActiveEmployee, asyncHandler(async (re
 // Inner try-catches intentional: each source fails independently for partial results
 router.get('/auto-tasks', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().split('T')[0];
-  const result = { calendar: [], tasks: [], email: null, chat: null };
+  const result = { calendar: [], tasks: [], email: null, chat: null, emailDetails: null };
 
   try { result.calendar = await fetchTodayCalendarEvents(req.user.id, req.prisma); }
   catch (err) { result.calendarError = err.message; }
@@ -154,7 +166,97 @@ router.get('/auto-tasks', authenticate, requireActiveEmployee, asyncHandler(asyn
     }
   } catch (_) { /* ignore */ }
 
+  // ─── NEW: Live Gmail email details (if user has gmail scope) ───
+  try {
+    const tokenRecord = await req.prisma.googleToken.findUnique({
+      where: { userId: req.user.id },
+      select: { scopes: true },
+    });
+    if (tokenRecord?.scopes?.includes('gmail.readonly')) {
+      let emailSummary = await buildEmailSummary(req.user.id, req.prisma, date);
+
+      // Filter out handled threads (DB-backed closure)
+      const handledThreads = await req.prisma.emailHandledThread.findMany({
+        where: { userId: req.user.id, date },
+        select: { threadId: true },
+      });
+      if (handledThreads.length > 0) {
+        const handledSet = new Set(handledThreads.map(h => h.threadId));
+        emailSummary = filterHandledThreads(emailSummary, handledSet);
+      }
+
+      result.emailDetails = emailSummary;
+    }
+  } catch (err) { result.emailDetailsError = err.message; }
+
   res.json(result);
+}));
+
+// ─── Mark Threads as Handled (DB-backed closure) ───
+
+// POST /api/google/mark-handled
+router.post('/mark-handled', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
+  const { threadIds, action } = req.body;
+  if (!threadIds || !Array.isArray(threadIds) || threadIds.length === 0) throw badRequest('No threadIds provided.');
+  if (!action) throw badRequest('Action is required (added_to_report, pushed_to_task, marked_handled).');
+
+  const date = new Date().toISOString().split('T')[0];
+  let marked = 0;
+
+  for (const threadId of threadIds) {
+    try {
+      await req.prisma.emailHandledThread.upsert({
+        where: { userId_threadId_date: { userId: req.user.id, threadId, date } },
+        update: { action },
+        create: { userId: req.user.id, threadId, date, action },
+      });
+      marked++;
+    } catch { /* skip duplicate or error */ }
+  }
+
+  res.json({ marked });
+}));
+
+// ─── Push Unreplied Threads to Google Tasks (Upsert) ───
+
+// POST /api/google/push-to-tasks
+router.post('/push-to-tasks', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
+  const { threads } = req.body;
+  if (!threads || !Array.isArray(threads) || threads.length === 0) throw badRequest('No threads provided.');
+
+  const oauth2Client = await getAuthedClientForUser(req.user.id, req.prisma);
+  const date = new Date().toISOString().split('T')[0];
+  let created = 0, updated = 0, failed = 0;
+
+  for (const t of threads) {
+    try {
+      const result = await upsertGoogleTask(oauth2Client, {
+        category: t.category,
+        company: t.company,
+        threadId: t.threadId,
+        subject: t.subject,
+        emailCount: t.emailCount || 0,
+        sentCount: t.sentCount || 0,
+        receivedCount: t.receivedCount || 0,
+      });
+      if (result.action === 'created') created++;
+      else updated++;
+
+      // Mark as handled in DB
+      try {
+        await req.prisma.emailHandledThread.upsert({
+          where: { userId_threadId_date: { userId: req.user.id, threadId: t.threadId, date } },
+          update: { action: 'pushed_to_task' },
+          create: { userId: req.user.id, threadId: t.threadId, date, action: 'pushed_to_task' },
+        });
+      } catch { /* ignore */ }
+    } catch (err) {
+      console.error(`Push-to-tasks failed for thread ${t.threadId}:`, err.message);
+      failed++;
+    }
+  }
+
+  res.json({ created, updated, failed });
 }));
 
 module.exports = router;

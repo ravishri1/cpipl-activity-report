@@ -1,7 +1,8 @@
 /**
  * Gmail Renewal Scanner
  * Scans ALL mail (not just inbox) for renewal/subscription emails,
- * extracts data via Gemini AI, and saves pending scans for admin review.
+ * extracts data via aiRouter (Requesty cost-ordered → Gemini fallback),
+ * and saves pending scans for admin review.
  * Spam and Trash are always skipped.
  */
 
@@ -64,19 +65,12 @@ function extractBody(payload) {
   return '';
 }
 
-// ─── Gemini extraction ────────────────────────────────────────────────────────
+// ─── AI extraction (via central aiRouter) ────────────────────────────────────
 
-async function extractRenewalDataWithGemini(subject, sender, body, prisma) {
+const { callAIText } = require('./aiRouter');
+
+async function extractRenewalDataWithAI(subject, sender, body, prisma) {
   try {
-    const setting = await prisma.setting.findUnique({
-      where: { key: 'google_generative_ai_api_key' },
-    });
-    if (!setting?.value) return { isRenewal: false, reason: 'No Gemini API key configured' };
-
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(setting.value);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
     const prompt = `Analyze this email and determine if it is related to a software subscription, service renewal, domain renewal, invoice, billing notice, or payment confirmation.
 
 Subject: ${subject}
@@ -95,13 +89,12 @@ Respond ONLY with a JSON object (no markdown, no explanation):
   "confidence": 0 to 100
 }`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim().replace(/```json|```/g, '').trim();
-
-    const parsed = JSON.parse(text);
+    const text = await callAIText('text_extraction', prompt, { prisma, silent: true });
+    const cleaned = text.trim().replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
     return parsed;
   } catch (err) {
-    console.error('[GmailScanner] Gemini extraction error:', err.message);
+    console.error('[GmailScanner] AI extraction error:', err.message);
     return { isRenewal: false, reason: err.message };
   }
 }
@@ -173,8 +166,8 @@ async function scanAllMailForRenewals(prisma, adminUserId) {
       const body       = extractBody(full.data.payload);
       const receivedAt = new Date(parseInt(full.data.internalDate));
 
-      // Extract renewal data via Gemini
-      const extracted = await extractRenewalDataWithGemini(subject, sender, body, prisma);
+      // Extract renewal data via AI (Requesty cost-ordered → Gemini fallback)
+      const extracted = await extractRenewalDataWithAI(subject, sender, body, prisma);
 
       // Only save if it looks like a renewal/billing email
       if (!extracted.isRenewal) continue;

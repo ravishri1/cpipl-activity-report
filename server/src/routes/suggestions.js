@@ -94,4 +94,110 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: 'Suggestion removed' });
 }));
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── AUTOMATION INSIGHTS ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const { runAutomationAnalysis } = require('../services/automationAnalyzer');
+
+const INSIGHT_STATUSES = ['new', 'reviewing', 'will_automate', 'automated', 'dismissed'];
+const INSIGHT_PRIORITIES = ['high', 'medium', 'low'];
+const INSIGHT_CATEGORIES = ['data_entry', 'communication', 'reporting', 'scheduling', 'procurement', 'approval', 'general'];
+
+// ─── 6. POST /analyze-automation ─── Trigger automation analysis (admin)
+router.post('/analyze-automation', requireAdmin, asyncHandler(async (req, res) => {
+  const periodDays = req.body.periodDays ? parseInt(req.body.periodDays, 10) : 30;
+  if (isNaN(periodDays) || periodDays < 7 || periodDays > 90) {
+    throw badRequest('periodDays must be between 7 and 90');
+  }
+
+  const result = await runAutomationAnalysis(req.prisma, {
+    triggeredBy: 'manual',
+    userId: req.user.id,
+    periodDays,
+  });
+
+  res.json({
+    message: `Analysis complete: ${result.insightsCreated} insights from ${result.totalTasks} tasks`,
+    ...result,
+  });
+}));
+
+// ─── 7. GET /automation-insights ─── List insights (admin)
+router.get('/automation-insights', requireAdmin, asyncHandler(async (req, res) => {
+  const { status, priority, category } = req.query;
+  const where = { isActive: true };
+  if (status && INSIGHT_STATUSES.includes(status)) where.status = status;
+  if (priority && INSIGHT_PRIORITIES.includes(priority)) where.priority = priority;
+  if (category && INSIGHT_CATEGORIES.includes(category)) where.category = category;
+
+  const insights = await req.prisma.automationInsight.findMany({
+    where,
+    orderBy: [{ priority: 'asc' }, { estimatedSavingsPerWeek: 'desc' }],
+  });
+
+  res.json(insights);
+}));
+
+// ─── 8. GET /automation-stats ─── Summary stats (admin)
+router.get('/automation-stats', requireAdmin, asyncHandler(async (req, res) => {
+  const activeWhere = { isActive: true };
+
+  const [total, byStatus, byPriority, byCategory, savingsAgg, lastLog] = await Promise.all([
+    req.prisma.automationInsight.count({ where: activeWhere }),
+    req.prisma.automationInsight.groupBy({ by: ['status'], where: activeWhere, _count: true }),
+    req.prisma.automationInsight.groupBy({ by: ['priority'], where: activeWhere, _count: true }),
+    req.prisma.automationInsight.groupBy({ by: ['category'], where: activeWhere, _count: true }),
+    req.prisma.automationInsight.aggregate({ where: activeWhere, _sum: { estimatedSavingsPerWeek: true, totalHoursPerWeek: true } }),
+    req.prisma.automationAnalysisLog.findFirst({ orderBy: { createdAt: 'desc' } }),
+  ]);
+
+  res.json({
+    total,
+    byStatus: Object.fromEntries(byStatus.map(s => [s.status, s._count])),
+    byPriority: Object.fromEntries(byPriority.map(p => [p.priority, p._count])),
+    byCategory: Object.fromEntries(byCategory.map(c => [c.category, c._count])),
+    totalSaveableHoursPerWeek: savingsAgg._sum.estimatedSavingsPerWeek || 0,
+    totalHoursPerWeek: savingsAgg._sum.totalHoursPerWeek || 0,
+    lastAnalysis: lastLog ? {
+      date: lastLog.analysisDate,
+      status: lastLog.status,
+      totalTasks: lastLog.totalTasks,
+      insightsCreated: lastLog.insightsCreated,
+      durationMs: lastLog.durationMs,
+      triggeredBy: lastLog.triggeredBy,
+    } : null,
+  });
+}));
+
+// ─── 9. PUT /automation-insights/:id ─── Update insight status/priority/notes (admin)
+router.put('/automation-insights/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { status, priority, adminNotes } = req.body;
+
+  const data = {};
+  if (status) {
+    requireEnum(status, INSIGHT_STATUSES, 'status');
+    data.status = status;
+  }
+  if (priority) {
+    requireEnum(priority, INSIGHT_PRIORITIES, 'priority');
+    data.priority = priority;
+  }
+  if (adminNotes !== undefined) data.adminNotes = adminNotes;
+  if (Object.keys(data).length === 0) throw badRequest('Provide status, priority, or adminNotes');
+
+  const updated = await req.prisma.automationInsight.update({ where: { id }, data });
+  res.json(updated);
+}));
+
+// ─── 10. DELETE /automation-insights/:id ─── Soft delete insight (admin)
+router.delete('/automation-insights/:id', requireAdmin, asyncHandler(async (req, res) => {
+  await req.prisma.automationInsight.update({
+    where: { id: parseId(req.params.id) },
+    data: { isActive: false },
+  });
+  res.json({ message: 'Insight removed' });
+}));
+
 module.exports = router;

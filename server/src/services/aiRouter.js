@@ -2,7 +2,7 @@
  * AI Router — centralized, cost-ordered model selection with auto-fallback.
  *
  * Provider priority:
- *   1. Requesty.ai  (REQUESTY_API_KEY in .env)
+ *   1. Requesty.ai  (requesty_api_key in Settings DB → env REQUESTY_API_KEY fallback)
  *      → OpenAI-compatible gateway to 433+ models.
  *      → Models are tried cheapest-first per task type.
  *      → Falls back to the next model on any error.
@@ -141,13 +141,28 @@ const TASK_MODELS = {
   ],
 };
 
+// ─── Requesty API key resolver ────────────────────────────────────────────────
+//
+// Priority: Settings DB (`requesty_api_key`) → process.env.REQUESTY_API_KEY
+// This lets admins manage the key from the UI without redeploying.
+
+async function getRequestyKey(prisma) {
+  if (prisma) {
+    try {
+      const setting = await prisma.setting.findUnique({ where: { key: 'requesty_api_key' } });
+      if (setting?.value) return setting.value;
+    } catch { /* fall through to env var */ }
+  }
+  return process.env.REQUESTY_API_KEY || '';
+}
+
 // ─── Requesty.ai call ─────────────────────────────────────────────────────────
 
-async function callRequesty(model, messages) {
+async function callRequesty(model, messages, apiKey) {
   const response = await fetch(REQUESTY_BASE, {
     method:  'POST',
     headers: {
-      'Authorization': `Bearer ${process.env.REQUESTY_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type':  'application/json',
     },
     body: JSON.stringify({ model, messages }),
@@ -293,11 +308,12 @@ async function callAI(taskType, messages, { prisma, silent } = {}) {
   }
 
   // ── Provider 1: Requesty.ai (cost-ordered, auto-fallback) ────────────────
-  if (process.env.REQUESTY_API_KEY) {
+  const apiKey = await getRequestyKey(prisma);
+  if (apiKey) {
     let lastError;
     for (const model of models) {
       try {
-        const result = await callRequesty(model, messages);
+        const result = await callRequesty(model, messages, apiKey);
         if (!silent) console.log(`[aiRouter] ✓ ${taskType} → ${model}`);
         return result;
       } catch (err) {
@@ -356,11 +372,12 @@ async function callAIWithModel(taskType, messages, { prisma, silent } = {}) {
   }
 
   // ── Provider 1: Requesty.ai (cost-ordered, auto-fallback) ────────────────
-  if (process.env.REQUESTY_API_KEY) {
+  const apiKey = await getRequestyKey(prisma);
+  if (apiKey) {
     let lastError;
     for (const model of models) {
       try {
-        const text = await callRequesty(model, messages);
+        const text = await callRequesty(model, messages, apiKey);
         if (!silent) console.log(`[aiRouter] ✓ ${taskType} → ${model}`);
         return { text, model };
       } catch (err) {
@@ -432,25 +449,32 @@ async function callAIVision(prompt, buffer, mimeType, opts = {}) {
  * @param {Buffer} buffer    - Input image buffer.
  * @param {string} mimeType  - MIME type of input image.
  * @param {object} [opts]
+ * @param {object} [opts.prisma]  - Prisma client (for DB-stored API key lookup).
  * @param {boolean} [opts.silent] - Suppress console logs.
  * @returns {Promise<{ buffer: Buffer, mimeType: string }>}
  * @throws {Error} if no model returned an image (caller should fall back)
  */
-async function callAIImageEdit(prompt, buffer, mimeType, { silent } = {}) {
-  if (!process.env.REQUESTY_API_KEY) {
+async function callAIImageEdit(prompt, buffer, mimeType, { prisma, silent, model: preferredModel } = {}) {
+  const apiKey = await getRequestyKey(prisma);
+  if (!apiKey) {
     throw new Error('REQUESTY_API_KEY required for AI image editing.');
   }
 
   const base64  = buffer.toString('base64');
   const dataUrl = `data:${mimeType};base64,${base64}`;
 
+  // If a preferred model is specified (from admin settings), try it first, then fall back to defaults
+  const modelsToTry = preferredModel
+    ? [preferredModel, ...IMAGE_EDIT_MODELS.filter(m => m !== preferredModel)]
+    : IMAGE_EDIT_MODELS;
+
   let lastError;
-  for (const model of IMAGE_EDIT_MODELS) {
+  for (const model of modelsToTry) {
     try {
       const response = await fetch(REQUESTY_BASE, {
         method:  'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.REQUESTY_API_KEY}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type':  'application/json',
         },
         body: JSON.stringify({
@@ -510,4 +534,4 @@ function getAllTaskModels() {
   );
 }
 
-module.exports = { callAI, callAIText, callAIVision, callAIImageEdit, callAIWithModel, callAITextWithModel, getTaskModels, getAllTaskModels };
+module.exports = { callAI, callAIText, callAIVision, callAIImageEdit, callAIWithModel, callAITextWithModel, getTaskModels, getAllTaskModels, getRequestyKey };

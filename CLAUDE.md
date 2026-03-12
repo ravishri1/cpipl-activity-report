@@ -122,7 +122,7 @@ module.exports = router;
 | `/reports` | reports.js | Daily activity reports |
 | `/dashboard` | dashboard.js | Summary stats |
 | `/settings` | settings.js | App settings |
-| `/google` | google.js | Google OAuth integration |
+| `/google` | google.js | Google OAuth, auto-tasks (calendar+tasks+email), push-to-tasks, mark-handled |
 | `/points` | points.js | Leaderboard, thumbs-up, appreciation |
 | `/attendance` | attendance.js | Clock in/out, team attendance |
 | `/leave` | leave.js | Leave requests, balances, approvals |
@@ -143,7 +143,7 @@ module.exports = router;
 | `/tickets` | tickets.js | Helpdesk with SLA tracking |
 | `/otp` | otp.js | OTP verification |
 | `/wiki` | wiki.js | Knowledge base articles |
-| `/suggestions` | suggestions.js | Employee suggestions |
+| `/suggestions` | suggestions.js | Employee suggestions, automation insights (analyze-automation, automation-insights, automation-stats) |
 | `/training` | training.js | Training modules, exams, attempts |
 
 ## Frontend Component Template (ALWAYS follow this pattern)
@@ -455,6 +455,73 @@ Scheduler: node-cron (runs on backend process)
 | `GOOGLE_WORKSPACE_DOMAIN` | Workspace domain | `.env` + Vercel |
 
 **When adding new env vars:** Always set in BOTH local `.env` AND Vercel dashboard. Use `vercel env add VARNAME production` for CLI, or Vercel Dashboard → Settings → Environment Variables.
+
+## AI Architecture (aiRouter)
+
+All AI calls route through `server/src/services/aiRouter.js`:
+- **Primary:** Requesty.ai (cost-ordered, 433+ models) — API key from Settings DB (`requesty_api_key`), falls back to `REQUESTY_API_KEY` env var
+- **Fallback:** Google Gemini SDK direct — API key from Settings DB (`gemini_api_key`)
+- **Admin UI:** Settings → AI Configuration → both keys editable with password-masked inputs
+
+| Feature | File | aiRouter Task Type | AI Needed? |
+|---------|------|-------------------|------------|
+| Resume Extraction | `routes/extraction.js` | `text_extraction` | Yes |
+| Invoice/Receipt OCR | `services/invoiceExtractor.js` | `vision_extraction` | Yes |
+| Profile Photo Cleanup | `services/photoProcessor.js` | `image_edit` | Yes |
+| Error Report Diagnosis | `routes/errorReports.js` | `code_analysis` | Yes |
+| Gmail Renewal Scanner | `services/gmailRenewalScanner.js` | `text_extraction` | Yes |
+| Email Work Tracker | `services/google/googleGmail.js` | None (rule-based) | No |
+| Automation Insights | `services/automationAnalyzer.js` | `classification` | Yes |
+
+## Smart Email Work Tracker
+
+Per-user daily email work tracking for EOD reports. Separate from `gmailRenewalScanner.js` (admin-only renewal detection).
+
+**Key files:**
+- `server/src/services/google/googleGmail.js` — Gmail fetcher, two-level Company→Thread grouping, categorization
+- `server/src/services/google/googleCalendar.js` — Tasks read + `upsertGoogleTask()` write (upsert by threadId)
+- `server/src/routes/google.js` — `GET /auto-tasks` (enhanced), `POST /push-to-tasks`, `POST /mark-handled`
+- `client/src/components/google/GoogleSuggestions.jsx` — 3-tab UI (Today's Work, Needs Attention, Summary)
+- `server/prisma/schema.prisma` — `EmailHandledThread` model (task closure, 3-day auto-cleanup)
+
+**Google endpoints (`/api/google/`):**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/auto-tasks?date=YYYY-MM-DD` | Calendar + Tasks + Email details (two-level grouped) |
+| POST | `/push-to-tasks` | Upsert Google Tasks for unreplied threads |
+| POST | `/mark-handled` | DB-backed closure for email threads |
+| GET | `/status` | OAuth status + scope check (hasGmailScope, hasTasksWriteScope) |
+
+**OAuth scopes:** `calendar.readonly` + `tasks` (read+write) + `gmail.readonly`
+**Pre-requisite:** Enable Gmail API in GCC project `345624220365`. Users must disconnect + reconnect to grant new scopes.
+
+## Automation Insights (AI-Powered Task Pattern Detection)
+
+Analyzes ALL employees' daily activity reports to detect repetitive/recurring tasks and surface automation opportunities. Located under `/admin/suggestions` page as a second tab.
+
+**Key files:**
+- `server/src/services/automationAnalyzer.js` — Two-phase analysis engine (rule-based grouping → AI semantic clustering)
+- `server/src/routes/suggestions.js` — 5 endpoints under `/api/suggestions/` prefix
+- `client/src/components/admin/SuggestionManager.jsx` — 2-tab layout (Employee Suggestions + Automation Insights)
+
+**Analysis engine (two phases):**
+1. **Phase 1 — Rule-based:** Fetch ReportTasks for N days, normalize descriptions (lowercase, strip dates/numbers/filler), group by normalized key, filter frequency ≥ 3
+2. **Phase 2 — AI:** Send top 50 clusters to `callAIText('classification', prompt, {prisma})`, AI merges similar clusters, categorizes, suggests automation tools. Falls back to rule-based insights on AI failure.
+
+**Suggestion endpoints (`/api/suggestions/`):**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/analyze-automation` | Trigger analysis (admin, periodDays 7-90) |
+| GET | `/automation-insights` | List insights with status/priority/category filters |
+| GET | `/automation-stats` | Summary stats (total, byStatus, byPriority, byCategory, saveable hours, last analysis) |
+| PUT | `/automation-insights/:id` | Update status/priority/adminNotes |
+| DELETE | `/automation-insights/:id` | Soft delete (isActive: false) |
+
+**Cron:** Sunday 11:00 PM IST — weekly auto-analysis of last 30 days (`cronJobs.js`)
+
+**Prisma models:** `AutomationInsight` (pattern data, priority, status, JSON fields for users/tools), `AutomationAnalysisLog` (run metadata)
 
 ## Crash Recovery
 

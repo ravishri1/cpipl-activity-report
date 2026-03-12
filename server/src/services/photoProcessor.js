@@ -7,29 +7,59 @@
  *
  * If AI editing fails for any reason the pipeline still runs sharp post-processing
  * on the original image, so the caller always gets a cleaned/resized result.
+ *
+ * Admin can customize the AI model and prompt via Settings → AI Configuration.
  */
 
 const { callAIImageEdit } = require('./aiRouter');
 
+// ─── Default prompts (used when admin hasn't customized) ────────────────────
+
+const DEFAULT_BASE_PROMPT =
+  'You are a professional headshot photo editor. Edit this photo to:\n' +
+  '1. Remove the background and replace it with a solid plain white background.\n' +
+  '2. Frame the subject as a professional portrait headshot (head and shoulders, 3:4 aspect ratio).\n' +
+  '3. Gently enhance the image: improve brightness, contrast, and sharpness.\n' +
+  '4. Keep the person\'s face, skin tone, and natural appearance exactly intact.\n' +
+  'Return ONLY the edited image with no text, explanation, or watermark.';
+
+const DEFAULT_MALE_EXTRA =
+  '5. Remove any glasses or sunglasses from the person\'s face — inpaint the eyes naturally.\n' +
+  '6. Remove any cap, hat, or headwear — reveal the natural hair/head beneath.';
+
+const DEFAULT_MODEL = ''; // empty = use aiRouter default model chain
+
+// ─── Read admin-configured settings ─────────────────────────────────────────
+
+async function getPhotoSettings(prisma) {
+  if (!prisma) return { model: DEFAULT_MODEL, basePrompt: DEFAULT_BASE_PROMPT, maleExtra: DEFAULT_MALE_EXTRA };
+
+  try {
+    const rows = await prisma.setting.findMany({
+      where: { key: { in: ['photo_ai_model', 'photo_ai_prompt', 'photo_ai_prompt_male_extra'] } },
+    });
+    const map = {};
+    for (const r of rows) map[r.key] = r.value;
+
+    return {
+      model:      (map.photo_ai_model || '').trim() || DEFAULT_MODEL,
+      basePrompt: (map.photo_ai_prompt || '').trim() || DEFAULT_BASE_PROMPT,
+      maleExtra:  (map.photo_ai_prompt_male_extra || '').trim() || DEFAULT_MALE_EXTRA,
+    };
+  } catch (err) {
+    console.warn('[photoProcessor] Failed to read settings, using defaults:', err.message);
+    return { model: DEFAULT_MODEL, basePrompt: DEFAULT_BASE_PROMPT, maleExtra: DEFAULT_MALE_EXTRA };
+  }
+}
+
 // ─── AI prompt builder ────────────────────────────────────────────────────────
 
-function buildEditingPrompt(gender) {
-  let prompt =
-    'You are a professional headshot photo editor. Edit this photo to:\n' +
-    '1. Remove the background and replace it with a solid plain white background.\n' +
-    '2. Frame the subject as a professional portrait headshot (head and shoulders, 3:4 aspect ratio).\n' +
-    '3. Gently enhance the image: improve brightness, contrast, and sharpness.\n' +
-    '4. Keep the person\'s face, skin tone, and natural appearance exactly intact.\n';
-
-  if (gender === 'male') {
-    prompt +=
-      '5. Remove any glasses or sunglasses from the person\'s face — inpaint the eyes naturally.\n' +
-      '6. Remove any cap, hat, or headwear — reveal the natural hair/head beneath.\n';
+function buildEditingPrompt(basePrompt, maleExtra, gender) {
+  let prompt = basePrompt;
+  if (gender === 'male' && maleExtra) {
+    // Insert male-specific instructions before the final "Return ONLY..." line
+    prompt += '\n' + maleExtra;
   }
-
-  prompt +=
-    'Return ONLY the edited image with no text, explanation, or watermark.';
-
   return prompt;
 }
 
@@ -54,15 +84,20 @@ async function sharpProcess(buffer) {
  * @param {string} mimeType  - Source MIME type (image/jpeg, image/png, image/webp, …)
  * @param {object} [opts]
  * @param {string|null} [opts.gender]  - 'male' | 'female' | null — drives AI prompt
+ * @param {object|null} [opts.prisma]  - Prisma client to read admin settings from DB
  * @returns {Promise<{ buffer: Buffer, mimeType: 'image/jpeg' }>}
  */
-async function processProfilePhoto(buffer, mimeType, { gender = null } = {}) {
+async function processProfilePhoto(buffer, mimeType, { gender = null, prisma = null } = {}) {
   let workBuffer = buffer;
 
   // ── Step 1: AI image editing (best-effort) ────────────────────────────────
   try {
-    const prompt = buildEditingPrompt(gender);
-    const result = await callAIImageEdit(prompt, buffer, mimeType);
+    const settings = await getPhotoSettings(prisma);
+    const prompt = buildEditingPrompt(settings.basePrompt, settings.maleExtra, gender);
+    const aiOpts = { prisma };
+    if (settings.model) aiOpts.model = settings.model;
+
+    const result = await callAIImageEdit(prompt, buffer, mimeType, aiOpts);
     workBuffer = result.buffer;
     console.log('[photoProcessor] AI editing succeeded');
   } catch (err) {
@@ -81,4 +116,4 @@ async function processProfilePhoto(buffer, mimeType, { gender = null } = {}) {
   }
 }
 
-module.exports = { processProfilePhoto };
+module.exports = { processProfilePhoto, DEFAULT_BASE_PROMPT, DEFAULT_MALE_EXTRA };

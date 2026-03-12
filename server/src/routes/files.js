@@ -309,7 +309,7 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
 
       // Process photo: white background, headshot crop, AI cleanup
       const { buffer, mimeType } = await processProfilePhoto(
-        rawBuffer, rawMime, { gender: user.gender ?? null }
+        rawBuffer, rawMime, { gender: user.gender ?? null, prisma: req.prisma }
       );
       const uploadName = fileName.replace(/\.(png)$/i, '.jpg'); // always JPEG after processing
 
@@ -374,7 +374,7 @@ router.post('/upload-profile-photo', upload.single('photo'), asyncHandler(async 
 
   // Process photo: white background, headshot crop, AI cleanup (glasses/cap for males)
   const { buffer: processedBuf, mimeType: processedMime } = await processProfilePhoto(
-    req.file.buffer, req.file.mimetype, { gender: user.gender ?? null }
+    req.file.buffer, req.file.mimetype, { gender: user.gender ?? null, prisma: req.prisma }
   );
   // Always upload as JPEG after processing
   const uploadName = req.file.originalname.replace(/\.(png|webp|gif|bmp)$/i, '.jpg');
@@ -463,7 +463,7 @@ router.post('/migrate-base64-photos', requireAdmin, asyncHandler(async (req, res
 
       // Process through AI + Sharp pipeline
       const { buffer: processed, mimeType: outMime } = await processProfilePhoto(
-        inputBuf, inputMime, { gender: user.gender ?? null }
+        inputBuf, inputMime, { gender: user.gender ?? null, prisma: req.prisma }
       );
 
       // Upload to Google Drive

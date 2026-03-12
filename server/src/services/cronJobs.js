@@ -293,6 +293,35 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> Gmail renewal scan scheduled: 30 8 * * 1 (8:30 AM IST every Monday)');
+
+  // ─── EmailHandledThread Cleanup: midnight daily — delete records older than 3 days ───
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 3);
+      const cutoffDate = cutoff.toISOString().split('T')[0];
+      const { count } = await prisma.emailHandledThread.deleteMany({
+        where: { date: { lt: cutoffDate } },
+      });
+      if (count > 0) console.log(`[CRON] Cleaned up ${count} old EmailHandledThread records (before ${cutoffDate})`);
+    } catch (err) {
+      console.error('[CRON] EmailHandledThread cleanup failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> EmailHandledThread cleanup scheduled: 0 0 * * * (midnight IST daily)');
+
+  // ─── Automation Analysis: Sunday 11:00 PM IST — weekly analysis of recurring tasks ───
+  const { runAutomationAnalysis } = require('./automationAnalyzer');
+  cron.schedule('0 23 * * 0', async () => {
+    try {
+      console.log('[CRON] Starting weekly automation analysis...');
+      const result = await runAutomationAnalysis(prisma, { triggeredBy: 'cron', periodDays: 30 });
+      console.log(`[CRON] Automation analysis complete: ${result.insightsCreated} insights from ${result.totalTasks} tasks (${result.durationMs}ms)`);
+    } catch (err) {
+      console.error('[CRON] Automation analysis failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Automation analysis scheduled: 0 23 * * 0 (Sunday 11:00 PM IST)');
 }
 
 module.exports = { initCronJobs };
