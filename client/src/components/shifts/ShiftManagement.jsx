@@ -55,14 +55,15 @@ export default function ShiftManagement() {
     const endpoint = editing ? `/shifts/${editing}` : '/shifts';
     const method = editing ? 'put' : 'post';
 
-    await execute(
-      () => api[method](endpoint, form),
-      editing ? 'Shift updated successfully' : 'Shift created successfully'
-    );
-
-    if (!saveErr) {
+    try {
+      await execute(
+        () => api[method](endpoint, form),
+        editing ? 'Shift updated successfully' : 'Shift created successfully'
+      );
       setShowForm(false);
       refetch();
+    } catch {
+      // Error already displayed by useApi hook
     }
   };
 
@@ -73,11 +74,15 @@ export default function ShiftManagement() {
     }
 
     if (window.confirm('Are you sure you want to delete this shift?')) {
-      await execute(
-        () => api.delete(`/shifts/${id}`),
-        'Shift deleted successfully'
-      );
-      refetch();
+      try {
+        await execute(
+          () => api.delete(`/shifts/${id}`),
+          'Shift deleted successfully'
+        );
+        refetch();
+      } catch {
+        // Error already displayed by useApi hook
+      }
     }
   };
 

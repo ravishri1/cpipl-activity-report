@@ -23,7 +23,7 @@ const STATUS_COLORS = {
 };
 
 export default function ContributeToModule() {
-  const { data: trainingModules, loading: loadingModules } = useFetch('/training/modules', []);
+  const { data: trainingModules, loading: loadingModules, error: modulesError } = useFetch('/training/modules', []);
   const { data: contributions, loading: loadingContribs, error: contribError, refetch } = useFetch('/training/contributions/my', []);
   const { execute, loading: submitting, error: submitErr, success } = useApi();
 
@@ -47,20 +47,23 @@ export default function ContributeToModule() {
       return;
     }
 
-    await execute(
-      () => api.post('/training/contribute', {
-        moduleId: selectedModuleId,
-        title: formData.title,
-        content: formData.content,
-        type: formData.type
-      }),
-      'Contribution submitted! It will be reviewed by an administrator.'
-    );
-
-    setFormData({ type: 'addition', title: '', content: '' });
-    setSelectedModuleId(null);
-    setShowForm(false);
-    refetch();
+    try {
+      await execute(
+        () => api.post('/training/contribute', {
+          moduleId: selectedModuleId,
+          title: formData.title,
+          content: formData.content,
+          type: formData.type
+        }),
+        'Contribution submitted! It will be reviewed by an administrator.'
+      );
+      setFormData({ type: 'addition', title: '', content: '' });
+      setSelectedModuleId(null);
+      setShowForm(false);
+      refetch();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   const loading = loadingModules || loadingContribs;
@@ -77,6 +80,7 @@ export default function ContributeToModule() {
       {success && <AlertMessage type="success" message={success} />}
       {submitErr && <AlertMessage type="error" message={submitErr} />}
       {contribError && <AlertMessage type="error" message={contribError} />}
+      {modulesError && <AlertMessage type="error" message={modulesError} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Submission Form */}
@@ -84,7 +88,12 @@ export default function ContributeToModule() {
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 sticky top-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Submit Contribution</h2>
 
-            {!showForm ? (
+            {trainingModules.length === 0 && !loadingModules ? (
+              <div className="text-center py-4 text-gray-500">
+                <p className="font-medium">No training modules available</p>
+                <p className="text-sm mt-1">Modules must be created by an admin before you can contribute.</p>
+              </div>
+            ) : !showForm ? (
               <button
                 onClick={() => setShowForm(true)}
                 className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2"

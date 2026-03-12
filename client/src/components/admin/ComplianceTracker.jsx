@@ -41,15 +41,19 @@ function RenewModal({ cert, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.post(`/compliance/certificates/${cert.id}/renew`, {
-        renewedDate,
-        newExpiryDate: newExpiryDate || undefined,
-      }),
-      'Certificate renewed!'
-    );
-    onSaved();
-    onClose();
+    try {
+      await execute(
+        () => api.post(`/compliance/certificates/${cert.id}/renew`, {
+          renewedDate,
+          newExpiryDate: newExpiryDate || undefined,
+        }),
+        'Certificate renewed!'
+      );
+      onSaved();
+      onClose();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   // Auto-compute suggested expiry
@@ -132,20 +136,24 @@ function AddCertModal({ registrations, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.post('/compliance/certificates', {
-        ...form,
-        companyRegistrationId: parseInt(form.companyRegistrationId),
-        reminderDays: parseInt(form.reminderDays),
-        issueDate: form.issueDate || null,
-        expiryDate: form.expiryDate || null,
-        documentUrl: form.documentUrl || null,
-        notes: form.notes || null,
-      }),
-      'Certificate added!'
-    );
-    onSaved();
-    onClose();
+    try {
+      await execute(
+        () => api.post('/compliance/certificates', {
+          ...form,
+          companyRegistrationId: parseInt(form.companyRegistrationId),
+          reminderDays: parseInt(form.reminderDays),
+          issueDate: form.issueDate || null,
+          expiryDate: form.expiryDate || null,
+          documentUrl: form.documentUrl || null,
+          notes: form.notes || null,
+        }),
+        'Certificate added!'
+      );
+      onSaved();
+      onClose();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   return (
@@ -249,19 +257,23 @@ function EditCertModal({ cert, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.put(`/compliance/certificates/${cert.id}`, {
-        ...form,
-        reminderDays: parseInt(form.reminderDays),
-        issueDate: form.issueDate || null,
-        expiryDate: form.expiryDate || null,
-        documentUrl: form.documentUrl || null,
-        notes: form.notes || null,
-      }),
-      'Certificate updated!'
-    );
-    onSaved();
-    onClose();
+    try {
+      await execute(
+        () => api.put(`/compliance/certificates/${cert.id}`, {
+          ...form,
+          reminderDays: parseInt(form.reminderDays),
+          issueDate: form.issueDate || null,
+          expiryDate: form.expiryDate || null,
+          documentUrl: form.documentUrl || null,
+          notes: form.notes || null,
+        }),
+        'Certificate updated!'
+      );
+      onSaved();
+      onClose();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   return (
@@ -383,8 +395,12 @@ export default function ComplianceTracker() {
 
   const handleDelete = async (cert) => {
     if (!window.confirm(`Delete ${cert.certificateType} — ${cert.certificateNo}?`)) return;
-    await execute(() => api.delete(`/compliance/certificates/${cert.id}`), 'Certificate deleted');
-    refetch();
+    try {
+      await execute(() => api.delete(`/compliance/certificates/${cert.id}`), 'Certificate deleted');
+      refetch();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   return (

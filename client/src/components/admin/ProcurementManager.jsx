@@ -45,6 +45,250 @@ const formatDate = (dateStr) => {
   });
 };
 
+// ─── Order Form Modal ────────────────────────────────────────────────────────
+
+function OrderFormModal({ vendors, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
+  const [form, setForm] = useState({
+    vendorId: '',
+    totalAmount: '',
+    description: '',
+    notes: '',
+    deliveryDate: '',
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.vendorId || !form.totalAmount) {
+      alert('Vendor and total amount are required');
+      return;
+    }
+    try {
+      await execute(
+        () => api.post('/procurement/orders', {
+          vendorId: parseInt(form.vendorId),
+          status: 'draft',
+          totalAmount: parseFloat(form.totalAmount),
+          createdDate: new Date().toISOString().split('T')[0],
+          description: form.description || undefined,
+          notes: form.notes || undefined,
+          deliveryDate: form.deliveryDate || undefined,
+        }),
+        'Order created successfully!'
+      );
+      onSaved();
+      onClose();
+    } catch {
+      // Error already displayed by useApi hook
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">New Purchase Order</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {error && <AlertMessage type="error" message={error} />}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Vendor *</label>
+            <select
+              value={form.vendorId}
+              onChange={(e) => set('vendorId', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select a vendor...</option>
+              {vendors.map(v => (
+                <option key={v.id} value={v.id}>{v.vendorName}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹) *</label>
+            <input
+              type="number"
+              value={form.totalAmount}
+              onChange={(e) => set('totalAmount', e.target.value)}
+              placeholder="0"
+              min="0"
+              step="0.01"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date</label>
+            <input
+              type="date"
+              value={form.deliveryDate}
+              onChange={(e) => set('deliveryDate', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => set('description', e.target.value)}
+              rows={2}
+              placeholder="Order description..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => set('notes', e.target.value)}
+              rows={2}
+              placeholder="Internal notes..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center gap-2">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Create Order
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Vendor Form Modal ───────────────────────────────────────────────────────
+
+function VendorFormModal({ onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
+  const [form, setForm] = useState({
+    vendorName: '',
+    contactPerson: '',
+    email: '',
+    phone: '',
+    address: '',
+    gstNumber: '',
+    panNumber: '',
+    category: '',
+    notes: '',
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.vendorName.trim() || !form.email.trim() || !form.phone.trim() || !form.address.trim()) {
+      alert('Vendor name, email, phone, and address are required');
+      return;
+    }
+    try {
+      await execute(
+        () => api.post('/procurement/vendors', {
+          vendorName: form.vendorName,
+          contactPerson: form.contactPerson || undefined,
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+          gstNumber: form.gstNumber || undefined,
+          panNumber: form.panNumber || undefined,
+          category: form.category || undefined,
+          notes: form.notes || undefined,
+        }),
+        'Vendor added successfully!'
+      );
+      onSaved();
+      onClose();
+    } catch {
+      // Error already displayed by useApi hook
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Add Vendor</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {error && <AlertMessage type="error" message={error} />}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name *</label>
+              <input type="text" value={form.vendorName} onChange={(e) => set('vendorName', e.target.value)}
+                placeholder="Company name" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+              <input type="text" value={form.contactPerson} onChange={(e) => set('contactPerson', e.target.value)}
+                placeholder="Name" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <input type="text" value={form.category} onChange={(e) => set('category', e.target.value)}
+                placeholder="e.g., IT, Office Supplies" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
+                placeholder="vendor@example.com" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+              <input type="text" value={form.phone} onChange={(e) => set('phone', e.target.value)}
+                placeholder="+91 XXXXX XXXXX" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+              <textarea value={form.address} onChange={(e) => set('address', e.target.value)}
+                rows={2} placeholder="Full address" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+              <input type="text" value={form.gstNumber} onChange={(e) => set('gstNumber', e.target.value)}
+                placeholder="GSTIN" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PAN Number</label>
+              <input type="text" value={form.panNumber} onChange={(e) => set('panNumber', e.target.value)}
+                placeholder="PAN" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)}
+              rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center gap-2">
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Add Vendor
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+
 export default function ProcurementManager() {
   const [activeTab, setActiveTab] = useState('orders');
   const [showVendorForm, setShowVendorForm] = useState(false);
@@ -117,31 +361,43 @@ export default function ProcurementManager() {
   });
 
   const handleSubmitOrder = async (orderId) => {
-    await submitOrder(
-      () => api.post(`/procurement/orders/${orderId}/submit`, {}),
-      'Order submitted successfully'
-    );
-    refetchOrders();
+    try {
+      await submitOrder(
+        () => api.post(`/procurement/orders/${orderId}/submit`, {}),
+        'Order submitted successfully'
+      );
+      refetchOrders();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   const handleApproveOrder = async (orderId) => {
-    await approveOrder(
-      () =>
-        api.post(`/procurement/orders/${orderId}/approve`, {
-          approvalDate: new Date().toISOString().split('T')[0],
-        }),
-      'Order approved successfully'
-    );
-    refetchOrders();
+    try {
+      await approveOrder(
+        () =>
+          api.post(`/procurement/orders/${orderId}/approve`, {
+            approvalDate: new Date().toISOString().split('T')[0],
+          }),
+        'Order approved successfully'
+      );
+      refetchOrders();
+    } catch {
+      // Error already displayed by useApi hook
+    }
   };
 
   const handleDeleteVendor = async (vendorId) => {
     if (window.confirm('Are you sure you want to delete this vendor?')) {
-      await deleteVendor(
-        () => api.delete(`/procurement/vendors/${vendorId}`),
-        'Vendor deleted successfully'
-      );
-      refetchVendors();
+      try {
+        await deleteVendor(
+          () => api.delete(`/procurement/vendors/${vendorId}`),
+          'Vendor deleted successfully'
+        );
+        refetchVendors();
+      } catch {
+        // Error already displayed by useApi hook
+      }
     }
   };
 
@@ -441,6 +697,23 @@ export default function ProcurementManager() {
           </div>
         )}
       </div>
+
+      {/* Order Form Modal */}
+      {showOrderForm && (
+        <OrderFormModal
+          vendors={vendors}
+          onClose={() => setShowOrderForm(false)}
+          onSaved={refetchOrders}
+        />
+      )}
+
+      {/* Vendor Form Modal */}
+      {showVendorForm && (
+        <VendorFormModal
+          onClose={() => setShowVendorForm(false)}
+          onSaved={refetchVendors}
+        />
+      )}
     </div>
   );
 }
