@@ -14,7 +14,7 @@ const router = express.Router();
 
 // GET /api/google/auth-url
 router.get('/auth-url', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
-  if (!process.env.GOOGLE_CLIENT_ID) throw badRequest('Google OAuth2 not configured. Set GOOGLE_CLIENT_ID in .env');
+  if (!process.env.GOOGLE_CLIENT_ID?.trim()) throw badRequest('Google OAuth2 not configured. Set GOOGLE_CLIENT_ID in .env');
   const url = generateAuthUrl(req.user.id);
   res.json({ url });
 }));
