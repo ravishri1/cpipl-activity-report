@@ -26,9 +26,12 @@ async function processPunch(punch, prisma) {
   const timeStr    = punchTime.slice(11, 16);    // "HH:MM"
   const direction  = punch.direction;            // 'in' | 'out' | null
 
+  // Build proper DateTime from punchTime string (IST → UTC for DB storage)
+  const punchDateTime = new Date(punchTime.replace(' ', 'T') + '+05:30');
+
   // Look for existing attendance record for this employee on this date
-  let attendance = await prisma.attendance.findFirst({
-    where: { userId: punch.userId, date: punchDate },
+  let attendance = await prisma.attendance.findUnique({
+    where: { userId_date: { userId: punch.userId, date: punchDate } },
   });
 
   if (!attendance) {
@@ -47,10 +50,9 @@ async function processPunch(punch, prisma) {
       data: {
         userId:  punch.userId,
         date:    punchDate,
-        clockIn: timeStr,
+        checkIn: punchDateTime,
         status:  'present',
-        source:  'biometric',
-        notes:   `Auto clock-in from biometric device ${punch.deviceSerial}`,
+        notes:   `Biometric clock-in ${timeStr} via ${punch.deviceSerial}`,
       },
     });
     await prisma.biometricPunch.update({
@@ -75,18 +77,20 @@ async function processPunch(punch, prisma) {
     });
 
   } else if (
-    !attendance.clockOut &&
-    attendance.clockIn &&
-    (direction === 'out' || (!direction && timeStr > attendance.clockIn))
+    !attendance.checkOut &&
+    attendance.checkIn &&
+    (direction === 'out' || (!direction && punchDateTime > attendance.checkIn))
   ) {
     // ── Clock-out: explicit 'out' punch OR later time-based punch ──────────
+    const workHours = (punchDateTime.getTime() - attendance.checkIn.getTime()) / 3600000;
     attendance = await prisma.attendance.update({
       where: { id: attendance.id },
       data: {
-        clockOut: timeStr,
+        checkOut:  punchDateTime,
+        workHours: Math.round(workHours * 100) / 100,
         notes: attendance.notes
-          ? attendance.notes + ` | Auto clock-out ${timeStr} via biometric`
-          : `Auto clock-out ${timeStr} via biometric`,
+          ? attendance.notes + ` | Biometric clock-out ${timeStr}`
+          : `Biometric clock-out ${timeStr}`,
       },
     });
     await prisma.biometricPunch.update({
