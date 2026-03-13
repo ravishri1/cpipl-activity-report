@@ -204,6 +204,20 @@ router.post('/sync', asyncHandler(async (req, res) => {
   const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
   const { agentKey, deviceSerial, punches } = req.body;
 
+  // Debug logging — temporary (remove after fixing)
+  console.log('[BIOMETRIC SYNC DEBUG]', JSON.stringify({
+    bodyType: typeof req.body,
+    hasAgentKey: !!agentKey,
+    agentKeyType: typeof agentKey,
+    agentKeyLen: agentKey ? agentKey.length : 0,
+    expectedKeyLen: expectedKey.length,
+    keysMatch: agentKey === expectedKey,
+    agentKeyHex: agentKey ? Buffer.from(agentKey).toString('hex').slice(0, 80) : null,
+    expectedKeyHex: Buffer.from(expectedKey).toString('hex').slice(0, 80),
+    contentType: req.headers['content-type'],
+    bodyKeys: Object.keys(req.body || {}),
+  }));
+
   if (agentKey !== expectedKey) {
     return res.status(401).json({ error: 'Invalid agent key' });
   }
