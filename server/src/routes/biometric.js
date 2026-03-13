@@ -202,24 +202,43 @@ router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (re
 router.post('/sync', asyncHandler(async (req, res) => {
   // Simple shared-secret auth for the local agent
   const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
-  const { agentKey, deviceSerial, punches } = req.body;
+  const { agentKey: bodyKey, deviceSerial, punches } = req.body || {};
+  // Also accept key from x-agent-key header as fallback (Node.js https module may have body issues)
+  const agentKey = bodyKey || req.headers['x-agent-key'];
 
   // Debug logging — temporary (remove after fixing)
   console.log('[BIOMETRIC SYNC DEBUG]', JSON.stringify({
     bodyType: typeof req.body,
-    hasAgentKey: !!agentKey,
-    agentKeyType: typeof agentKey,
+    bodyKeyCount: Object.keys(req.body || {}).length,
+    hasBodyKey: !!bodyKey,
+    hasHeaderKey: !!req.headers['x-agent-key'],
+    agentKeySource: bodyKey ? 'body' : req.headers['x-agent-key'] ? 'header' : 'none',
     agentKeyLen: agentKey ? agentKey.length : 0,
     expectedKeyLen: expectedKey.length,
     keysMatch: agentKey === expectedKey,
-    agentKeyHex: agentKey ? Buffer.from(agentKey).toString('hex').slice(0, 80) : null,
-    expectedKeyHex: Buffer.from(expectedKey).toString('hex').slice(0, 80),
     contentType: req.headers['content-type'],
     bodyKeys: Object.keys(req.body || {}),
   }));
 
   if (agentKey !== expectedKey) {
-    return res.status(401).json({ error: 'Invalid agent key' });
+    return res.status(401).json({
+      error: 'Invalid agent key',
+      debug: {
+        receivedType: typeof agentKey,
+        receivedLen: agentKey ? agentKey.length : 0,
+        expectedLen: expectedKey.length,
+        receivedFirst6: agentKey ? agentKey.slice(0, 6) : null,
+        expectedFirst6: expectedKey.slice(0, 6),
+        receivedLast4: agentKey ? agentKey.slice(-4) : null,
+        expectedLast4: expectedKey.slice(-4),
+        keySource: bodyKey ? 'body' : req.headers['x-agent-key'] ? 'header' : 'none',
+        bodyKeyCount: Object.keys(req.body || {}).length,
+        bodyKeys: Object.keys(req.body || {}),
+        contentType: req.headers['content-type'],
+        hasBody: !!req.body,
+        bodyType: typeof req.body,
+      }
+    });
   }
   if (!deviceSerial) throw badRequest('deviceSerial required');
   if (!Array.isArray(punches) || punches.length === 0) {
