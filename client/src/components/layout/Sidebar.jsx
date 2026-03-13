@@ -13,7 +13,6 @@ import {
   CheckSquare,
   ClipboardCheck,
   Upload,
-  Brain,
   ChevronDown,
   ChevronRight,
   X,
@@ -35,9 +34,7 @@ import {
   MessageSquare,
   BookOpen,
   UsersRound,
-  TrendingUp,
   Bug,
-  ShoppingCart,
   Boxes,
   Building2,
   BadgeCheck,
@@ -47,8 +44,6 @@ import {
   Heart,
   Wrench,
   AlarmClock,
-  Calculator,
-  Target,
   Briefcase,
   RefreshCw,
   Activity,
@@ -71,7 +66,6 @@ const DEFAULT_EXPANDED = {
   // Level-2 groups inside My Work
   timeAttendance: true,
   moneyBenefits: false,
-  performanceGrowth: false,
   supportPolicies: false,
   // Level-2 groups inside My Workspace
   personal: true,
@@ -172,7 +166,6 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/activity-reports',           label: 'Activity Reports',      icon: ClipboardEdit },
         { to: '/attendance',                  label: 'Attendance',            icon: Clock },
         { to: '/leave',                       label: 'Leave',                 icon: CalendarOff },
-        { to: '/overtime',                    label: 'Overtime',              icon: Clock },
         { to: '/my-comp-off',                 label: 'Comp-Off',              icon: AlarmClock },
         { to: '/attendance-regularization',   label: 'Regularization',        icon: ClipboardEdit },
       ],
@@ -184,16 +177,6 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { to: '/payslips',        label: 'Payslips',               icon: IndianRupee },
         { to: '/expenses',        label: 'Expenses',               icon: Wallet },
-        { to: '/my-loans',        label: 'My Loans',               icon: Banknote },
-        { to: '/my-investment',   label: 'Investment Declaration', icon: Calculator },
-      ],
-    },
-    {
-      key: 'performanceGrowth',
-      label: 'Performance & Growth',
-      icon: TrendingUp,
-      items: [
-        { to: '/my-performance',           label: 'My Performance',       icon: Target },
       ],
     },
     {
@@ -243,7 +226,6 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/surveys',      label: 'Survey Manager',     icon: ClipboardList },
     { to: '/admin/suggestions',  label: 'Suggestions',        icon: MessageSquare },
     { to: '/admin/import',       label: 'Import Employees',   icon: Upload },
-    { to: '/admin/ai-extract',   label: 'AI Extract',         icon: Brain },
   ];
 
   const timePayItems = [
@@ -255,26 +237,18 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/payroll',                  label: 'Payroll',                icon: CreditCard },
     { to: '/admin/salary-setup',             label: 'Salary Setup',           icon: Banknote },
     { to: '/admin/expense-claims',           label: 'Expense Claims',         icon: Receipt },
-    { to: '/admin/overtime',                 label: 'Overtime Manager',       icon: Clock },
     { to: '/admin/comp-off',                 label: 'Comp-Off Manager',       icon: AlarmClock },
     { to: '/admin/regularization',           label: 'Regularization',         icon: ClipboardEdit },
-    { to: '/admin/loans',                    label: 'Loan Manager',           icon: Banknote },
-    { to: '/admin/investment-declarations',  label: 'Investment Declarations',icon: Calculator },
   ];
 
   const organizationItems = [
     { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
     { to: '/admin/compliance',              label: 'Compliance Tracker',      icon: BadgeCheck },
     { to: '/admin/renewals',                label: 'Renewal Manager',         icon: RefreshCw },
-    { to: '/admin/performance',             label: 'Performance Management',  icon: Target },
     { to: '/admin/assets',                  label: 'Asset Manager',           icon: Package },
     { to: '/admin/asset-lifecycle',         label: 'Asset Lifecycle',         icon: Activity },
     { to: '/admin/predictive-maintenance',  label: 'Predictive Maintenance',  icon: HeartPulse },
     { to: '/admin/hr-analytics',            label: 'HR Analytics',            icon: LineChart },
-    { to: '/admin/vendor-analytics',        label: 'Vendor Analytics',        icon: TrendingUp },
-    { to: '/admin/procurement',             label: 'Procurement',             icon: ShoppingCart },
-    { to: '/admin/order-approvals',         label: 'Order Approvals',         icon: ClipboardCheck },
-    { to: '/admin/inventory',               label: 'Inventory',               icon: Boxes },
     { to: '/admin/insurance',               label: 'Insurance Management',    icon: Heart },
     { to: '/admin/contracts',               label: 'Company Contracts',       icon: ScrollText },
     { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },

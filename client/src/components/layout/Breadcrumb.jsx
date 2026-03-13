@@ -21,11 +21,8 @@ const ROUTE_MAP = {
   '/attendance':                    { label: 'Attendance',                parent: 'My Work' },
   '/attendance-regularization':     { label: 'Regularization',           parent: 'My Work' },
   '/leave':                         { label: 'Leave',                     parent: 'My Work' },
-  '/overtime':                      { label: 'Overtime',                  parent: 'My Work' },
   '/my-comp-off':                   { label: 'Comp Off',                  parent: 'My Work' },
   '/expenses':                      { label: 'Expenses',                  parent: 'My Work' },
-  '/my-investment':                 { label: 'Investment Declaration',    parent: 'My Work' },
-  '/my-performance':                { label: 'Performance',               parent: 'My Work' },
 
   // ── My Info ──────────────────────────────────────────────────
   '/payslips':                      { label: 'My Payslips' },
@@ -33,7 +30,6 @@ const ROUTE_MAP = {
   '/my-repairs':                    { label: 'Asset Repairs' },
   '/my-insurance':                  { label: 'Insurance Card' },
   '/my-files':                      { label: 'My Files' },
-  '/my-loans':                      { label: 'Loans' },
   '/my-compliance':                 { label: 'My Compliance' },
   '/policies':                      { label: 'Policies' },
 
@@ -66,23 +62,15 @@ const ROUTE_MAP = {
   '/admin/biometric':               { label: 'Biometric',                 parent: 'Organization' },
   '/admin/separations':             { label: 'Separations',               parent: 'Organization' },
   '/admin/onboarding':              { label: 'Onboarding',                parent: 'Organization' },
-  '/admin/overtime':                { label: 'Overtime',                  parent: 'Organization' },
   '/admin/comp-off':                { label: 'Comp Off',                  parent: 'Organization' },
   '/admin/regularization':          { label: 'Regularization',            parent: 'Organization' },
-  '/admin/loans':                   { label: 'Loans',                     parent: 'Organization' },
-  '/admin/investment-declarations': { label: 'Investment Declarations',   parent: 'Organization' },
   '/admin/assets':                  { label: 'Assets',                    parent: 'Organization' },
   '/admin/asset-lifecycle':         { label: 'Asset Lifecycle',           parent: 'Organization' },
   '/admin/predictive-maintenance':  { label: 'Predictive Maintenance',    parent: 'Organization' },
-  '/admin/procurement':             { label: 'Procurement',               parent: 'Organization' },
-  '/admin/order-approvals':         { label: 'Order Approvals',           parent: 'Organization' },
-  '/admin/inventory':               { label: 'Inventory Analytics',       parent: 'Organization' },
-  '/admin/vendor-analytics':        { label: 'Vendor Analytics',          parent: 'Organization' },
   '/admin/contracts':               { label: 'Contracts',                 parent: 'Organization' },
   '/admin/insurance':               { label: 'Insurance',                 parent: 'Organization' },
   '/admin/reports':                 { label: 'HR Reports',                parent: 'Organization' },
   '/admin/hr-analytics':            { label: 'HR Analytics',              parent: 'Organization' },
-  '/admin/ai-extract':              { label: 'Resume Extractor',          parent: 'Organization' },
   '/admin/policies':                { label: 'Policies',                  parent: 'Organization' },
   '/admin/policy-scorecard':        { label: 'Policy Scorecard',          parent: 'Organization' },
   '/admin/letters':                 { label: 'Letters',                   parent: 'Organization' },
@@ -95,7 +83,6 @@ const ROUTE_MAP = {
   '/admin/compliance':              { label: 'Compliance Tracker',        parent: 'Organization' },
   '/admin/renewals':                { label: 'Renewal Manager',           parent: 'Organization' },
   '/admin/recruitment':             { label: 'Recruitment',               parent: 'Organization' },
-  '/admin/performance':             { label: 'Performance',               parent: 'Organization' },
 };
 
 // Normalise dynamic segments so /employee/42 → /employee/:id

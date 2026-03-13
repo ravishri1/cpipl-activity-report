@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import {
   Save, CheckCircle, ExternalLink, Unlink, Loader2,
-  Building2, Plus, Pencil, Brain, Eye, EyeOff, Camera, RotateCcw,
+  Brain, Eye, EyeOff, Camera, RotateCcw,
 } from 'lucide-react';
 
 export default function Settings() {
@@ -24,12 +24,6 @@ export default function Settings() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showRequestyKey, setShowRequestyKey] = useState(false);
 
-  // Company management
-  const [companies, setCompanies] = useState([]);
-  const [companyLoading, setCompanyLoading] = useState(true);
-  const [editingCompany, setEditingCompany] = useState(null);
-  const [companyForm, setCompanyForm] = useState({ name: '', shortName: '', gst: '', state: '', city: '', address: '' });
-  const [addingCompany, setAddingCompany] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -50,19 +44,8 @@ export default function Settings() {
         setGoogleLoading(false);
       }
     };
-    const fetchCompanies = async () => {
-      try {
-        const res = await api.get('/companies');
-        setCompanies(res.data);
-      } catch (err) {
-        console.error('Fetch companies error:', err);
-      } finally {
-        setCompanyLoading(false);
-      }
-    };
     fetchSettings();
     fetchGoogleStatus();
-    fetchCompanies();
   }, []);
 
   const handleSave = async (e) => {
@@ -80,40 +63,6 @@ export default function Settings() {
     }
   };
 
-  // Company handlers
-  const resetCompanyForm = () => {
-    setCompanyForm({ name: '', shortName: '', gst: '', state: '', city: '', address: '' });
-    setEditingCompany(null);
-    setAddingCompany(false);
-  };
-
-  const handleSaveCompany = async () => {
-    try {
-      if (editingCompany) {
-        const res = await api.put(`/companies/${editingCompany}`, companyForm);
-        setCompanies((prev) => prev.map((c) => (c.id === editingCompany ? res.data : c)));
-      } else {
-        const res = await api.post('/companies', companyForm);
-        setCompanies((prev) => [...prev, res.data]);
-      }
-      resetCompanyForm();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to save company.');
-    }
-  };
-
-  const startEditCompany = (company) => {
-    setEditingCompany(company.id);
-    setCompanyForm({
-      name: company.name || '',
-      shortName: company.shortName || '',
-      gst: company.gst || '',
-      state: company.state || '',
-      city: company.city || '',
-      address: company.address || '',
-    });
-    setAddingCompany(false);
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -384,62 +333,6 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* ═══ Company Management ═══ */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-indigo-600" />
-            Companies
-          </h2>
-          {!addingCompany && !editingCompany && (
-            <button
-              onClick={() => { setAddingCompany(true); setEditingCompany(null); setCompanyForm({ name: '', shortName: '', gst: '', state: '', city: '', address: '' }); }}
-              className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" />
-              Add Company
-            </button>
-          )}
-        </div>
-
-        {/* Company list */}
-        {companyLoading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {companies.map((c) => (
-              <div key={c.id} className={`border rounded-lg p-3 ${editingCompany === c.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
-                {editingCompany === c.id ? (
-                  <CompanyFormFields form={companyForm} setForm={setCompanyForm} onSave={handleSaveCompany} onCancel={resetCompanyForm} />
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{c.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {c.shortName && <span className="font-mono bg-slate-200 px-1 rounded mr-2">{c.shortName}</span>}
-                        {c.gst && <span>GST: {c.gst}</span>}
-                        {c.state && <span className="ml-2">• {c.city ? `${c.city}, ` : ''}{c.state}</span>}
-                      </p>
-                    </div>
-                    <button onClick={() => startEditCompany(c)} className="p-1.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Add form */}
-        {addingCompany && (
-          <div className="mt-3 border border-blue-300 bg-blue-50 rounded-lg p-3">
-            <CompanyFormFields form={companyForm} setForm={setCompanyForm} onSave={handleSaveCompany} onCancel={resetCompanyForm} isNew />
-          </div>
-        )}
-      </div>
 
       {/* ═══ Google Workspace Connection ═══ */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -520,66 +413,6 @@ export default function Settings() {
           <li><code className="bg-amber-100 px-1 rounded">GMAIL_APP_PASSWORD</code> - Gmail App Password</li>
           <li><code className="bg-amber-100 px-1 rounded">TEAM_LEAD_EMAIL</code> - Email for summaries</li>
         </ul>
-      </div>
-    </div>
-  );
-}
-
-/* Reusable company form fields */
-function CompanyFormFields({ form, setForm, onSave, onCancel, isNew }) {
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Company Name *"
-          className="px-3 py-1.5 border border-slate-300 rounded text-sm"
-        />
-        <input
-          value={form.shortName}
-          onChange={(e) => setForm({ ...form, shortName: e.target.value })}
-          placeholder="Short Name (e.g. CPIPL)"
-          className="px-3 py-1.5 border border-slate-300 rounded text-sm"
-        />
-      </div>
-      <input
-        value={form.gst}
-        onChange={(e) => setForm({ ...form, gst: e.target.value })}
-        placeholder="GST Number"
-        className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          value={form.state}
-          onChange={(e) => setForm({ ...form, state: e.target.value })}
-          placeholder="State"
-          className="px-3 py-1.5 border border-slate-300 rounded text-sm"
-        />
-        <input
-          value={form.city}
-          onChange={(e) => setForm({ ...form, city: e.target.value })}
-          placeholder="City"
-          className="px-3 py-1.5 border border-slate-300 rounded text-sm"
-        />
-      </div>
-      <input
-        value={form.address}
-        onChange={(e) => setForm({ ...form, address: e.target.value })}
-        placeholder="Full Address"
-        className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"
-      />
-      <div className="flex items-center gap-2 pt-1">
-        <button
-          onClick={onSave}
-          disabled={!form.name.trim()}
-          className={`text-xs text-white px-3 py-1.5 rounded font-medium disabled:opacity-40 ${isNew ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-600 hover:bg-amber-700'}`}
-        >
-          {isNew ? 'Add Company' : 'Save Changes'}
-        </button>
-        <button onClick={onCancel} className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5">
-          Cancel
-        </button>
       </div>
     </div>
   );

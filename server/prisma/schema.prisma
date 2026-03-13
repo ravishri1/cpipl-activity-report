@@ -141,8 +141,6 @@ model User {
   onboardingTasks    OnboardingChecklist[]
   separation         Separation?
   separationHandler  Separation[]       @relation("SeparationHandler")
-  overtimeRequests   OvertimeRequest[]
-  overtimeReviews    OvertimeRequest[]  @relation("OvertimeReviews")
   surveyResponses    SurveyResponse[]
   surveysCreated     Survey[]           @relation("SurveyCreator")
   tickets            Ticket[]
@@ -159,8 +157,6 @@ model User {
 
   // ── Asset Lifecycle Management ──
   locationIncharge           Location[]                   @relation("LocationIncharge")      // Locations this user manages
-  poCreated                  PurchaseOrder[]              @relation("POCreator")             // POs created by this user
-  poApproved                 PurchaseOrder[]              @relation("POApprover")            // POs approved by this user
   assetAssigneeMaster        AssetAssignment[]            @relation("AssetAssignee")         // Assets assigned to this user
   assetAssignmentsMade       AssetAssignment[]            @relation("AssignmentCreator")     // Assignments created by this user
   assetAssignmentsReceived   AssetAssignment[]            @relation("AssignmentReturner")    // Assets returned to office by this user
@@ -170,13 +166,6 @@ model User {
   assetDisposalsCreated      AssetDisposal[]              @relation("DisposalCreator")       // Disposals requested by this user
   detachmentRequestsCreated  AssetDetachmentRequest[]     @relation("DetachmentRequester")   // Detachment requests by this employee
   detachmentRequestsApproved AssetDetachmentRequest[]     @relation("DetachmentApprover")    // Requests approved by this user
-
-  // ── Procurement & Inventory Relations ──
-  procurementOrdersCreated    ProcurementOrder[]           @relation("ProcurementCreator")    // POs created by this user
-  procurementOrdersApproved   ProcurementOrder[]           @relation("ProcurementApprover")   // POs approved by this user
-  procurementApprovals        ProcurementApprovalWorkflow[] @relation("ApprovalWorkflowApprover") // Approvals given by this user
-  inventoryMovementsMade      InventoryMovement[]          @relation("InventoryMovement")     // Inventory movements logged by this user
-  employeeBudgets             EmployeeBudget[]             @relation("EmployeeBudget")        // Budget allocations for this employee
 
   // ── Predictive Maintenance Relations ──
   maintenanceRecommendationApprovals MaintenanceRecommendation[] @relation("MaintenanceApprover") // Recommendations approved by this user
@@ -206,25 +195,11 @@ model User {
   regularizationRequests    AttendanceRegularization[]
   regularizationReviewed    AttendanceRegularization[]   @relation("RegularizationReviewer")
 
-  // ── Employee Loans ──
-  loans                     EmployeeLoan[]
-  loansApproved             EmployeeLoan[]               @relation("LoanApprover")
-
-  // ── Investment Declaration ──
-  investmentDeclarations    InvestmentDeclaration[]
-  declarationsApproved      InvestmentDeclaration[]      @relation("DeclarationApprover")
-
   // ── Recruitment ──
   jobOpeningsPosted         JobOpening[]                 @relation("JobPoster")
   candidateReferrals        Candidate[]                  @relation("CandidateReferral")
   interviewsConducted       Interview[]                  @relation("InterviewConductor")
   offersGenerated           JobOffer[]                   @relation("OfferGenerator")
-
-  // ── Performance ──
-  performanceGoals          PerformanceGoal[]            @relation("GoalEmployee")
-  performanceGoalsSet       PerformanceGoal[]            @relation("GoalSetter")
-  performanceReviews        PerformanceReview[]          @relation("ReviewEmployee")
-  performanceReviewsDone    PerformanceReview[]          @relation("ReviewManager")
 
   // ── Email Work Tracker ──
   emailHandledThreads       EmailHandledThread[]
@@ -591,9 +566,7 @@ model Company {
   surveys          Survey[]
   
   // Asset Lifecycle Management
-  vendors          Vendor[]
   locations        Location[]
-  purchaseOrders   PurchaseOrder[]
   costCenterEmployees  User[]       @relation("CostCenter")
   contracts        CompanyContract[]
   branches         Branch[]
@@ -890,12 +863,6 @@ model Asset {
   assignedDate   String?                                 // "YYYY-MM-DD"
   returnDate     String?                                 // "YYYY-MM-DD"
   
-  // ── Procurement Integration ──
-  procurementOrderId Int?                                // Links to ProcurementOrder
-  originalCost   Float?                                  // Purchase cost from PO
-  budgetCategory String?                                 // For budget tracking (department, team, etc)
-  inventoryItemId Int?                                   // Links to InventoryItem for tracking
-  
   notes          String?
   companyId      Int?
   companyRegistrationId Int?                              // Links to CompanyRegistration (GSTIN-level ownership)
@@ -909,11 +876,7 @@ model Asset {
   companyRegistration CompanyRegistration? @relation("AssetCompanyRegistration", fields: [companyRegistrationId], references: [id])
   handovers         AssetHandover[]
   repairHistory     AssetRepair[]
-  vendorMetrics     VendorMetrics[] @relation("VendorMetrics")
-  
-  // Procurement & Inventory Relations
-  inventoryLinks    AssetInventoryLink[]
-  
+
   // Lifecycle Management Relations
   assignments       AssetAssignment[]
   movements         AssetMovement[]
@@ -992,28 +955,6 @@ model ShiftDefinition {
   createdAt     DateTime  @default(now())
 
   company       Company?  @relation(fields: [companyId], references: [id])
-}
-
-// ═══════════════════════════════════════════════
-// Overtime & Comp-Off
-// ═══════════════════════════════════════════════
-
-model OvertimeRequest {
-  id            Int       @id @default(autoincrement())
-  userId        Int
-  date          String                                   // "YYYY-MM-DD"
-  hours         Float
-  reason        String?
-  status        String    @default("pending")            // pending, approved, rejected
-  compOffEarned Boolean   @default(false)
-  reviewedBy    Int?
-  reviewedAt    DateTime?
-  createdAt     DateTime  @default(now())
-
-  user          User      @relation(fields: [userId], references: [id])
-  reviewer      User?     @relation("OvertimeReviews", fields: [reviewedBy], references: [id])
-
-  @@unique([userId, date])
 }
 
 // ═══════════════════════════════════════════════
@@ -1372,7 +1313,6 @@ model AssetRepair {
   initiator         User      @relation("RepairInitiator", fields: [initiatedBy], references: [id])
   completer         User?     @relation("RepairCompleter", fields: [completedBy], references: [id])
   timeline          RepairTimeline[]
-  metrics           VendorMetrics?                      // Phase 3: Performance tracking
 
   @@index([assetId])
   @@index([status])
@@ -1461,41 +1401,6 @@ model Location {
   @@index([type])
   @@index([isActive])
   @@index([city])
-}
-
-// ─── Purchase Order (for asset procurement) ───
-model PurchaseOrder {
-  id              Int       @id @default(autoincrement())
-  poNumber        String    @unique                       // "PO-2026-001"
-  vendorId        Int
-  poDate          String                                  // "YYYY-MM-DD"
-  expectedDeliveryDate String?                            // "YYYY-MM-DD"
-  actualDeliveryDate String?                              // "YYYY-MM-DD"
-  items           String                                  // JSON: [{assetName, quantity, unitPrice, description}]
-  totalAmount     Float
-  gstAmount       Float?
-  finalAmount     Float
-  status          String    @default("pending")           // pending, approved, ordered, received, partial, rejected
-  poFile          String?                                 // URL to PDF of PO
-  grnNumber       String?                                 // Goods Received Note reference
-  grnDate         String?                                 // "YYYY-MM-DD"
-  notes           String?
-  createdBy       Int
-  approvedBy      Int?
-  approvedAt      DateTime?
-  companyId       Int?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  vendor          Vendor    @relation(fields: [vendorId], references: [id])
-  creator         User      @relation("POCreator", fields: [createdBy], references: [id])
-  approver        User?     @relation("POApprover", fields: [approvedBy], references: [id])
-  company         Company?  @relation(fields: [companyId], references: [id])
-
-  @@index([poNumber])
-  @@index([vendorId])
-  @@index([status])
-  @@index([poDate])
 }
 
 // ─── Asset Assignment Tracking (enhanced) ───
@@ -1628,348 +1533,6 @@ model AssetDetachmentRequest {
   @@index([requestStatus])
   @@index([requestDate])
   @@index([postApprovalAction])
-}
-
-// ─── Asset Enhancements (Update existing Asset model references) ───
-// Note: The Asset model at line ~760 already has basic fields.
-// Phase 2 will add: locationId (for current location), vendorId (original vendor),
-// purchaseOrderId (link to PO), depreciation tracking, and more advanced fields.
-
-// ═════════════════════════════════════════════════════════════════════════════
-// TASK 19: HRMS/PROCUREMENT/INVENTORY INTEGRATION
-// ═════════════════════════════════════════════════════════════════════════════
-
-// ─── Procurement Management ───
-model ProcurementOrder {
-  id                  Int       @id @default(autoincrement())
-  orderNumber         String    @unique                   // PO-2026-0001
-  vendorId            Int
-  departmentId        String?                             // Department requesting
-  status              String    @default("draft")         // draft, submitted, pending_approval, approved, received, cancelled
-  totalAmount         Float
-  description         String?
-  notes               String?
-  createdDate         String                              // YYYY-MM-DD
-  deliveryDate        String?                             // YYYY-MM-DD - expected delivery
-  actualDeliveryDate  String?                             // YYYY-MM-DD - when actually received
-  approvalStatus      String    @default("pending")       // pending, approved, rejected
-  approvedBy          Int?
-  approvalDate        DateTime?
-  rejectionReason     String?
-  createdBy           Int
-  updatedAt           DateTime  @updatedAt
-  createdAt           DateTime  @default(now())
-
-  // Relations
-  vendor              Vendor    @relation(fields: [vendorId], references: [id])
-  creator             User      @relation("ProcurementCreator", fields: [createdBy], references: [id])
-  approver            User?     @relation("ProcurementApprover", fields: [approvedBy], references: [id])
-  approvalWorkflows   ProcurementApprovalWorkflow[]
-  inventoryItems     InventoryItem[]
-  assetInventoryLinks AssetInventoryLink[]
-  lineItems           ProcurementLineItem[]
-
-  @@index([status])
-  @@index([createdDate])
-  @@index([vendorId])
-  @@index([approvalStatus])
-  @@index([departmentId])
-}
-
-// ─── Procurement Line Items ───
-model ProcurementLineItem {
-  id                  Int       @id @default(autoincrement())
-  procurementId       Int
-  itemCode            String                              // SKU/Item code
-  itemName            String
-  quantity            Int
-  unitPrice           Float
-  totalPrice          Float     @default(0)               // quantity * unitPrice
-  category            String    // electronics, furniture, office_supplies, etc
-  deliveryStatus      String    @default("pending")       // pending, partial, delivered
-  quantityDelivered   Int       @default(0)
-  notes               String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  procurement         ProcurementOrder @relation(fields: [procurementId], references: [id], onDelete: Cascade)
-
-  @@index([procurementId])
-  @@index([itemCode])
-  @@index([deliveryStatus])
-}
-
-// ─── Procurement Approval Workflow ───
-model ProcurementApprovalWorkflow {
-  id                  Int       @id @default(autoincrement())
-  procurementId       Int
-  approverRole        String                              // admin, manager, finance_head, cfo
-  requiredApprovals   Int       @default(1)               // how many at this level
-  currentApprovalCount Int      @default(0)
-  approvalStatus      String    @default("pending")       // pending, approved, rejected, cancelled
-  approvedBy          Int?
-  approvalDate        DateTime?
-  rejectionReason     String?
-  approvalOrder       Int       @default(1)               // sequence of approval
-  isActive            Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  procurement         ProcurementOrder @relation(fields: [procurementId], references: [id], onDelete: Cascade)
-  approver            User?     @relation("ApprovalWorkflowApprover", fields: [approvedBy], references: [id])
-
-  @@index([procurementId])
-  @@index([approverRole])
-  @@index([approvalStatus])
-}
-
-// ─── Vendor Management ───
-model Vendor {
-  id                  Int       @id @default(autoincrement())
-  vendorCode          String    @unique                   // VND-001
-  vendorName          String
-  contactPerson       String?
-  email               String?
-  phone               String?
-  address             String?
-  gstNumber           String?
-  panNumber           String?
-  bankDetails         String?                             // JSON: {accountNumber, ifscCode, bankName}
-  status              String    @default("active")        // active, inactive, blacklisted
-  category            String?                             // electronics, office_supplies, furniture, etc
-  rating              Float?    @default(0)               // 0-5 star rating
-  totalTransactions   Int       @default(0)
-  lastTransactionDate String?                             // YYYY-MM-DD
-  notes               String?
-  companyId           Int?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  company             Company?  @relation(fields: [companyId], references: [id])
-  procurementOrders   ProcurementOrder[]
-  purchaseOrders      PurchaseOrder[]
-  vendorMetrics       VendorMetrics[] @relation("VendorMetrics")
-  performanceScore    VendorPerformanceScore? @relation("VendorPerformanceScore")
-
-  @@index([status])
-  @@index([category])
-  @@index([vendorCode])
-}
-
-// ─── Inventory Management ───
-model InventoryItem {
-  id                  Int       @id @default(autoincrement())
-  itemCode            String    @unique                   // SKU code
-  itemName            String
-  category            String                              // electronics, furniture, office_supplies, etc
-  unitPrice           Float
-  quantityOnHand      Int       @default(0)               // Current stock level
-  reorderLevel        Int       @default(10)              // Alert when stock drops below
-  reorderQuantity     Int       @default(20)              // Order quantity when restocking
-  storageLocationId   Int?
-  supplier            String?
-  description         String?
-  hsn_sac_code        String?                             // Tax classification
-  lastRestockDate     String?                             // YYYY-MM-DD
-  lastCountDate       String?                             // YYYY-MM-DD of physical count
-  status              String    @default("active")        // active, inactive, discontinued
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  storageLocation     InventoryLocation? @relation(fields: [storageLocationId], references: [id])
-  procurementOrders   ProcurementOrder[]
-  assetInventoryLinks AssetInventoryLink[]
-  inventoryMovements  InventoryMovement[]
-
-  @@index([itemCode])
-  @@index([category])
-  @@index([storageLocationId])
-  @@index([status])
-}
-
-// ─── Inventory Location ───
-model InventoryLocation {
-  id                  Int       @id @default(autoincrement())
-  locationCode        String    @unique                   // LOC-001
-  locationName        String                              // Warehouse A, Office Floor 2, etc
-  description         String?
-  capacity            Int?                                // Max items that can be stored
-  currentUtilization  Int       @default(0)
-  locationType        String    @default("warehouse")     // warehouse, office, storage_room, etc
-  isActive            Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  inventoryItems      InventoryItem[]
-
-  @@index([locationType])
-  @@index([isActive])
-}
-
-// ─── Asset & Inventory Link ───
-model AssetInventoryLink {
-  id                  Int       @id @default(autoincrement())
-  assetId             Int
-  inventoryItemId     Int
-  procurementId       Int?
-  quantityReceived    Int
-  dateReceived        String                              // YYYY-MM-DD
-  cost                Float                               // Unit cost at purchase
-  totalCost           Float     @default(0)               // quantity * cost
-  serialNumber        String?                             // For trackable items
-  warrantyExpiry      String?                             // YYYY-MM-DD
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  asset               Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  inventoryItem       InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  procurement         ProcurementOrder? @relation(fields: [procurementId], references: [id])
-
-  @@index([assetId])
-  @@index([inventoryItemId])
-  @@index([procurementId])
-  @@unique([assetId, inventoryItemId])
-}
-
-// ─── Inventory Movement Tracking ───
-model InventoryMovement {
-  id                  Int       @id @default(autoincrement())
-  inventoryItemId     Int
-  movementType        String                              // received, used, transferred, damaged, lost, adjusted
-  quantity            Int                                 // Positive for inbound, negative for outbound
-  fromLocation        Int?                                // LocationId - if transfer
-  toLocation          Int?                                // LocationId - if transfer
-  relatedAssetId      Int?                                // Asset involved if any
-  reason              String?
-  reference           String?                             // PO number, or other reference
-  movedBy             Int
-  movementDate        String                              // YYYY-MM-DD
-  notes               String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  inventoryItem       InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  movedByUser         User      @relation("InventoryMovement", fields: [movedBy], references: [id])
-
-  @@index([inventoryItemId])
-  @@index([movementType])
-  @@index([movementDate])
-  @@index([movedBy])
-}
-
-// ─── Employee Budget Tracking ───
-model EmployeeBudget {
-  id                  Int       @id @default(autoincrement())
-  employeeId          Int
-  year                Int                                 // Financial year
-  assetBudget         Float     @default(0)               // Total asset budget allocated
-  totalSpent          Float     @default(0)               // Amount spent on assets
-  remainingBudget     Float     @default(0)               // assetBudget - totalSpent
-  budgetCategory      String?                             // Department budget pool
-  notes               String?
-  updatedAt           DateTime  @updatedAt
-  createdAt           DateTime  @default(now())
-
-  employee            User      @relation("EmployeeBudget", fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@unique([employeeId, year])
-  @@index([employeeId])
-  @@index([year])
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// PHASE 3 TRACK 1: VENDOR INTELLIGENCE & PERFORMANCE ANALYTICS
-// ═════════════════════════════════════════════════════════════════════════════
-
-// ─── Vendor Performance Metrics (Track vendor performance per asset) ───
-model VendorMetrics {
-  id                    Int       @id @default(autoincrement())
-  repairId              Int       @unique              // Links to specific repair
-  vendorId              Int
-  assetId               Int
-  
-  // ── Turnaround Time Metrics ──
-  daysInRepair          Int                           // actualReturnDate - sentOutDate
-  daysInProgress        Int?                          // Actual repair duration
-  daysOverdue           Int       @default(0)         // If late, how many days past expected
-  
-  // ── Cost Metrics ──
-  estimatedCost         Float?
-  actualCost            Float?
-  costVariance          Float?                        // actualCost - estimatedCost
-  costOverrunPercent    Float?    @default(0)         // (costVariance / estimatedCost) * 100
-  
-  // ── Quality & Service Metrics ──
-  repairSuccessful      Boolean   @default(true)      // Did asset work after repair?
-  reworkRequired        Boolean   @default(false)     // Had to go back for rework?
-  customerSatisfaction  Int?                          // 1-5 rating
-  communicationScore    Int?                          // 1-5 rating
-  qualityScore          Int?                          // 1-5 rating
-  overallServiceRating  Float?                        // Average of above scores
-  
-  // ── Notes & Issues ──
-  issues                String?                       // Any issues encountered
-  positiveNotes         String?                       // What went well
-  
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  
-  repair                AssetRepair @relation(fields: [repairId], references: [id], onDelete: Cascade)
-  vendor                Vendor    @relation("VendorMetrics", fields: [vendorId], references: [id])
-  asset                 Asset     @relation("VendorMetrics", fields: [assetId], references: [id], onDelete: Cascade)
-  
-  @@index([vendorId])
-  @@index([assetId])
-  @@index([repairId])
-  @@index([daysOverdue])
-  @@index([costOverrunPercent])
-}
-
-// ─── Vendor Performance Score (Aggregated metrics for vendor) ───
-model VendorPerformanceScore {
-  id                      Int       @id @default(autoincrement())
-  vendorId                Int       @unique
-  
-  // ── Repair Statistics ──
-  totalRepairs            Int       @default(0)        // Total repairs handled
-  successfulRepairs       Int       @default(0)        // Repairs that worked first time
-  successRate             Float     @default(0)        // successfulRepairs / totalRepairs * 100
-  reworkCount             Int       @default(0)        // Repairs requiring rework
-  
-  // ── Turnaround Time Analytics ──
-  avgDaysInRepair         Float     @default(0)        // Average repair duration
-  onTimeDeliveryRate      Float     @default(0)        // Repairs completed on time %
-  avgDaysOverdue          Float     @default(0)        // If late, average days late
-  lateDeliveryCount       Int       @default(0)        // Total late deliveries
-  
-  // ── Cost Analytics ──
-  avgEstimatedCost        Float     @default(0)
-  avgActualCost           Float     @default(0)
-  avgCostVariance         Float     @default(0)        // actualCost - estimatedCost
-  costAccuracyPercent     Float     @default(0)        // How close to estimate
-  costOverrunRate         Float     @default(0)        // % of repairs that went over budget
-  
-  // ── Quality Metrics ──
-  avgCommunicationScore   Float     @default(0)        // 1-5 average
-  avgQualityScore         Float     @default(0)        // 1-5 average
-  avgSatisfactionScore    Float     @default(0)        // 1-5 average
-  overallVendorRating     Float     @default(0)        // Composite score 0-100
-  
-  // ── Trust Score (1-100) ──
-  trustScore              Float     @default(0)        // Weighted score based on all metrics
-  vendorTier              String    @default("bronze") // bronze, silver, gold, platinum
-  
-  // ── Status ──
-  lastUpdated             DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-  
-  vendor                  Vendor    @relation("VendorPerformanceScore", fields: [vendorId], references: [id], onDelete: Cascade)
-  
-  @@index([vendorId])
-  @@index([trustScore])
-  @@index([vendorTier])
-  @@index([successRate])
-  @@index([onTimeDeliveryRate])
 }
 
 // ═══════════════════════════════════════════════
@@ -2585,109 +2148,6 @@ model AttendanceRegularization {
 }
 
 // ════════════════════════════════════════════════════════════════
-// Employee Loan / Salary Advance
-// ════════════════════════════════════════════════════════════════
-
-model EmployeeLoan {
-  id              Int       @id @default(autoincrement())
-  userId          Int
-  loanType        String    @default("salary_advance")  // salary_advance | personal_loan
-  principalAmount Float
-  interestRate    Float     @default(0)                 // % per annum (0 = interest-free)
-  tenureMonths    Int                                   // repayment months
-  emiAmount       Float                                 // monthly EMI
-  disbursedOn     String?                               // "YYYY-MM-DD"
-  totalRepaid     Float     @default(0)
-  balanceAmount   Float     @default(0)
-  status          String    @default("pending")         // pending | approved | disbursed | closed | rejected
-  approvedBy      Int?
-  approvedAt      DateTime?
-  purpose         String?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  user            User      @relation(fields: [userId], references: [id])
-  approver        User?     @relation("LoanApprover", fields: [approvedBy], references: [id])
-  repayments      LoanRepayment[]
-
-  @@index([userId])
-  @@index([status])
-}
-
-model LoanRepayment {
-  id        Int      @id @default(autoincrement())
-  loanId    Int
-  month     String                                // "YYYY-MM"
-  amount    Float
-  status    String   @default("pending")          // pending | deducted | paid
-  paidOn    String?
-  notes     String?
-  createdAt DateTime @default(now())
-
-  loan      EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
-
-  @@index([loanId])
-  @@index([month])
-  @@index([status])
-}
-
-// ════════════════════════════════════════════════════════════════
-// Investment Declaration (Form 12BB for TDS)
-// ════════════════════════════════════════════════════════════════
-
-model InvestmentDeclaration {
-  id                    Int      @id @default(autoincrement())
-  userId                Int
-  financialYear         String                              // "2025-26"
-
-  // Section 80C (max ₹1,50,000)
-  ppf                   Float    @default(0)
-  elss                  Float    @default(0)
-  lifeInsurance         Float    @default(0)
-  homeLoanPrincipal     Float    @default(0)
-  nsc                   Float    @default(0)
-  tuitionFees           Float    @default(0)
-  other80C              Float    @default(0)
-  total80C              Float    @default(0)               // computed, max ₹1,50,000
-
-  // Section 80D (health insurance)
-  healthInsuranceSelf   Float    @default(0)               // max ₹25,000
-  healthInsuranceParents Float   @default(0)               // max ₹25,000 (₹50,000 if senior)
-
-  // Section 80E (education loan interest)
-  educationLoanInterest Float    @default(0)
-
-  // HRA
-  rentPaid              Float    @default(0)
-  landlordName          String?
-  landlordPan           String?
-  rentedCity            String?
-
-  // Home Loan Section 24B
-  homeLoanInterest      Float    @default(0)               // max ₹2,00,000
-
-  // NPS Section 80CCD(1B)
-  npsContribution       Float    @default(0)               // max ₹50,000 extra
-
-  totalDeclared         Float    @default(0)               // total exemptions claimed
-  status                String   @default("draft")         // draft | submitted | approved | finalized
-  submittedAt           DateTime?
-  approvedBy            Int?
-  approvedAt            DateTime?
-  notes                 String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  user                  User     @relation(fields: [userId], references: [id])
-  approver              User?    @relation("DeclarationApprover", fields: [approvedBy], references: [id])
-
-  @@unique([userId, financialYear])
-  @@index([userId])
-  @@index([status])
-}
-
-// ════════════════════════════════════════════════════════════════
 // Recruitment Module
 // ════════════════════════════════════════════════════════════════
 
@@ -2795,73 +2255,4 @@ model JobOffer {
 
   @@index([candidateId])
   @@index([status])
-}
-
-// ════════════════════════════════════════════════════════════════
-// Performance Management
-// ════════════════════════════════════════════════════════════════
-
-model PerformanceGoal {
-  id              Int       @id @default(autoincrement())
-  userId          Int
-  setBy           Int
-  title           String
-  description     String?
-  category        String    @default("individual")        // individual | team | department
-  weightage       Float     @default(0)                   // % of overall rating
-  targetDate      String?                                 // "YYYY-MM-DD"
-  status          String    @default("active")            // active | completed | cancelled
-  selfProgress    Int?                                    // 0-100 (self-reported)
-  managerProgress Int?                                    // 0-100 (manager-assessed)
-  year            Int
-  quarter         Int?                                    // 1-4 for quarterly goals
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  user            User      @relation("GoalEmployee", fields: [userId], references: [id])
-  setter          User      @relation("GoalSetter", fields: [setBy], references: [id])
-
-  @@index([userId, year])
-  @@index([status])
-}
-
-model PerformanceReview {
-  id                  Int       @id @default(autoincrement())
-  userId              Int
-  reviewedBy          Int
-  cycleType           String    @default("annual")        // annual | mid_year | quarterly | probation
-  year                Int
-  quarter             Int?
-
-  // Self-review
-  selfRating          Float?
-  selfComments        String?
-  selfSubmittedAt     DateTime?
-
-  // Manager review
-  managerRating       Float?
-  managerComments     String?
-  strengthNotes       String?
-  improvementNotes    String?
-  managerSubmittedAt  DateTime?
-
-  // HR/Final
-  finalRating         Float?
-  ratingLabel         String?                             // Exceptional | Exceeds | Meets | Below | Unsatisfactory
-  hrApprovedAt        DateTime?
-
-  // Outcome
-  incrementPercent    Float?
-  bonusAmount         Float?
-  promotionRecommended Boolean  @default(false)
-
-  status              String    @default("pending")       // pending | self_review | manager_review | hr_review | completed
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  user                User      @relation("ReviewEmployee", fields: [userId], references: [id])
-  reviewer            User      @relation("ReviewManager", fields: [reviewedBy], references: [id])
-
-  @@index([userId, year])
-  @@index([status])
-}
+}

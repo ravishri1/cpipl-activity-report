@@ -20,7 +20,6 @@ const TeamManagement = lazy(() => import('./components/admin/TeamManagement'));
 const HolidayManager = lazy(() => import('./components/admin/HolidayManager'));
 const Settings = lazy(() => import('./components/admin/Settings'));
 const EmployeeImport = lazy(() => import('./components/admin/EmployeeImport'));
-const ResumeExtractor = lazy(() => import('./components/admin/ResumeExtractor'));
 const PolicyAcceptance = lazy(() => import('./components/policies/PolicyAcceptance'));
 const PolicyManager = lazy(() => import('./components/admin/PolicyManager'));
 const PolicyScorecard = lazy(() => import('./components/admin/PolicyScorecard'));
@@ -47,10 +46,6 @@ const MyFiles = lazy(() => import('./components/files/MyFiles'));
 const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCard'));
 const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
 const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTimeline'));
-const VendorAnalyticsDashboard = lazy(() => import('./components/admin/VendorAnalyticsDashboard'));
-const ProcurementManager = lazy(() => import('./components/admin/ProcurementManager'));
-const OrderApprovalQueue = lazy(() => import('./components/admin/OrderApprovalQueue'));
-const InventoryAnalytics = lazy(() => import('./components/admin/InventoryAnalytics'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
@@ -62,19 +57,11 @@ const CompanyMaster = lazy(() => import('./components/admin/CompanyMaster'));
 const ComplianceTracker = lazy(() => import('./components/admin/ComplianceTracker'));
 const ActivityReports = lazy(() => import('./components/reports/ActivityReports'));
 const MyWorkspace = lazy(() => import('./components/workspace/MyWorkspace'));
-const MyOvertime = lazy(() => import('./components/overtime/MyOvertime'));
-const OvertimeManager = lazy(() => import('./components/admin/OvertimeManager'));
 const MyCompliance = lazy(() => import('./components/compliance/MyCompliance'));
 const MySupport = lazy(() => import('./components/support/MySupport'));
 const MyCompOff = lazy(() => import('./components/compoff/MyCompOff'));
 const CompOffManager = lazy(() => import('./components/compoff/CompOffManager'));
-const MyLoans = lazy(() => import('./components/loans/MyLoans'));
-const LoanManager = lazy(() => import('./components/loans/LoanManager'));
-const InvestmentDeclaration = lazy(() => import('./components/investment/InvestmentDeclaration'));
-const InvestmentDeclarations = lazy(() => import('./components/investment/InvestmentDeclarations'));
 const RecruitmentManager = lazy(() => import('./components/recruitment/RecruitmentManager'));
-const MyPerformance = lazy(() => import('./components/performance/MyPerformance'));
-const PerformanceManager = lazy(() => import('./components/performance/PerformanceManager'));
 const RenewalManager = lazy(() => import('./components/admin/RenewalManager'));
 const AttendanceRegularization = lazy(() => import('./components/attendance/AttendanceRegularization'));
 const RegularizationManager = lazy(() => import('./components/admin/RegularizationManager'));
@@ -169,12 +156,8 @@ function AppRoutes() {
                   <Route path="/activity-reports" element={<SeparatedRoute><ActivityReports /></SeparatedRoute>} />
                   <Route path="/my-workspace" element={<SeparatedRoute><MyWorkspace /></SeparatedRoute>} />
                   <Route path="/my-compliance" element={<SeparatedRoute><MyCompliance /></SeparatedRoute>} />
-                  <Route path="/overtime" element={<SeparatedRoute><MyOvertime /></SeparatedRoute>} />
                   <Route path="/my-comp-off" element={<SeparatedRoute><MyCompOff /></SeparatedRoute>} />
                   <Route path="/attendance-regularization" element={<SeparatedRoute><AttendanceRegularization /></SeparatedRoute>} />
-                  <Route path="/my-loans" element={<SeparatedRoute><MyLoans /></SeparatedRoute>} />
-                  <Route path="/my-investment" element={<SeparatedRoute><InvestmentDeclaration /></SeparatedRoute>} />
-                  <Route path="/my-performance" element={<SeparatedRoute><MyPerformance /></SeparatedRoute>} />
                   <Route path="/my-support" element={<MySupport />} />
 
                   {/* Allowed for separated employees */}
@@ -209,10 +192,6 @@ function AppRoutes() {
                   <Route path="/admin/asset-lifecycle" element={<SeparatedRoute><AdminRoute><AssetLifecycleDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/predictive-maintenance" element={<SeparatedRoute><AdminRoute><PredictiveMaintenanceDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/hr-analytics" element={<SeparatedRoute><AdminRoute><HRAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/vendor-analytics" element={<SeparatedRoute><AdminRoute><VendorAnalyticsDashboard /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/procurement" element={<SeparatedRoute><AdminRoute><ProcurementManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/order-approvals" element={<SeparatedRoute><AdminRoute><OrderApprovalQueue /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/inventory" element={<SeparatedRoute><AdminRoute><InventoryAnalytics /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/insurance" element={<SeparatedRoute><AdminRoute><AdminInsuranceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/contracts" element={<SeparatedRoute><AdminRoute><CompanyContractsManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/letters" element={<SeparatedRoute><AdminRoute><LetterManager /></AdminRoute></SeparatedRoute>} />
@@ -221,18 +200,13 @@ function AppRoutes() {
                   <Route path="/admin/biometric" element={<SeparatedRoute><AdminRoute><BiometricDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/company-master" element={<SeparatedRoute><AdminRoute><CompanyMaster /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/compliance" element={<SeparatedRoute><AdminRoute><ComplianceTracker /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/overtime" element={<SeparatedRoute><AdminRoute><OvertimeManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/comp-off" element={<SeparatedRoute><AdminRoute><CompOffManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/regularization" element={<SeparatedRoute><AdminRoute><RegularizationManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/loans" element={<SeparatedRoute><AdminRoute><LoanManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/investment-declarations" element={<SeparatedRoute><AdminRoute><InvestmentDeclarations /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/recruitment" element={<SeparatedRoute><AdminRoute><RecruitmentManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/performance" element={<SeparatedRoute><AdminRoute><PerformanceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/renewals" element={<SeparatedRoute><AdminRoute><RenewalManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/ai-extract" element={<SeparatedRoute><AdminRoute><ResumeExtractor /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/surveys" element={<SeparatedRoute><AdminRoute><SurveyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/tickets" element={<SeparatedRoute><AdminRoute><TicketManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/suggestions" element={<SeparatedRoute><AdminRoute><SuggestionManager /></AdminRoute></SeparatedRoute>} />

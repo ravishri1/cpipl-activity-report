@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-13T06:38:04.495Z",
+  "timestamp": "2026-03-13T17:33:27.452Z",
   "version": 2,
   "stats": {
-    "filesScanned": 134,
-    "apiCallsFound": 383,
-    "routesFound": 466,
+    "filesScanned": 108,
+    "apiCallsFound": 326,
+    "routesFound": 375,
     "issuesFound": 0
   },
   "missingRoutes": [],
@@ -29,12 +29,6 @@
       "severity": "LOW"
     },
     {
-      "file": "components\\admin\\ResumeExtractor.jsx",
-      "type": "MANUAL_FETCH",
-      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
-      "severity": "LOW"
-    },
-    {
       "file": "components\\admin\\SalaryStructure.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
@@ -48,12 +42,6 @@
     },
     {
       "file": "components\\admin\\TeamManagement.jsx",
-      "type": "MANUAL_FETCH",
-      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
-      "severity": "LOW"
-    },
-    {
-      "file": "components\\admin\\TrainingManager.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
       "severity": "LOW"
@@ -143,5 +131,5 @@
       "severity": "MEDIUM"
     }
   ],
-  "matchedCount": 383
+  "matchedCount": 326
 }
