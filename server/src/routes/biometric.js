@@ -5,7 +5,6 @@ const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
 
 const router = express.Router();
-router.use(authenticate);
 
 // ─── Helper: process a raw punch into attendance ──────────────────────────────
 // punch.direction controls behaviour:
@@ -125,7 +124,7 @@ async function matchEmployee(enrollNumber, prisma) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/biometric/devices — list all devices
-router.get('/devices', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/devices', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const devices = await req.prisma.biometricDevice.findMany({
     orderBy: { name: 'asc' },
     include: {
@@ -136,7 +135,7 @@ router.get('/devices', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/biometric/devices — add a device
-router.post('/devices', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/devices', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'serialNumber');
   const { name, serialNumber, location, ipAddress, esslUrl, apiUser, apiPassword, apiKey, companyCode, syncIntervalMin, forceDirection } = req.body;
 
@@ -159,7 +158,7 @@ router.post('/devices', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/biometric/devices/:id — update device
-router.put('/devices/:id', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/devices/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { name, serialNumber, location, ipAddress, esslUrl, apiUser, apiPassword, apiKey, companyCode, syncIntervalMin, isActive, forceDirection } = req.body;
 
@@ -184,7 +183,7 @@ router.put('/devices/:id', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/biometric/devices/:id — remove device
-router.delete('/devices/:id', requireAdmin, asyncHandler(async (req, res) => {
+router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   await req.prisma.biometricDevice.delete({ where: { id } });
   res.json({ message: 'Device removed' });
@@ -281,7 +280,7 @@ router.post('/sync', asyncHandler(async (req, res) => {
 
 // GET /api/biometric/punches — list punches with filters
 // ?date=2026-03-07&deviceId=1&matchStatus=unmatched&processStatus=pending&page=1&limit=50
-router.get('/punches', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const { date, deviceId, matchStatus, processStatus, enrollNumber, page = 1, limit = 50 } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -310,7 +309,7 @@ router.get('/punches', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/biometric/unmatched — unmatched punches (unknown employees)
-router.get('/unmatched', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/unmatched', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const { date } = req.query;
   const where = { matchStatus: 'unmatched' };
   if (date) where.punchDate = date;
@@ -338,7 +337,7 @@ router.get('/unmatched', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // GET /api/biometric/status — dashboard summary
-router.get('/status', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/status', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
 
   const [devices, todayPunches, unmatchedToday, pendingProcess, totalPunches] = await Promise.all([
@@ -355,7 +354,7 @@ router.get('/status', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/biometric/punches/:id/reprocess — manually retry processing a punch
-router.post('/punches/:id/reprocess', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/punches/:id/reprocess', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const punch = await req.prisma.biometricPunch.findUnique({ where: { id } });
   if (!punch) throw notFound('Punch');
@@ -370,7 +369,7 @@ router.post('/punches/:id/reprocess', requireAdmin, asyncHandler(async (req, res
 }));
 
 // POST /api/biometric/punches/:id/assign — manually assign unmatched punch to employee
-router.post('/punches/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/punches/:id/assign', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId');
   const id     = parseId(req.params.id);
   const userId = parseId(req.body.userId);
@@ -407,7 +406,7 @@ router.post('/punches/:id/assign', requireAdmin, asyncHandler(async (req, res) =
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/biometric/mappings — employees with their bioDeviceId
-router.get('/mappings', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/mappings', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const employees = await req.prisma.user.findMany({
     where: { isActive: true },
     select: { id: true, name: true, employeeId: true, department: true, bioDeviceId: true },
@@ -417,7 +416,7 @@ router.get('/mappings', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // PUT /api/biometric/mappings/:userId — set bioDeviceId for employee
-router.put('/mappings/:userId', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/mappings/:userId', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   const { bioDeviceId } = req.body;
 
@@ -430,7 +429,7 @@ router.put('/mappings/:userId', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/biometric/rematch — re-run matching on all unmatched punches
-router.post('/rematch', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/rematch', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const unmatched = await req.prisma.biometricPunch.findMany({
     where: { matchStatus: 'unmatched' },
     select: { id: true, enrollNumber: true },

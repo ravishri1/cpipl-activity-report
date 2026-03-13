@@ -1,0 +1,147 @@
+{
+  "timestamp": "2026-03-13T06:38:04.495Z",
+  "version": 2,
+  "stats": {
+    "filesScanned": 134,
+    "apiCallsFound": 383,
+    "routesFound": 466,
+    "issuesFound": 0
+  },
+  "missingRoutes": [],
+  "queryParamCalls": 0,
+  "warnings": [
+    {
+      "file": "components\\admin\\ConfirmationManager.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\HolidayManager.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\PolicyScorecard.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\ResumeExtractor.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\SalaryStructure.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\Settings.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\TeamManagement.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\TrainingManager.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\attendance\\TeamAttendance.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\employees\\EmployeeDirectory.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\employees\\EmployeeProfile.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\google\\GoogleImportModal.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\google\\GoogleSuggestions.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\leaderboard\\AppreciationFeed.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\leaderboard\\AppreciationModal.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\leaderboard\\BudgetIndicator.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\leave\\LeaveApplyModal.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\policies\\PolicyAcceptance.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\predictive\\PredictiveMaintenanceDashboard.jsx",
+      "type": "NO_LOADING_STATE",
+      "message": "Submit button has no disabled={loading} — user can double-click",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\reports\\ReportForm.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "components\\reports\\ReportHistory.jsx",
+      "type": "MANUAL_FETCH",
+      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
+      "severity": "LOW"
+    },
+    {
+      "file": "hooks\\useApi.js",
+      "type": "MISSING_ERROR_DISPLAY",
+      "message": "useApi() error is captured but never displayed in JSX",
+      "severity": "MEDIUM"
+    }
+  ],
+  "matchedCount": 383
+}
