@@ -43,12 +43,6 @@ const MyTickets = lazy(() => import('./components/helpdesk/MyTickets'));
 const WikiPage = lazy(() => import('./components/wiki/WikiPage'));
 const SuggestionBox = lazy(() => import('./components/suggestions/SuggestionBox'));
 const SuggestionManager = lazy(() => import('./components/admin/SuggestionManager'));
-const MyTrainingAssignments = lazy(() => import('./components/training/MyTrainingAssignments'));
-const TrainingLibrary = lazy(() => import('./components/training/TrainingLibrary'));
-const ContributeToModule = lazy(() => import('./components/training/ContributeToModule'));
-const TrainingManager = lazy(() => import('./components/training/TrainingManager'));
-const MyPointsDashboard = lazy(() => import('./components/training/MyPointsDashboard'));
-const TrainingLeaderboard = lazy(() => import('./components/training/Leaderboard'));
 const MyFiles = lazy(() => import('./components/files/MyFiles'));
 const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCard'));
 const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
@@ -169,11 +163,6 @@ function AppRoutes() {
                   <Route path="/my-repairs" element={<SeparatedRoute><AssetRepairTimeline /></SeparatedRoute>} />
                   <Route path="/surveys" element={<SeparatedRoute><MySurveys /></SeparatedRoute>} />
                   <Route path="/wiki" element={<SeparatedRoute><WikiPage /></SeparatedRoute>} />
-                  <Route path="/training/my-assignments" element={<SeparatedRoute><MyTrainingAssignments /></SeparatedRoute>} />
-                  <Route path="/training/library" element={<SeparatedRoute><TrainingLibrary /></SeparatedRoute>} />
-                  <Route path="/training/contribute" element={<SeparatedRoute><ContributeToModule /></SeparatedRoute>} />
-                  <Route path="/training/my-points" element={<SeparatedRoute><MyPointsDashboard /></SeparatedRoute>} />
-                  <Route path="/training/leaderboard" element={<SeparatedRoute><TrainingLeaderboard /></SeparatedRoute>} />
                   <Route path="/my-insurance" element={<SeparatedRoute><MyInsuranceCard /></SeparatedRoute>} />
 
                   {/* Combined pages (new navigation) */}
@@ -203,7 +192,6 @@ function AppRoutes() {
                   <Route path="/leaderboard" element={<SeparatedRoute><Leaderboard /></SeparatedRoute>} />
 
                   {/* Admin / Team Lead shared routes */}
-                  <Route path="/training/manage" element={<SeparatedRoute><AdminRoute><TrainingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/attendance" element={<SeparatedRoute><AdminRoute><TeamAttendance /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />
@@ -247,7 +235,6 @@ function AppRoutes() {
                   <Route path="/admin/ai-extract" element={<SeparatedRoute><AdminRoute><ResumeExtractor /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/surveys" element={<SeparatedRoute><AdminRoute><SurveyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/tickets" element={<SeparatedRoute><AdminRoute><TicketManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/admin/training" element={<SeparatedRoute><AdminRoute><TrainingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/suggestions" element={<SeparatedRoute><AdminRoute><SuggestionManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/error-reports" element={<SeparatedRoute><AdminRoute><ErrorReportsPanel /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/settings" element={<SeparatedRoute><AdminRoute><Settings /></AdminRoute></SeparatedRoute>} />

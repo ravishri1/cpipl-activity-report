@@ -144,7 +144,7 @@ module.exports = router;
 | `/otp` | otp.js | OTP verification |
 | `/wiki` | wiki.js | Knowledge base articles |
 | `/suggestions` | suggestions.js | Employee suggestions, automation insights (analyze-automation, automation-insights, automation-stats) |
-| `/training` | training.js | Training modules, exams, attempts |
+
 
 ## Frontend Component Template (ALWAYS follow this pattern)
 
@@ -250,7 +250,7 @@ const handleSave = async () => {
 
 3. **Render-level errors** — ErrorBoundary wraps the entire app (`client/src/components/shared/ErrorBoundary.jsx`), catches React render crashes, and reports to `/api/error-reports`.
 
-**Empty states:** When a dependency fetch returns empty data (e.g., no training modules exist for a contribution form), show a helpful message instead of a broken form.
+**Empty states:** When a dependency fetch returns empty data, show a helpful message instead of a broken form.
 
 ## Shared Hooks Reference
 
@@ -293,7 +293,7 @@ handleSubmit(async () => { await api.post('/api/path', form); });
 **Assets:** Asset, AssetHandover
 **Lifecycle:** OnboardingChecklist, Separation
 **Engagement:** Survey, SurveyResponse, Ticket, TicketComment
-**Misc:** GoogleToken, EmailActivity, ChatActivity, PointLog, ThumbsUp, Appreciation, AppreciationBudget, ShiftDefinition, OvertimeRequest, OtpVerification, WikiArticle, Suggestion, TrainingModule, TrainingExam, TrainingAttempt, Policy, PolicySection, PolicyAcceptance, PolicyVersion
+**Misc:** GoogleToken, EmailActivity, ChatActivity, PointLog, ThumbsUp, Appreciation, AppreciationBudget, ShiftDefinition, OvertimeRequest, OtpVerification, WikiArticle, Suggestion, Policy, PolicySection, PolicyAcceptance, PolicyVersion
 
 ## Mandatory Completion Checklist (NEVER skip)
 

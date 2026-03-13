@@ -1437,7 +1437,6 @@ const PERMISSION_SECTIONS = [
       { to: '/policies', label: 'Policies' },
       { to: '/surveys', label: 'Surveys' },
       { to: '/my-tickets', label: 'Support Tickets' },
-      { to: '/training', label: 'Training' },
       { to: '/suggestions', label: 'Suggestions' },
       { to: '/wiki', label: 'Knowledge Base' },
       { to: '/my-files', label: 'My Files' },
@@ -1448,7 +1447,6 @@ const PERMISSION_SECTIONS = [
     label: 'My Team (Team Leads)',
     items: [
       { to: '/my-team', label: 'My Team' },
-      { to: '/training/manage', label: 'Manage Training' },
     ],
   },
   {
@@ -1498,7 +1496,6 @@ const PERMISSION_SECTIONS = [
       { to: '/admin/policies', label: 'Policy Manager' },
       { to: '/admin/surveys', label: 'Surveys (Admin)' },
       { to: '/admin/tickets', label: 'Tickets (Admin)' },
-      { to: '/admin/training', label: 'Training (Admin)' },
       { to: '/admin/suggestions', label: 'Suggestions (Admin)' },
       { to: '/admin/reports', label: 'Reports' },
       { to: '/admin/error-reports', label: 'Error Reports' },

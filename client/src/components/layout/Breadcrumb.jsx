@@ -6,7 +6,6 @@ const PARENT_ROUTES = {
   'My Work':        '/activity-reports',
   'Organization':   '/admin/company-master',
   'Company Master': '/admin/company-master',
-  'Training':       '/training/my-assignments',
   'Team':           '/directory',
   'My Info':        '/payslips',
 };
@@ -46,13 +45,6 @@ const ROUTE_MAP = {
   '/announcements':                 { label: 'Announcements' },
   '/wiki':                          { label: 'Knowledge Base' },
   '/leaderboard':                   { label: 'Leaderboard' },
-
-  // ── Training ──────────────────────────────────────────────────
-  '/training/my-assignments':       { label: 'My Assignments',           parent: 'Training' },
-  '/training/library':              { label: 'Library',                  parent: 'Training' },
-  '/training/contribute':           { label: 'Contribute',               parent: 'Training' },
-  '/training/my-points':            { label: 'My Points',                parent: 'Training' },
-  '/training/leaderboard':          { label: 'Leaderboard',              parent: 'Training' },
 
   // ── Team ──────────────────────────────────────────────────────
   '/directory':                     { label: 'Employee Directory',        parent: 'Team' },
@@ -96,7 +88,6 @@ const ROUTE_MAP = {
   '/admin/letters':                 { label: 'Letters',                   parent: 'Organization' },
   '/admin/surveys':                 { label: 'Surveys',                   parent: 'Organization' },
   '/admin/tickets':                 { label: 'Tickets',                   parent: 'Organization' },
-  '/admin/training':                { label: 'Training',                  parent: 'Organization' },
   '/admin/suggestions':             { label: 'Suggestions',               parent: 'Organization' },
   '/admin/error-reports':           { label: 'Error Reports',             parent: 'Organization' },
   '/admin/settings':                { label: 'Settings',                  parent: 'Organization' },

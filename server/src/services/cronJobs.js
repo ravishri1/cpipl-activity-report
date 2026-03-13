@@ -12,7 +12,6 @@ const { runProbationEndCheck }     = require('./notifications/probationAlertServ
 const { runPassportExpiryCheck }   = require('./notifications/passportAlertService');
 const { runInsuranceExpiryCheck }  = require('./notifications/insuranceAlertService');
 const { runOnboardingOverdueCheck } = require('./notifications/onboardingOverdueService');
-const { runTrainingDeadlineCheck }  = require('./notifications/trainingDeadlineService');
 const { runSeparationAlert }        = require('./notifications/separationAlertService');
 const { runConfirmationAlerts }     = require('./notifications/confirmationAlertService');
 const { runComplianceAlerts }       = require('./notifications/complianceAlertService');
@@ -209,18 +208,6 @@ function initCronJobs(prisma) {
   });
   console.log('  -> Onboarding overdue check scheduled: 0 10 * * 1-6 (10:00 Mon-Sat)');
 
-  // Training assignment deadline check: 10:15 AM daily (Mon-Sat)
-  // Finds incomplete assignments past their dueDate for active employees
-  cron.schedule('15 10 * * 1-6', async () => {
-    console.log(`[CRON] Training deadline check triggered at ${new Date().toLocaleString()}`);
-    try {
-      const count = await runTrainingDeadlineCheck(prisma);
-      console.log(`[CRON] Training deadline check complete: ${count} overdue assignment(s) found.`);
-    } catch (err) {
-      console.error('[CRON] Training deadline check failed:', err);
-    }
-  });
-  console.log('  -> Training deadline check scheduled: 15 10 * * 1-6 (10:15 Mon-Sat)');
 
   // Separation last-working-day alert: 10:30 AM daily (Mon-Sat)
   // Alerts at 7, 3, and 1 day before an employee's lastWorkingDate

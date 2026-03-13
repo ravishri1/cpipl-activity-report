@@ -32,11 +32,9 @@ import {
   ClipboardList,
   LifeBuoy,
   Banknote,
-  GraduationCap,
   MessageSquare,
   BookOpen,
   UsersRound,
-  Crown,
   TrendingUp,
   Bug,
   ShoppingCart,
@@ -196,10 +194,6 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: TrendingUp,
       items: [
         { to: '/my-performance',           label: 'My Performance',       icon: Target },
-        { to: '/training/my-assignments',  label: 'My Training',          icon: GraduationCap },
-        { to: '/training/library',         label: 'Training Library',     icon: BookOpen },
-        { to: '/training/contribute',      label: 'Contribute Training',  icon: Brain },
-        { to: '/training/leaderboard',     label: 'Training Leaderboard', icon: Crown },
       ],
     },
     {
@@ -223,7 +217,6 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: Boxes,
       items: [
         { to: '/my-workspace',       label: 'My Assets', icon: Package },
-        { to: '/training/my-points', label: 'My Points', icon: Trophy },
         { to: '/my-files',           label: 'My Files',  icon: FolderOpen },
       ],
     },
@@ -236,7 +229,6 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const myTeamItems = [
     { to: '/my-team',                label: 'Team Overview',    icon: UsersRound },
-    { to: '/training/manage',        label: 'Team Training',    icon: GraduationCap },
     { to: '/admin/attendance',       label: 'Team Attendance',  icon: CheckSquare },
     { to: '/admin/leave-requests',   label: 'Leave Requests',   icon: ClipboardCheck },
     { to: '/admin/expense-claims',   label: 'Expense Claims',   icon: Receipt },
@@ -288,7 +280,6 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
     { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
     { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
-    { to: '/admin/training',                label: 'Training Manager',        icon: GraduationCap },
     { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
     { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },
     { to: '/admin/settings',                label: 'Settings',                icon: Settings },

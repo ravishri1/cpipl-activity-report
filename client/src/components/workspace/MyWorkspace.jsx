@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { Package, Star, FolderOpen } from 'lucide-react';
+import { Package, FolderOpen } from 'lucide-react';
 import MyAssets from '../assets/MyAssets';
-import MyPointsDashboard from '../training/MyPointsDashboard';
 import MyFiles from '../files/MyFiles';
 
 const TABS = [
   { key: 'assets', label: 'My Assets', icon: Package },
-  { key: 'points', label: 'My Points', icon: Star },
   { key: 'files', label: 'My Files', icon: FolderOpen },
 ];
 
@@ -34,7 +32,6 @@ export default function MyWorkspace() {
         </div>
       </div>
       {activeTab === 'assets' && <MyAssets />}
-      {activeTab === 'points' && <MyPointsDashboard />}
       {activeTab === 'files' && <MyFiles />}
     </div>
   );
