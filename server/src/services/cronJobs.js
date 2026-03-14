@@ -18,6 +18,8 @@ const { runComplianceAlerts }       = require('./notifications/complianceAlertSe
 const { runRenewalAlerts }          = require('./notifications/renewalAlertService');
 const { scanAllMailForRenewals }    = require('./gmailRenewalScanner');
 
+const { syncAllDevices } = require('./biometric/biometricSyncService');
+
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
   const reminderMinute = process.env.REMINDER_TIME_MINUTE || 0;
@@ -296,6 +298,22 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> EmailHandledThread cleanup scheduled: 0 0 * * * (midnight IST daily)');
+
+  // ─── Biometric Sync: every 5 minutes during work hours (7 AM - 10 PM, Mon-Sat IST) ───
+  // Fetches punch data from eSSL devices using credentials stored in BiometricDevice DB model.
+  // Only works when server can reach the device (local dev server on same LAN, or device on VPN/public IP).
+  // On Vercel (can't reach LAN device), each device sync fails gracefully and continues to next.
+  cron.schedule('*/5 7-22 * * 1-6', async () => {
+    try {
+      const result = await syncAllDevices(prisma);
+      if (result.synced > 0 || result.failed > 0) {
+        console.log(`[CRON] Biometric sync: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed`);
+      }
+    } catch (err) {
+      console.error('[CRON] Biometric sync failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Biometric sync scheduled: */5 7-22 * * 1-6 (every 5 min, 7 AM-10 PM IST, Mon-Sat)');
 
   // ─── Automation Analysis: Sunday 11:00 PM IST — weekly analysis of recurring tasks ───
   const { runAutomationAnalysis } = require('./automationAnalyzer');
