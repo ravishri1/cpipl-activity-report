@@ -8,6 +8,7 @@ import {
   Clock,
   Users,
   Calendar,
+  Search,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export default function TeamAttendance() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [calendarView, setCalendarView] = useState(null); // { userId, name } or null
+  const [filterName, setFilterName] = useState('');
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -44,9 +46,17 @@ export default function TeamAttendance() {
     setDate(d.toISOString().split('T')[0]);
   };
 
-  const present = data.filter((d) => d.status === 'present' || d.status === 'half_day');
-  const absent = data.filter((d) => d.status === 'absent');
-  const onLeave = data.filter((d) => d.status === 'on_leave');
+  // Filter employees by name/employeeId search
+  const filtered = filterName
+    ? data.filter(d =>
+        d.name?.toLowerCase().includes(filterName.toLowerCase()) ||
+        d.employeeId?.toLowerCase().includes(filterName.toLowerCase())
+      )
+    : data;
+
+  const present = filtered.filter((d) => d.status === 'present' || d.status === 'half_day');
+  const absent = filtered.filter((d) => d.status === 'absent');
+  const onLeave = filtered.filter((d) => d.status === 'on_leave');
 
   // Calendar view for a selected employee
   if (calendarView) {
@@ -66,20 +76,32 @@ export default function TeamAttendance() {
         Team Attendance
       </h1>
 
-      {/* Date navigation */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => changeDate(-1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-          <ChevronLeft className="w-4 h-4 text-slate-500" />
-        </button>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-        />
-        <button onClick={() => changeDate(1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-          <ChevronRight className="w-4 h-4 text-slate-500" />
-        </button>
+      {/* Date navigation + Employee filter */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => changeDate(-1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+            <ChevronLeft className="w-4 h-4 text-slate-500" />
+          </button>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+          />
+          <button onClick={() => changeDate(1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search employee..."
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white w-56 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+          />
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -89,7 +111,7 @@ export default function TeamAttendance() {
             <Users className="w-4 h-4 text-slate-400" />
             <span className="text-xs font-medium text-slate-500">Total</span>
           </div>
-          <p className="text-2xl font-bold text-slate-800">{data.length}</p>
+          <p className="text-2xl font-bold text-slate-800">{filtered.length}</p>
         </div>
         <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -136,7 +158,7 @@ export default function TeamAttendance() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.length > 0 ? data.map((emp) => (
+                {filtered.length > 0 ? filtered.map((emp) => (
                   <tr key={emp.userId || emp.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5">
                       <div>
