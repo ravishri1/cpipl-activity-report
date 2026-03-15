@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd client && npm install --include=dev --legacy-peer-deps && npx vite build",
+  "buildCommand": "cd client && npm install --include=dev --legacy-peer-deps && NODE_OPTIONS=--max-old-space-size=4096 npx vite build",
   "outputDirectory": "client/dist",
   "installCommand": "cd server && npm install && npx prisma generate && npx prisma db push --skip-generate --accept-data-loss",
   "headers": [
