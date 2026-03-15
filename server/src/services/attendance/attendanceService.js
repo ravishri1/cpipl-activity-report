@@ -213,6 +213,116 @@ async function getTeamAttendance(date, department, prisma) {
 }
 
 /**
+ * Get team attendance aggregated over a date range (admin/team_lead)
+ * @param {string} startDate - "YYYY-MM-DD"
+ * @param {string} endDate - "YYYY-MM-DD"
+ * @param {string|null} department
+ */
+async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
+  const userWhere = { isActive: true };
+  if (department) userWhere.department = department;
+
+  // Count working days in range (exclude weekends)
+  let workingDays = 0;
+  let d = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) workingDays++;
+    d.setDate(d.getDate() + 1);
+  }
+
+  // Fetch holidays in range
+  const holidays = await prisma.holiday.findMany({
+    where: { date: { gte: startDate, lte: endDate } },
+  });
+  const holidaySet = new Set(holidays.map(h => h.date));
+
+  const [users, attendances, leaves] = await Promise.all([
+    prisma.user.findMany({
+      where: userWhere,
+      select: { id: true, name: true, department: true, employeeId: true, profilePhotoUrl: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.attendance.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+      select: { userId: true, date: true, status: true, workHours: true, checkIn: true, checkOut: true },
+    }),
+    prisma.leaveRequest.findMany({
+      where: {
+        status: 'approved',
+        startDate: { lte: endDate },
+        endDate: { gte: startDate },
+      },
+      select: { userId: true, startDate: true, endDate: true, days: true },
+    }),
+  ]);
+
+  // Build attendance map: userId → array of records
+  const attByUser = {};
+  for (const a of attendances) {
+    if (!attByUser[a.userId]) attByUser[a.userId] = [];
+    attByUser[a.userId].push(a);
+  }
+
+  // Build leave days per user
+  const leaveByUser = {};
+  for (const lr of leaves) {
+    if (!leaveByUser[lr.userId]) leaveByUser[lr.userId] = 0;
+    // Count leave days that fall within the range
+    let ld = new Date(Math.max(new Date(lr.startDate + 'T00:00:00'), new Date(startDate + 'T00:00:00')));
+    const le = new Date(Math.min(new Date(lr.endDate + 'T00:00:00'), new Date(endDate + 'T00:00:00')));
+    while (ld <= le) {
+      const dow = ld.getDay();
+      if (dow !== 0 && dow !== 6) leaveByUser[lr.userId]++;
+      ld.setDate(ld.getDate() + 1);
+    }
+  }
+
+  const employees = users.map(u => {
+    const records = attByUser[u.id] || [];
+    const presentDays = records.filter(r => r.status === 'present').length;
+    const halfDays = records.filter(r => r.status === 'half_day').length;
+    const absentInRecords = records.filter(r => r.status === 'absent').length;
+    const totalHours = records.reduce((s, r) => s + (r.workHours || 0), 0);
+    const leaveDays = leaveByUser[u.id] || 0;
+    const holidayDays = holidays.length; // same for all employees
+    // Absent = working days - present - half - leave - holiday (that fall on weekdays)
+    const holidayWeekdays = holidays.filter(h => {
+      const hd = new Date(h.date + 'T00:00:00').getDay();
+      return hd !== 0 && hd !== 6;
+    }).length;
+    const effectiveWorkDays = workingDays - holidayWeekdays;
+    const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays - leaveDays);
+    const avgHours = presentDays + halfDays > 0 ? totalHours / (presentDays + halfDays) : 0;
+
+    return {
+      userId: u.id,
+      name: u.name,
+      department: u.department,
+      employeeId: u.employeeId,
+      profilePhotoUrl: u.profilePhotoUrl,
+      presentDays,
+      halfDays,
+      absentDays,
+      leaveDays,
+      totalHours: Math.round(totalHours * 100) / 100,
+      avgHours: Math.round(avgHours * 100) / 100,
+    };
+  });
+
+  const summary = {
+    total: employees.length,
+    workingDays: workingDays - holidays.filter(h => { const hd = new Date(h.date + 'T00:00:00').getDay(); return hd !== 0 && hd !== 6; }).length,
+    holidays: holidays.length,
+    startDate,
+    endDate,
+  };
+
+  return { employees, summary };
+}
+
+/**
  * Get employee calendar view — monthly grid with attendance, holidays, leaves, biometric punches
  * @param {number} userId
  * @param {string} month - "YYYY-MM" format
@@ -391,5 +501,6 @@ module.exports = {
   getTodayAttendance,
   getMonthlyAttendance,
   getTeamAttendance,
+  getTeamAttendanceRange,
   getEmployeeCalendar,
 };

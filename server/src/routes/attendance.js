@@ -8,6 +8,7 @@ const {
   getTodayAttendance,
   getMonthlyAttendance,
   getTeamAttendance,
+  getTeamAttendanceRange,
   getEmployeeCalendar,
 } = require('../services/attendance/attendanceService');
 
@@ -46,6 +47,18 @@ router.get('/team', authenticate, requireAdmin, asyncHandler(async (req, res) =>
   const date = req.query.date || new Date().toISOString().split('T')[0];
   const department = req.user.role === 'team_lead' ? req.user.department : null;
   const data = await getTeamAttendance(date, department, req.prisma);
+  res.json(data);
+}));
+
+// GET /api/attendance/team-range?startDate=X&endDate=Y — Team attendance over a date range
+router.get('/team-range', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) throw badRequest('startDate and endDate are required');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    throw badRequest('Dates must be in YYYY-MM-DD format');
+  }
+  const department = req.user.role === 'team_lead' ? req.user.department : null;
+  const data = await getTeamAttendanceRange(startDate, endDate, department, req.prisma);
   res.json(data);
 }));
 

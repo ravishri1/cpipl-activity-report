@@ -11,24 +11,104 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 
+// Period presets
+const PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'this_week', label: 'This Week' },
+  { key: 'this_month', label: 'This Month' },
+  { key: 'last_month', label: 'Last Month' },
+  { key: 'last_30', label: 'Last 30 Days' },
+  { key: 'last_90', label: 'Last 90 Days' },
+  { key: 'this_quarter', label: 'This Quarter' },
+  { key: 'this_year', label: 'This Year' },
+  { key: 'custom', label: 'Custom Range' },
+];
+
+function getPeriodDates(key) {
+  const today = new Date();
+  const fmt = (d) => d.toISOString().split('T')[0];
+  const todayStr = fmt(today);
+
+  switch (key) {
+    case 'today':
+      return { startDate: todayStr, endDate: todayStr, isRange: false };
+    case 'yesterday': {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      return { startDate: fmt(y), endDate: fmt(y), isRange: false };
+    }
+    case 'this_week': {
+      const day = today.getDay(); // 0=Sun
+      const mon = new Date(today); mon.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+      return { startDate: fmt(mon), endDate: todayStr, isRange: true };
+    }
+    case 'this_month': {
+      const s = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+    }
+    case 'last_month': {
+      const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const e = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { startDate: fmt(s), endDate: fmt(e), isRange: true };
+    }
+    case 'last_30': {
+      const s = new Date(today); s.setDate(today.getDate() - 29);
+      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+    }
+    case 'last_90': {
+      const s = new Date(today); s.setDate(today.getDate() - 89);
+      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+    }
+    case 'this_quarter': {
+      const qMonth = Math.floor(today.getMonth() / 3) * 3;
+      const s = new Date(today.getFullYear(), qMonth, 1);
+      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+    }
+    case 'this_year': {
+      const s = new Date(today.getFullYear(), 0, 1);
+      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+    }
+    default:
+      return { startDate: todayStr, endDate: todayStr, isRange: false };
+  }
+}
+
 export default function TeamAttendance() {
+  const [period, setPeriod] = useState('today');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [data, setData] = useState([]);
-  const [summary, setSummary] = useState({ total: 0, present: 0, absent: 0, onLeave: 0 });
+  const [rangeData, setRangeData] = useState([]);
+  const [summary, setSummary] = useState({});
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
-  const [calendarView, setCalendarView] = useState(null); // { userId, name } or null
+  const [calendarView, setCalendarView] = useState(null);
   const [filterName, setFilterName] = useState('');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
 
+  const isRange = period === 'custom'
+    ? (customStart && customEnd && customStart !== customEnd)
+    : getPeriodDates(period).isRange;
+
+  // Single-day fetch
   useEffect(() => {
+    if (isRange) return;
     const fetchTeam = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/attendance/team?date=${date}`);
-        // Backend returns { employees: [...], summary: {...} }
+        let fetchDate = date;
+        if (period !== 'custom') {
+          const pd = getPeriodDates(period);
+          fetchDate = pd.startDate;
+          setDate(fetchDate);
+        }
+        const res = await api.get(`/attendance/team?date=${fetchDate}`);
         const result = res.data;
         setData(Array.isArray(result) ? result : (result.employees || []));
+        setRangeData([]);
         if (result.summary) setSummary(result.summary);
       } catch (err) {
         console.error('Team attendance error:', err);
@@ -38,27 +118,77 @@ export default function TeamAttendance() {
       }
     };
     fetchTeam();
-  }, [date]);
+  }, [date, period, isRange]);
+
+  // Range fetch
+  useEffect(() => {
+    if (!isRange) return;
+    const fetchRange = async () => {
+      setLoading(true);
+      try {
+        let startDate, endDate;
+        if (period === 'custom') {
+          startDate = customStart;
+          endDate = customEnd;
+        } else {
+          const pd = getPeriodDates(period);
+          startDate = pd.startDate;
+          endDate = pd.endDate;
+        }
+        if (!startDate || !endDate) { setLoading(false); return; }
+        const res = await api.get(`/attendance/team-range?startDate=${startDate}&endDate=${endDate}`);
+        setRangeData(res.data.employees || []);
+        setData([]);
+        setSummary(res.data.summary || {});
+      } catch (err) {
+        console.error('Team attendance range error:', err);
+        setRangeData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRange();
+  }, [period, customStart, customEnd, isRange]);
 
   const changeDate = (delta) => {
     const d = new Date(date);
     d.setDate(d.getDate() + delta);
     setDate(d.toISOString().split('T')[0]);
+    setPeriod(delta === 0 ? 'today' : 'custom');
   };
 
-  // Filter employees by name/employeeId search
+  const handlePeriodSelect = (key) => {
+    setPeriod(key);
+    setShowPeriodMenu(false);
+    if (key !== 'custom') {
+      const pd = getPeriodDates(key);
+      if (!pd.isRange) setDate(pd.startDate);
+    }
+  };
+
+  const currentPeriodLabel = PERIODS.find(p => p.key === period)?.label || 'Today';
+
+  // Determine which data set to filter
+  const displayData = isRange ? rangeData : data;
   const filtered = filterName
-    ? data.filter(d =>
+    ? displayData.filter(d =>
         d.name?.toLowerCase().includes(filterName.toLowerCase()) ||
         d.employeeId?.toLowerCase().includes(filterName.toLowerCase())
       )
-    : data;
+    : displayData;
 
-  const present = filtered.filter((d) => d.status === 'present' || d.status === 'half_day');
-  const absent = filtered.filter((d) => d.status === 'absent');
-  const onLeave = filtered.filter((d) => d.status === 'on_leave');
+  // Summary counts differ for single-day vs range
+  const presentCount = isRange
+    ? filtered.reduce((s, d) => s + (d.presentDays || 0), 0)
+    : filtered.filter(d => d.status === 'present' || d.status === 'half_day').length;
+  const absentCount = isRange
+    ? filtered.reduce((s, d) => s + (d.absentDays || 0), 0)
+    : filtered.filter(d => d.status === 'absent').length;
+  const leaveCount = isRange
+    ? filtered.reduce((s, d) => s + (d.leaveDays || 0), 0)
+    : filtered.filter(d => d.status === 'on_leave').length;
 
-  // Calendar view for a selected employee
+  // Calendar view
   if (calendarView) {
     return (
       <EmployeeCalendarView
@@ -69,6 +199,14 @@ export default function TeamAttendance() {
     );
   }
 
+  // Get display date range text
+  const getDateRangeText = () => {
+    if (!isRange) return date;
+    if (period === 'custom') return `${customStart} to ${customEnd}`;
+    const pd = getPeriodDates(period);
+    return `${pd.startDate} to ${pd.endDate}`;
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -76,32 +214,91 @@ export default function TeamAttendance() {
         Team Attendance
       </h1>
 
-      {/* Date navigation + Employee filter */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div className="flex items-center gap-2">
-          <button onClick={() => changeDate(-1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-            <ChevronLeft className="w-4 h-4 text-slate-500" />
-          </button>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
-          />
-          <button onClick={() => changeDate(1)} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
+      {/* Period selector + Date navigation + Employee filter */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Period dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {currentPeriodLabel}
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+            {showPeriodMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowPeriodMenu(false)} />
+                <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 w-44">
+                  {PERIODS.map(p => (
+                    <button
+                      key={p.key}
+                      onClick={() => handlePeriodSelect(p.key)}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 ${period === p.key ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Single-day navigation (only for single-day periods) */}
+          {!isRange && period !== 'custom' && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0]); setPeriod('custom'); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+                <ChevronLeft className="w-4 h-4 text-slate-500" />
+              </button>
+              <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPeriod('custom'); }} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d.toISOString().split('T')[0]); setPeriod('custom'); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+                <ChevronRight className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+          )}
+
+          {/* Custom range date pickers */}
+          {period === 'custom' && isRange && (
+            <div className="flex items-center gap-2">
+              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+              <span className="text-sm text-slate-400">to</span>
+              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+            </div>
+          )}
+
+          {/* Single date for custom single-day */}
+          {period === 'custom' && !isRange && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0]); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+                <ChevronLeft className="w-4 h-4 text-slate-500" />
+              </button>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d.toISOString().split('T')[0]); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+                <ChevronRight className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+          )}
+
+          {/* Employee search */}
+          <div className="relative ml-auto">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search employee..."
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white w-56 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+            />
+          </div>
         </div>
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search employee..."
-            value={filterName}
-            onChange={(e) => setFilterName(e.target.value)}
-            className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white w-56 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-          />
-        </div>
+
+        {/* Range indicator */}
+        {isRange && (
+          <p className="text-xs text-slate-500">
+            Showing: <span className="font-medium text-slate-700">{getDateRangeText()}</span>
+            {summary.workingDays != null && <> &middot; {summary.workingDays} working days</>}
+          </p>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -109,30 +306,30 @@ export default function TeamAttendance() {
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-medium text-slate-500">Total</span>
+            <span className="text-xs font-medium text-slate-500">{isRange ? 'Employees' : 'Total'}</span>
           </div>
           <p className="text-2xl font-bold text-slate-800">{filtered.length}</p>
         </div>
         <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span className="text-xs font-medium text-emerald-600">Present</span>
+            <span className="text-xs font-medium text-emerald-600">{isRange ? 'Present Days' : 'Present'}</span>
           </div>
-          <p className="text-2xl font-bold text-emerald-700">{present.length}</p>
+          <p className="text-2xl font-bold text-emerald-700">{presentCount}</p>
         </div>
         <div className="bg-red-50 rounded-xl border border-red-100 p-4">
           <div className="flex items-center gap-2 mb-1">
             <XCircle className="w-4 h-4 text-red-500" />
-            <span className="text-xs font-medium text-red-600">Absent</span>
+            <span className="text-xs font-medium text-red-600">{isRange ? 'Absent Days' : 'Absent'}</span>
           </div>
-          <p className="text-2xl font-bold text-red-700">{absent.length}</p>
+          <p className="text-2xl font-bold text-red-700">{absentCount}</p>
         </div>
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="w-4 h-4 text-blue-500" />
-            <span className="text-xs font-medium text-blue-600">On Leave</span>
+            <span className="text-xs font-medium text-blue-600">{isRange ? 'Leave Days' : 'On Leave'}</span>
           </div>
-          <p className="text-2xl font-bold text-blue-700">{onLeave.length}</p>
+          <p className="text-2xl font-bold text-blue-700">{leaveCount}</p>
         </div>
       </div>
 
@@ -144,78 +341,152 @@ export default function TeamAttendance() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-left">
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Employee</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Department</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Shift</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Status</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600">Hours</th>
-                  <th className="px-4 py-2.5 font-medium text-slate-600 w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.length > 0 ? filtered.map((emp) => (
-                  <tr key={emp.userId || emp.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5">
-                      <div>
-                        <p className="font-medium text-slate-800">{emp.name}</p>
-                        <p className="text-xs text-slate-400">{emp.employeeId}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-600">{emp.department}</td>
-                    <td className="px-4 py-2.5">
-                      {emp.shift ? (
-                        <div className="flex flex-col gap-0.5">
-                          <p className="font-medium text-slate-700 text-xs">{emp.shift.name}</p>
-                          <p className="text-xs text-slate-500">{emp.shift.startTime} - {emp.shift.endTime}</p>
+            {isRange ? (
+              /* Range view — aggregated columns */
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left">
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Employee</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Department</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-center">Present</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-center">Half Day</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-center">Absent</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-center">Leave</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-right">Total Hrs</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 text-right">Avg Hrs</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.length > 0 ? filtered.map((emp) => (
+                    <tr key={emp.userId} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        <div>
+                          <p className="font-medium text-slate-800">{emp.name}</p>
+                          <p className="text-xs text-slate-400">{emp.employeeId}</p>
                         </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {emp.checkIn ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                          <CheckCircle2 className="w-3 h-3" /> Present
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">{emp.department}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-emerald-100 text-emerald-700 text-xs font-bold">
+                          {emp.presentDays}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                          <XCircle className="w-3 h-3" /> Not Checked In
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-amber-100 text-amber-700 text-xs font-bold">
+                          {emp.halfDays || 0}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-600">
-                      {emp.checkIn ? new Date(emp.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-600">
-                      {emp.checkOut ? new Date(emp.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 font-medium text-slate-700">
-                      {emp.workHours ? `${emp.workHours.toFixed(1)}h` : '—'}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <button
-                        onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                        title="View monthly calendar"
-                      >
-                        <Calendar className="w-4 h-4 text-blue-500" />
-                      </button>
-                    </td>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-red-100 text-red-700 text-xs font-bold">
+                          {emp.absentDays}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-6 rounded bg-blue-100 text-blue-700 text-xs font-bold">
+                          {emp.leaveDays}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium text-slate-700">
+                        {emp.totalHours > 0 ? `${emp.totalHours.toFixed(1)}h` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium text-slate-700">
+                        {emp.avgHours > 0 ? `${emp.avgHours.toFixed(1)}h` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                          title="View monthly calendar"
+                        >
+                          <Calendar className="w-4 h-4 text-blue-500" />
+                        </button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                        No attendance data for this period.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              /* Single-day view — existing columns */
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-left">
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Employee</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Department</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Shift</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Status</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Hours</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600 w-10"></th>
                   </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
-                      No attendance data for this date.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.length > 0 ? filtered.map((emp) => (
+                    <tr key={emp.userId || emp.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        <div>
+                          <p className="font-medium text-slate-800">{emp.name}</p>
+                          <p className="text-xs text-slate-400">{emp.employeeId}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">{emp.department}</td>
+                      <td className="px-4 py-2.5">
+                        {emp.shift ? (
+                          <div className="flex flex-col gap-0.5">
+                            <p className="font-medium text-slate-700 text-xs">{emp.shift.name}</p>
+                            <p className="text-xs text-slate-500">{emp.shift.startTime} - {emp.shift.endTime}</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {emp.checkIn ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 className="w-3 h-3" /> Present
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                            <XCircle className="w-3 h-3" /> Not Checked In
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        {emp.checkIn ? new Date(emp.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        {emp.checkOut ? new Date(emp.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 font-medium text-slate-700">
+                        {emp.workHours ? `${emp.workHours.toFixed(1)}h` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button
+                          onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                          title="View monthly calendar"
+                        >
+                          <Calendar className="w-4 h-4 text-blue-500" />
+                        </button>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                        No attendance data for this date.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </div>
