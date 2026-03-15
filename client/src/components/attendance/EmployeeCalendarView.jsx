@@ -7,28 +7,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  LogIn,
-  LogOut,
   Calendar,
   Fingerprint,
   MapPin,
-  Shield,
-  Activity,
-  FileText,
-  AlertCircle,
 } from 'lucide-react';
 
+// Light pastel backgrounds like greytHR — subtle, not bold
 const statusConfig = {
-  present:  { bg: 'bg-emerald-500', text: 'text-white',       label: 'P',  full: 'Present',  dotColor: 'bg-emerald-500' },
-  absent:   { bg: 'bg-red-500',     text: 'text-white',       label: 'A',  full: 'Absent',   dotColor: 'bg-red-500' },
-  half_day: { bg: 'bg-amber-500',   text: 'text-white',       label: 'HD', full: 'Half Day', dotColor: 'bg-amber-500' },
-  on_leave: { bg: 'bg-blue-500',    text: 'text-white',       label: 'L',  full: 'On Leave', dotColor: 'bg-blue-500' },
-  holiday:  { bg: 'bg-purple-500',  text: 'text-white',       label: 'H',  full: 'Holiday',  dotColor: 'bg-purple-500' },
-  weekend:  { bg: 'bg-slate-300',   text: 'text-white',       label: 'W',  full: 'Weekend',  dotColor: 'bg-slate-400' },
-  future:   { bg: 'bg-slate-100',   text: 'text-slate-400',   label: '-',  full: '',          dotColor: 'bg-slate-200' },
+  present:  { bg: 'bg-white',       text: 'text-emerald-600', label: 'P',  full: 'Present' },
+  absent:   { bg: 'bg-red-50',      text: 'text-red-500',     label: 'A',  full: 'Absent' },
+  half_day: { bg: 'bg-amber-50',    text: 'text-amber-600',   label: 'HD', full: 'Half Day' },
+  on_leave: { bg: 'bg-blue-50',     text: 'text-blue-500',    label: 'L',  full: 'On Leave' },
+  holiday:  { bg: 'bg-orange-50',   text: 'text-orange-500',  label: 'H',  full: 'Holiday' },
+  weekend:  { bg: 'bg-slate-50',    text: 'text-slate-400',   label: 'O',  full: 'Off' },
+  future:   { bg: 'bg-white',       text: 'text-slate-300',   label: '',   full: '' },
 };
 
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
@@ -68,35 +63,37 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
 
   const selectedDay = data?.days?.find(d => d.date === selectedDate);
 
-  // Build calendar grid with Monday start
+  // Build calendar grid with Sunday start (like greytHR)
   const buildGrid = () => {
     if (!data?.days) return [];
     const firstDay = data.days[0];
     if (!firstDay) return [];
-    const firstDow = (firstDay.dayOfWeek + 6) % 7; // 0=Mon, 6=Sun
+    const firstDow = firstDay.dayOfWeek; // 0=Sun already
     const cells = [];
     for (let i = 0; i < firstDow; i++) cells.push(null);
     for (const day of data.days) cells.push(day);
+    // Pad end to complete last row
+    while (cells.length % 7 !== 0) cells.push(null);
     return cells;
   };
 
   const grid = buildGrid();
 
   const formatTime = (dt) => {
-    if (!dt) return '—';
-    return new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    if (!dt) return '-';
+    return new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   const formatPunchTime = (timeStr) => {
-    if (!timeStr) return '—';
+    if (!timeStr) return '-';
     const parts = timeStr.split(' ');
     if (parts.length < 2) return timeStr;
     const [h, m] = parts[1].split(':');
-    const hour = parseInt(h);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${h12}:${m} ${ampm}`;
+    return `${h}:${m}`;
   };
+
+  const today = new Date().toISOString().split('T')[0];
+  const shiftCode = data?.shift?.name ? getShiftCode(data.shift.name) : '';
 
   if (loading) return <LoadingSpinner />;
 
@@ -104,359 +101,360 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white"
-          title="Back to team view"
-        >
+        <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white" title="Back to team view">
           <ArrowLeft className="w-4 h-4 text-slate-600" />
         </button>
         <div className="flex-1">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600" />
-            {employeeName}
-          </h2>
-          <p className="text-xs text-slate-500">Attendance Calendar</p>
+          <h2 className="text-lg font-bold text-slate-800">Attendance Info</h2>
+          <p className="text-sm text-slate-500">{employeeName}</p>
         </div>
       </div>
 
       {error && <AlertMessage type="error" message={error} />}
 
       {data && (
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Left: Calendar Grid — compact like greytHR */}
-          <div className="lg:w-[420px] w-full flex-shrink-0">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-              {/* Month navigation */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-                <button onClick={() => changeMonth(-1)} className="p-1 rounded-lg hover:bg-slate-100">
-                  <ChevronLeft className="w-4 h-4 text-slate-500" />
-                </button>
-                <h3 className="text-sm font-semibold text-slate-700">
-                  {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-                </h3>
-                <button onClick={() => changeMonth(1)} className="p-1 rounded-lg hover:bg-slate-100">
-                  <ChevronRight className="w-4 h-4 text-slate-500" />
-                </button>
-              </div>
-
-              {/* Day headers */}
-              <div className="grid grid-cols-7 px-3 pt-2">
-                {DAY_NAMES.map(d => (
-                  <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1 uppercase">
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar grid — compact cells */}
-              <div className="grid grid-cols-7 gap-[3px] px-3 pb-2">
-                {grid.map((cell, idx) => {
-                  if (!cell) return <div key={`empty-${idx}`} className="h-[42px]" />;
-                  const cfg = statusConfig[cell.status] || statusConfig.future;
-                  const isSelected = cell.date === selectedDate;
-                  const isToday = cell.date === new Date().toISOString().split('T')[0];
-
-                  return (
-                    <button
-                      key={cell.date}
-                      onClick={() => setSelectedDate(cell.date)}
-                      className={`
-                        flex flex-col items-center justify-center h-[42px] rounded-md transition-all cursor-pointer
-                        ${isSelected ? 'bg-blue-50 ring-2 ring-blue-500' : 'hover:bg-slate-50'}
-                        ${isToday && !isSelected ? 'ring-1 ring-blue-400' : ''}
-                      `}
-                    >
-                      <span className={`text-[11px] leading-none ${isToday ? 'font-bold text-blue-600' : 'font-medium text-slate-600'}`}>
-                        {cell.day}
-                      </span>
-                      <span className={`mt-0.5 w-5 h-[14px] rounded-sm flex items-center justify-center text-[9px] font-bold ${cfg.bg} ${cfg.text}`}>
-                        {cell.statusLabel}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Legend */}
-              <div className="flex flex-wrap gap-x-3 gap-y-1 px-3 py-2 border-t border-slate-100 text-[10px]">
-                {Object.entries(statusConfig).filter(([k]) => k !== 'future').map(([key, cfg]) => (
-                  <span key={key} className="inline-flex items-center gap-1">
-                    <span className={`w-2.5 h-2.5 rounded-sm ${cfg.bg}`} />
-                    <span className="text-slate-500">{cfg.full}</span>
-                  </span>
-                ))}
-              </div>
-
-              {/* Summary stats */}
-              {data.summary && (
-                <div className="grid grid-cols-3 gap-2 px-3 py-2.5 border-t border-slate-100">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-emerald-600">{data.summary.present}</p>
-                    <p className="text-[10px] text-slate-500">Present</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-red-600">{data.summary.absent}</p>
-                    <p className="text-[10px] text-slate-500">Absent</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-blue-600">{data.summary.onLeave}</p>
-                    <p className="text-[10px] text-slate-500">Leave</p>
-                  </div>
-                  {data.summary.halfDay > 0 && (
-                    <div className="text-center">
-                      <p className="text-lg font-bold text-amber-600">{data.summary.halfDay}</p>
-                      <p className="text-[10px] text-slate-500">Half Day</p>
-                    </div>
-                  )}
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-purple-600">{data.summary.holiday}</p>
-                    <p className="text-[10px] text-slate-500">Holidays</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-indigo-600">{data.summary.totalWorkHours?.toFixed(0) || 0}h</p>
-                    <p className="text-[10px] text-slate-500">Total Hrs</p>
-                  </div>
-                </div>
-              )}
-            </div>
+        <>
+          {/* Insight cards — like greytHR top row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <InsightCard label="AVG. WORK HRS" value={data.summary.totalWorkHours > 0 && data.summary.present > 0 ? formatHrsMin(data.summary.totalWorkHours / data.summary.present) : '-'} />
+            <InsightCard label="PRESENT DAYS" value={data.summary.present} />
+            <InsightCard label="ABSENT DAYS" value={data.summary.absent} />
+            <InsightCard label="LEAVES" value={data.summary.onLeave} />
           </div>
 
-          {/* Right: Day Detail Panel — wider, with 5 sections like greytHR */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm sticky top-4">
-              {selectedDay ? (
-                <div className="divide-y divide-slate-100">
-                  {/* Day header */}
-                  <div className="px-5 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">
-                        {new Date(selectedDay.date + 'T00:00:00').toLocaleDateString('en-IN', {
-                          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                        })}
-                      </p>
-                    </div>
-                    {(() => {
-                      const cfg = statusConfig[selectedDay.status] || statusConfig.future;
-                      return (
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${cfg.bg} ${cfg.text}`}>
-                          {cfg.label} — {cfg.full}
-                        </span>
-                      );
-                    })()}
-                  </div>
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Left: Calendar Grid */}
+            <div className="lg:flex-[3] min-w-0">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+                {/* Month navigation — Prev / Month Year / Next */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <button onClick={() => changeMonth(-1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+                    <ChevronLeft className="w-4 h-4" /> Prev
+                  </button>
+                  <h3 className="text-base font-semibold text-slate-800">
+                    {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <button onClick={() => changeMonth(1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
 
-                  {/* 1. Shift Details */}
-                  <DetailSection icon={Clock} title="Shift Details" color="text-indigo-600">
-                    {data.shift ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Shift Name</span>
-                          <span className="text-xs font-semibold text-slate-800">{data.shift.name}</span>
+                {/* Day headers */}
+                <div className="grid grid-cols-7 border-b border-slate-200">
+                  {DAY_NAMES.map(d => (
+                    <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2 border-r border-slate-100 last:border-r-0">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar grid — proper bordered boxes like greytHR */}
+                <div className="grid grid-cols-7">
+                  {grid.map((cell, idx) => {
+                    if (!cell) {
+                      return (
+                        <div key={`empty-${idx}`} className="border-r border-b border-slate-100 last:border-r-0 h-[80px] bg-slate-50/50" />
+                      );
+                    }
+                    const cfg = statusConfig[cell.status] || statusConfig.future;
+                    const isSelected = cell.date === selectedDate;
+                    const isToday = cell.date === today;
+                    const isWeekend = cell.dayOfWeek === 0 || cell.dayOfWeek === 6;
+                    const showShift = !isWeekend && cell.status !== 'holiday' && cell.status !== 'future';
+
+                    return (
+                      <button
+                        key={cell.date}
+                        onClick={() => setSelectedDate(cell.date)}
+                        className={`
+                          relative h-[80px] border-r border-b border-slate-100 last:border-r-0 text-left p-1.5 transition-all cursor-pointer
+                          ${cfg.bg}
+                          ${isSelected ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/40' : 'hover:bg-blue-50/30'}
+                        `}
+                      >
+                        {/* Date number */}
+                        <div className="flex items-start justify-between">
+                          <span className={`text-xs font-medium leading-none ${isToday ? 'bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-600'}`}>
+                            {String(cell.day).padStart(2, '0')}
+                          </span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Shift Timing</span>
-                          <span className="text-xs font-semibold text-slate-800">{data.shift.startTime} — {data.shift.endTime}</span>
+                        {/* Status code — center */}
+                        <div className="flex items-center justify-center mt-1">
+                          <span className={`text-sm font-semibold ${cfg.text}`}>
+                            {cfg.label}
+                          </span>
                         </div>
-                        {data.shift.breakDuration > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Break Duration</span>
-                            <span className="text-xs font-semibold text-slate-800">{data.shift.breakDuration} min</span>
+                        {/* Shift code — bottom right like greytHR */}
+                        {showShift && shiftCode && (
+                          <div className="absolute bottom-1 right-1.5">
+                            <span className="text-[10px] text-slate-300 font-medium">{shiftCode}</span>
                           </div>
                         )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400">No shift assigned</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Detail Panel — wider, with table sections like greytHR */}
+            <div className="lg:flex-[2] min-w-0">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm sticky top-4">
+                {selectedDay ? (
+                  <div>
+                    {/* Swipe timeline bar */}
+                    {selectedDay.punches && selectedDay.punches.length > 0 && (
+                      <SwipeTimeline punches={selectedDay.punches} shift={data.shift} />
                     )}
-                  </DetailSection>
 
-                  {/* 2. Processed / Status Details */}
-                  <DetailSection icon={Activity} title="Processed Details" color="text-emerald-600">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Status</span>
-                        {(() => {
-                          const cfg = statusConfig[selectedDay.status] || statusConfig.future;
-                          return <span className={`text-xs font-semibold ${cfg.bg === 'bg-slate-100' ? 'text-slate-500' : cfg.bg.replace('bg-', 'text-').replace('500', '700')}`}>{cfg.full || '—'}</span>;
-                        })()}
-                      </div>
-                      {selectedDay.holidayName && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Holiday</span>
-                          <span className="text-xs font-semibold text-purple-700">{selectedDay.holidayName}</span>
-                        </div>
-                      )}
-                      {selectedDay.leaveName && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Leave Type</span>
-                          <span className="text-xs font-semibold text-blue-700">{selectedDay.leaveName}</span>
-                        </div>
-                      )}
-                      {selectedDay.notes && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Remarks</span>
-                          <span className="text-xs font-semibold text-slate-700">{selectedDay.notes}</span>
-                        </div>
-                      )}
-                      {selectedDay.workHours != null && selectedDay.workHours > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Work Hours</span>
-                          <span className="text-xs font-bold text-emerald-700">{selectedDay.workHours.toFixed(2)} hrs</span>
-                        </div>
-                      )}
+                    {/* Status Details */}
+                    <SectionHeader title="Status Details" />
+                    <div className="px-4 pb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-400 font-medium">
+                            <td className="py-1.5 pr-4">Status</td>
+                            <td className="py-1.5">Remarks</td>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="text-slate-700 border-t border-slate-50">
+                            <td className="py-2 pr-4">
+                              <span className={`font-semibold ${(statusConfig[selectedDay.status] || statusConfig.future).text}`}>
+                                {(statusConfig[selectedDay.status] || statusConfig.future).full || '-'}
+                              </span>
+                            </td>
+                            <td className="py-2">
+                              {selectedDay.holidayName || selectedDay.leaveName || selectedDay.notes || '-'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                  </DetailSection>
 
-                  {/* 3. Session Details */}
-                  <DetailSection icon={LogIn} title="Session Details" color="text-blue-600">
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-emerald-50 rounded-lg p-2.5 text-center">
-                          <p className="text-[10px] font-medium text-emerald-600 uppercase mb-0.5">First In</p>
-                          <p className="text-sm font-bold text-emerald-700">{formatTime(selectedDay.checkIn)}</p>
-                        </div>
-                        <div className="bg-rose-50 rounded-lg p-2.5 text-center">
-                          <p className="text-[10px] font-medium text-rose-600 uppercase mb-0.5">Last Out</p>
-                          <p className="text-sm font-bold text-rose-700">{formatTime(selectedDay.checkOut)}</p>
-                        </div>
-                      </div>
+                    {/* Session Details */}
+                    <SectionHeader title="Session Details" />
+                    <div className="px-4 pb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-400 font-medium">
+                            <td className="py-1.5">Session</td>
+                            <td className="py-1.5">Session Timing</td>
+                            <td className="py-1.5">First In</td>
+                            <td className="py-1.5">Last Out</td>
+                          </tr>
+                        </thead>
+                        <tbody className="text-slate-700">
+                          {data.shift ? (
+                            <>
+                              {/* Session 1: Shift start to midpoint */}
+                              {(() => {
+                                const [sh] = (data.shift.startTime || '0').split(':').map(Number);
+                                const [eh] = (data.shift.endTime || '0').split(':').map(Number);
+                                const midH = Math.floor((sh + eh) / 2);
+                                const midTime = `${String(midH).padStart(2, '0')}:30`;
+                                const s1Start = data.shift.startTime;
+                                const s1End = midTime;
+                                const s2Start = `${String(midH).padStart(2, '0')}:31`;
+                                const s2End = data.shift.endTime;
+
+                                // Find first in and last out from punches
+                                const firstIn = selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-';
+                                const lastOut = selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-';
+
+                                return (
+                                  <>
+                                    <tr className="border-t border-slate-50">
+                                      <td className="py-2 font-medium">Session 1</td>
+                                      <td className="py-2">{s1Start} - {s1End}</td>
+                                      <td className="py-2 font-semibold">{firstIn}</td>
+                                      <td className="py-2">-</td>
+                                    </tr>
+                                    <tr className="border-t border-slate-50">
+                                      <td className="py-2 font-medium">Session 2</td>
+                                      <td className="py-2">{s2Start} - {s2End}</td>
+                                      <td className="py-2">-</td>
+                                      <td className="py-2 font-semibold">{lastOut}</td>
+                                    </tr>
+                                  </>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            <tr className="border-t border-slate-50">
+                              <td className="py-2 font-medium">Full Day</td>
+                              <td className="py-2">-</td>
+                              <td className="py-2 font-semibold">{selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-'}</td>
+                              <td className="py-2 font-semibold">{selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-'}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                      {/* Late In / Early Out row */}
                       {(selectedDay.lateIn || selectedDay.earlyOut) && (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="flex gap-4 mt-2 text-xs">
                           {selectedDay.lateIn && (
-                            <div className="bg-amber-50 rounded-lg p-2 text-center">
-                              <p className="text-[10px] font-medium text-amber-600 uppercase mb-0.5">Late In</p>
-                              <p className="text-xs font-bold text-amber-700">{selectedDay.lateIn}</p>
-                            </div>
+                            <span className="text-amber-600 font-medium">Late In: {selectedDay.lateIn}</span>
                           )}
                           {selectedDay.earlyOut && (
-                            <div className="bg-orange-50 rounded-lg p-2 text-center">
-                              <p className="text-[10px] font-medium text-orange-600 uppercase mb-0.5">Early Out</p>
-                              <p className="text-xs font-bold text-orange-700">{selectedDay.earlyOut}</p>
-                            </div>
+                            <span className="text-orange-600 font-medium">Early Out: {selectedDay.earlyOut}</span>
                           )}
                         </div>
                       )}
-                      {selectedDay.workHours != null && selectedDay.workHours > 0 && (
-                        <div className="bg-indigo-50 rounded-lg p-2.5 flex items-center justify-between">
-                          <span className="text-xs font-medium text-indigo-600">Total Hours</span>
-                          <span className="text-sm font-bold text-indigo-700">{selectedDay.workHours.toFixed(2)} hrs</span>
-                        </div>
-                      )}
-                      {data.shift && (
-                        <div className="bg-slate-50 rounded-lg p-2.5 flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-500">Expected Hours</span>
-                          <span className="text-xs font-semibold text-slate-700">
-                            {(() => {
-                              const [sh, sm] = (data.shift.startTime || '0:0').split(':').map(Number);
-                              const [eh, em] = (data.shift.endTime || '0:0').split(':').map(Number);
-                              const expected = ((eh * 60 + em) - (sh * 60 + sm) - (data.shift.breakDuration || 0)) / 60;
-                              return expected > 0 ? `${expected.toFixed(1)} hrs` : '—';
-                            })()}
-                          </span>
+                      {selectedDay.workHours > 0 && (
+                        <div className="mt-2 text-xs text-slate-500">
+                          Total: <span className="font-semibold text-slate-700">{formatHrsMin(selectedDay.workHours)}</span>
                         </div>
                       )}
                     </div>
-                  </DetailSection>
 
-                  {/* 4. Permission / Leave Details */}
-                  <DetailSection icon={Shield} title="Permission Details" color="text-purple-600">
-                    {selectedDay.leaveName ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Type</span>
-                          <span className="text-xs font-semibold text-blue-700">{selectedDay.leaveName}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">Status</span>
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Approved
-                          </span>
-                        </div>
-                      </div>
-                    ) : selectedDay.holidayName ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Holiday</span>
-                        <span className="text-xs font-semibold text-purple-700">{selectedDay.holidayName}</span>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400">No permissions for this day</p>
-                    )}
-                  </DetailSection>
+                    {/* Permission Details */}
+                    <SectionHeader title="Permission Details" />
+                    <div className="px-4 pb-3">
+                      {selectedDay.leaveName ? (
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-medium">
+                              <td className="py-1.5">Type</td>
+                              <td className="py-1.5">Status</td>
+                              <td className="py-1.5">From Date</td>
+                              <td className="py-1.5">To Date</td>
+                            </tr>
+                          </thead>
+                          <tbody className="text-slate-700">
+                            <tr className="border-t border-slate-50">
+                              <td className="py-2 font-medium">{selectedDay.leaveName}</td>
+                              <td className="py-2">
+                                <span className="text-emerald-600 font-medium">Approved</span>
+                              </td>
+                              <td className="py-2">{selectedDay.date}</td>
+                              <td className="py-2">{selectedDay.date}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-xs text-slate-400 py-2">-</p>
+                      )}
+                    </div>
 
-                  {/* 5. Swipe Details */}
-                  <DetailSection icon={Fingerprint} title="Swipe Details" color="text-orange-600" noPaddingBottom>
-                    {selectedDay.punches && selectedDay.punches.length > 0 ? (
-                      <div className="space-y-0">
-                        {/* Swipe table header */}
-                        <div className="grid grid-cols-4 gap-2 text-[10px] font-semibold text-slate-400 uppercase pb-1 border-b border-slate-100 mb-1">
-                          <span>Time</span>
-                          <span>Direction</span>
-                          <span>Device</span>
-                          <span>Location</span>
-                        </div>
-                        {selectedDay.punches.map((punch, idx) => (
-                          <div
-                            key={idx}
-                            className="grid grid-cols-4 gap-2 py-1.5 text-xs border-b border-slate-50 last:border-0"
-                          >
-                            <span className="font-mono font-medium text-slate-700">
-                              {formatPunchTime(punch.time)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                punch.direction === 'in' ? 'bg-emerald-500' :
-                                punch.direction === 'out' ? 'bg-rose-500' : 'bg-slate-400'
-                              }`} />
-                              <span className={`font-medium capitalize ${
-                                punch.direction === 'in' ? 'text-emerald-600' :
-                                punch.direction === 'out' ? 'text-rose-600' : 'text-slate-500'
-                              }`}>
-                                {punch.direction || '—'}
-                              </span>
-                            </span>
-                            <span className="text-slate-600 truncate" title={punch.device}>
-                              {punch.device || '—'}
-                            </span>
-                            <span className="text-slate-500 truncate flex items-center gap-0.5" title={punch.location}>
-                              {punch.location ? (
-                                <>
-                                  <MapPin className="w-3 h-3 flex-shrink-0" />
-                                  {punch.location}
-                                </>
-                              ) : '—'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 text-center py-2">No swipe records for this day</p>
-                    )}
-                  </DetailSection>
-                </div>
-              ) : (
-                <div className="px-5 py-16 text-center text-slate-400">
-                  <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Select a day to view details</p>
-                  <p className="text-xs mt-1">Click on any date in the calendar</p>
-                </div>
-              )}
+                    {/* Swipe Details */}
+                    <SectionHeader title={`Swipes${selectedDay.workHours > 0 ? ` (Total: ${formatHrsMin(selectedDay.workHours)})` : ''}`} />
+                    <div className="px-4 pb-3">
+                      {selectedDay.punches && selectedDay.punches.length > 0 ? (
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-medium">
+                              <td className="py-1.5">Time</td>
+                              <td className="py-1.5">In/Out</td>
+                              <td className="py-1.5">Device</td>
+                              <td className="py-1.5">Location</td>
+                            </tr>
+                          </thead>
+                          <tbody className="text-slate-700">
+                            {selectedDay.punches.map((punch, idx) => (
+                              <tr key={idx} className="border-t border-slate-50">
+                                <td className="py-2 font-mono font-medium">{formatPunchTime(punch.time)}</td>
+                                <td className="py-2">
+                                  <span className={`font-medium capitalize ${
+                                    punch.direction === 'in' ? 'text-emerald-600' :
+                                    punch.direction === 'out' ? 'text-rose-600' : 'text-slate-500'
+                                  }`}>
+                                    {punch.direction || '-'}
+                                  </span>
+                                </td>
+                                <td className="py-2 max-w-[100px] truncate" title={punch.device}>{punch.device || '-'}</td>
+                                <td className="py-2 max-w-[80px] truncate" title={punch.location}>
+                                  {punch.location ? (
+                                    <span className="flex items-center gap-0.5">
+                                      <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                      {punch.location}
+                                    </span>
+                                  ) : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-xs text-slate-400 py-2">No swipe records</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-5 py-16 text-center text-slate-400">
+                    <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">Select a day to view details</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-// Reusable section wrapper — greytHR-style collapsible card section
-function DetailSection({ icon: Icon, title, color, children, noPaddingBottom }) {
+// Section header — light grey bar like greytHR
+function SectionHeader({ title }) {
   return (
-    <div className={`px-5 py-3 ${noPaddingBottom ? 'pb-2' : ''}`}>
-      <h4 className={`text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5 ${color}`}>
-        <Icon className="w-3.5 h-3.5" />
-        {title}
-      </h4>
-      {children}
+    <div className="bg-slate-50 px-4 py-2 border-t border-b border-slate-100">
+      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wide">{title}</h4>
     </div>
   );
+}
+
+// Insight card — top row stats
+function InsightCard({ label, value }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-3 text-center shadow-sm">
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-bold text-slate-800 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+// Swipe timeline bar — visual representation of swipe times across the day
+function SwipeTimeline({ punches, shift }) {
+  if (!punches || punches.length === 0) return null;
+
+  // Parse punch times to display as timeline markers
+  const times = punches.map(p => {
+    const parts = p.time?.split(' ');
+    if (!parts || parts.length < 2) return null;
+    return parts[1]?.substring(0, 5); // HH:MM
+  }).filter(Boolean);
+
+  if (times.length === 0) return null;
+
+  return (
+    <div className="px-4 py-2.5 border-b border-slate-100 overflow-x-auto">
+      <div className="flex items-center gap-4 min-w-max">
+        {times.map((time, idx) => (
+          <div key={idx} className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full ${idx % 2 === 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            <span className="text-xs font-mono font-medium text-slate-600">{time}</span>
+          </div>
+        ))}
+      </div>
+      {/* Green progress bar */}
+      <div className="mt-1.5 h-1 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-full bg-emerald-400 rounded-full" style={{ width: '100%' }} />
+      </div>
+    </div>
+  );
+}
+
+// Helper: get shift short code (e.g., "General Shift" → "GS")
+function getShiftCode(name) {
+  if (!name) return '';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase();
+}
+
+// Helper: format decimal hours to HH:MM (e.g., 9.5 → "09:30")
+function formatHrsMin(hours) {
+  if (!hours || hours <= 0) return '-';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
