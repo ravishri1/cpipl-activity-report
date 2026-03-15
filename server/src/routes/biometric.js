@@ -130,17 +130,18 @@ router.post('/sync-all', authenticate, requireAdmin, asyncHandler(async (req, re
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/biometric/punches — list punches with filters
-// ?date=2026-03-07&deviceId=1&matchStatus=unmatched&processStatus=pending&page=1&limit=50
+// ?date=2026-03-07&deviceId=1&matchStatus=unmatched&processStatus=pending&userId=5&page=1&limit=50
 router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res) => {
-  const { date, deviceId, matchStatus, processStatus, enrollNumber, page = 1, limit = 50 } = req.query;
+  const { date, deviceId, matchStatus, processStatus, enrollNumber, userId, page = 1, limit = 50 } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const where = {};
-  if (date)          where.punchDate   = date;
-  if (deviceId)      where.deviceId    = parseInt(deviceId);
+  if (date)          where.punchDate    = date;
+  if (deviceId)      where.deviceId     = parseInt(deviceId);
   if (matchStatus)   where.matchStatus  = matchStatus;
   if (processStatus) where.processStatus = processStatus;
   if (enrollNumber)  where.enrollNumber  = enrollNumber;
+  if (userId)        where.userId        = parseInt(userId);
 
   const [punches, total] = await Promise.all([
     req.prisma.biometricPunch.findMany({
@@ -157,6 +158,47 @@ router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res)
   ]);
 
   res.json({ punches, total, page: parseInt(page), limit: parseInt(limit) });
+}));
+
+// GET /api/biometric/punches/export — export filtered punches as CSV
+router.get('/punches/export', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const { date, deviceId, matchStatus, processStatus, enrollNumber, userId } = req.query;
+
+  const where = {};
+  if (date)          where.punchDate    = date;
+  if (deviceId)      where.deviceId     = parseInt(deviceId);
+  if (matchStatus)   where.matchStatus  = matchStatus;
+  if (processStatus) where.processStatus = processStatus;
+  if (enrollNumber)  where.enrollNumber  = enrollNumber;
+  if (userId)        where.userId        = parseInt(userId);
+
+  const punches = await req.prisma.biometricPunch.findMany({
+    where,
+    orderBy: { punchTime: 'desc' },
+    take: 10000,
+    include: {
+      employee: { select: { name: true, employeeId: true } },
+      device:   { select: { name: true } },
+    },
+  });
+
+  const header = 'Employee,Employee ID,Enroll Number,Punch Date,Punch Time,Direction,Device,Match Status,Process Status\n';
+  const rows = punches.map(p => [
+    `"${(p.employee?.name || 'Unknown').replace(/"/g, '""')}"`,
+    p.employee?.employeeId || '',
+    p.enrollNumber,
+    p.punchDate,
+    p.punchTime,
+    p.direction || '',
+    `"${(p.device?.name || p.deviceSerial || '').replace(/"/g, '""')}"`,
+    p.matchStatus,
+    p.processStatus,
+  ].join(','));
+
+  const csv = header + rows.join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="punch-log-${date || 'all'}.csv"`);
+  res.send(csv);
 }));
 
 // GET /api/biometric/unmatched — unmatched punches (unknown employees)

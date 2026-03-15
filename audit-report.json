@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-14T17:52:18.000Z",
+  "timestamp": "2026-03-15T07:12:25.621Z",
   "version": 2,
   "stats": {
     "filesScanned": 108,
-    "apiCallsFound": 326,
-    "routesFound": 376,
+    "apiCallsFound": 327,
+    "routesFound": 377,
     "issuesFound": 0
   },
   "missingRoutes": [],
@@ -131,5 +131,5 @@
       "severity": "MEDIUM"
     }
   ],
-  "matchedCount": 326
+  "matchedCount": 327
 }

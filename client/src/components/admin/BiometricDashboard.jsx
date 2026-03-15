@@ -24,6 +24,7 @@ import {
   ServerCrash,
   Activity,
   X,
+  Download,
 } from 'lucide-react';
 
 // ─── Status style maps ────────────────────────────────────────────────────────
@@ -90,8 +91,12 @@ function StatusTab() {
   const { execute, loading: syncing } = useApi();
 
   const handleRematch = async () => {
-    await execute(() => api.post('/biometric/rematch'), 'Re-match complete!');
-    refetch();
+    try {
+      await execute(() => api.post('/biometric/rematch'), 'Re-match complete!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   if (loading) return <LoadingSpinner />;
@@ -159,33 +164,76 @@ function StatusTab() {
 }
 
 // ─── Tab: Punch Log ───────────────────────────────────────────────────────────
-function PunchLogTab() {
-  const [filters, setFilters] = useState({ date: '', matchStatus: '', processStatus: '', page: 1 });
+function PunchLogTab({ employees }) {
+  const [filters, setFilters] = useState({ date: '', matchStatus: '', processStatus: '', userId: '', page: 1 });
   const query = new URLSearchParams({
     ...(filters.date          && { date: filters.date }),
     ...(filters.matchStatus   && { matchStatus: filters.matchStatus }),
     ...(filters.processStatus && { processStatus: filters.processStatus }),
+    ...(filters.userId        && { userId: filters.userId }),
     page: filters.page,
     limit: 50,
   }).toString();
 
-  const { data, loading, error } = useFetch(`/biometric/punches?${query}`, { punches: [], total: 0 });
-  const { execute, loading: reprocessing } = useApi();
+  const { data, loading, error, refetch } = useFetch(`/biometric/punches?${query}`, { punches: [], total: 0 });
+  const { execute, loading: reprocessing, error: reprocessErr, success } = useApi();
 
   const handleReprocess = async (id) => {
-    await execute(() => api.post(`/biometric/punches/${id}/reprocess`), 'Reprocessed!');
+    try {
+      await execute(() => api.post(`/biometric/punches/${id}/reprocess`), 'Reprocessed!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
+  };
+
+  const [exporting, setExporting] = useState(false);
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const exportParams = new URLSearchParams({
+        ...(filters.date          && { date: filters.date }),
+        ...(filters.matchStatus   && { matchStatus: filters.matchStatus }),
+        ...(filters.processStatus && { processStatus: filters.processStatus }),
+        ...(filters.userId        && { userId: filters.userId }),
+      }).toString();
+      const res = await api.get(`/biometric/punches/export?${exportParams}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `punch-log-${filters.date || 'all'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      // Download failed silently
+    }
+    setExporting(false);
   };
 
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <input
           type="date"
           value={filters.date}
           onChange={e => setFilters(f => ({ ...f, date: e.target.value, page: 1 }))}
           className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
         />
+        <select
+          value={filters.userId}
+          onChange={e => setFilters(f => ({ ...f, userId: e.target.value, page: 1 }))}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 max-w-[220px]"
+        >
+          <option value="">All employees</option>
+          {(employees ?? []).map(emp => (
+            <option key={emp.id} value={emp.id}>
+              {emp.name} {emp.employeeId ? `(${emp.employeeId})` : ''}
+            </option>
+          ))}
+        </select>
         <select
           value={filters.matchStatus}
           onChange={e => setFilters(f => ({ ...f, matchStatus: e.target.value, page: 1 }))}
@@ -206,8 +254,20 @@ function PunchLogTab() {
           <option value="processed">Processed</option>
           <option value="skipped">Skipped</option>
         </select>
+
+        {/* Export CSV */}
+        <button
+          onClick={handleExportCSV}
+          disabled={exporting}
+          className="ml-auto flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50"
+        >
+          {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          {exporting ? 'Exporting…' : 'Export CSV'}
+        </button>
       </div>
 
+      {success      && <AlertMessage type="success" message={success} />}
+      {reprocessErr && <AlertMessage type="error"   message={reprocessErr} />}
       {loading && <LoadingSpinner />}
       {error   && <AlertMessage type="error" message={error} />}
 
@@ -464,25 +524,37 @@ function DevicesTab() {
   };
 
   const handleSave = async () => {
-    if (modal.mode === 'add') {
-      await execute(() => api.post('/biometric/devices', form), 'Device added!');
-    } else {
-      await execute(() => api.put(`/biometric/devices/${modal.device.id}`, form), 'Device updated!');
+    try {
+      if (modal.mode === 'add') {
+        await execute(() => api.post('/biometric/devices', form), 'Device added!');
+      } else {
+        await execute(() => api.put(`/biometric/devices/${modal.device.id}`, form), 'Device updated!');
+      }
+      refetch();
+      setModal(null);
+    } catch {
+      // Error displayed by useApi
     }
-    refetch();
-    setModal(null);
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Remove this device? Punch history will be deleted.')) return;
-    await execute(() => api.delete(`/biometric/devices/${id}`), 'Device removed!');
-    refetch();
+    try {
+      await execute(() => api.delete(`/biometric/devices/${id}`), 'Device removed!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const handleToggle = async (d) => {
-    await execute(() => api.put(`/biometric/devices/${d.id}`, { isActive: !d.isActive }),
-      d.isActive ? 'Device deactivated' : 'Device activated');
-    refetch();
+    try {
+      await execute(() => api.put(`/biometric/devices/${d.id}`, { isActive: !d.isActive }),
+        d.isActive ? 'Device deactivated' : 'Device activated');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -648,9 +720,13 @@ function MappingsTab() {
   const cancelEdit = () => { setEditId(null); setEditVal(''); };
 
   const saveMapping = async (userId) => {
-    await execute(() => api.put(`/biometric/mappings/${userId}`, { bioDeviceId: editVal || null }), 'Mapping saved!');
-    cancelEdit();
-    refetch();
+    try {
+      await execute(() => api.put(`/biometric/mappings/${userId}`, { bioDeviceId: editVal || null }), 'Mapping saved!');
+      cancelEdit();
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -785,7 +861,7 @@ export default function BiometricDashboard() {
       {/* Tab content */}
       <div>
         {activeTab === 'status'    && <StatusTab />}
-        {activeTab === 'punches'   && <PunchLogTab />}
+        {activeTab === 'punches'   && <PunchLogTab employees={employees} />}
         {activeTab === 'unmatched' && <UnmatchedTab employees={employees} />}
         {activeTab === 'devices'   && <DevicesTab />}
         {activeTab === 'mappings'  && <MappingsTab />}
