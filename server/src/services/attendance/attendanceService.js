@@ -212,10 +212,156 @@ async function getTeamAttendance(date, department, prisma) {
   return { employees: result, summary };
 }
 
+/**
+ * Get employee calendar view — monthly grid with attendance, holidays, leaves, biometric punches
+ * @param {number} userId
+ * @param {string} month - "YYYY-MM" format
+ */
+async function getEmployeeCalendar(userId, month, prisma) {
+  const startDate = `${month}-01`;
+  const [year, mon] = month.split('-').map(Number);
+  const lastDay = new Date(year, mon, 0).getDate();
+  const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+  const today = new Date().toISOString().split('T')[0];
+
+  const [attendances, holidays, leaves, punches, shiftAssignment] = await Promise.all([
+    prisma.attendance.findMany({
+      where: { userId, date: { gte: startDate, lte: endDate } },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.holiday.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+    }),
+    prisma.leaveRequest.findMany({
+      where: {
+        userId,
+        status: 'approved',
+        startDate: { lte: endDate },
+        endDate: { gte: startDate },
+      },
+      include: { leaveType: { select: { name: true, code: true } } },
+    }),
+    prisma.biometricPunch.findMany({
+      where: { userId, punchDate: { gte: startDate, lte: endDate }, matchStatus: 'matched' },
+      orderBy: { punchTime: 'asc' },
+      include: { device: { select: { name: true, location: true } } },
+    }),
+    prisma.shiftAssignment.findFirst({
+      where: {
+        userId,
+        status: 'active',
+        effectiveFrom: { lte: today },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+      },
+      include: { shift: true },
+    }),
+  ]);
+
+  // Build lookup maps
+  const attendanceMap = {};
+  for (const a of attendances) attendanceMap[a.date] = a;
+
+  const holidayMap = {};
+  for (const h of holidays) holidayMap[h.date] = h;
+
+  const punchesByDate = {};
+  for (const p of punches) {
+    if (!punchesByDate[p.punchDate]) punchesByDate[p.punchDate] = [];
+    punchesByDate[p.punchDate].push({
+      time: p.punchTime,
+      direction: p.direction,
+      device: p.device?.name || p.deviceSerial,
+      location: p.device?.location || null,
+    });
+  }
+
+  // Build leave date set from approved leave ranges
+  const leaveDates = {};
+  for (const lr of leaves) {
+    let d = new Date(lr.startDate + 'T00:00:00');
+    const end = new Date(lr.endDate + 'T00:00:00');
+    while (d <= end) {
+      const ds = d.toISOString().split('T')[0];
+      if (ds >= startDate && ds <= endDate) {
+        leaveDates[ds] = { type: lr.leaveType?.code || 'L', name: lr.leaveType?.name || 'Leave' };
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+
+  // Build calendar days array
+  const days = [];
+  for (let day = 1; day <= lastDay; day++) {
+    const dateStr = `${month}-${String(day).padStart(2, '0')}`;
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const att = attendanceMap[dateStr];
+    const holiday = holidayMap[dateStr];
+    const leave = leaveDates[dateStr];
+    const dayPunches = punchesByDate[dateStr] || [];
+
+    let status = 'absent';
+    let statusLabel = 'A';
+    if (holiday) { status = 'holiday'; statusLabel = 'H'; }
+    else if (isWeekend) { status = 'weekend'; statusLabel = 'W'; }
+    else if (leave) { status = 'on_leave'; statusLabel = leave.type; }
+
+    // Attendance record overrides
+    if (att) {
+      if (att.status === 'present') { status = 'present'; statusLabel = 'P'; }
+      else if (att.status === 'half_day') { status = 'half_day'; statusLabel = 'HD'; }
+      else if (att.status === 'on_leave') { status = 'on_leave'; statusLabel = leave?.type || 'L'; }
+      else if (att.status === 'holiday') { status = 'holiday'; statusLabel = 'H'; }
+      else if (att.status === 'weekend') { status = 'weekend'; statusLabel = 'W'; }
+    }
+
+    // Future dates — no status yet
+    const isFuture = dateStr > today;
+    if (isFuture && !holiday && !isWeekend && !leave) {
+      status = 'future';
+      statusLabel = '-';
+    }
+
+    days.push({
+      date: dateStr,
+      day,
+      dayOfWeek,
+      status,
+      statusLabel,
+      holidayName: holiday?.name || null,
+      leaveName: leave?.name || null,
+      checkIn: att?.checkIn || null,
+      checkOut: att?.checkOut || null,
+      workHours: att?.workHours || null,
+      punches: dayPunches,
+    });
+  }
+
+  const summary = {
+    present: days.filter(d => d.status === 'present').length,
+    absent: days.filter(d => d.status === 'absent').length,
+    halfDay: days.filter(d => d.status === 'half_day').length,
+    onLeave: days.filter(d => d.status === 'on_leave').length,
+    holiday: days.filter(d => d.status === 'holiday').length,
+    weekend: days.filter(d => d.status === 'weekend').length,
+    totalWorkHours: Math.round(days.reduce((sum, d) => sum + (d.workHours || 0), 0) * 100) / 100,
+  };
+
+  return {
+    days,
+    summary,
+    shift: shiftAssignment?.shift || null,
+    month,
+    year,
+  };
+}
+
 module.exports = {
   checkIn,
   checkOut,
   getTodayAttendance,
   getMonthlyAttendance,
   getTeamAttendance,
+  getEmployeeCalendar,
 };

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import EmployeeCalendarView from './EmployeeCalendarView';
 import {
   CheckSquare,
   CheckCircle2,
   XCircle,
   Clock,
   Users,
+  Calendar,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ export default function TeamAttendance() {
   const [summary, setSummary] = useState({ total: 0, present: 0, absent: 0, onLeave: 0 });
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
+  const [calendarView, setCalendarView] = useState(null); // { userId, name } or null
 
   useEffect(() => {
     const fetchTeam = async () => {
@@ -44,6 +47,17 @@ export default function TeamAttendance() {
   const present = data.filter((d) => d.status === 'present' || d.status === 'half_day');
   const absent = data.filter((d) => d.status === 'absent');
   const onLeave = data.filter((d) => d.status === 'on_leave');
+
+  // Calendar view for a selected employee
+  if (calendarView) {
+    return (
+      <EmployeeCalendarView
+        userId={calendarView.userId}
+        employeeName={calendarView.name}
+        onBack={() => setCalendarView(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -118,6 +132,7 @@ export default function TeamAttendance() {
                   <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
                   <th className="px-4 py-2.5 font-medium text-slate-600">Hours</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -160,10 +175,19 @@ export default function TeamAttendance() {
                     <td className="px-4 py-2.5 font-medium text-slate-700">
                       {emp.workHours ? `${emp.workHours.toFixed(1)}h` : '—'}
                     </td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
+                        className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                        title="View monthly calendar"
+                      >
+                        <Calendar className="w-4 h-4 text-blue-500" />
+                      </button>
+                    </td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                       No attendance data for this date.
                     </td>
                   </tr>

@@ -8,6 +8,7 @@ const {
   getTodayAttendance,
   getMonthlyAttendance,
   getTeamAttendance,
+  getEmployeeCalendar,
 } = require('../services/attendance/attendanceService');
 
 const router = express.Router();
@@ -45,6 +46,16 @@ router.get('/team', authenticate, requireAdmin, asyncHandler(async (req, res) =>
   const date = req.query.date || new Date().toISOString().split('T')[0];
   const department = req.user.role === 'team_lead' ? req.user.department : null;
   const data = await getTeamAttendance(date, department, req.prisma);
+  res.json(data);
+}));
+
+// GET /api/attendance/employee-calendar?userId=X&month=YYYY-MM — Admin calendar view for one employee
+router.get('/employee-calendar', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseInt(req.query.userId);
+  if (!userId || isNaN(userId)) throw badRequest('userId is required');
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be in YYYY-MM format.');
+  const data = await getEmployeeCalendar(userId, month, req.prisma);
   res.json(data);
 }));
 
