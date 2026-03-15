@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import EmployeeCalendarView from './EmployeeCalendarView';
 import {
@@ -12,20 +12,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  CalendarRange,
 } from 'lucide-react';
 
-// Period presets
+// Period presets — "single" = one day view, "range" = aggregated view
 const PERIODS = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'this_week', label: 'This Week' },
-  { key: 'this_month', label: 'This Month' },
-  { key: 'last_month', label: 'Last Month' },
-  { key: 'last_30', label: 'Last 30 Days' },
-  { key: 'last_90', label: 'Last 90 Days' },
-  { key: 'this_quarter', label: 'This Quarter' },
-  { key: 'this_year', label: 'This Year' },
-  { key: 'custom', label: 'Custom Range' },
+  { key: 'today', label: 'Today', type: 'single' },
+  { key: 'yesterday', label: 'Yesterday', type: 'single' },
+  { key: 'this_week', label: 'This Week', type: 'range' },
+  { key: 'this_month', label: 'This Month', type: 'range' },
+  { key: 'last_month', label: 'Last Month', type: 'range' },
+  { key: 'last_30', label: 'Last 30 Days', type: 'range' },
+  { key: 'last_90', label: 'Last 90 Days', type: 'range' },
+  { key: 'this_quarter', label: 'This Quarter', type: 'range' },
+  { key: 'this_year', label: 'This Year', type: 'range' },
+  { key: 'custom', label: 'Custom Range', type: 'range' },
 ];
 
 function getPeriodDates(key) {
@@ -35,44 +36,45 @@ function getPeriodDates(key) {
 
   switch (key) {
     case 'today':
-      return { startDate: todayStr, endDate: todayStr, isRange: false };
+      return { startDate: todayStr, endDate: todayStr };
     case 'yesterday': {
       const y = new Date(today); y.setDate(y.getDate() - 1);
-      return { startDate: fmt(y), endDate: fmt(y), isRange: false };
+      const yStr = fmt(y);
+      return { startDate: yStr, endDate: yStr };
     }
     case 'this_week': {
-      const day = today.getDay(); // 0=Sun
+      const day = today.getDay();
       const mon = new Date(today); mon.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
-      return { startDate: fmt(mon), endDate: todayStr, isRange: true };
+      return { startDate: fmt(mon), endDate: todayStr };
     }
     case 'this_month': {
       const s = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+      return { startDate: fmt(s), endDate: todayStr };
     }
     case 'last_month': {
       const s = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const e = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { startDate: fmt(s), endDate: fmt(e), isRange: true };
+      return { startDate: fmt(s), endDate: fmt(e) };
     }
     case 'last_30': {
       const s = new Date(today); s.setDate(today.getDate() - 29);
-      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+      return { startDate: fmt(s), endDate: todayStr };
     }
     case 'last_90': {
       const s = new Date(today); s.setDate(today.getDate() - 89);
-      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+      return { startDate: fmt(s), endDate: todayStr };
     }
     case 'this_quarter': {
       const qMonth = Math.floor(today.getMonth() / 3) * 3;
       const s = new Date(today.getFullYear(), qMonth, 1);
-      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+      return { startDate: fmt(s), endDate: todayStr };
     }
     case 'this_year': {
       const s = new Date(today.getFullYear(), 0, 1);
-      return { startDate: fmt(s), endDate: todayStr, isRange: true };
+      return { startDate: fmt(s), endDate: todayStr };
     }
     default:
-      return { startDate: todayStr, endDate: todayStr, isRange: false };
+      return { startDate: todayStr, endDate: todayStr };
   }
 }
 
@@ -80,104 +82,132 @@ export default function TeamAttendance() {
   const [period, setPeriod] = useState('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [data, setData] = useState([]);
-  const [rangeData, setRangeData] = useState([]);
+  const [singleDate, setSingleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState({});
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   const [calendarView, setCalendarView] = useState(null);
   const [filterName, setFilterName] = useState('');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
 
-  const isRange = period === 'custom'
-    ? (customStart && customEnd && customStart !== customEnd)
-    : getPeriodDates(period).isRange;
+  // Determine if current view is a range or single-day
+  const periodConfig = PERIODS.find(p => p.key === period);
+  const isRange = periodConfig?.type === 'range';
 
-  // Single-day fetch
+  // Compute actual dates for current period
+  const getActiveDates = useCallback(() => {
+    if (period === 'custom') {
+      return { startDate: customStart, endDate: customEnd };
+    }
+    if (!isRange) {
+      // For today/yesterday, use the singleDate state (allows arrow navigation)
+      return { startDate: singleDate, endDate: singleDate };
+    }
+    return getPeriodDates(period);
+  }, [period, customStart, customEnd, singleDate, isRange]);
+
+  // Single unified data fetch
   useEffect(() => {
-    if (isRange) return;
-    const fetchTeam = async () => {
-      setLoading(true);
-      try {
-        let fetchDate = date;
-        if (period !== 'custom') {
-          const pd = getPeriodDates(period);
-          fetchDate = pd.startDate;
-          setDate(fetchDate);
+    const { startDate, endDate } = getActiveDates();
+
+    // For custom range, wait until both dates are selected
+    if (period === 'custom' && (!startDate || !endDate)) {
+      setEmployees([]);
+      setSummary({});
+      setLoading(false);
+      return;
+    }
+
+    // For single-day periods
+    if (!isRange) {
+      const fetchSingle = async () => {
+        setLoading(true);
+        try {
+          const res = await api.get(`/attendance/team?date=${startDate}`);
+          const result = res.data;
+          setEmployees(Array.isArray(result) ? result : (result.employees || []));
+          setSummary(result.summary || {});
+        } catch (err) {
+          console.error('Team attendance error:', err);
+          setEmployees([]);
+        } finally {
+          setLoading(false);
         }
-        const res = await api.get(`/attendance/team?date=${fetchDate}`);
-        const result = res.data;
-        setData(Array.isArray(result) ? result : (result.employees || []));
-        setRangeData([]);
-        if (result.summary) setSummary(result.summary);
-      } catch (err) {
-        console.error('Team attendance error:', err);
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTeam();
-  }, [date, period, isRange]);
+      };
+      fetchSingle();
+      return;
+    }
 
-  // Range fetch
-  useEffect(() => {
-    if (!isRange) return;
+    // For range periods
+    if (!startDate || !endDate) {
+      setLoading(false);
+      return;
+    }
     const fetchRange = async () => {
       setLoading(true);
       try {
-        let startDate, endDate;
-        if (period === 'custom') {
-          startDate = customStart;
-          endDate = customEnd;
-        } else {
-          const pd = getPeriodDates(period);
-          startDate = pd.startDate;
-          endDate = pd.endDate;
-        }
-        if (!startDate || !endDate) { setLoading(false); return; }
         const res = await api.get(`/attendance/team-range?startDate=${startDate}&endDate=${endDate}`);
-        setRangeData(res.data.employees || []);
-        setData([]);
+        setEmployees(res.data.employees || []);
         setSummary(res.data.summary || {});
       } catch (err) {
         console.error('Team attendance range error:', err);
-        setRangeData([]);
+        setEmployees([]);
       } finally {
         setLoading(false);
       }
     };
     fetchRange();
-  }, [period, customStart, customEnd, isRange]);
+  }, [period, singleDate, customStart, customEnd, isRange, getActiveDates]);
 
-  const changeDate = (delta) => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split('T')[0]);
-    setPeriod(delta === 0 ? 'today' : 'custom');
-  };
-
+  // Handle period selection
   const handlePeriodSelect = (key) => {
     setPeriod(key);
     setShowPeriodMenu(false);
-    if (key !== 'custom') {
-      const pd = getPeriodDates(key);
-      if (!pd.isRange) setDate(pd.startDate);
+    // For single-day presets, sync the singleDate
+    if (key === 'today') {
+      setSingleDate(new Date().toISOString().split('T')[0]);
+    } else if (key === 'yesterday') {
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      setSingleDate(y.toISOString().split('T')[0]);
+    }
+    // For custom, initialize with this week's dates if empty
+    if (key === 'custom' && !customStart && !customEnd) {
+      const today = new Date();
+      const mon = new Date(today);
+      const day = today.getDay();
+      mon.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+      setCustomStart(mon.toISOString().split('T')[0]);
+      setCustomEnd(today.toISOString().split('T')[0]);
+    }
+  };
+
+  // Navigate single-day with arrows
+  const navigateDay = (delta) => {
+    const d = new Date(singleDate);
+    d.setDate(d.getDate() + delta);
+    setSingleDate(d.toISOString().split('T')[0]);
+    // Keep the period as today/yesterday if it matches, else switch
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newDate = d.toISOString().split('T')[0];
+    if (newDate === todayStr) setPeriod('today');
+    else {
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      if (newDate === y.toISOString().split('T')[0]) setPeriod('yesterday');
+      else setPeriod('today'); // keep it single-day mode
     }
   };
 
   const currentPeriodLabel = PERIODS.find(p => p.key === period)?.label || 'Today';
 
-  // Determine which data set to filter
-  const displayData = isRange ? rangeData : data;
+  // Filter employees
   const filtered = filterName
-    ? displayData.filter(d =>
+    ? employees.filter(d =>
         d.name?.toLowerCase().includes(filterName.toLowerCase()) ||
         d.employeeId?.toLowerCase().includes(filterName.toLowerCase())
       )
-    : displayData;
+    : employees;
 
-  // Summary counts differ for single-day vs range
+  // Summary counts
   const presentCount = isRange
     ? filtered.reduce((s, d) => s + (d.presentDays || 0), 0)
     : filtered.filter(d => d.status === 'present' || d.status === 'half_day').length;
@@ -188,7 +218,16 @@ export default function TeamAttendance() {
     ? filtered.reduce((s, d) => s + (d.leaveDays || 0), 0)
     : filtered.filter(d => d.status === 'on_leave').length;
 
-  // Calendar view
+  // Date display text
+  const getDateDisplayText = () => {
+    const { startDate, endDate } = getActiveDates();
+    if (!isRange) return startDate;
+    if (!startDate || !endDate) return '—';
+    if (startDate === endDate) return startDate;
+    return `${startDate} to ${endDate}`;
+  };
+
+  // Calendar drill-down
   if (calendarView) {
     return (
       <EmployeeCalendarView
@@ -199,14 +238,6 @@ export default function TeamAttendance() {
     );
   }
 
-  // Get display date range text
-  const getDateRangeText = () => {
-    if (!isRange) return date;
-    if (period === 'custom') return `${customStart} to ${customEnd}`;
-    const pd = getPeriodDates(period);
-    return `${pd.startDate} to ${pd.endDate}`;
-  };
-
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -214,29 +245,31 @@ export default function TeamAttendance() {
         Team Attendance
       </h1>
 
-      {/* Period selector + Date navigation + Employee filter */}
+      {/* Controls row */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Period dropdown */}
           <div className="relative">
             <button
               onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm"
             >
+              <CalendarRange className="w-4 h-4 text-blue-500" />
               {currentPeriodLabel}
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </button>
             {showPeriodMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowPeriodMenu(false)} />
-                <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 w-44">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 w-48">
                   {PERIODS.map(p => (
                     <button
                       key={p.key}
                       onClick={() => handlePeriodSelect(p.key)}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 ${period === p.key ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between ${period === p.key ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
                     >
                       {p.label}
+                      {p.type === 'range' && <span className="text-[10px] text-slate-400 uppercase">Range</span>}
                     </button>
                   ))}
                 </div>
@@ -244,38 +277,46 @@ export default function TeamAttendance() {
             )}
           </div>
 
-          {/* Single-day navigation (only for single-day periods) */}
-          {!isRange && period !== 'custom' && (
+          {/* Single-day date navigation (Today / Yesterday) */}
+          {!isRange && (
             <div className="flex items-center gap-1">
-              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0]); setPeriod('custom'); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+              <button
+                onClick={() => navigateDay(-1)}
+                className="p-2 rounded-lg hover:bg-slate-100 bg-white border border-slate-200"
+              >
                 <ChevronLeft className="w-4 h-4 text-slate-500" />
               </button>
-              <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPeriod('custom'); }} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
-              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d.toISOString().split('T')[0]); setPeriod('custom'); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
+              <input
+                type="date"
+                value={singleDate}
+                onChange={(e) => { setSingleDate(e.target.value); setPeriod('today'); }}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+              />
+              <button
+                onClick={() => navigateDay(1)}
+                className="p-2 rounded-lg hover:bg-slate-100 bg-white border border-slate-200"
+              >
                 <ChevronRight className="w-4 h-4 text-slate-500" />
               </button>
             </div>
           )}
 
-          {/* Custom range date pickers */}
-          {period === 'custom' && isRange && (
+          {/* Custom Range — ALWAYS show both date pickers */}
+          {period === 'custom' && (
             <div className="flex items-center gap-2">
-              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
-              <span className="text-sm text-slate-400">to</span>
-              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
-            </div>
-          )}
-
-          {/* Single date for custom single-day */}
-          {period === 'custom' && !isRange && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toISOString().split('T')[0]); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-                <ChevronLeft className="w-4 h-4 text-slate-500" />
-              </button>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
-              <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); setDate(d.toISOString().split('T')[0]); }} className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200">
-                <ChevronRight className="w-4 h-4 text-slate-500" />
-              </button>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+              />
+              <span className="text-sm text-slate-400 font-medium">to</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+              />
             </div>
           )}
 
@@ -292,11 +333,14 @@ export default function TeamAttendance() {
           </div>
         </div>
 
-        {/* Range indicator */}
+        {/* Date range indicator */}
         {isRange && (
-          <p className="text-xs text-slate-500">
-            Showing: <span className="font-medium text-slate-700">{getDateRangeText()}</span>
-            {summary.workingDays != null && <> &middot; {summary.workingDays} working days</>}
+          <p className="text-xs text-slate-500 flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            Showing: <span className="font-medium text-slate-700">{getDateDisplayText()}</span>
+            {summary.workingDays != null && (
+              <span> · <span className="font-medium text-slate-700">{summary.workingDays}</span> working days</span>
+            )}
           </p>
         )}
       </div>
@@ -342,7 +386,7 @@ export default function TeamAttendance() {
         ) : (
           <div className="overflow-x-auto">
             {isRange ? (
-              /* Range view — aggregated columns */
+              /* ═══ Range view — aggregated columns ═══ */
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
@@ -413,7 +457,7 @@ export default function TeamAttendance() {
                 </tbody>
               </table>
             ) : (
-              /* Single-day view — existing columns */
+              /* ═══ Single-day view ═══ */
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">
@@ -448,13 +492,22 @@ export default function TeamAttendance() {
                         )}
                       </td>
                       <td className="px-4 py-2.5">
-                        {emp.checkIn ? (
+                        {emp.status === 'present' || emp.status === 'half_day' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 className="w-3 h-3" /> Present
+                            <CheckCircle2 className="w-3 h-3" />
+                            {emp.status === 'half_day' ? 'Half Day' : 'Present'}
+                          </span>
+                        ) : emp.status === 'on_leave' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            On Leave
+                          </span>
+                        ) : emp.status === 'holiday' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                            Holiday
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                            <XCircle className="w-3 h-3" /> Not Checked In
+                            <XCircle className="w-3 h-3" /> Absent
                           </span>
                         )}
                       </td>
