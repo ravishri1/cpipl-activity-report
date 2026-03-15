@@ -323,6 +323,31 @@ async function getEmployeeCalendar(userId, month, prisma) {
       statusLabel = '-';
     }
 
+    // Calculate late-in / early-out based on shift timing
+    let lateIn = null;
+    let earlyOut = null;
+    const shift = shiftAssignment?.shift;
+    if (shift && att?.checkIn) {
+      const [sh, sm] = (shift.startTime || '').split(':').map(Number);
+      const ciTime = new Date(att.checkIn);
+      const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+      const shiftStartMin = (sh || 0) * 60 + (sm || 0);
+      if (ciMinutes > shiftStartMin + 5) { // 5-min grace
+        const diff = ciMinutes - shiftStartMin;
+        lateIn = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      }
+    }
+    if (shift && att?.checkOut) {
+      const [eh, em] = (shift.endTime || '').split(':').map(Number);
+      const coTime = new Date(att.checkOut);
+      const coMinutes = coTime.getHours() * 60 + coTime.getMinutes();
+      const shiftEndMin = (eh || 0) * 60 + (em || 0);
+      if (coMinutes < shiftEndMin - 5) { // 5-min grace
+        const diff = shiftEndMin - coMinutes;
+        earlyOut = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      }
+    }
+
     days.push({
       date: dateStr,
       day,
@@ -334,6 +359,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
       checkIn: att?.checkIn || null,
       checkOut: att?.checkOut || null,
       workHours: att?.workHours || null,
+      notes: att?.notes || null,
+      lateIn,
+      earlyOut,
       punches: dayPunches,
     });
   }
