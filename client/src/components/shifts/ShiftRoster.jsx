@@ -5,7 +5,7 @@ import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
-import { ChevronLeft, ChevronRight, Search, X, Calendar, Download, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, X, Calendar, Download, Users, FileSpreadsheet } from 'lucide-react';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -144,6 +144,107 @@ export default function ShiftRoster() {
     }
   };
 
+  // Export roster to CSV (respects current filters)
+  const handleExport = useCallback(() => {
+    if (!filteredRoster.length || !daysArray.length) return;
+
+    // Build CSV rows
+    const rows = [];
+
+    // Header row: Employee No, Employee Name, Department, Designation, Branch, OFF, 1, 2, 3, ...
+    const header = [
+      'Employee No',
+      'Employee Name',
+      'Department',
+      'Designation',
+      'Location',
+      'OFF Count',
+      ...daysArray.map(d => `${d.day} ${DAY_NAMES[d.dayOfWeek]}`),
+    ];
+    rows.push(header);
+
+    // Data rows
+    filteredRoster.forEach(emp => {
+      const row = [
+        emp.employeeId || '',
+        emp.name,
+        emp.department || '',
+        emp.designation || '',
+        emp.branch || '',
+        emp.offCount || 0,
+      ];
+
+      daysArray.forEach(d => {
+        const dayData = emp.days[d.date];
+        if (!dayData) {
+          row.push('-');
+          return;
+        }
+        const { status, shiftName, leaveCode } = dayData;
+        if (status === 'OFF') {
+          row.push('OFF');
+        } else if (leaveCode) {
+          const sc = shiftName ? shiftCodeMap[shiftName]?.code : null;
+          row.push(sc ? `${sc}:${leaveCode}` : leaveCode);
+        } else if (shiftName) {
+          row.push(shiftCodeMap[shiftName]?.code || shiftCode(shiftName));
+        } else {
+          row.push('-');
+        }
+      });
+
+      rows.push(row);
+    });
+
+    // Summary row
+    const summaryRow = ['', '', '', '', 'SUMMARY', ''];
+    daysArray.forEach(d => {
+      let present = 0;
+      let off = 0;
+      let leave = 0;
+      filteredRoster.forEach(emp => {
+        const dayData = emp.days[d.date];
+        if (!dayData) return;
+        if (dayData.status === 'OFF') off++;
+        else if (dayData.leaveCode) leave++;
+        else if (dayData.shiftName) present++;
+      });
+      summaryRow.push(`P:${present} O:${off} L:${leave}`);
+    });
+    rows.push(summaryRow);
+
+    // Convert to CSV string
+    const csvContent = rows.map(row =>
+      row.map(cell => {
+        const str = String(cell);
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes(':')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(',')
+    ).join('\r\n');
+
+    // Add BOM for Excel to recognize UTF-8
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    // File name: Shift_Roster_March_2026.csv (with filter hints)
+    let fileName = `Shift_Roster_${MONTH_NAMES[monNum - 1]}_${yearNum}`;
+    if (filterDept) fileName += `_${filterDept}`;
+    if (filterBranch) fileName += `_${filterBranch}`;
+    fileName += '.csv';
+
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [filteredRoster, daysArray, shiftCodeMap, monNum, yearNum, filterDept, filterBranch]);
+
   // Render cell content based on day data
   const renderCell = (dayData) => {
     if (!dayData) return <span className="text-gray-300">-</span>;
@@ -262,9 +363,20 @@ export default function ShiftRoster() {
           </select>
         )}
 
-        <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
-          <Users size={14} />
-          <span>Total: {filteredRoster.length}</span>
+        <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-1 text-xs text-gray-500">
+            <Users size={14} />
+            <span>Total: {filteredRoster.length}</span>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={filteredRoster.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title={filterDept || filterBranch || search ? 'Export filtered records' : 'Export all records'}
+          >
+            <FileSpreadsheet size={14} />
+            Export {(filterDept || filterBranch || search) ? 'Filtered' : 'All'}
+          </button>
         </div>
       </div>
 
