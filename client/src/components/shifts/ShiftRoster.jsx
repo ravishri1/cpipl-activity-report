@@ -145,19 +145,19 @@ export default function ShiftRoster() {
   };
 
   // Render cell content based on day data
-  const renderCell = (dayData, d) => {
+  const renderCell = (dayData) => {
     if (!dayData) return <span className="text-gray-300">-</span>;
 
-    const { status, shiftName, leaveCode, isWeekend, isHoliday } = dayData;
+    const { status, shiftName, leaveCode } = dayData;
 
-    // Weekend or Holiday → show "OFF"
+    // Weekend or Holiday → show "OFF" in red
     if (status === 'OFF') {
       return (
         <span className="text-red-500 font-bold text-[10px]">OFF</span>
       );
     }
 
-    // Leave day → show leave code (e.g., "LOP", "PL", "CL", "COF")
+    // Leave day → show "GS:LOP", "GS:PL", "COF" etc.
     if (leaveCode) {
       const sc = shiftName ? shiftCodeMap[shiftName]?.code : null;
       const label = sc ? `${sc}:${leaveCode}` : leaveCode;
@@ -166,8 +166,24 @@ export default function ShiftRoster() {
       );
     }
 
-    // Normal shift day → empty (greytHR shows nothing for normal working days)
-    return null;
+    // Normal working day → show shift code with color
+    if (shiftName) {
+      const colors = shiftColorMap[shiftName];
+      const code = shiftCodeMap[shiftName]?.code || shiftCode(shiftName);
+      if (colors) {
+        return (
+          <span
+            className="font-bold text-[10px] inline-block px-1 py-0.5 rounded"
+            style={{ backgroundColor: colors.bg, color: colors.text }}
+          >
+            {code}
+          </span>
+        );
+      }
+      return <span className="text-gray-600 font-bold text-[10px]">{code}</span>;
+    }
+
+    return <span className="text-gray-300 text-[10px]">-</span>;
   };
 
   if (loading) return <LoadingSpinner />;
