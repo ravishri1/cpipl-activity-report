@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ClipboardEdit, CheckCircle, XCircle, AlertCircle,
   Users, X, Clock, Timer, ShieldAlert, Download,
@@ -398,6 +398,19 @@ export default function RegularizationManager() {
   const allQuery = `?${allParams}`;
   const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } =
     useFetch(`/regularization${allQuery}`, []);
+
+  // Auto-poll every 30 seconds for real-time updates
+  const refetchPendingRef = useRef(refetchPending);
+  const refetchAllRef = useRef(refetchAll);
+  refetchPendingRef.current = refetchPending;
+  refetchAllRef.current = refetchAll;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetchPendingRef.current();
+      refetchAllRef.current();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleReviewed = () => {
     refetchPending();

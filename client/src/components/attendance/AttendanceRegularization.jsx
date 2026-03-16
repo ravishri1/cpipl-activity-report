@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ClipboardEdit, Plus, X, CheckCircle, XCircle, AlertCircle,
   Clock, Trash2, Timer, ShieldAlert, AlertTriangle, ChevronDown,
@@ -44,6 +44,14 @@ export default function AttendanceRegularization() {
   const { data: lateData, error: lateErr } = useFetch(`/regularization/late-marks?month=${selectedMonth}`, {
     lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0,
   });
+
+  // Auto-poll every 30 seconds so list stays fresh
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  useEffect(() => {
+    const interval = setInterval(() => { refetchRef.current(); }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
