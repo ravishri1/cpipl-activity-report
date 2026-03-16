@@ -42,7 +42,7 @@ export default function ShiftRoster() {
   const [assignForm, setAssignForm] = useState({ shiftId: '', effectiveTo: '', reason: 'Roster Assignment' });
 
   const { data, loading, error, refetch } = useFetch(
-    `/shifts/roster?month=${month}&_t=${Date.now()}`, null
+    `/shifts/roster?month=${month}`, null
   );
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
