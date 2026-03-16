@@ -131,7 +131,7 @@ router.get(
 
     // Get all active employees
     const employees = await req.prisma.user.findMany({
-      where: { status: { not: 'inactive' } },
+      where: { isActive: true },
       select: {
         id: true,
         name: true,
