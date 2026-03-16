@@ -57,11 +57,12 @@ router.get('/my', asyncHandler(async (req, res) => {
 
 // GET /api/regularization — admin: all requests (enriched with attendance + shift context)
 router.get('/', requireAdmin, asyncHandler(async (req, res) => {
-  const { status, userId } = req.query;
+  const { status, userId, all } = req.query;
   const where = {};
   if (status) where.status = status;
   if (userId) where.userId = parseInt(userId);
-  if (!status) where.status = 'pending';
+  // Default to pending unless 'all' param is passed or a specific status is set
+  if (!status && !all) where.status = 'pending';
 
   const requests = await req.prisma.attendanceRegularization.findMany({
     where,
