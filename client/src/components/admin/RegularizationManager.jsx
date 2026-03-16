@@ -3,7 +3,7 @@ import {
   ClipboardEdit, CheckCircle, XCircle, AlertCircle,
   Users, X, Clock, Timer, ShieldAlert, Download,
   AlertTriangle, ChevronRight, MessageSquare, User,
-  Calendar, ArrowRight,
+  Calendar, ArrowRight, RefreshCw,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -507,9 +507,19 @@ export default function RegularizationManager() {
           </button>
         )}
 
-        {/* Count */}
-        <div className="ml-auto text-sm text-slate-400">
-          {filteredList.length} request{filteredList.length !== 1 ? 's' : ''}
+        {/* Refresh + Count */}
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => { refetchPending(); refetchAll(); }}
+            disabled={activeLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+            title="Refresh list"
+          >
+            <RefreshCw size={14} className={activeLoading ? 'animate-spin' : ''} /> Refresh
+          </button>
+          <span className="text-sm text-slate-400">
+            {filteredList.length} request{filteredList.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
