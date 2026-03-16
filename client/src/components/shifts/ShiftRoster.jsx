@@ -90,8 +90,13 @@ export default function ShiftRoster() {
   const filteredRoster = useMemo(() => {
     if (!data?.roster) return [];
     return data.roster.filter(emp => {
-      if (search && !emp.name.toLowerCase().includes(search.toLowerCase()) &&
-          !emp.employeeId?.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!emp.name.toLowerCase().includes(q) &&
+            !emp.employeeId?.toLowerCase().includes(q) &&
+            !emp.department?.toLowerCase().includes(q) &&
+            !emp.designation?.toLowerCase().includes(q)) return false;
+      }
       if (filterDept && emp.department !== filterDept) return false;
       if (filterBranch && emp.branch !== filterBranch) return false;
       return true;
@@ -433,7 +438,7 @@ export default function ShiftRoster() {
                         {emp.name}
                       </div>
                       <div className="text-gray-500 text-[9px] truncate max-w-[170px]">
-                        {emp.designation || ''}{emp.branch ? `, ${emp.branch}` : ''}
+                        {emp.designation || ''}{emp.department && emp.department !== 'General' ? ` · ${emp.department}` : ''}{emp.branch ? ` · ${emp.branch}` : ''}
                       </div>
                     </td>
                     {/* OFF count */}
