@@ -233,7 +233,7 @@ function RequestsTable({ requests, onReview, showReview }) {
   if (requests.length === 0) {
     return (
       <EmptyState
-        icon={<ClipboardEdit className="w-8 h-8 text-slate-300" />}
+        icon={ClipboardEdit}
         title="No requests found"
         subtitle="Adjust filters to see more"
       />
