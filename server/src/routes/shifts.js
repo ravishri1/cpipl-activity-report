@@ -138,7 +138,7 @@ router.get(
         employeeId: true,
         shift: true,
         department: true,
-        branch: true,
+        branch: { select: { name: true, city: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -210,7 +210,7 @@ router.get(
         name: emp.name,
         employeeId: emp.employeeId,
         department: emp.department,
-        branch: emp.branch,
+        branch: emp.branch?.name || emp.branch?.city || null,
         defaultShift: emp.shift,
         days,
       };
