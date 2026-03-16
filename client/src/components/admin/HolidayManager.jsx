@@ -167,13 +167,15 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
     e.preventDefault();
     setLoading(true); setError('');
     try {
+      let result;
       if (isEdit) {
-        await api.put(`/holidays/${holiday.id}`, form);
+        result = await api.put(`/holidays/${holiday.id}`, form);
       } else {
-        await api.post('/holidays', form);
+        result = await api.post('/holidays', form);
       }
-      onSaved();
+      // Close modal first, then refresh data from DB
       onClose();
+      await onSaved(result.data, isEdit);
     } catch (err) {
       setError(err.response?.data?.error || `Failed to ${isEdit ? 'update' : 'add'} holiday.`);
     } finally {
@@ -253,13 +255,14 @@ export default function HolidayManager() {
   const [importResults, setImportResults] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Fetch holidays for both years in FY
-  const fetchHolidays = async () => {
-    setLoading(true);
+  // Fetch holidays for both years in FY (with cache-busting)
+  const fetchHolidays = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
+      const cacheBuster = `_t=${Date.now()}`;
       const [res1, res2] = await Promise.all([
-        api.get(`/holidays?year=${fy}`),
-        api.get(`/holidays?year=${fy + 1}`),
+        api.get(`/holidays?year=${fy}&${cacheBuster}`),
+        api.get(`/holidays?year=${fy + 1}&${cacheBuster}`),
       ]);
       const all = [...res1.data, ...res2.data];
       const fyStart = `${fy}-04-01`;
@@ -272,11 +275,30 @@ export default function HolidayManager() {
     } catch (err) {
       console.error('Failed to fetch holidays:', err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => { fetchHolidays(); setSelected(new Set()); }, [fy]);
+
+  // Called after add/edit from modal — optimistic update + DB refetch
+  const handleSaved = async (record, isEdit) => {
+    if (record) {
+      if (isEdit) {
+        // Optimistic: replace the edited record in the list
+        setAllHolidays(prev => prev.map(h => h.id === record.id ? record : h));
+      } else {
+        // Optimistic: add the new record to the list in sorted order
+        setAllHolidays(prev => {
+          const updated = [...prev, record];
+          updated.sort((a, b) => a.date.localeCompare(b.date));
+          return updated;
+        });
+      }
+    }
+    // Then refetch from DB in background to ensure consistency
+    await fetchHolidays(false);
+  };
 
   // Filter by location
   const locationFiltered = useMemo(() => {
@@ -303,31 +325,42 @@ export default function HolidayManager() {
     });
   };
 
-  // Bulk delete
+  // Bulk delete — optimistic removal + DB refetch
   const handleBulkDelete = async () => {
     if (selected.size === 0) return;
     if (!window.confirm(`Delete ${selected.size} selected holiday(s)?`)) return;
     setDeleting(true);
+    const idsToDelete = [...selected];
+    // Optimistic: remove from list immediately
+    setAllHolidays(prev => prev.filter(h => !selected.has(h.id)));
+    setSelected(new Set());
     try {
-      await Promise.all([...selected].map(id => api.delete(`/holidays/${id}`)));
-      setSelected(new Set());
-      fetchHolidays();
+      await Promise.all(idsToDelete.map(id => api.delete(`/holidays/${id}`)));
+      // Refetch from DB to confirm
+      await fetchHolidays(false);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete some holidays.');
+      // Refetch to restore correct state
+      await fetchHolidays(false);
     } finally {
       setDeleting(false);
     }
   };
 
-  // Single delete
+  // Single delete — optimistic removal + DB refetch
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Delete holiday "${name}"?`)) return;
+    // Optimistic: remove immediately
+    setAllHolidays(prev => prev.filter(h => h.id !== id));
+    setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
     try {
       await api.delete(`/holidays/${id}`);
-      setAllHolidays(prev => prev.filter(h => h.id !== id));
-      setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
+      // Refetch from DB to confirm
+      await fetchHolidays(false);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete.');
+      // Refetch to restore correct state on error
+      await fetchHolidays(false);
     }
   };
 
@@ -375,7 +408,8 @@ export default function HolidayManager() {
       const res = await api.post('/holidays/import', { holidays: importPreview });
       setImportResults(res.data);
       setImportPreview(null);
-      fetchHolidays();
+      // Immediately refetch from DB to show imported holidays
+      await fetchHolidays(false);
     } catch (err) {
       alert(err.response?.data?.error || 'Import failed.');
     } finally {
@@ -583,7 +617,7 @@ export default function HolidayManager() {
         <HolidayFormModal
           holiday={editingHoliday}
           onClose={() => { setShowForm(false); setEditingHoliday(null); }}
-          onSaved={fetchHolidays}
+          onSaved={handleSaved}
         />
       )}
       {importPreview && (
