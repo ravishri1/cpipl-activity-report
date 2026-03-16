@@ -14,8 +14,33 @@ router.get('/', asyncHandler(async (req, res) => {
   const month = req.query.month || new Date().toISOString().substring(0, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be in YYYY-MM format');
   const department = req.query.department || null;
-  const data = await getAttendanceMuster(month, department, req.prisma);
+  const location = req.query.location || null;
+  const data = await getAttendanceMuster(month, department, location, req.prisma);
   res.json(data);
+}));
+
+// GET /api/muster/yearly?year=2025&department=X&location=Y — Get full year data for export
+// year param = financial year start (e.g. 2025 means Apr 2025 - Mar 2026)
+router.get('/yearly', asyncHandler(async (req, res) => {
+  const yearParam = parseInt(req.query.year);
+  if (!yearParam || isNaN(yearParam)) throw badRequest('year is required (financial year start, e.g. 2025)');
+  const department = req.query.department || null;
+  const location = req.query.location || null;
+
+  // Financial year: Apr of yearParam to Mar of yearParam+1
+  const months = [];
+  for (let m = 4; m <= 12; m++) months.push(`${yearParam}-${String(m).padStart(2, '0')}`);
+  for (let m = 1; m <= 3; m++) months.push(`${yearParam + 1}-${String(m).padStart(2, '0')}`);
+
+  // Fetch all 12 months in parallel
+  const results = await Promise.all(
+    months.map(month => getAttendanceMuster(month, department, location, req.prisma))
+  );
+
+  res.json({
+    financialYear: `${yearParam}-${yearParam + 1}`,
+    months: results,
+  });
 }));
 
 // PUT /api/muster/:userId/:date — Admin update cell

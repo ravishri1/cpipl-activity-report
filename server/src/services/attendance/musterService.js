@@ -3,11 +3,20 @@
  * Builds greytHR-style monthly attendance grid with session-based tracking
  */
 
+const GRACE_MINUTES = 15;
+
+/** Parse "HH:MM" to total minutes */
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
 /**
  * Get attendance muster for a month (greytHR-style grid)
  * Returns all employees with their daily statuses for the entire month
  */
-async function getAttendanceMuster(month, department, prisma) {
+async function getAttendanceMuster(month, department, location, prisma) {
   const startDate = `${month}-01`;
   const [year, mon] = month.split('-').map(Number);
   const lastDay = new Date(year, mon, 0).getDate();
@@ -30,8 +39,9 @@ async function getAttendanceMuster(month, department, prisma) {
   // Parallel data fetch
   const userWhere = { isActive: true };
   if (department) userWhere.department = department;
+  if (location) userWhere.location = location;
 
-  const [users, attendances, holidays, leaves, shiftAssignments] = await Promise.all([
+  const [users, attendances, holidays, leaves, shiftAssignments, regularizations] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
       select: { id: true, name: true, employeeId: true, department: true, location: true },
@@ -55,6 +65,11 @@ async function getAttendanceMuster(month, department, prisma) {
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
       },
       select: { userId: true, shift: { select: { name: true, startTime: true, endTime: true } } },
+    }),
+    // Fetch regularization requests for this month
+    prisma.attendanceRegularization.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+      select: { userId: true, date: true, status: true },
     }),
   ]);
 
@@ -88,11 +103,19 @@ async function getAttendanceMuster(month, department, prisma) {
     shiftMap[sa.userId] = sa.shift;
   }
 
+  // Regularization map: userId -> date -> status (pending/approved/rejected)
+  const regMap = {};
+  for (const r of regularizations) {
+    if (!regMap[r.userId]) regMap[r.userId] = {};
+    regMap[r.userId][r.date] = r.status;
+  }
+
   // Build employee rows
   const employees = users.map(user => {
     const days = {};
-    const summary = { P: 0, L: 0, H: 0, A: 0, OFF: 0, HD: 0, LOP: 0, OD: 0 };
+    const summary = { P: 0, L: 0, H: 0, A: 0, OFF: 0, HD: 0, LOP: 0, OD: 0, COF: 0, late: 0, regularized: 0 };
     const shift = shiftMap[user.id] || null;
+    const shiftStartMins = shift ? parseTimeToMinutes(shift.startTime) : null;
 
     for (const di of dayInfo) {
       const att = attMap[user.id]?.[di.date];
@@ -100,6 +123,7 @@ async function getAttendanceMuster(month, department, prisma) {
       const isWeekend = di.dow === 0 || di.dow === 6;
       const leaveCode = leaveMap[user.id]?.[di.date] || null;
       const isFuture = di.date > today;
+      const regStatus = regMap[user.id]?.[di.date] || null;
 
       let display = '-';
       let color = 'future';
@@ -107,6 +131,10 @@ async function getAttendanceMuster(month, department, prisma) {
       let session2 = null;
       let adminOverride = false;
       let adminRemark = null;
+      let isLate = false;
+      let lateMinutes = 0;
+      let isRegularized = regStatus === 'approved';
+      let regPending = regStatus === 'pending';
 
       if (isFuture && !isHoliday && !isWeekend) {
         display = '-';
@@ -125,8 +153,22 @@ async function getAttendanceMuster(month, department, prisma) {
         session1 = att.session1 || null;
         session2 = att.session2 || null;
 
+        // Detect late arrival (only if NOT admin-overridden and NOT regularized)
+        if (att.checkIn && shiftStartMins !== null && !adminOverride && !isRegularized) {
+          const checkInDate = new Date(att.checkIn);
+          const checkInMins = checkInDate.getHours() * 60 + checkInDate.getMinutes();
+          const diff = checkInMins - shiftStartMins;
+          if (diff > GRACE_MINUTES) {
+            isLate = true;
+            lateMinutes = diff;
+            summary.late++;
+          }
+        }
+
+        if (isRegularized) summary.regularized++;
+
         if (session1 && session2) {
-          // Admin has set sessions explicitly
+          // Admin/system has set sessions explicitly
           if (session1 === 'P' && session2 === 'P') {
             display = 'P'; color = 'present'; summary.P++;
           } else if (session1 === 'P' && session2 === 'A') {
@@ -135,6 +177,15 @@ async function getAttendanceMuster(month, department, prisma) {
             display = 'A:P'; color = 'halfday'; summary.HD++;
           } else if (session1 === 'A' && session2 === 'A') {
             display = 'A'; color = 'absent'; summary.A++;
+          } else if (session1 === 'LOP' || session2 === 'LOP') {
+            display = `${session1}:${session2}`; color = 'lop';
+            summary.LOP++;
+          } else if (session1 === 'OD' || session2 === 'OD') {
+            display = `${session1}:${session2}`; color = 'onduty';
+            summary.OD++;
+          } else if (session1 === 'COF' || session2 === 'COF') {
+            display = `${session1}:${session2}`; color = 'compoff';
+            summary.COF++;
           } else if (session1 === 'L' || session2 === 'L') {
             display = `${session1}:${session2}`; color = 'leave'; summary.L++;
           } else {
@@ -160,7 +211,15 @@ async function getAttendanceMuster(month, department, prisma) {
         display = 'A'; color = 'absent'; summary.A++;
       }
 
-      days[di.date] = { display, color, session1, session2, adminOverride, adminRemark, checkIn: att?.checkIn || null, checkOut: att?.checkOut || null, workHours: att?.workHours || null };
+      days[di.date] = {
+        display, color, session1, session2,
+        adminOverride, adminRemark,
+        checkIn: att?.checkIn || null,
+        checkOut: att?.checkOut || null,
+        workHours: att?.workHours || null,
+        isLate, lateMinutes,
+        isRegularized, regPending,
+      };
     }
 
     return {
@@ -175,6 +234,10 @@ async function getAttendanceMuster(month, department, prisma) {
     };
   });
 
+  // Get unique locations and departments for filter dropdowns
+  const allLocations = [...new Set(employees.map(e => e.location).filter(Boolean))].sort();
+  const allDepartments = [...new Set(employees.map(e => e.department).filter(Boolean))].sort();
+
   return {
     month,
     lastDay,
@@ -182,6 +245,8 @@ async function getAttendanceMuster(month, department, prisma) {
     holidays: holidayMap,
     employees,
     totalEmployees: employees.length,
+    allLocations,
+    allDepartments,
   };
 }
 
