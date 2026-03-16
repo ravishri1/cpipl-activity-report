@@ -399,6 +399,12 @@ model Attendance {
   workHours Float?                              // auto-calc from checkIn/checkOut
   ipAddress String?
   notes     String?
+  session1       String?                            // "P", "A", "L" — First session status (admin override)
+  session2       String?                            // "P", "A", "L" — Second session status (admin override)
+  adminOverride  Boolean   @default(false)          // Whether admin manually set this status
+  adminRemark    String?                            // Admin remark when overriding
+  overriddenBy   Int?                               // Admin user who overrode
+  overriddenAt   DateTime?                          // When the override happened
 
   user User @relation(fields: [userId], references: [id])
 

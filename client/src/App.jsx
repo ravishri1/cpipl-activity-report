@@ -65,6 +65,7 @@ const RecruitmentManager = lazy(() => import('./components/recruitment/Recruitme
 const RenewalManager = lazy(() => import('./components/admin/RenewalManager'));
 const AttendanceRegularization = lazy(() => import('./components/attendance/AttendanceRegularization'));
 const RegularizationManager = lazy(() => import('./components/admin/RegularizationManager'));
+const AttendanceMuster = lazy(() => import('./components/admin/AttendanceMuster'));
 const AssetLifecycleDashboard = lazy(() => import('./components/admin/AssetLifecycleDashboard'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/admin/PredictiveMaintenanceDashboard'));
 const HRAnalyticsDashboard = lazy(() => import('./components/admin/HRAnalyticsDashboard'));
@@ -202,6 +203,7 @@ function AppRoutes() {
                   <Route path="/admin/compliance" element={<SeparatedRoute><AdminRoute><ComplianceTracker /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/comp-off" element={<SeparatedRoute><AdminRoute><CompOffManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/regularization" element={<SeparatedRoute><AdminRoute><RegularizationManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/muster" element={<SeparatedRoute><AdminRoute><AttendanceMuster /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/recruitment" element={<SeparatedRoute><AdminRoute><RecruitmentManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/renewals" element={<SeparatedRoute><AdminRoute><RenewalManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />

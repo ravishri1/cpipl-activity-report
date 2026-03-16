@@ -49,6 +49,7 @@ import {
   Activity,
   HeartPulse,
   LineChart,
+  LayoutGrid,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -230,6 +231,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const timePayItems = [
     { to: '/admin/attendance',               label: 'Team Attendance',        icon: CheckSquare },
+    { to: '/admin/muster',                    label: 'Attendance Muster',      icon: LayoutGrid },
     { to: '/admin/biometric',                label: 'Biometric',              icon: Fingerprint },
     { to: '/admin/shifts',                   label: 'Shift Management',       icon: Clock },
     { to: '/admin/leave-requests',           label: 'Leave Requests',         icon: ClipboardCheck },

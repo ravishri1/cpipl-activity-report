@@ -47,6 +47,7 @@ const complianceRoutes = require('./routes/compliance');
 const compOffRoutes = require('./routes/compOff');
 const regularizationRoutes = require('./routes/regularization');
 const recruitmentRoutes = require('./routes/recruitment');
+const musterRoutes = require('./routes/muster');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -170,6 +171,7 @@ app.use('/api/compliance', complianceRoutes);
 app.use('/api/comp-off', compOffRoutes);
 app.use('/api/regularization', regularizationRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
+app.use('/api/muster', musterRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);
