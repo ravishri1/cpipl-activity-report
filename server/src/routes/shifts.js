@@ -129,42 +129,86 @@ router.get(
     const startDate = `${month}-01`;
     const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-    // Get all active employees
-    const employees = await req.prisma.user.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        employeeId: true,
-        shift: true,
-        department: true,
-        branch: { select: { name: true, city: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    // Run all queries in parallel for performance
+    const [employees, assignments, shifts, holidays, leaves] = await Promise.all([
+      // All active employees
+      req.prisma.user.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          employeeId: true,
+          shift: true,
+          department: true,
+          designation: true,
+          location: true,
+          branch: { select: { name: true, city: true } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+      // Shift assignments overlapping this month
+      req.prisma.shiftAssignment.findMany({
+        where: {
+          status: { in: ['active', 'pending'] },
+          effectiveFrom: { lte: endDate },
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gte: startDate } },
+          ],
+        },
+        include: {
+          shift: { select: { id: true, name: true, startTime: true, endTime: true } },
+        },
+        orderBy: { effectiveFrom: 'desc' },
+      }),
+      // All active shifts for legend/dropdown
+      req.prisma.shift.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, startTime: true, endTime: true },
+        orderBy: { name: 'asc' },
+      }),
+      // Holidays in this month
+      req.prisma.holiday.findMany({
+        where: { date: { gte: startDate, lte: endDate } },
+        select: { date: true, name: true, isOptional: true, location: true },
+      }),
+      // Approved leaves overlapping this month
+      req.prisma.leaveRequest.findMany({
+        where: {
+          status: 'approved',
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+        select: {
+          userId: true,
+          startDate: true,
+          endDate: true,
+          leaveType: { select: { code: true, name: true } },
+        },
+      }),
+    ]);
 
-    // Get all shift assignments that overlap this month for all users
-    const assignments = await req.prisma.shiftAssignment.findMany({
-      where: {
-        status: { in: ['active', 'pending'] },
-        effectiveFrom: { lte: endDate },
-        OR: [
-          { effectiveTo: null },
-          { effectiveTo: { gte: startDate } },
-        ],
-      },
-      include: {
-        shift: { select: { id: true, name: true, startTime: true, endTime: true } },
-      },
-      orderBy: { effectiveFrom: 'desc' },
-    });
+    // Build holiday lookup by date
+    const holidayMap = {};
+    for (const h of holidays) {
+      if (!holidayMap[h.date]) holidayMap[h.date] = [];
+      holidayMap[h.date].push(h);
+    }
 
-    // Get all shifts for legend / dropdown
-    const shifts = await req.prisma.shift.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, startTime: true, endTime: true },
-      orderBy: { name: 'asc' },
-    });
+    // Build leave lookup: userId -> { date -> leaveCode }
+    const leavesByUser = {};
+    for (const lr of leaves) {
+      if (!leavesByUser[lr.userId]) leavesByUser[lr.userId] = {};
+      let d = new Date(lr.startDate + 'T00:00:00');
+      const end = new Date(lr.endDate + 'T00:00:00');
+      while (d <= end) {
+        const ds = d.toISOString().split('T')[0];
+        if (ds >= startDate && ds <= endDate) {
+          leavesByUser[lr.userId][ds] = lr.leaveType?.code || 'L';
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    }
 
     // Build assignment lookup: userId -> array of assignments
     const assignmentsByUser = {};
@@ -176,33 +220,54 @@ router.get(
     // Build roster data
     const roster = employees.map(emp => {
       const userAssignments = assignmentsByUser[emp.id] || [];
+      const userLeaves = leavesByUser[emp.id] || {};
+      const empBranch = emp.branch?.name || emp.branch?.city || emp.location || null;
 
-      // For each day of the month, find the applicable shift
+      // For each day of the month, find the applicable shift + OFF/leave status
       const days = {};
+      let offCount = 0;
       for (let d = 1; d <= lastDay; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+        const dateObj = new Date(year, mon - 1, d);
+        const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-        // Find the most recent assignment that covers this date
+        // Check holiday (match All or employee's branch/location)
+        const dayHolidays = holidayMap[dateStr] || [];
+        const isHoliday = dayHolidays.some(h =>
+          h.location === 'All' || h.location === empBranch
+        );
+        const holidayName = dayHolidays.find(h => h.location === 'All' || h.location === empBranch)?.name || null;
+
+        // Check leave
+        const leaveCode = userLeaves[dateStr] || null;
+
+        // Find shift assignment
         const applicable = userAssignments.find(a => {
           if (a.effectiveFrom > dateStr) return false;
           if (a.effectiveTo && a.effectiveTo < dateStr) return false;
           return true;
         });
 
-        if (applicable) {
-          days[dateStr] = {
-            shiftId: applicable.shift.id,
-            shiftName: applicable.shift.name,
-            assignmentId: applicable.id,
-          };
-        } else {
-          // Use default shift name from user profile
-          days[dateStr] = {
-            shiftId: null,
-            shiftName: emp.shift || null,
-            assignmentId: null,
-          };
-        }
+        const shiftName = applicable ? applicable.shift.name : (emp.shift || null);
+        const shiftId = applicable ? applicable.shift.id : null;
+
+        // Determine display status
+        let status = null; // null = normal shift day
+        if (isWeekend) { status = 'OFF'; offCount++; }
+        else if (isHoliday) { status = 'OFF'; offCount++; }
+        else if (leaveCode) { status = leaveCode; } // "PL", "CL", "LOP", "COF", etc.
+
+        days[dateStr] = {
+          shiftId,
+          shiftName,
+          assignmentId: applicable?.id || null,
+          status,
+          holidayName,
+          leaveCode,
+          isWeekend,
+          isHoliday,
+        };
       }
 
       return {
@@ -210,8 +275,10 @@ router.get(
         name: emp.name,
         employeeId: emp.employeeId,
         department: emp.department,
-        branch: emp.branch?.name || emp.branch?.city || null,
+        designation: emp.designation,
+        branch: empBranch,
         defaultShift: emp.shift,
+        offCount,
         days,
       };
     });
