@@ -13,7 +13,9 @@ export function useFetch(url, initialData = null, deps = []) {
   const state = useApi(initialData);
 
   const refetch = useCallback(() => {
-    return state.execute(() => api.get(url));
+    // Add cache-buster to prevent stale responses
+    const sep = url.includes('?') ? '&' : '?';
+    return state.execute(() => api.get(`${url}${sep}_t=${Date.now()}`));
   }, [url, state.execute]);
 
   useEffect(() => {

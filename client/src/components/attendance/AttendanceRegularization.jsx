@@ -36,7 +36,7 @@ export default function AttendanceRegularization() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
   const [showPolicy, setShowPolicy] = useState(false);
 
-  const { data: requests, loading, error, refetch } = useFetch('/regularization/my', []);
+  const { data: requests, setData: setRequests, loading, error, refetch } = useFetch('/regularization/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const { execute: execDelete, loading: deleting } = useApi();
 
@@ -76,12 +76,15 @@ export default function AttendanceRegularization() {
       ...(form.requestedOut && { requestedOut: form.requestedOut }),
     };
     try {
-      await execute(
+      const newRecord = await execute(
         () => api.post('/regularization', payload),
         'Regularization request submitted!'
       );
       setShowForm(false);
-      refetch();
+      // Optimistic update — immediately show new record in list
+      if (newRecord) setRequests(prev => [newRecord, ...(Array.isArray(prev) ? prev : [])]);
+      // Also refetch in background for full server data
+      refetch().catch(() => {});
     } catch {
       // Error displayed by useApi hook
     }

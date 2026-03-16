@@ -96,7 +96,7 @@ app.use((req, res, next) => {
   // API endpoints: 5-minute cache for GET requests (safe/idempotent)
   else if (req.method === 'GET' && req.path.startsWith('/api/')) {
     // Exclude sensitive endpoints from caching
-    const noCacheEndpoints = ['/api/auth', '/api/users/me', '/api/dashboard'];
+    const noCacheEndpoints = ['/api/auth', '/api/users/me', '/api/dashboard', '/api/regularization'];
     if (noCacheEndpoints.some(ep => req.path.startsWith(ep))) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else {
