@@ -50,6 +50,7 @@ import {
   HeartPulse,
   LineChart,
   LayoutGrid,
+  Calendar,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -234,6 +235,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/muster',                    label: 'Attendance Muster',      icon: LayoutGrid },
     { to: '/admin/biometric',                label: 'Biometric',              icon: Fingerprint },
     { to: '/admin/shifts',                   label: 'Shift Management',       icon: Clock },
+    { to: '/admin/shift-roster',              label: 'Shift Roster',           icon: Calendar },
     { to: '/admin/leave-requests',           label: 'Leave Requests',         icon: ClipboardCheck },
     { to: '/admin/holidays',                 label: 'Holidays',               icon: CalendarDays },
     { to: '/admin/payroll',                  label: 'Payroll',                icon: CreditCard },

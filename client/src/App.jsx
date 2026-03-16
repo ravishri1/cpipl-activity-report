@@ -47,6 +47,7 @@ const MyInsuranceCard = lazy(() => import('./components/insurance/MyInsuranceCar
 const AdminInsuranceManager = lazy(() => import('./components/insurance/AdminInsuranceManager'));
 const AssetRepairTimeline = lazy(() => import('./components/admin/AssetRepairTimeline'));
 const ShiftManagement = lazy(() => import('./components/shifts/ShiftManagement'));
+const ShiftRoster = lazy(() => import('./components/shifts/ShiftRoster'));
 const TeamOverview = lazy(() => import('./components/team-lead/TeamOverview'));
 const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPanel'));
 // BranchManager is now embedded inside CompanyMaster (no direct route)
@@ -186,6 +187,7 @@ function AppRoutes() {
                   <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/shifts" element={<SeparatedRoute><AdminRoute><ShiftManagement /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/shift-roster" element={<SeparatedRoute><AdminRoute><ShiftRoster /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/import" element={<SeparatedRoute><AdminRoute><EmployeeImport /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policies" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/policy-scorecard" element={<SeparatedRoute><AdminRoute><PolicyManager /></AdminRoute></SeparatedRoute>} />
