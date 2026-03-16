@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { ClipboardEdit, Plus, X, CheckCircle, XCircle, AlertCircle, Clock, Trash2 } from 'lucide-react';
+import {
+  ClipboardEdit, Plus, X, CheckCircle, XCircle, AlertCircle,
+  Clock, Trash2, Timer, ShieldAlert, AlertTriangle, ChevronDown,
+} from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -30,15 +33,22 @@ export default function AttendanceRegularization() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [showPolicy, setShowPolicy] = useState(false);
 
   const { data: requests, loading, error, refetch } = useFetch('/regularization/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const { execute: execDelete, loading: deleting } = useApi();
 
+  // Fetch late marks for the selected month
+  const { data: lateData, error: lateErr } = useFetch(`/regularization/late-marks?month=${selectedMonth}`, {
+    lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0,
+  });
+
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const openForm = () => {
-    setForm(EMPTY_FORM);
+  const openForm = (date = '') => {
+    setForm({ ...EMPTY_FORM, date });
     setFormError('');
     clearMessages();
     setShowForm(true);
@@ -57,30 +67,39 @@ export default function AttendanceRegularization() {
       ...(form.requestedIn  && { requestedIn:  form.requestedIn }),
       ...(form.requestedOut && { requestedOut: form.requestedOut }),
     };
-    await execute(
-      () => api.post('/regularization', payload),
-      'Regularization request submitted!'
-    );
-    setShowForm(false);
-    refetch();
+    try {
+      await execute(
+        () => api.post('/regularization', payload),
+        'Regularization request submitted!'
+      );
+      setShowForm(false);
+      refetch();
+    } catch {
+      // Error displayed by useApi hook
+    }
   };
 
   const handleCancel = async (id) => {
     if (!window.confirm('Cancel this regularization request?')) return;
-    await execDelete(
-      () => api.delete(`/regularization/${id}`),
-      'Request cancelled.'
-    );
-    refetch();
+    try {
+      await execDelete(
+        () => api.delete(`/regularization/${id}`),
+        'Request cancelled.'
+      );
+      refetch();
+    } catch {
+      // Error displayed by useApi hook
+    }
   };
 
   const pending  = requests.filter(r => r.status === 'pending').length;
   const approved = requests.filter(r => r.status === 'approved').length;
+  const rejected = requests.filter(r => r.status === 'rejected').length;
 
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-5xl mx-auto">
       {/* Sticky Header */}
       <div className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 -mx-6 -mt-6 px-6 py-4 mb-6 flex items-center justify-between">
         <div>
@@ -88,7 +107,7 @@ export default function AttendanceRegularization() {
           <p className="text-sm text-slate-500 mt-0.5">Request corrections for missed or incorrect check-in/out</p>
         </div>
         <button
-          onClick={openForm}
+          onClick={() => openForm()}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
         >
           <Plus size={16} /> New Request
@@ -97,23 +116,117 @@ export default function AttendanceRegularization() {
 
       {/* Alerts */}
       {error    && <AlertMessage type="error"   message={error}   />}
+      {saveErr  && <AlertMessage type="error"   message={saveErr} />}
       {success  && <AlertMessage type="success" message={success} />}
+      {lateErr  && <AlertMessage type="error"   message={lateErr} />}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Total Requests</p>
-          <p className="text-2xl font-bold text-slate-800">{requests.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Pending</p>
-          <p className="text-2xl font-bold text-amber-600">{pending}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500 mb-1">Approved</p>
-          <p className="text-2xl font-bold text-green-600">{approved}</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        <StatCard label="Total Requests" value={requests.length} />
+        <StatCard label="Pending" value={pending} highlight="amber" />
+        <StatCard label="Approved" value={approved} highlight="green" />
+        <StatCard label="Late Marks" value={lateData.totalLateMarks} highlight={lateData.totalLateMarks > 0 ? 'amber' : null} />
+        <StatCard
+          label="Penalty Days"
+          value={lateData.halfDayDeductions}
+          highlight={lateData.halfDayDeductions > 0 ? 'red' : null}
+          subtitle={lateData.halfDayDeductions > 0 ? `${lateData.halfDayDeductions * 0.5} day deduction` : null}
+        />
       </div>
+
+      {/* Late Mark Policy Alert */}
+      {lateData.totalLateMarks > 0 && (
+        <div className={`mb-6 px-4 py-3 rounded-xl border text-sm flex items-start gap-2 ${
+          lateData.halfDayDeductions > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'
+        }`}>
+          <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">
+              {lateData.totalLateMarks} late mark{lateData.totalLateMarks !== 1 ? 's' : ''} in {selectedMonth}
+              {lateData.regularizedCount > 0 && ` (${lateData.regularizedCount} regularized)`}
+            </p>
+            <p className="text-xs mt-0.5 opacity-80">
+              {lateData.unregularizedCount} unregularized.
+              {lateData.halfDayDeductions > 0
+                ? ` Penalty: ${lateData.halfDayDeductions * 0.5} day(s) deducted from leave/LOP.`
+                : ` ${3 - (lateData.unregularizedCount % 3)} more before next half-day deduction.`}
+            </p>
+          </div>
+          <select
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none"
+          >
+            {getLast6Months().map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Late Marks Detail */}
+      {lateData.lateMarks.length > 0 && (
+        <div className="mb-6">
+          <button
+            onClick={() => setShowPolicy(!showPolicy)}
+            className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 mb-2"
+          >
+            <ChevronDown size={16} className={`transition-transform ${showPolicy ? 'rotate-180' : ''}`} />
+            Late Marks Detail ({selectedMonth})
+          </button>
+          {showPolicy && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Date</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Shift Start</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Check-In</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Late By</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Regularization</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {lateData.lateMarks.map((lm, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-medium text-slate-800">{formatDate(lm.date)}</td>
+                      <td className="px-4 py-2 text-slate-600">{lm.shiftStart}</td>
+                      <td className="px-4 py-2 font-mono text-slate-700">
+                        {lm.checkIn ? new Date(lm.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">
+                          <Timer size={10} /> {lm.lateMinutes} min
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        {lm.regularizationStatus ? (
+                          <StatusBadge status={lm.regularizationStatus} />
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-rose-500 text-[10px] font-bold">
+                            <AlertTriangle size={10} /> Not Applied
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2">
+                        {!lm.regularizationStatus && (
+                          <button
+                            onClick={() => openForm(lm.date)}
+                            className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[10px] font-bold"
+                          >
+                            Apply
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* New Request Modal */}
       {showForm && (
@@ -195,7 +308,7 @@ export default function AttendanceRegularization() {
                   disabled={saving}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {saving ? 'Submitting…' : 'Submit Request'}
+                  {saving ? 'Submitting...' : 'Submit Request'}
                 </button>
               </div>
             </form>
@@ -269,4 +382,32 @@ export default function AttendanceRegularization() {
       )}
     </div>
   );
+}
+
+// ── Helpers ──
+
+function StatCard({ label, value, highlight, subtitle }) {
+  const hl = {
+    amber: { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-600' },
+    green: { border: 'border-green-200', bg: 'bg-green-50', text: 'text-green-600' },
+    red:   { border: 'border-red-200',   bg: 'bg-red-50',   text: 'text-red-600' },
+  };
+  const s = highlight ? hl[highlight] : { border: 'border-slate-200', bg: 'bg-white', text: 'text-slate-800' };
+  return (
+    <div className={`rounded-xl border p-4 ${s.border} ${s.bg}`}>
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${s.text}`}>{value}</p>
+      {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
+    </div>
+  );
+}
+
+function getLast6Months() {
+  const months = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.toISOString().substring(0, 7));
+  }
+  return months;
 }

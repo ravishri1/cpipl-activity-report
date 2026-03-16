@@ -324,17 +324,21 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
 
 /**
  * Get employee calendar view — monthly grid with attendance, holidays, leaves, biometric punches
+ * Now includes late mark detection, short hours, and regularization status
  * @param {number} userId
  * @param {string} month - "YYYY-MM" format
  */
 async function getEmployeeCalendar(userId, month, prisma) {
+  const GRACE_MINUTES = 15;
+  const REQUIRED_WORK_HOURS = 9;
+
   const startDate = `${month}-01`;
   const [year, mon] = month.split('-').map(Number);
   const lastDay = new Date(year, mon, 0).getDate();
   const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
   const today = new Date().toISOString().split('T')[0];
 
-  const [attendances, holidays, leaves, punches, shiftAssignment] = await Promise.all([
+  const [attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
     prisma.attendance.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
       orderBy: { date: 'asc' },
@@ -365,6 +369,11 @@ async function getEmployeeCalendar(userId, month, prisma) {
       },
       include: { shift: true },
     }),
+    prisma.attendanceRegularization.findMany({
+      where: { userId, date: { gte: startDate, lte: endDate } },
+      include: { reviewer: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
   // Build lookup maps
@@ -385,6 +394,13 @@ async function getEmployeeCalendar(userId, month, prisma) {
     });
   }
 
+  // Build regularization map (latest per date)
+  const regularizationMap = {};
+  for (const r of regularizations) {
+    // regularizations are ordered by createdAt desc, so first one per date is the latest
+    if (!regularizationMap[r.date]) regularizationMap[r.date] = r;
+  }
+
   // Build leave date set from approved leave ranges
   const leaveDates = {};
   for (const lr of leaves) {
@@ -399,8 +415,15 @@ async function getEmployeeCalendar(userId, month, prisma) {
     }
   }
 
+  const shift = shiftAssignment?.shift;
+  const shiftStartMin = shift ? parseTimeToMinutes(shift.startTime) : null;
+
   // Build calendar days array
   const days = [];
+  let lateMarksCount = 0;
+  let regularizedDaysCount = 0;
+  let shortHoursDaysCount = 0;
+
   for (let day = 1; day <= lastDay; day++) {
     const dateStr = `${month}-${String(day).padStart(2, '0')}`;
     const dateObj = new Date(dateStr + 'T00:00:00');
@@ -410,6 +433,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
     const holiday = holidayMap[dateStr];
     const leave = leaveDates[dateStr];
     const dayPunches = punchesByDate[dateStr] || [];
+    const reg = regularizationMap[dateStr] || null;
 
     let status = 'absent';
     let statusLabel = 'A';
@@ -436,27 +460,54 @@ async function getEmployeeCalendar(userId, month, prisma) {
     // Calculate late-in / early-out based on shift timing
     let lateIn = null;
     let earlyOut = null;
-    const shift = shiftAssignment?.shift;
     if (shift && att?.checkIn) {
-      const [sh, sm] = (shift.startTime || '').split(':').map(Number);
       const ciTime = new Date(att.checkIn);
       const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
-      const shiftStartMin = (sh || 0) * 60 + (sm || 0);
-      if (ciMinutes > shiftStartMin + 5) { // 5-min grace
+      if (ciMinutes > shiftStartMin + 5) { // 5-min grace for display
         const diff = ciMinutes - shiftStartMin;
         lateIn = `${Math.floor(diff / 60)}h ${diff % 60}m`;
       }
     }
     if (shift && att?.checkOut) {
-      const [eh, em] = (shift.endTime || '').split(':').map(Number);
+      const shiftEndMin = parseTimeToMinutes(shift.endTime);
       const coTime = new Date(att.checkOut);
       const coMinutes = coTime.getHours() * 60 + coTime.getMinutes();
-      const shiftEndMin = (eh || 0) * 60 + (em || 0);
-      if (coMinutes < shiftEndMin - 5) { // 5-min grace
+      if (coMinutes < shiftEndMin - 5) { // 5-min grace for display
         const diff = shiftEndMin - coMinutes;
         earlyOut = `${Math.floor(diff / 60)}h ${diff % 60}m`;
       }
     }
+
+    // Policy enforcement: late mark detection (15-min grace)
+    let isLate = false;
+    let lateMinutes = 0;
+    let shortHours = false;
+    let needsRegularization = false;
+    let regularizationStatus = reg?.status || null;
+
+    // Only compute for non-future, non-weekend, non-holiday, non-leave working days
+    const isWorkingDay = !isFuture && !isWeekend && !holiday && !leave;
+
+    if (isWorkingDay && shift && att?.checkIn) {
+      const ciTime = new Date(att.checkIn);
+      const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+      lateMinutes = Math.max(0, ciMinutes - shiftStartMin);
+      isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
+    }
+
+    if (isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null) {
+      shortHours = att.workHours < REQUIRED_WORK_HOURS;
+    }
+
+    if (isWorkingDay && (isLate || shortHours)) {
+      // Needs regularization if no approved regularization exists
+      needsRegularization = !reg || reg.status !== 'approved';
+    }
+
+    // Count summary metrics
+    if (isLate) lateMarksCount++;
+    if (reg?.status === 'approved') regularizedDaysCount++;
+    if (shortHours) shortHoursDaysCount++;
 
     days.push({
       date: dateStr,
@@ -473,8 +524,28 @@ async function getEmployeeCalendar(userId, month, prisma) {
       lateIn,
       earlyOut,
       punches: dayPunches,
+      // Policy enforcement fields
+      isLate,
+      lateMinutes,
+      shortHours,
+      needsRegularization,
+      regularizationStatus,
+      regularization: reg ? {
+        id: reg.id,
+        status: reg.status,
+        reason: reg.reason,
+        requestedIn: reg.requestedIn,
+        requestedOut: reg.requestedOut,
+        reviewNote: reg.reviewNote,
+        reviewerName: reg.reviewer?.name || null,
+        reviewedAt: reg.reviewedAt,
+        createdAt: reg.createdAt,
+      } : null,
     });
   }
+
+  // Count unregularized late marks (late AND no approved regularization)
+  const unregularizedLateMarks = days.filter(d => d.isLate && (!d.regularizationStatus || d.regularizationStatus !== 'approved')).length;
 
   const summary = {
     present: days.filter(d => d.status === 'present').length,
@@ -484,6 +555,11 @@ async function getEmployeeCalendar(userId, month, prisma) {
     holiday: days.filter(d => d.status === 'holiday').length,
     weekend: days.filter(d => d.status === 'weekend').length,
     totalWorkHours: Math.round(days.reduce((sum, d) => sum + (d.workHours || 0), 0) * 100) / 100,
+    // Policy enforcement summary
+    lateMarks: lateMarksCount,
+    regularizedDays: regularizedDaysCount,
+    shortHoursDays: shortHoursDaysCount,
+    halfDayDeductions: Math.floor(unregularizedLateMarks / 3),
   };
 
   return {
@@ -495,6 +571,121 @@ async function getEmployeeCalendar(userId, month, prisma) {
   };
 }
 
+/**
+ * Parse "HH:MM" time string to minutes since midnight
+ */
+function parseTimeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Get late marks summary for a user in a given month
+ * Used for policy enforcement: 3 late marks = 1 half day deduction
+ * @param {number} userId
+ * @param {string} month - "YYYY-MM" format
+ * @param {object} prisma
+ */
+async function getLateMarksSummary(userId, month, prisma) {
+  const GRACE_MINUTES = 15;
+  const startDate = `${month}-01`;
+  const [year, mon] = month.split('-').map(Number);
+  const lastDay = new Date(year, mon, 0).getDate();
+  const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+  const today = new Date().toISOString().split('T')[0];
+
+  const [attendances, holidays, shiftAssignment, regularizations] = await Promise.all([
+    prisma.attendance.findMany({
+      where: { userId, date: { gte: startDate, lte: endDate } },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.holiday.findMany({
+      where: { date: { gte: startDate, lte: endDate } },
+    }),
+    prisma.shiftAssignment.findFirst({
+      where: {
+        userId,
+        status: 'active',
+        effectiveFrom: { lte: today },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+      },
+      include: { shift: true },
+    }),
+    prisma.attendanceRegularization.findMany({
+      where: { userId, date: { gte: startDate, lte: endDate } },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+
+  const shift = shiftAssignment?.shift;
+  if (!shift) {
+    return {
+      lateMarks: [],
+      totalLateMarks: 0,
+      regularizedCount: 0,
+      unregularizedCount: 0,
+      halfDayDeductions: 0,
+      month,
+    };
+  }
+
+  const shiftStartMin = parseTimeToMinutes(shift.startTime);
+  const holidaySet = new Set(holidays.map(h => h.date));
+
+  // Build regularization map (latest per date)
+  const regMap = {};
+  for (const r of regularizations) {
+    if (!regMap[r.date]) regMap[r.date] = r;
+  }
+
+  const lateMarks = [];
+  let regularizedCount = 0;
+
+  for (const att of attendances) {
+    if (!att.checkIn) continue;
+    if (att.date > today) continue; // skip future
+
+    // Skip weekends
+    const dateObj = new Date(att.date + 'T00:00:00');
+    const dow = dateObj.getDay();
+    if (dow === 0 || dow === 6) continue;
+
+    // Skip holidays
+    if (holidaySet.has(att.date)) continue;
+
+    const ciTime = new Date(att.checkIn);
+    const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+    const lateMinutes = ciMinutes - shiftStartMin;
+
+    if (lateMinutes > GRACE_MINUTES) {
+      const reg = regMap[att.date];
+      const regStatus = reg?.status || null;
+      if (regStatus === 'approved') regularizedCount++;
+
+      lateMarks.push({
+        date: att.date,
+        lateMinutes,
+        checkIn: att.checkIn,
+        shiftStart: shift.startTime,
+        regularizationStatus: regStatus,
+      });
+    }
+  }
+
+  const totalLateMarks = lateMarks.length;
+  const unregularizedCount = totalLateMarks - regularizedCount;
+
+  return {
+    lateMarks,
+    totalLateMarks,
+    regularizedCount,
+    unregularizedCount,
+    halfDayDeductions: Math.floor(unregularizedCount / 3),
+    month,
+  };
+}
+
 module.exports = {
   checkIn,
   checkOut,
@@ -503,4 +694,5 @@ module.exports = {
   getTeamAttendance,
   getTeamAttendanceRange,
   getEmployeeCalendar,
+  getLateMarksSummary,
 };

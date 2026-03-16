@@ -3,11 +3,47 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { getLateMarksSummary } = require('../services/attendance/attendanceService');
 
 const router = express.Router();
 router.use(authenticate);
 
 function isAdminRole(u) { return u.role === 'admin' || u.role === 'sub_admin' || u.role === 'team_lead'; }
+
+/**
+ * Detect regularization type from attendance data
+ */
+function detectRegularizationType(attendance, shiftStartMin, graceMinutes) {
+  if (!attendance) return 'missed_punch';
+  if (!attendance.checkIn || !attendance.checkOut) return 'missed_punch';
+
+  if (attendance.checkIn && shiftStartMin != null) {
+    const ciTime = new Date(attendance.checkIn);
+    const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+    if (ciMinutes > shiftStartMin + graceMinutes) return 'late_mark';
+  }
+
+  if (attendance.workHours != null && attendance.workHours < 9) return 'short_hours';
+
+  return 'other';
+}
+
+// GET /api/regularization/late-marks?userId=X&month=YYYY-MM — late marks summary
+router.get('/late-marks', asyncHandler(async (req, res) => {
+  let userId;
+  if (req.query.userId && isAdminRole(req.user)) {
+    userId = parseInt(req.query.userId);
+    if (isNaN(userId)) throw badRequest('Invalid userId');
+  } else {
+    userId = req.user.id;
+  }
+
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be in YYYY-MM format');
+
+  const summary = await getLateMarksSummary(userId, month, req.prisma);
+  res.json(summary);
+}));
 
 // GET /api/regularization/my
 router.get('/my', asyncHandler(async (req, res) => {
@@ -19,7 +55,7 @@ router.get('/my', asyncHandler(async (req, res) => {
   res.json(requests);
 }));
 
-// GET /api/regularization — admin: all requests
+// GET /api/regularization — admin: all requests (enriched with attendance + shift context)
 router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   const { status, userId } = req.query;
   const where = {};
@@ -35,7 +71,37 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
     },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(requests);
+
+  // Enrich each request with attendance data + shift assignment for admin context
+  const today = new Date().toISOString().split('T')[0];
+  const enriched = await Promise.all(requests.map(async (r) => {
+    const attendance = await req.prisma.attendance.findUnique({
+      where: { userId_date: { userId: r.userId, date: r.date } },
+      select: { checkIn: true, checkOut: true, workHours: true, status: true },
+    });
+    const shiftAssignment = await req.prisma.shiftAssignment.findFirst({
+      where: {
+        userId: r.userId,
+        status: 'active',
+        effectiveFrom: { lte: today },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+      },
+      select: { shift: { select: { name: true, startTime: true, endTime: true } } },
+    });
+    const shiftData = shiftAssignment?.shift || null;
+
+    // Compute the type of regularization needed
+    let shiftStartMin = null;
+    if (shiftData?.startTime) {
+      const [h, m] = shiftData.startTime.split(':').map(Number);
+      shiftStartMin = (h || 0) * 60 + (m || 0);
+    }
+    const type = detectRegularizationType(attendance, shiftStartMin, 15);
+
+    return { ...r, attendance, shift: shiftData, type };
+  }));
+
+  res.json(enriched);
 }));
 
 // POST /api/regularization — employee submits request
@@ -63,7 +129,26 @@ router.post('/', asyncHandler(async (req, res) => {
       reason,
     },
   });
-  res.status(201).json(request);
+
+  // Compute type for response
+  const today = new Date().toISOString().split('T')[0];
+  const shiftAssignment = await req.prisma.shiftAssignment.findFirst({
+    where: {
+      userId: req.user.id,
+      status: 'active',
+      effectiveFrom: { lte: today },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+    },
+    select: { shift: { select: { startTime: true } } },
+  });
+  let shiftStartMin = null;
+  if (shiftAssignment?.shift?.startTime) {
+    const [h, m] = shiftAssignment.shift.startTime.split(':').map(Number);
+    shiftStartMin = (h || 0) * 60 + (m || 0);
+  }
+  const type = detectRegularizationType(attendance, shiftStartMin, 15);
+
+  res.status(201).json({ ...request, type });
 }));
 
 // PUT /api/regularization/:id/review — admin approves/rejects

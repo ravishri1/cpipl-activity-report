@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   ClipboardEdit, CheckCircle, XCircle, AlertCircle,
-  Users, X, Clock, LogIn, LogOut,
+  Users, X, Clock, LogIn, LogOut, Timer, ShieldAlert,
+  AlertTriangle, Briefcase,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -17,6 +18,13 @@ const STATUS_CONFIG = {
   rejected: { label: 'Rejected', icon: XCircle,     bg: 'bg-red-100',    text: 'text-red-700',    border: 'border-red-200' },
 };
 
+const TYPE_CONFIG = {
+  late_mark:     { label: 'Late Mark',     icon: Timer,          color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+  missed_punch:  { label: 'Missed Punch',  icon: AlertTriangle,  color: 'text-red-600',   bg: 'bg-red-50',   border: 'border-red-200' },
+  short_hours:   { label: 'Short Hours',   icon: Clock,          color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  other:         { label: 'Other',         icon: ClipboardEdit,  color: 'text-slate-600', bg: 'bg-slate-50',  border: 'border-slate-200' },
+};
+
 function StatusBadge({ status }) {
   const c = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const Icon = c.icon;
@@ -27,6 +35,21 @@ function StatusBadge({ status }) {
   );
 }
 
+function TypeBadge({ type }) {
+  const c = TYPE_CONFIG[type] || TYPE_CONFIG.other;
+  const Icon = c.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${c.bg} ${c.color} ${c.border}`}>
+      <Icon size={10} /> {c.label}
+    </span>
+  );
+}
+
+function formatTime(dt) {
+  if (!dt) return '-';
+  return new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 // ── Review Modal ──────────────────────────────────────────────────────────────
 function ReviewModal({ request, onClose, onReviewed }) {
   const [decision, setDecision] = useState('approved');
@@ -34,17 +57,24 @@ function ReviewModal({ request, onClose, onReviewed }) {
   const { execute, loading, error } = useApi();
 
   const handleSubmit = async () => {
-    await execute(
-      () => api.put(`/regularization/${request.id}/review`, { status: decision, reviewNote: reviewNote || undefined }),
-      `Request ${decision}`
-    );
-    onReviewed();
-    onClose();
+    try {
+      await execute(
+        () => api.put(`/regularization/${request.id}/review`, { status: decision, reviewNote: reviewNote || undefined }),
+        `Request ${decision}`
+      );
+      onReviewed();
+      onClose();
+    } catch {
+      // Error displayed by useApi hook
+    }
   };
+
+  const att = request.attendance;
+  const shift = request.shift;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-800">Review Regularization Request</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg">
@@ -52,28 +82,87 @@ function ReviewModal({ request, onClose, onReviewed }) {
           </button>
         </div>
         <div className="p-6 space-y-4">
-          {/* Request info */}
-          <div className="bg-slate-50 rounded-lg p-4 space-y-2 text-sm">
-            <p>
-              <span className="text-slate-500">Employee:</span>{' '}
-              <span className="font-medium">{request.user?.name}</span>{' '}
-              <span className="text-slate-400">({request.user?.employeeId})</span>
-            </p>
-            <p><span className="text-slate-500">Department:</span> <span className="font-medium">{request.user?.department || '—'}</span></p>
-            <p><span className="text-slate-500">Date:</span> <span className="font-medium">{formatDate(request.date)}</span></p>
-            {request.requestedIn && (
-              <p>
-                <span className="text-slate-500">Requested Check-In:</span>{' '}
-                <span className="font-semibold text-green-600">{request.requestedIn}</span>
-              </p>
+          {/* Employee info */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-slate-800">{request.user?.name}</p>
+              <p className="text-xs text-slate-400">{request.user?.employeeId} · {request.user?.department || '—'}</p>
+            </div>
+            <TypeBadge type={request.type} />
+          </div>
+
+          {/* Request details */}
+          <div className="bg-slate-50 rounded-lg p-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Date:</span>
+              <span className="font-semibold">{formatDate(request.date)}</span>
+            </div>
+
+            {/* Shift info */}
+            {shift && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 flex items-center gap-1"><Briefcase size={12} /> Shift:</span>
+                <span className="font-medium text-slate-700">{shift.name} ({shift.startTime} - {shift.endTime})</span>
+              </div>
             )}
-            {request.requestedOut && (
-              <p>
-                <span className="text-slate-500">Requested Check-Out:</span>{' '}
-                <span className="font-semibold text-blue-600">{request.requestedOut}</span>
-              </p>
+
+            {/* Actual attendance vs requested */}
+            <div className="border-t border-slate-200 pt-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Actual vs Requested</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Actual Check-In</p>
+                  <p className="font-mono font-semibold text-slate-700">{att?.checkIn ? formatTime(att.checkIn) : 'No punch'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Requested Check-In</p>
+                  <p className="font-mono font-semibold text-emerald-600">{request.requestedIn || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Actual Check-Out</p>
+                  <p className="font-mono font-semibold text-slate-700">{att?.checkOut ? formatTime(att.checkOut) : 'No punch'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Requested Check-Out</p>
+                  <p className="font-mono font-semibold text-blue-600">{request.requestedOut || '—'}</p>
+                </div>
+              </div>
+              {att?.workHours != null && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-slate-400">Work Hours:</span>
+                  <span className={`font-semibold text-sm ${att.workHours < 9 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {att.workHours.toFixed(1)}h {att.workHours < 9 && <span className="text-[10px] font-normal">(min: 9h)</span>}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Late mark info */}
+            {request.type === 'late_mark' && shift && att?.checkIn && (
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <ShieldAlert size={14} className="text-amber-500" />
+                  <span className="text-amber-700 font-medium">
+                    Late by {(() => {
+                      const [sh, sm] = shift.startTime.split(':').map(Number);
+                      const shiftMin = sh * 60 + sm;
+                      const ci = new Date(att.checkIn);
+                      const ciMin = ci.getHours() * 60 + ci.getMinutes();
+                      return ciMin - shiftMin;
+                    })()} min
+                    (grace: 15 min, shift starts {shift.startTime})
+                  </span>
+                </div>
+              </div>
             )}
-            {request.reason && <p><span className="text-slate-500">Reason:</span> <span>{request.reason}</span></p>}
+
+            {/* Reason */}
+            {request.reason && (
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-xs text-slate-400 mb-1">Reason</p>
+                <p className="text-slate-700">{request.reason}</p>
+              </div>
+            )}
           </div>
 
           {/* Decision */}
@@ -112,7 +201,7 @@ function ReviewModal({ request, onClose, onReviewed }) {
               value={reviewNote}
               onChange={e => setReviewNote(e.target.value)}
               rows={2}
-              placeholder="Add a note for the employee…"
+              placeholder="Add a note for the employee..."
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
@@ -130,7 +219,7 @@ function ReviewModal({ request, onClose, onReviewed }) {
                 decision === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
               }`}
             >
-              {loading ? 'Saving…' : `Confirm ${decision === 'approved' ? 'Approval' : 'Rejection'}`}
+              {loading ? 'Saving...' : `Confirm ${decision === 'approved' ? 'Approval' : 'Rejection'}`}
             </button>
           </div>
         </div>
@@ -158,11 +247,13 @@ function RequestsTable({ requests, onReview, showReview }) {
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-4 py-3 font-medium text-slate-600">Employee</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Date</th>
-              <th className="text-left px-4 py-3 font-medium text-slate-600">Check-In</th>
-              <th className="text-left px-4 py-3 font-medium text-slate-600">Check-Out</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Type</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Shift</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Actual In/Out</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Requested</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Hours</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Reason</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
-              <th className="text-left px-4 py-3 font-medium text-slate-600">Reviewed By</th>
               {showReview && <th className="text-left px-4 py-3 font-medium text-slate-600">Action</th>}
             </tr>
           </thead>
@@ -172,29 +263,68 @@ function RequestsTable({ requests, onReview, showReview }) {
                 <td className="px-4 py-3">
                   <p className="font-medium text-slate-800">{r.user?.name}</p>
                   <p className="text-xs text-slate-400">{r.user?.employeeId}</p>
-                  <p className="text-xs text-slate-400">{r.user?.department || ''}</p>
                 </td>
                 <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">
                   {formatDate(r.date)}
                 </td>
                 <td className="px-4 py-3">
-                  {r.requestedIn
-                    ? <span className="inline-flex items-center gap-1 text-green-600 font-medium"><LogIn size={13} /> {r.requestedIn}</span>
-                    : <span className="text-slate-300">—</span>}
+                  <TypeBadge type={r.type} />
+                </td>
+                <td className="px-4 py-3 text-xs text-slate-500">
+                  {r.shift ? (
+                    <div>
+                      <p className="font-medium text-slate-600">{r.shift.name}</p>
+                      <p>{r.shift.startTime} - {r.shift.endTime}</p>
+                    </div>
+                  ) : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  <div className="space-y-0.5">
+                    <p>
+                      <span className="text-slate-400">In:</span>{' '}
+                      <span className="font-mono font-medium text-slate-700">
+                        {r.attendance?.checkIn ? formatTime(r.attendance.checkIn) : 'No punch'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Out:</span>{' '}
+                      <span className="font-mono font-medium text-slate-700">
+                        {r.attendance?.checkOut ? formatTime(r.attendance.checkOut) : 'No punch'}
+                      </span>
+                    </p>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  <div className="space-y-0.5">
+                    {r.requestedIn && (
+                      <p>
+                        <span className="text-slate-400">In:</span>{' '}
+                        <span className="font-mono font-semibold text-emerald-600">{r.requestedIn}</span>
+                      </p>
+                    )}
+                    {r.requestedOut && (
+                      <p>
+                        <span className="text-slate-400">Out:</span>{' '}
+                        <span className="font-mono font-semibold text-blue-600">{r.requestedOut}</span>
+                      </p>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-xs">
+                  {r.attendance?.workHours != null ? (
+                    <span className={`font-semibold ${r.attendance.workHours < 9 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {r.attendance.workHours.toFixed(1)}h
+                    </span>
+                  ) : <span className="text-slate-300">—</span>}
+                </td>
+                <td className="px-4 py-3 text-slate-500 max-w-[150px]">
+                  <span className="line-clamp-2 text-xs">{r.reason || '—'}</span>
                 </td>
                 <td className="px-4 py-3">
-                  {r.requestedOut
-                    ? <span className="inline-flex items-center gap-1 text-blue-600 font-medium"><LogOut size={13} /> {r.requestedOut}</span>
-                    : <span className="text-slate-300">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-500 max-w-xs">
-                  <span className="line-clamp-2">{r.reason || '—'}</span>
-                </td>
-                <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {r.reviewer?.name
-                    ? <><p className="font-medium text-slate-700">{r.reviewer.name}</p>{r.reviewNote && <p className="mt-0.5 italic">{r.reviewNote}</p>}</>
-                    : <span className="text-slate-300">—</span>}
+                  <StatusBadge status={r.status} />
+                  {r.reviewer?.name && (
+                    <p className="text-[10px] text-slate-400 mt-0.5">by {r.reviewer.name}</p>
+                  )}
                 </td>
                 {showReview && (
                   <td className="px-4 py-3">
@@ -219,7 +349,7 @@ function RequestsTable({ requests, onReview, showReview }) {
 export default function RegularizationManager() {
   const [tab, setTab] = useState('pending');
   const [reviewTarget, setReviewTarget] = useState(null);
-  const [filters, setFilters] = useState({ status: '' });
+  const [filters, setFilters] = useState({ status: '', type: '' });
 
   // Pending tab — always fresh pending list
   const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } =
@@ -228,12 +358,19 @@ export default function RegularizationManager() {
   // All tab — filtered
   const allParams = new URLSearchParams();
   if (filters.status) allParams.set('status', filters.status);
+  const allQuery = allParams.toString() ? `?${allParams}` : '';
   const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } =
-    useFetch(`/regularization?${allParams}`, []);
+    useFetch(`/regularization${allQuery}`, []);
 
   const handleReviewed = () => {
     refetchPending();
     refetchAll();
+  };
+
+  // Filter by type on client side (since type is computed)
+  const filterByType = (list) => {
+    if (!filters.type) return list;
+    return list.filter(r => r.type === filters.type);
   };
 
   const TABS = [
@@ -242,7 +379,7 @@ export default function RegularizationManager() {
   ];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       {/* Sticky Page Header */}
       <div className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 -mx-6 -mt-6 px-6 py-4 mb-6">
         <div className="flex items-center gap-3">
@@ -251,6 +388,18 @@ export default function RegularizationManager() {
             <h1 className="text-xl font-semibold text-slate-800">Attendance Regularization</h1>
             <p className="text-sm text-slate-500 mt-0.5">Review and approve employee check-in / check-out correction requests</p>
           </div>
+        </div>
+      </div>
+
+      {/* Policy info banner */}
+      <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700 flex items-start gap-2">
+        <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-semibold">Attendance Policy</p>
+          <p className="mt-0.5 opacity-80">
+            Working hours: 9h/day | Grace period: 15 min | Every 3 unregularized late marks = 0.5 day deduction from leave (or LOP).
+            Approving a regularization request clears the late mark penalty for that day.
+          </p>
         </div>
       </div>
 
@@ -285,7 +434,7 @@ export default function RegularizationManager() {
           {pendingErr && <AlertMessage type="error" message={pendingErr} />}
           {!pendingLoading && (
             <RequestsTable
-              requests={pending}
+              requests={filterByType(pending)}
               onReview={setReviewTarget}
               showReview
             />
@@ -308,9 +457,20 @@ export default function RegularizationManager() {
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
-            {filters.status && (
+            <select
+              value={filters.type}
+              onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Types</option>
+              <option value="late_mark">Late Mark</option>
+              <option value="missed_punch">Missed Punch</option>
+              <option value="short_hours">Short Hours</option>
+              <option value="other">Other</option>
+            </select>
+            {(filters.status || filters.type) && (
               <button
-                onClick={() => setFilters({ status: '' })}
+                onClick={() => setFilters({ status: '', type: '' })}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50"
               >
                 <X size={14} /> Clear
@@ -321,7 +481,7 @@ export default function RegularizationManager() {
           {allErr && <AlertMessage type="error" message={allErr} />}
           {!allLoading && (
             <RequestsTable
-              requests={all}
+              requests={filterByType(all)}
               onReview={setReviewTarget}
               showReview={false}
             />

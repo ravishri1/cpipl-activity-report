@@ -62,6 +62,14 @@ router.get('/team-range', authenticate, requireAdmin, asyncHandler(async (req, r
   res.json(data);
 }));
 
+// GET /api/attendance/my-calendar?month=YYYY-MM — Employee's own calendar view with policy data
+router.get('/my-calendar', asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be in YYYY-MM format.');
+  const data = await getEmployeeCalendar(req.user.id, month, req.prisma);
+  res.json(data);
+}));
+
 // GET /api/attendance/employee-calendar?userId=X&month=YYYY-MM — Admin calendar view for one employee
 router.get('/employee-calendar', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseInt(req.query.userId);
