@@ -7,6 +7,7 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const LOCATIONS = ['All', 'Mumbai', 'Lucknow'];
 
 function formatDateDisplay(dateStr) {
   if (!dateStr) return '';
@@ -21,8 +22,7 @@ function getDayName(dateStr) {
 
 function getCurrentFY() {
   const now = new Date();
-  const m = now.getMonth(); // 0-indexed
-  return m >= 3 ? now.getFullYear() : now.getFullYear() - 1; // Apr=3
+  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
 function getFYLabel(fy) {
@@ -32,18 +32,8 @@ function getFYLabel(fy) {
 function getFYOptions() {
   const current = getCurrentFY();
   const opts = [];
-  for (let y = current - 3; y <= current + 2; y++) {
-    opts.push(y);
-  }
+  for (let y = current - 3; y <= current + 2; y++) opts.push(y);
   return opts;
-}
-
-// Get months in FY as YYYY-MM strings (Apr thru Mar)
-function getFYMonths(fy) {
-  const months = [];
-  for (let m = 4; m <= 12; m++) months.push(`${fy}-${String(m).padStart(2, '0')}`);
-  for (let m = 1; m <= 3; m++) months.push(`${fy + 1}-${String(m).padStart(2, '0')}`);
-  return months;
 }
 
 // CSV Parser
@@ -64,12 +54,12 @@ function parseCSV(text) {
       current += ch;
     }
     fields.push(current.trim());
-    let [date, name, type] = fields;
+    let [date, name, type, location] = fields;
     if (date && /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(date)) {
       const parts = date.split(/[-/]/);
       date = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
-    return { date: date || '', name: name || '', type: type || 'General' };
+    return { date: date || '', name: name || '', type: type || 'General', location: location || 'All' };
   });
 }
 
@@ -89,7 +79,7 @@ function ImportModal({ rows, onClose, onConfirm, importing }) {
         </div>
         <div className="overflow-auto flex-1 p-5">
           <p className="text-sm text-slate-500 mb-3">
-            Existing holidays on same date will be <span className="font-medium text-amber-600">updated</span>. New dates will be <span className="font-medium text-green-600">created</span>.
+            Existing holidays on same date+location will be <span className="font-medium text-amber-600">updated</span>. New entries will be <span className="font-medium text-green-600">created</span>.
           </p>
           <table className="w-full text-sm">
             <thead><tr className="bg-slate-50 text-left">
@@ -97,6 +87,7 @@ function ImportModal({ rows, onClose, onConfirm, importing }) {
               <th className="px-3 py-2 font-medium text-slate-600">Date</th>
               <th className="px-3 py-2 font-medium text-slate-600">Occasion</th>
               <th className="px-3 py-2 font-medium text-slate-600">Type</th>
+              <th className="px-3 py-2 font-medium text-slate-600">Location</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
@@ -104,7 +95,8 @@ function ImportModal({ rows, onClose, onConfirm, importing }) {
                   <td className="px-3 py-2 text-slate-400">{i + 1}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{r.date || <span className="text-red-500">Missing</span>}</td>
                   <td className="px-3 py-2 text-slate-800">{r.name || <span className="text-red-500">Missing</span>}</td>
-                  <td className="px-3 py-2"><span className={`text-xs font-medium px-2 py-0.5 rounded ${r.type?.toLowerCase() === 'optional' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{r.type || 'General'}</span></td>
+                  <td className="px-3 py-2"><span className={`text-xs font-medium px-2 py-0.5 rounded ${r.type?.toLowerCase() === 'optional' || r.type?.toLowerCase() === 'restricted' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{r.type || 'General'}</span></td>
+                  <td className="px-3 py-2 text-slate-600">{r.location || 'All'}</td>
                 </tr>
               ))}
             </tbody>
@@ -166,6 +158,7 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
     name: holiday?.name || '',
     date: holiday?.date || '',
     isOptional: holiday?.isOptional || false,
+    location: holiday?.location || 'All',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -210,6 +203,16 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Location</label>
+            <select value={form.location}
+              onChange={e => setForm({ ...form, location: e.target.value })}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              {LOCATIONS.map(loc => (
+                <option key={loc} value={loc}>{loc === 'All' ? 'All Locations' : loc}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
             <select value={form.isOptional ? 'optional' : 'general'}
               onChange={e => setForm({ ...form, isOptional: e.target.value === 'optional' })}
@@ -237,7 +240,8 @@ export default function HolidayManager() {
   const [fy, setFy] = useState(getCurrentFY());
   const [allHolidays, setAllHolidays] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('general'); // general | optional
+  const [activeTab, setActiveTab] = useState('general');
+  const [locationFilter, setLocationFilter] = useState('All');
   const [selected, setSelected] = useState(new Set());
   const [showForm, setShowForm] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState(null);
@@ -249,7 +253,7 @@ export default function HolidayManager() {
   const [importResults, setImportResults] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Fetch holidays for both years in FY (e.g. 2025 + 2026 for FY Apr 2025-Mar 2026)
+  // Fetch holidays for both years in FY
   const fetchHolidays = async () => {
     setLoading(true);
     try {
@@ -257,12 +261,10 @@ export default function HolidayManager() {
         api.get(`/holidays?year=${fy}`),
         api.get(`/holidays?year=${fy + 1}`),
       ]);
-      // Combine and filter to FY range (Apr of fy to Mar of fy+1)
       const all = [...res1.data, ...res2.data];
       const fyStart = `${fy}-04-01`;
       const fyEnd = `${fy + 1}-03-31`;
       const filtered = all.filter(h => h.date >= fyStart && h.date <= fyEnd);
-      // Deduplicate by id
       const seen = new Set();
       const unique = filtered.filter(h => { if (seen.has(h.id)) return false; seen.add(h.id); return true; });
       unique.sort((a, b) => a.date.localeCompare(b.date));
@@ -276,25 +278,27 @@ export default function HolidayManager() {
 
   useEffect(() => { fetchHolidays(); setSelected(new Set()); }, [fy]);
 
-  // Filtered by tab
-  const generalHolidays = useMemo(() => allHolidays.filter(h => !h.isOptional), [allHolidays]);
-  const optionalHolidays = useMemo(() => allHolidays.filter(h => h.isOptional), [allHolidays]);
+  // Filter by location
+  const locationFiltered = useMemo(() => {
+    if (locationFilter === 'All') return allHolidays;
+    return allHolidays.filter(h => h.location === 'All' || h.location === locationFilter);
+  }, [allHolidays, locationFilter]);
+
+  // Filter by tab
+  const generalHolidays = useMemo(() => locationFiltered.filter(h => !h.isOptional), [locationFiltered]);
+  const optionalHolidays = useMemo(() => locationFiltered.filter(h => h.isOptional), [locationFiltered]);
   const displayedHolidays = activeTab === 'general' ? generalHolidays : optionalHolidays;
 
   // Select all / none
   const allSelected = displayedHolidays.length > 0 && displayedHolidays.every(h => selected.has(h.id));
   const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(displayedHolidays.map(h => h.id)));
-    }
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(displayedHolidays.map(h => h.id)));
   };
   const toggleSelect = (id) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -330,10 +334,10 @@ export default function HolidayManager() {
   // Export
   const handleExport = () => {
     const holidays = displayedHolidays;
-    const csvHeader = 'Date,Occasion,Day,Type';
+    const csvHeader = 'Date,Occasion,Day,Location,Type';
     const csvRows = holidays.map(h => {
       const name = h.name.includes(',') ? `"${h.name}"` : h.name;
-      return `${h.date},${name},${getDayName(h.date)},${h.isOptional ? 'Optional' : 'General'}`;
+      return `${h.date},${name},${getDayName(h.date)},${h.location || 'All'},${h.isOptional ? 'Optional' : 'General'}`;
     });
     const csv = [csvHeader, ...csvRows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -355,7 +359,7 @@ export default function HolidayManager() {
       if (typeof text !== 'string') return;
       const rows = parseCSV(text);
       if (rows.length === 0) {
-        alert('No valid holiday data found. Expected CSV: Date, Occasion, Type');
+        alert('No valid holiday data found. Expected CSV: Date, Occasion, Type, Location');
         return;
       }
       setImportPreview(rows);
@@ -410,12 +414,12 @@ export default function HolidayManager() {
           The <span className="font-semibold">Holiday List</span> page displays all the holidays declared for a particular year.
           Holidays defined here are reflected across attendance, leave calculations, and payroll.
           <span className="text-xs text-blue-500 block mt-0.5">
-            CSV Format: <code className="bg-blue-100 px-1 rounded">Date, Occasion, Type</code> — Dates: YYYY-MM-DD or DD-MM-YYYY, Type: General or Optional
+            CSV Format: <code className="bg-blue-100 px-1 rounded">Date, Occasion, Type, Location</code> — Location: All, Mumbai, or Lucknow
           </span>
         </div>
       </div>
 
-      {/* ── Tabs Row ───────────────────────────────────────────────────────── */}
+      {/* ── Tabs + Actions Row ─────────────────────────────────────────────── */}
       <div className="mx-6 mt-4 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center">
           {/* Tab buttons */}
@@ -423,9 +427,7 @@ export default function HolidayManager() {
             <button
               onClick={() => { setActiveTab('general'); setSelected(new Set()); }}
               className={`px-5 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === 'general'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-50'
+                activeTab === 'general' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               {generalHolidays.length} General Holidays
@@ -433,24 +435,18 @@ export default function HolidayManager() {
             <button
               onClick={() => { setActiveTab('optional'); setSelected(new Set()); }}
               className={`px-5 py-2.5 text-sm font-medium border-l border-slate-200 transition-colors ${
-                activeTab === 'optional'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-50'
+                activeTab === 'optional' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               {optionalHolidays.length} Restricted Holidays
             </button>
           </div>
-
           {/* Add Holiday link */}
-          <button
-            onClick={() => setShowForm(true)}
-            className="ml-4 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
-          >
+          <button onClick={() => setShowForm(true)}
+            className="ml-4 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1">
             <Plus className="w-4 h-4" /> Add Holiday
           </button>
         </div>
-
         {/* Right: Import + Export */}
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".csv,.txt" onChange={handleFileSelect} className="hidden" />
@@ -462,6 +458,22 @@ export default function HolidayManager() {
             className="flex items-center gap-1.5 px-3 py-2 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50 hover:border-blue-300 bg-white font-medium disabled:opacity-40">
             <Download className="w-4 h-4" /> Excel Export
           </button>
+        </div>
+      </div>
+
+      {/* ── Location Filter ────────────────────────────────────────────────── */}
+      <div className="mx-6 mt-3 flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Location:</label>
+          <select
+            value={locationFilter}
+            onChange={e => { setLocationFilter(e.target.value); setSelected(new Set()); }}
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-slate-700"
+          >
+            <option value="All">All</option>
+            <option value="Mumbai">Mumbai</option>
+            <option value="Lucknow">Lucknow</option>
+          </select>
         </div>
       </div>
 
@@ -477,18 +489,15 @@ export default function HolidayManager() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="w-10 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleSelectAll}
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
+                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                   </th>
                   <th className="w-10 px-2 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">#</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Occasion</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Day</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Restricted Holiday</th>
                   <th className="w-20 px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -496,17 +505,11 @@ export default function HolidayManager() {
                 {displayedHolidays.length > 0 ? displayedHolidays.map((h, idx) => {
                   const isPast = h.date < today;
                   return (
-                    <tr
-                      key={h.id}
-                      className={`hover:bg-blue-50/50 transition-colors ${isPast ? 'text-slate-400' : 'text-slate-700'} ${selected.has(h.id) ? 'bg-blue-50' : ''}`}
-                    >
+                    <tr key={h.id}
+                      className={`hover:bg-blue-50/50 transition-colors ${isPast ? 'text-slate-400' : 'text-slate-700'} ${selected.has(h.id) ? 'bg-blue-50' : ''}`}>
                       <td className="px-3 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(h.id)}
-                          onChange={() => toggleSelect(h.id)}
-                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
+                        <input type="checkbox" checked={selected.has(h.id)} onChange={() => toggleSelect(h.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                       </td>
                       <td className="px-2 py-3 text-slate-400 font-mono text-xs">{idx + 1}</td>
                       <td className="px-4 py-3">
@@ -516,27 +519,28 @@ export default function HolidayManager() {
                       <td className="px-4 py-3 whitespace-nowrap">{getDayName(h.date)}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          h.isOptional
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-green-100 text-green-700'
+                          h.location === 'All'
+                            ? 'bg-purple-100 text-purple-700'
+                            : h.location === 'Mumbai'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-teal-100 text-teal-700'
                         }`}>
-                          {h.isOptional ? 'Restricted' : 'General'}
+                          {h.location === 'All' ? 'Mumbai, Lucknow' : h.location}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {h.isOptional ? (
+                          <span className="inline-block w-4 h-4 rounded-full bg-amber-400" title="Restricted"></span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => setEditingHoliday(h)}
-                            className="p-1.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600"
-                            title="Edit"
-                          >
+                          <button onClick={() => setEditingHoliday(h)}
+                            className="p-1.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600" title="Edit">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(h.id, h.name)}
-                            className="p-1.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-600"
-                            title="Delete"
-                          >
+                          <button onClick={() => handleDelete(h.id, h.name)}
+                            className="p-1.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-600" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -545,10 +549,11 @@ export default function HolidayManager() {
                   );
                 }) : (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
+                    <td colSpan={8} className="px-4 py-12 text-center">
                       <CalendarDays className="w-10 h-10 mx-auto mb-3 text-slate-200" />
                       <p className="text-slate-400 font-medium">
                         No {activeTab === 'general' ? 'general' : 'restricted'} holidays for {getFYLabel(fy)}
+                        {locationFilter !== 'All' ? ` in ${locationFilter}` : ''}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">Click "Add Holiday" or import from CSV to get started.</p>
                     </td>
@@ -566,13 +571,9 @@ export default function HolidayManager() {
           <span className="text-sm text-slate-600">
             <span className="font-semibold text-blue-600">{selected.size}</span> holiday(s) selected
           </span>
-          <button
-            onClick={handleBulkDelete}
-            disabled={deleting}
-            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
-          >
-            <Trash2 className="w-4 h-4" />
-            {deleting ? 'Deleting...' : 'Delete Selected'}
+          <button onClick={handleBulkDelete} disabled={deleting}
+            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+            <Trash2 className="w-4 h-4" />{deleting ? 'Deleting...' : 'Delete Selected'}
           </button>
         </div>
       )}

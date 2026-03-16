@@ -468,8 +468,9 @@ model Holiday {
   date       String                              // "YYYY-MM-DD"
   year       Int
   isOptional Boolean @default(false)
+  location   String  @default("All")             // "All", "Mumbai", "Lucknow", or comma-separated
 
-  @@unique([date])
+  @@unique([date, location])
   @@index([year])
 }
 
