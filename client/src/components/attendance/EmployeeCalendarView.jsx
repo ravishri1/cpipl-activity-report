@@ -426,7 +426,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                         <div className="px-3 py-2 bg-white border-t border-amber-100 space-y-1">
                           {selectedDay.isLate && (
                             <p className="text-xs text-slate-600">
-                              Late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`} (grace: 15 min). Every 3 unregularized late marks = 0.5 day deduction.
+                              Late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`} (after 15 min grace). Every 3 unregularized late marks = 0.5 day deduction.
                             </p>
                           )}
                           {selectedDay.shortHours && (

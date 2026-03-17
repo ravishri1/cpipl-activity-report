@@ -142,7 +142,9 @@ async function getTeamAttendance(date, department, prisma) {
   const userWhere = { isActive: true };
   if (department) userWhere.department = department;
 
-  const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD" string for String fields
+  // Use IST date for "today" — Vercel runs in UTC
+  const nowIST = new Date(Date.now() + 330 * 60 * 1000);
+  const today = nowIST.toISOString().split('T')[0];
 
   const users = await prisma.user.findMany({
     where: userWhere,
@@ -335,7 +337,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
   const [year, mon] = month.split('-').map(Number);
   const lastDay = new Date(year, mon, 0).getDate();
   const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
-  const today = new Date().toISOString().split('T')[0];
+  // Use IST date for "today" — Vercel runs in UTC, so toISOString() gives UTC date
+  const nowIST = new Date(Date.now() + 330 * 60 * 1000); // UTC + 5:30
+  const today = nowIST.toISOString().split('T')[0];
 
   const [user, attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, employeeId: true, isAttendanceExempt: true } }),
@@ -502,8 +506,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
 
     if (!isExempt && isWorkingDay && shift && att?.checkIn) {
       const ciMinutes = toISTMinutes(att.checkIn);
-      lateMinutes = Math.max(0, ciMinutes - shiftStartMin);
       isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
+      // Late minutes = time beyond grace period (grace is company's internal allowance)
+      lateMinutes = isLate ? Math.max(0, ciMinutes - shiftStartMin - GRACE_MINUTES) : 0;
     }
 
     if (!isExempt && isWorkingDay && (status === 'present' || status === 'half_day') && att?.checkIn && att?.checkOut && dateStr !== today && shiftDurationHrs > 0) {
@@ -625,7 +630,9 @@ async function getLateMarksSummary(userId, month, prisma) {
   const [year, mon] = month.split('-').map(Number);
   const lastDay = new Date(year, mon, 0).getDate();
   const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
-  const today = new Date().toISOString().split('T')[0];
+  // Use IST date for "today" — Vercel runs in UTC
+  const nowIST = new Date(Date.now() + 330 * 60 * 1000);
+  const today = nowIST.toISOString().split('T')[0];
 
   // Attendance-exempt users have zero late marks
   const exemptUser = await prisma.user.findUnique({ where: { id: userId }, select: { isAttendanceExempt: true } });
@@ -693,9 +700,11 @@ async function getLateMarksSummary(userId, month, prisma) {
     if (holidaySet.has(att.date)) continue;
 
     const ciMinutes = toISTMinutes(att.checkIn);
-    const lateMinutes = ciMinutes - shiftStartMin;
+    const rawLateMinutes = ciMinutes - shiftStartMin;
 
-    if (lateMinutes > GRACE_MINUTES) {
+    if (rawLateMinutes > GRACE_MINUTES) {
+      // Late minutes = time beyond grace period (grace is company's internal allowance)
+      const lateMinutes = rawLateMinutes - GRACE_MINUTES;
       const reg = regMap[att.date];
       const regStatus = reg?.status || null;
       if (regStatus === 'approved') regularizedCount++;
