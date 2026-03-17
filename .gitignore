@@ -12,3 +12,4 @@ server/prisma/migrations/
 .vercel
 PLAN.md
 server/google-service-account.json
+.env.vercel.local

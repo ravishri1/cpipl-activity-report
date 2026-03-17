@@ -22,7 +22,7 @@ import {
 
 // Calendar cell colors — greytHR style
 const statusConfig = {
-  present:        { bg: 'bg-white',       text: 'text-emerald-600', label: 'P',  full: 'Present' },
+  present:        { bg: 'bg-emerald-50',   text: 'text-emerald-600', label: 'P',  full: 'Present' },
   absent:         { bg: 'bg-red-50',      text: 'text-red-500',     label: 'A',  full: 'Absent' },
   half_day:       { bg: 'bg-amber-50',    text: 'text-amber-600',   label: 'HD', full: 'Half Day' },
   on_leave:       { bg: 'bg-blue-50',     text: 'text-blue-500',    label: 'L',  full: 'On Leave' },
@@ -178,26 +178,39 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
   // Break hours = fixed 1 hour as per company policy
   const BREAK_HOURS = 1;
 
+  // Convert DateTime to IST minutes since midnight (UTC+5:30)
+  const toISTMin = (dt) => {
+    const d = new Date(dt);
+    return (d.getUTCHours() * 60 + d.getUTCMinutes() + 330) % 1440;
+  };
+
   // Calculate work hours within shift window
   const calcWorkInShift = (day, shift) => {
-    if (!day?.checkIn || !shift) return day?.workHours || 0;
-    const ciTime = new Date(day.checkIn);
+    if (!day?.checkIn || !shift) return 0;
     const coTime = day.checkOut ? new Date(day.checkOut) : null;
-    if (!coTime) return day.workHours || 0;
+    if (!coTime) return 0;
 
     const [sh, sm] = (shift.startTime || '0:0').split(':').map(Number);
     const [eh, em] = (shift.endTime || '0:0').split(':').map(Number);
     const shiftStartMin = sh * 60 + (sm || 0);
     const shiftEndMin = eh * 60 + (em || 0);
 
-    const ciMin = ciTime.getHours() * 60 + ciTime.getMinutes();
-    const coMin = coTime.getHours() * 60 + coTime.getMinutes();
+    const ciMin = toISTMin(day.checkIn);
+    const coMin = toISTMin(day.checkOut);
 
     const effectiveStart = Math.max(ciMin, shiftStartMin);
     const effectiveEnd = Math.min(coMin, shiftEndMin);
 
     if (effectiveEnd <= effectiveStart) return 0;
     return (effectiveEnd - effectiveStart) / 60;
+  };
+
+  // Shift duration in hours (for shortfall/excess calculation)
+  const getShiftDurationHrs = (shift) => {
+    if (!shift) return 0;
+    const [sh, sm] = (shift.startTime || '0:0').split(':').map(Number);
+    const [eh, em] = (shift.endTime || '0:0').split(':').map(Number);
+    return ((eh * 60 + (em || 0)) - (sh * 60 + (sm || 0))) / 60;
   };
 
   if (loading) return <LoadingSpinner />;
@@ -487,9 +500,14 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                       const actualWorkHrs = Math.max(0, totalHrsRaw - breakHrs);
                       // Work hours within shift window
                       const workInShift = calcWorkInShift(selectedDay, data.shift);
-                      // Late In — only show if beyond 15 min grace (isLate from backend)
+                      // Shift duration for shortfall/excess
+                      const shiftDuration = getShiftDurationHrs(data.shift);
+                      const shiftWorkExpected = shiftDuration > 0 ? shiftDuration - BREAK_HOURS : 0; // expected actual work = shift - break
+                      const shortfallHrs = (shiftWorkExpected > 0 && actualWorkHrs > 0 && actualWorkHrs < shiftWorkExpected) ? (shiftWorkExpected - actualWorkHrs) : 0;
+                      const excessHrs = (shiftWorkExpected > 0 && actualWorkHrs > shiftWorkExpected) ? (actualWorkHrs - shiftWorkExpected) : 0;
+                      // Late In display
                       const lateInDisplay = selectedDay.lateIn || '-';
-                      // Early Out — always show if left before shift end
+                      // Early Out display
                       const earlyOutDisplay = selectedDay.earlyOut || '-';
 
                       return (
@@ -506,7 +524,9 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                     <td className="py-2 pr-2 whitespace-nowrap">Total Work Hrs</td>
                                     <td className="py-2 pr-2 whitespace-nowrap">Break Hrs</td>
                                     <td className="py-2 pr-2 whitespace-nowrap">Actual Work Hrs</td>
-                                    <td className="py-2 whitespace-nowrap">Work Hrs in Shift</td>
+                                    <td className="py-2 pr-2 whitespace-nowrap">Work Hrs in Shift</td>
+                                    <td className="py-2 pr-2 whitespace-nowrap">Shortfall Hrs</td>
+                                    <td className="py-2 whitespace-nowrap">Excess Hrs</td>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -534,7 +554,17 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                         </span>
                                       ) : '-'}
                                     </td>
-                                    <td className="py-2.5 font-semibold">{data.shift && workInShift > 0 ? formatHrsMin(workInShift) : '-'}</td>
+                                    <td className="py-2.5 pr-2 font-semibold">{workInShift > 0 ? formatHrsMin(workInShift) : '-'}</td>
+                                    <td className="py-2.5 pr-2">
+                                      {shortfallHrs > 0 ? (
+                                        <span className="text-red-500 font-medium">{formatHrsMin(shortfallHrs)}</span>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="py-2.5">
+                                      {excessHrs > 0 ? (
+                                        <span className="text-emerald-600 font-medium">{formatHrsMin(excessHrs)}</span>
+                                      ) : '-'}
+                                    </td>
                                   </tr>
                                 </tbody>
                               </table>
@@ -567,59 +597,94 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                       );
                     })()}
 
-                    {/* Session Details */}
+                    {/* Session Details — greytHR style */}
                     <SectionHeader title="Session Details" />
                     <div className="px-4 pb-3">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-slate-400 font-medium">
-                            <td className="py-1.5">Session</td>
-                            <td className="py-1.5">Session Timing</td>
-                            <td className="py-1.5">First In</td>
-                            <td className="py-1.5">Last Out</td>
-                          </tr>
-                        </thead>
-                        <tbody className="text-slate-700">
-                          {data.shift ? (
-                            (() => {
-                              const [sh] = (data.shift.startTime || '0').split(':').map(Number);
-                              const [eh] = (data.shift.endTime || '0').split(':').map(Number);
-                              const midH = Math.floor((sh + eh) / 2);
-                              const midTime = `${String(midH).padStart(2, '0')}:30`;
-                              const s1Start = data.shift.startTime;
-                              const s1End = midTime;
-                              const s2Start = `${String(midH).padStart(2, '0')}:31`;
-                              const s2End = data.shift.endTime;
-                              const firstIn = selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-';
-                              const lastOut = selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-';
+                      {data.shift ? (
+                        (() => {
+                          const [sh, sm] = (data.shift.startTime || '0:0').split(':').map(Number);
+                          const [eh, em] = (data.shift.endTime || '0:0').split(':').map(Number);
+                          const startMin = sh * 60 + (sm || 0);
+                          const endMin = eh * 60 + (em || 0);
+                          const midMin = Math.floor((startMin + endMin) / 2);
+                          const lunchStart = midMin;
+                          const lunchEnd = midMin + 60; // 1 hour break
+                          const fmtMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+                          const s1Start = data.shift.startTime;
+                          const s1End = fmtMin(lunchStart);
+                          const s2Start = fmtMin(lunchEnd);
+                          const s2End = data.shift.endTime;
 
-                              return (
-                                <>
-                                  <tr className="border-t border-slate-50">
-                                    <td className="py-2 font-medium">Session 1</td>
-                                    <td className="py-2">{s1Start} - {s1End}</td>
-                                    <td className="py-2 font-semibold">{firstIn}</td>
-                                    <td className="py-2">-</td>
-                                  </tr>
-                                  <tr className="border-t border-slate-50">
-                                    <td className="py-2 font-medium">Session 2</td>
-                                    <td className="py-2">{s2Start} - {s2End}</td>
-                                    <td className="py-2">-</td>
-                                    <td className="py-2 font-semibold">{lastOut}</td>
-                                  </tr>
-                                </>
-                              );
-                            })()
-                          ) : (
-                            <tr className="border-t border-slate-50">
-                              <td className="py-2 font-medium">Full Day</td>
-                              <td className="py-2">-</td>
-                              <td className="py-2 font-semibold">{selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-'}</td>
-                              <td className="py-2 font-semibold">{selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-'}</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                          const firstIn = selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-';
+                          const lastOut = selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-';
+
+                          // Calculate session durations
+                          const s1Dur = (lunchStart - startMin) / 60;
+                          const s2Dur = (endMin - lunchEnd) / 60;
+
+                          return (
+                            <div className="space-y-2">
+                              {/* Session 1 */}
+                              <div className="bg-slate-50 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-semibold text-slate-700">Session 1</span>
+                                  <span className="text-[10px] text-slate-400">{s1Start} – {s1End} ({s1Dur.toFixed(1)} hrs)</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 mb-0.5">First In</div>
+                                    <div className="text-xs font-semibold text-emerald-600">{firstIn}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
+                                    <div className="text-xs font-semibold text-slate-600">{s1End}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Break */}
+                              <div className="bg-amber-50 rounded-lg p-2 flex items-center justify-between">
+                                <span className="text-[10px] font-medium text-amber-700">🍽️ Break</span>
+                                <span className="text-[10px] text-amber-600">{s1End} – {s2Start} (1:00 hr)</span>
+                              </div>
+
+                              {/* Session 2 */}
+                              <div className="bg-slate-50 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-semibold text-slate-700">Session 2</span>
+                                  <span className="text-[10px] text-slate-400">{s2Start} – {s2End} ({s2Dur.toFixed(1)} hrs)</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 mb-0.5">First In</div>
+                                    <div className="text-xs font-semibold text-slate-600">{s2Start}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
+                                    <div className="text-xs font-semibold text-blue-600">{lastOut}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <div className="bg-slate-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-slate-700">Full Day</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <div className="text-[10px] text-slate-400 mb-0.5">First In</div>
+                              <div className="text-xs font-semibold text-emerald-600">{selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-'}</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
+                              <div className="text-xs font-semibold text-blue-600">{selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Regularization Details */}
