@@ -45,6 +45,9 @@ export default function AttendanceRegularization() {
     lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0,
   });
 
+  // Fetch reporting manager name
+  const { data: profileData } = useFetch('/users/profile', null);
+
   // Auto-poll every 30 seconds so list stays fresh
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
@@ -55,8 +58,20 @@ export default function AttendanceRegularization() {
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const openForm = (date = '') => {
-    setForm({ ...EMPTY_FORM, date });
+  // Format DateTime to HH:MM for time input
+  const toTimeStr = (dt) => {
+    if (!dt) return '';
+    const d = new Date(dt);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const openForm = (date = '', checkIn = null, checkOut = null) => {
+    setForm({
+      ...EMPTY_FORM,
+      date,
+      requestedIn: toTimeStr(checkIn),
+      requestedOut: toTimeStr(checkOut),
+    });
     setFormError('');
     clearMessages();
     setShowForm(true);
@@ -223,7 +238,7 @@ export default function AttendanceRegularization() {
                       <td className="px-4 py-2">
                         {!lm.regularizationStatus && (
                           <button
-                            onClick={() => openForm(lm.date)}
+                            onClick={() => openForm(lm.date, lm.checkIn, lm.checkOut)}
                             className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[10px] font-bold"
                           >
                             Apply
@@ -250,6 +265,14 @@ export default function AttendanceRegularization() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Approver info */}
+              {profileData?.reportingManager && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                  <span className="text-xs text-blue-600 font-medium">Approver:</span>
+                  <span className="text-xs text-blue-800 font-semibold">{profileData.reportingManager.name}</span>
+                </div>
+              )}
+
               {/* Date */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -261,11 +284,12 @@ export default function AttendanceRegularization() {
                   onChange={e => setField('date', e.target.value)}
                   required
                   max={new Date().toISOString().slice(0, 10)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  readOnly={!!form.requestedIn || !!form.requestedOut}
+                  className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${form.requestedIn || form.requestedOut ? 'bg-slate-50 text-slate-600' : ''}`}
                 />
               </div>
 
-              {/* Time fields */}
+              {/* Time fields — pre-filled and read-only when from Apply button */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Check-In Time</label>
@@ -273,7 +297,8 @@ export default function AttendanceRegularization() {
                     type="time"
                     value={form.requestedIn}
                     onChange={e => setField('requestedIn', e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    readOnly={!!form.requestedIn}
+                    className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${form.requestedIn ? 'bg-slate-50 text-slate-600' : ''}`}
                   />
                 </div>
                 <div>
@@ -282,11 +307,14 @@ export default function AttendanceRegularization() {
                     type="time"
                     value={form.requestedOut}
                     onChange={e => setField('requestedOut', e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    readOnly={!!form.requestedOut}
+                    className={`w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${form.requestedOut ? 'bg-slate-50 text-slate-600' : ''}`}
                   />
                 </div>
               </div>
-              <p className="text-xs text-slate-400 -mt-2">At least one of Check-In or Check-Out is required.</p>
+              {!form.requestedIn && !form.requestedOut && (
+                <p className="text-xs text-slate-400 -mt-2">At least one of Check-In or Check-Out is required.</p>
+              )}
 
               {/* Reason */}
               <div>

@@ -738,6 +738,7 @@ async function getLateMarksSummary(userId, month, prisma) {
         date: att.date,
         lateMinutes,
         checkIn: att.checkIn,
+        checkOut: att.checkOut || null,
         shiftStart: shift.startTime,
         regularizationStatus: regStatus,
       });
