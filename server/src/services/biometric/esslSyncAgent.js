@@ -166,7 +166,7 @@ async function pushToHrApp(deviceSerial, punches) {
     punches,
   });
 
-  const hrUrl = new URL('/api/biometric/sync', CONFIG.hrApiUrl);
+  const hrUrl = new URL('/api/agent/sync-single', CONFIG.hrApiUrl);
   const res   = await httpRequest(hrUrl.toString(), {
     method: 'POST',
     headers: {
@@ -188,7 +188,7 @@ async function pushBatchToHrApp(allDeviceData) {
     devices: allDeviceData,
   });
 
-  const hrUrl = new URL('/api/biometric/agent-sync', CONFIG.hrApiUrl);
+  const hrUrl = new URL('/api/agent/sync', CONFIG.hrApiUrl);
   const res   = await httpRequest(hrUrl.toString(), {
     method: 'POST',
     headers: {
@@ -205,15 +205,15 @@ async function pushBatchToHrApp(allDeviceData) {
 
 // ─── Fetch device list from HR API ───────────────────────────────────────────
 async function fetchDeviceList() {
-  const url = new URL('/api/biometric/devices', CONFIG.hrApiUrl);
-  // Use agent key header for auth (device list is normally admin-only,
-  // but we'll use a special header for the agent)
+  const url = new URL('/api/agent/devices', CONFIG.hrApiUrl);
   const res = await httpRequest(url.toString(), {
     method: 'GET',
     headers: { 'x-agent-key': CONFIG.hrAgentKey },
   });
 
   if (res.status !== 200) {
+    // Log full response body for debugging
+    console.error(`  Response body: ${res.body.slice(0, 500)}`);
     throw new Error(`Failed to fetch device list: ${res.status}`);
   }
   return JSON.parse(res.body);

@@ -49,6 +49,7 @@ const regularizationRoutes = require('./routes/regularization');
 const recruitmentRoutes = require('./routes/recruitment');
 const musterRoutes = require('./routes/muster');
 const { errorHandler } = require('./middleware/errorHandler');
+const { asyncHandler } = require('./utils/asyncHandler');
 
 const app = express();
 
@@ -127,6 +128,103 @@ app.use((req, res, next) => {
   req.prisma = prisma;
   next();
 });
+
+// ═══ Agent endpoints (unauthenticated — agent key only) ═══
+// These are mounted BEFORE all other routes to ensure no auth middleware can intercept them.
+// The local biometric sync agent on cpserver uses these to communicate with the cloud app.
+app.get('/api/agent/devices', asyncHandler(async (req, res) => {
+  const agentKey = req.headers['x-agent-key'];
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  if (agentKey !== expectedKey) {
+    return res.status(401).json({ error: 'Invalid agent key' });
+  }
+  const devices = await req.prisma.biometricDevice.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+  });
+  res.json(devices);
+}));
+
+app.post('/api/agent/sync', asyncHandler(async (req, res) => {
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const agentKey = req.body.agentKey || req.headers['x-agent-key'];
+  if (agentKey !== expectedKey) {
+    return res.status(401).json({ error: 'Invalid agent key' });
+  }
+
+  const { devices: deviceData } = req.body;
+  if (!Array.isArray(deviceData) || deviceData.length === 0) {
+    return res.json({ message: 'No device data received', results: [] });
+  }
+
+  const { processAndStorePunches } = require('./services/biometric/biometricSyncService');
+  const results = [];
+  for (const dd of deviceData) {
+    const { deviceSerial, punches = [] } = dd;
+    if (!deviceSerial) continue;
+
+    const device = await req.prisma.biometricDevice.findUnique({
+      where: { serialNumber: deviceSerial },
+    });
+    if (!device) {
+      results.push({ device: deviceSerial, status: 'skipped', reason: 'Unknown device serial' });
+      continue;
+    }
+
+    if (punches.length === 0) {
+      await req.prisma.biometricDevice.update({
+        where: { id: device.id },
+        data: { lastSyncAt: new Date(), lastSyncStatus: 'success', lastSyncMessage: '0 new punches' },
+      });
+      results.push({ device: device.name, status: 'success', inserted: 0, matched: 0, processed: 0 });
+      continue;
+    }
+
+    const result = await processAndStorePunches(req.prisma, device, punches);
+    await req.prisma.biometricDevice.update({
+      where: { id: device.id },
+      data: {
+        lastSyncAt: new Date(),
+        lastSyncStatus: 'success',
+        lastSyncMessage: `${result.inserted} new, ${result.matched} matched, ${result.processed} processed`,
+      },
+    });
+    results.push({ device: device.name, status: 'success', ...result });
+  }
+  res.json({ received: deviceData.length, results });
+}));
+
+app.post('/api/agent/sync-single', asyncHandler(async (req, res) => {
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const agentKey = req.body.agentKey || req.headers['x-agent-key'];
+  if (agentKey !== expectedKey) {
+    return res.status(401).json({ error: 'Invalid agent key' });
+  }
+
+  const { deviceSerial, punches } = req.body;
+  if (!deviceSerial) return res.status(400).json({ error: 'deviceSerial required' });
+  if (!Array.isArray(punches) || punches.length === 0) {
+    return res.json({ received: 0, inserted: 0, matched: 0, processed: 0 });
+  }
+
+  const device = await req.prisma.biometricDevice.findUnique({
+    where: { serialNumber: deviceSerial },
+  });
+  if (!device) return res.status(400).json({ error: `Unknown device: ${deviceSerial}` });
+
+  const { processAndStorePunches } = require('./services/biometric/biometricSyncService');
+  const result = await processAndStorePunches(req.prisma, device, punches);
+
+  await req.prisma.biometricDevice.update({
+    where: { id: device.id },
+    data: {
+      lastSyncAt: new Date(),
+      lastSyncStatus: 'success',
+      lastSyncMessage: `${result.inserted} new, ${result.matched} matched, ${result.processed} processed`,
+    },
+  });
+  res.json({ received: punches.length, ...result });
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);
