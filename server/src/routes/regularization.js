@@ -105,6 +105,51 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   res.json(enriched);
 }));
 
+// POST /api/regularization/bulk — employee submits multiple requests at once
+router.post('/bulk', asyncHandler(async (req, res) => {
+  const { requests: items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) throw badRequest('requests array is required and must not be empty');
+  if (items.length > 20) throw badRequest('Maximum 20 requests at a time');
+
+  // Validate each item
+  for (const item of items) {
+    if (!item.date || !item.reason) throw badRequest(`date and reason are required for every entry (missing on ${item.date || 'unknown'})`);
+    if (!item.requestedIn && !item.requestedOut) throw badRequest(`At least one of requestedIn or requestedOut is required for ${item.date}`);
+    if (typeof item.reason !== 'string' || item.reason.trim().length < 3) throw badRequest(`Reason must be at least 3 characters for ${item.date}`);
+  }
+
+  const dates = items.map(i => i.date);
+  // Check for duplicate dates in request
+  if (new Set(dates).size !== dates.length) throw badRequest('Duplicate dates in request');
+
+  // Check for existing pending requests for any of these dates
+  const existing = await req.prisma.attendanceRegularization.findMany({
+    where: { userId: req.user.id, date: { in: dates }, status: 'pending' },
+    select: { date: true },
+  });
+  if (existing.length > 0) {
+    const dupDates = existing.map(e => e.date).join(', ');
+    throw badRequest(`Pending requests already exist for: ${dupDates}`);
+  }
+
+  // Create all in a transaction
+  const created = await req.prisma.$transaction(
+    items.map(item =>
+      req.prisma.attendanceRegularization.create({
+        data: {
+          userId: req.user.id,
+          date: item.date,
+          requestedIn: item.requestedIn || null,
+          requestedOut: item.requestedOut || null,
+          reason: item.reason.trim(),
+        },
+      })
+    )
+  );
+
+  res.status(201).json({ count: created.length, requests: created });
+}));
+
 // POST /api/regularization — employee submits request
 router.post('/', asyncHandler(async (req, res) => {
   requireFields(req.body, 'date', 'reason');

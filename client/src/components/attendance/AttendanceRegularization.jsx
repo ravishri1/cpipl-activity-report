@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ClipboardEdit, Plus, X, CheckCircle, XCircle, AlertCircle,
   Clock, Trash2, Timer, ShieldAlert, AlertTriangle, ChevronDown,
+  CheckSquare, Square, Send,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -36,12 +37,19 @@ export default function AttendanceRegularization() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
   const [showPolicy, setShowPolicy] = useState(true);
 
+  // Bulk selection
+  const [selectedDates, setSelectedDates] = useState(new Set());
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkReasons, setBulkReasons] = useState({}); // { date: reason }
+  const [commonReason, setCommonReason] = useState('');
+
   const { data: requests, setData: setRequests, loading, error, refetch } = useFetch('/regularization/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
   const { execute: execDelete, loading: deleting } = useApi();
+  const { execute: execBulk, loading: bulkSaving, error: bulkErr, success: bulkSuccess, clearMessages: clearBulk } = useApi();
 
   // Fetch late marks for the selected month
-  const { data: lateData, error: lateErr } = useFetch(`/regularization/late-marks?month=${selectedMonth}`, {
+  const { data: lateData, error: lateErr, refetch: refetchLate } = useFetch(`/regularization/late-marks?month=${selectedMonth}`, {
     lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0,
   });
 
@@ -55,6 +63,15 @@ export default function AttendanceRegularization() {
     const interval = setInterval(() => { refetchRef.current(); }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Unregularized late marks (eligible for selection)
+  const eligibleLateMarks = useMemo(() =>
+    lateData.lateMarks.filter(lm => !lm.regularizationStatus),
+    [lateData.lateMarks]
+  );
+
+  // Reset selections when month changes
+  useEffect(() => { setSelectedDates(new Set()); }, [selectedMonth]);
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -96,10 +113,9 @@ export default function AttendanceRegularization() {
         'Regularization request submitted!'
       );
       setShowForm(false);
-      // Optimistic update — immediately show new record in list
       if (newRecord) setRequests(prev => [newRecord, ...(Array.isArray(prev) ? prev : [])]);
-      // Also refetch in background for full server data
       refetch().catch(() => {});
+      refetchLate().catch(() => {});
     } catch {
       // Error displayed by useApi hook
     }
@@ -113,10 +129,87 @@ export default function AttendanceRegularization() {
         'Request cancelled.'
       );
       refetch();
+      refetchLate().catch(() => {});
     } catch {
       // Error displayed by useApi hook
     }
   };
+
+  // ── Bulk selection helpers ──
+  const toggleDate = (date) => {
+    setSelectedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedDates.size === eligibleLateMarks.length) {
+      setSelectedDates(new Set());
+    } else {
+      setSelectedDates(new Set(eligibleLateMarks.map(lm => lm.date)));
+    }
+  };
+
+  const openBulkModal = () => {
+    // Pre-fill reasons as empty, pre-fill times from late marks data
+    const reasons = {};
+    selectedDates.forEach(date => { reasons[date] = ''; });
+    setBulkReasons(reasons);
+    setCommonReason('');
+    clearBulk();
+    setShowBulkModal(true);
+  };
+
+  const applyCommonReason = () => {
+    if (!commonReason.trim()) return;
+    setBulkReasons(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(d => { if (!next[d]) next[d] = commonReason; });
+      return next;
+    });
+  };
+
+  const handleBulkSubmit = async () => {
+    // Validate all reasons filled
+    const missing = Object.entries(bulkReasons).filter(([, r]) => !r || r.trim().length < 3);
+    if (missing.length > 0) {
+      return; // Button is disabled, but safety check
+    }
+
+    // Build requests array with pre-filled times
+    const items = [];
+    for (const date of selectedDates) {
+      const lm = lateData.lateMarks.find(l => l.date === date);
+      items.push({
+        date,
+        requestedIn: lm?.checkIn ? toTimeStr(lm.checkIn) : null,
+        requestedOut: lm?.checkOut ? toTimeStr(lm.checkOut) : null,
+        reason: bulkReasons[date].trim(),
+      });
+    }
+
+    try {
+      await execBulk(
+        () => api.post('/regularization/bulk', { requests: items }),
+        `${items.length} regularization requests submitted!`
+      );
+      setShowBulkModal(false);
+      setSelectedDates(new Set());
+      refetch().catch(() => {});
+      refetchLate().catch(() => {});
+    } catch {
+      // Error displayed by useApi hook
+    }
+  };
+
+  // Check if all bulk reasons are filled (min 3 chars)
+  const allBulkReasonsValid = useMemo(() =>
+    Object.values(bulkReasons).every(r => r && r.trim().length >= 3),
+    [bulkReasons]
+  );
 
   // Filter requests by selected month
   const monthRequests = requests.filter(r => r.date && r.date.startsWith(selectedMonth));
@@ -172,10 +265,11 @@ export default function AttendanceRegularization() {
       </div>
 
       {/* Alerts */}
-      {error    && <AlertMessage type="error"   message={error}   />}
-      {saveErr  && <AlertMessage type="error"   message={saveErr} />}
-      {success  && <AlertMessage type="success" message={success} />}
-      {lateErr  && <AlertMessage type="error"   message={lateErr} />}
+      {error      && <AlertMessage type="error"   message={error}   />}
+      {saveErr    && <AlertMessage type="error"   message={saveErr} />}
+      {success    && <AlertMessage type="success" message={success} />}
+      {lateErr    && <AlertMessage type="error"   message={lateErr} />}
+      {bulkSuccess && <AlertMessage type="success" message={bulkSuccess} />}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
@@ -212,21 +306,44 @@ export default function AttendanceRegularization() {
         </div>
       )}
 
-      {/* Late Marks Detail */}
+      {/* Late Marks Detail with Bulk Selection */}
       {lateData.lateMarks.length > 0 && (
         <div className="mb-6">
-          <button
-            onClick={() => setShowPolicy(!showPolicy)}
-            className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 mb-2"
-          >
-            <ChevronDown size={16} className={`transition-transform ${showPolicy ? 'rotate-180' : ''}`} />
-            Late Marks Detail ({selectedMonth})
-          </button>
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setShowPolicy(!showPolicy)}
+              className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800"
+            >
+              <ChevronDown size={16} className={`transition-transform ${showPolicy ? 'rotate-180' : ''}`} />
+              Late Marks Detail ({selectedMonth})
+            </button>
+
+            {/* Bulk action button */}
+            {selectedDates.size > 0 && (
+              <button
+                onClick={openBulkModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-semibold shadow-sm transition-all"
+              >
+                <Send size={13} />
+                Apply Regularization ({selectedDates.size})
+              </button>
+            )}
+          </div>
+
           {showPolicy && (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
+                    {eligibleLateMarks.length > 0 && (
+                      <th className="px-3 py-2 w-8">
+                        <button onClick={toggleAll} className="text-slate-400 hover:text-blue-600">
+                          {selectedDates.size === eligibleLateMarks.length && eligibleLateMarks.length > 0
+                            ? <CheckSquare size={15} className="text-blue-600" />
+                            : <Square size={15} />}
+                        </button>
+                      </th>
+                    )}
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Date</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Shift Start</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Check-In</th>
@@ -236,39 +353,57 @@ export default function AttendanceRegularization() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {lateData.lateMarks.map((lm, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-medium text-slate-800">{formatDate(lm.date)}</td>
-                      <td className="px-4 py-2 text-slate-600">{lm.shiftStart}</td>
-                      <td className="px-4 py-2 font-mono text-slate-700">
-                        {lm.checkIn ? new Date(lm.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">
-                          <Timer size={10} /> {lm.lateMinutes} min
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        {lm.regularizationStatus ? (
-                          <StatusBadge status={lm.regularizationStatus} />
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-rose-500 text-[10px] font-bold">
-                            <AlertTriangle size={10} /> Not Applied
+                  {lateData.lateMarks.map((lm, idx) => {
+                    const isEligible = !lm.regularizationStatus;
+                    const isSelected = selectedDates.has(lm.date);
+                    return (
+                      <tr
+                        key={idx}
+                        className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}
+                      >
+                        {eligibleLateMarks.length > 0 && (
+                          <td className="px-3 py-2">
+                            {isEligible && (
+                              <button onClick={() => toggleDate(lm.date)} className="text-slate-400 hover:text-blue-600">
+                                {isSelected
+                                  ? <CheckSquare size={15} className="text-blue-600" />
+                                  : <Square size={15} />}
+                              </button>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-2 font-medium text-slate-800">{formatDate(lm.date)}</td>
+                        <td className="px-4 py-2 text-slate-600">{lm.shiftStart}</td>
+                        <td className="px-4 py-2 font-mono text-slate-700">
+                          {lm.checkIn ? new Date(lm.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">
+                            <Timer size={10} /> {lm.lateMinutes} min
                           </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        {!lm.regularizationStatus && (
-                          <button
-                            onClick={() => openForm(lm.date, lm.checkIn, lm.checkOut)}
-                            className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[10px] font-bold"
-                          >
-                            Apply
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-2">
+                          {lm.regularizationStatus ? (
+                            <StatusBadge status={lm.regularizationStatus} />
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-rose-500 text-[10px] font-bold">
+                              <AlertTriangle size={10} /> Not Applied
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          {isEligible && (
+                            <button
+                              onClick={() => openForm(lm.date, lm.checkIn, lm.checkOut)}
+                              className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[10px] font-bold"
+                            >
+                              Apply
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -276,7 +411,7 @@ export default function AttendanceRegularization() {
         </div>
       )}
 
-      {/* New Request Modal */}
+      {/* Single Request Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
@@ -377,6 +512,121 @@ export default function AttendanceRegularization() {
         </div>
       )}
 
+      {/* Bulk Regularization Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Bulk Regularization</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{selectedDates.size} date{selectedDates.size !== 1 ? 's' : ''} selected — reason is mandatory for each</p>
+              </div>
+              <button onClick={() => setShowBulkModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg">
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Approver info */}
+              {profileData?.reportingManager && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+                  <span className="text-xs text-blue-600 font-medium">Approver:</span>
+                  <span className="text-xs text-blue-800 font-semibold">{profileData.reportingManager.name}</span>
+                </div>
+              )}
+
+              {/* Quick fill: Apply same reason to all */}
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-2">
+                <p className="text-xs font-medium text-slate-600">Quick fill — Apply same reason to all empty fields</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={commonReason}
+                    onChange={e => setCommonReason(e.target.value)}
+                    placeholder="e.g. Traffic delay, Client meeting..."
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCommonReason}
+                    disabled={!commonReason.trim()}
+                    className="px-3 py-2 bg-slate-600 text-white rounded-lg text-xs font-medium hover:bg-slate-700 disabled:opacity-40 whitespace-nowrap"
+                  >
+                    Apply to All
+                  </button>
+                </div>
+              </div>
+
+              {/* Per-date reason inputs */}
+              <div className="space-y-3">
+                {[...selectedDates].sort().map(date => {
+                  const lm = lateData.lateMarks.find(l => l.date === date);
+                  const reason = bulkReasons[date] || '';
+                  const isValid = reason.trim().length >= 3;
+                  return (
+                    <div key={date} className={`rounded-xl border p-3 space-y-2 ${isValid ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-slate-800">{formatDate(date)}</span>
+                          {lm && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold text-[10px]">
+                              <Timer size={10} /> {lm.lateMinutes} min late
+                            </span>
+                          )}
+                        </div>
+                        {lm?.checkIn && (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            In: {new Date(lm.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                            {lm.checkOut && ` — Out: ${new Date(lm.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })}`}
+                          </span>
+                        )}
+                      </div>
+                      <textarea
+                        value={reason}
+                        onChange={e => setBulkReasons(prev => ({ ...prev, [date]: e.target.value }))}
+                        placeholder="Reason for regularization (required)..."
+                        rows={2}
+                        className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
+                          !isValid && reason.length > 0 ? 'border-red-300' : 'border-slate-200'
+                        }`}
+                      />
+                      {!isValid && reason.length > 0 && (
+                        <p className="text-[10px] text-red-500">Reason must be at least 3 characters</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {bulkErr && <AlertMessage type="error" message={bulkErr} />}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 flex-shrink-0">
+              <p className="text-xs text-slate-500">
+                {Object.values(bulkReasons).filter(r => r && r.trim().length >= 3).length} / {selectedDates.size} reasons filled
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkSubmit}
+                  disabled={bulkSaving || !allBulkReasonsValid}
+                  className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Send size={14} />
+                  {bulkSaving ? 'Submitting...' : `Submit ${selectedDates.size} Request${selectedDates.size !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Requests Table — filtered by month */}
       {monthRequests.length === 0 ? (
         <EmptyState
@@ -461,14 +711,4 @@ function StatCard({ label, value, highlight, subtitle }) {
       {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
     </div>
   );
-}
-
-function getLast6Months() {
-  const months = [];
-  const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(d.toISOString().substring(0, 7));
-  }
-  return months;
 }
