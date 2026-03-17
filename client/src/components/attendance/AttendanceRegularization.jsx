@@ -34,7 +34,7 @@ export default function AttendanceRegularization() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
-  const [showPolicy, setShowPolicy] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(true);
 
   const { data: requests, setData: setRequests, loading, error, refetch } = useFetch('/regularization/my', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
@@ -118,26 +118,57 @@ export default function AttendanceRegularization() {
     }
   };
 
-  const pending  = requests.filter(r => r.status === 'pending').length;
-  const approved = requests.filter(r => r.status === 'approved').length;
-  const rejected = requests.filter(r => r.status === 'rejected').length;
+  // Filter requests by selected month
+  const monthRequests = requests.filter(r => r.date && r.date.startsWith(selectedMonth));
+  const pending  = monthRequests.filter(r => r.status === 'pending').length;
+  const approved = monthRequests.filter(r => r.status === 'approved').length;
+  const rejected = monthRequests.filter(r => r.status === 'rejected').length;
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 -mx-6 -mt-6 px-6 py-4 mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Attendance Regularization</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Request corrections for missed or incorrect check-in/out</p>
+      {/* Sticky Header with Month Navigation */}
+      <div className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 -mx-6 -mt-6 px-6 py-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">Attendance Regularization</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Request corrections for missed or incorrect check-in/out</p>
+          </div>
+          <button
+            onClick={() => openForm()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+          >
+            <Plus size={16} /> New Request
+          </button>
         </div>
-        <button
-          onClick={() => openForm()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          <Plus size={16} /> New Request
-        </button>
+        {/* Month selector */}
+        <div className="flex items-center gap-3 mt-3">
+          <button
+            onClick={() => {
+              const d = new Date(selectedMonth + '-01');
+              d.setMonth(d.getMonth() - 1);
+              setSelectedMonth(d.toISOString().substring(0, 7));
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-200 border border-slate-200 bg-white"
+          >
+            <ChevronDown size={14} className="rotate-90 text-slate-500" />
+          </button>
+          <span className="text-sm font-semibold text-slate-700 min-w-[120px] text-center">
+            {new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+          </span>
+          <button
+            onClick={() => {
+              const d = new Date(selectedMonth + '-01');
+              d.setMonth(d.getMonth() + 1);
+              const next = d.toISOString().substring(0, 7);
+              if (next <= new Date().toISOString().substring(0, 7)) setSelectedMonth(next);
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-200 border border-slate-200 bg-white"
+          >
+            <ChevronDown size={14} className="-rotate-90 text-slate-500" />
+          </button>
+        </div>
       </div>
 
       {/* Alerts */}
@@ -148,7 +179,7 @@ export default function AttendanceRegularization() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-        <StatCard label="Total Requests" value={requests.length} />
+        <StatCard label="Total Requests" value={monthRequests.length} />
         <StatCard label="Pending" value={pending} highlight="amber" />
         <StatCard label="Approved" value={approved} highlight="green" />
         <StatCard label="Late Marks" value={lateData.totalLateMarks} highlight={lateData.totalLateMarks > 0 ? 'amber' : null} />
@@ -178,15 +209,6 @@ export default function AttendanceRegularization() {
                 : ` ${3 - (lateData.unregularizedCount % 3)} more before next half-day deduction.`}
             </p>
           </div>
-          <select
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none"
-          >
-            {getLast6Months().map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
         </div>
       )}
 
@@ -355,12 +377,12 @@ export default function AttendanceRegularization() {
         </div>
       )}
 
-      {/* Requests Table */}
-      {requests.length === 0 ? (
+      {/* Requests Table — filtered by month */}
+      {monthRequests.length === 0 ? (
         <EmptyState
           icon={ClipboardEdit}
           title="No regularization requests"
-          subtitle="Submit a request to correct a missed or incorrect attendance entry"
+          subtitle={`No requests for ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`}
         />
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -379,7 +401,7 @@ export default function AttendanceRegularization() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {requests.map(r => (
+                {monthRequests.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{formatDate(r.date)}</td>
                     <td className="px-4 py-3">
