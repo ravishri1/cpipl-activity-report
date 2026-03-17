@@ -107,6 +107,62 @@ router.get(
   })
 );
 
+// ═══════════════════════════════════════════════
+// ATTENDANCE EXCEPTIONS — bypass attendance rules
+// ═══════════════════════════════════════════════
+
+// GET /api/shifts/attendance-exceptions - List all exempt employees
+router.get(
+  '/attendance-exceptions',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const exemptUsers = await req.prisma.user.findMany({
+      where: { isAttendanceExempt: true, isActive: true },
+      select: {
+        id: true, name: true, employeeId: true, department: true,
+        designation: true, attendanceExemptReason: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.json(exemptUsers);
+  })
+);
+
+// POST /api/shifts/attendance-exceptions - Add employees to exception list
+router.post(
+  '/attendance-exceptions',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    requireFields(req.body, 'userIds');
+    const { userIds, reason } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) throw badRequest('userIds must be a non-empty array');
+
+    const updated = await req.prisma.user.updateMany({
+      where: { id: { in: userIds.map(Number) } },
+      data: {
+        isAttendanceExempt: true,
+        attendanceExemptReason: reason || 'Management',
+      },
+    });
+
+    res.json({ message: `${updated.count} employee(s) added to attendance exceptions`, count: updated.count });
+  })
+);
+
+// DELETE /api/shifts/attendance-exceptions/:userId - Remove employee from exception list
+router.delete(
+  '/attendance-exceptions/:userId',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const userId = parseId(req.params.userId);
+    await req.prisma.user.update({
+      where: { id: userId },
+      data: { isAttendanceExempt: false, attendanceExemptReason: null },
+    });
+    res.json({ message: 'Employee removed from attendance exceptions' });
+  })
+);
+
 // GET /api/shifts/my - Get current user's shift info
 router.get(
   '/my',

@@ -101,6 +101,8 @@ model User {
   confirmationStatus        String?  // pending | extended | confirmed (null = N/A)
   confirmedAt               String?  // "YYYY-MM-DD"
   benefitsUnlocked          Boolean  @default(false)
+  isAttendanceExempt        Boolean  @default(false) // Bypass all attendance rules — always marked Present
+  attendanceExemptReason    String?  // "Management", "Director", "Business Travel", etc.
 
   // ── Existing Relations ──
   reports          DailyReport[]

@@ -403,6 +403,14 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                       </p>
                     </div>
 
+                    {/* Attendance Exempt badge */}
+                    {data.isAttendanceExempt && (
+                      <div className="mx-3 mt-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-xs font-medium text-emerald-700">Attendance Exception — All rules bypassed</span>
+                      </div>
+                    )}
+
                     {/* Insight banner — greytHR style (skip for today — day not complete) */}
                     {!isSelectedDayToday && selectedDay.needsRegularization && !hideInsight && (
                       <div className="mx-3 mt-3 border border-amber-200 rounded-lg overflow-hidden">

@@ -339,7 +339,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
   const today = new Date().toISOString().split('T')[0];
 
   const [user, attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true, employeeId: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true, employeeId: true, isAttendanceExempt: true } }),
     prisma.attendance.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
       orderBy: { date: 'asc' },
@@ -487,6 +487,8 @@ async function getEmployeeCalendar(userId, month, prisma) {
     }
 
     // Policy enforcement: late mark detection (15-min grace)
+    // Attendance-exempt users bypass ALL policy rules (always Present, no late marks, no regularization)
+    const isExempt = user?.isAttendanceExempt === true;
     let isLate = false;
     let lateMinutes = 0;
     let shortHours = false;
@@ -496,18 +498,18 @@ async function getEmployeeCalendar(userId, month, prisma) {
     // Only compute for non-future, non-weekend, non-holiday, non-leave working days
     const isWorkingDay = !isFuture && !isWeekend && !holiday && !leave;
 
-    if (isWorkingDay && shift && att?.checkIn) {
+    if (!isExempt && isWorkingDay && shift && att?.checkIn) {
       const ciMinutes = toISTMinutes(att.checkIn);
       lateMinutes = Math.max(0, ciMinutes - shiftStartMin);
       isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
     }
 
-    if (isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null && dateStr !== today) {
+    if (!isExempt && isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null && dateStr !== today) {
       // Skip short hours check for today — day not yet complete
       shortHours = att.workHours < REQUIRED_WORK_HOURS;
     }
 
-    if (isWorkingDay && (isLate || shortHours) && dateStr !== today) {
+    if (!isExempt && isWorkingDay && (isLate || shortHours) && dateStr !== today) {
       // Needs regularization if no approved regularization exists
       // Skip today — day is not yet complete
       needsRegularization = !reg || reg.status !== 'approved';
@@ -577,6 +579,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
   return {
     employeeName: user?.name || null,
     employeeId: user?.employeeId || null,
+    isAttendanceExempt: user?.isAttendanceExempt || false,
     days,
     summary,
     shift: shiftAssignment?.shift || null,
@@ -619,6 +622,12 @@ async function getLateMarksSummary(userId, month, prisma) {
   const lastDay = new Date(year, mon, 0).getDate();
   const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
   const today = new Date().toISOString().split('T')[0];
+
+  // Attendance-exempt users have zero late marks
+  const exemptUser = await prisma.user.findUnique({ where: { id: userId }, select: { isAttendanceExempt: true } });
+  if (exemptUser?.isAttendanceExempt) {
+    return { lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0, month };
+  }
 
   const [attendances, holidays, shiftAssignment, regularizations] = await Promise.all([
     prisma.attendance.findMany({
