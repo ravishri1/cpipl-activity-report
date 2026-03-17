@@ -117,6 +117,14 @@ export default function MyAttendance() {
   const isCheckedOut = today?.checkIn && today?.checkOut;
   const notCheckedIn = !today?.checkIn || today?.status === 'not_checked_in';
 
+  // Format decimal hours as HH:MM
+  const formatHrsMin = (hrs) => {
+    if (!hrs || hrs <= 0) return '-';
+    const h = Math.floor(hrs);
+    const m = Math.round((hrs - h) * 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -203,11 +211,12 @@ export default function MyAttendance() {
 
       {/* Monthly Stats */}
       {monthly?.summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Present" value={monthly.summary.present} color="text-emerald-600" bg="bg-emerald-50" />
           <StatCard label="Absent" value={monthly.summary.absent} color="text-red-600" bg="bg-red-50" />
           <StatCard label="On Leave" value={monthly.summary.onLeave} color="text-blue-600" bg="bg-blue-50" />
-          <StatCard label="Avg Hours" value={monthly.summary.avgWorkHours?.toFixed(1) || '0'} color="text-purple-600" bg="bg-purple-50" />
+          <StatCard label="Avg Work Hrs" value={formatHrsMin(monthly.summary.avgWorkHours)} color="text-purple-600" bg="bg-purple-50" />
+          <StatCard label="Avg Actual Hrs" value={formatHrsMin(monthly.summary.avgActualWorkHours)} color="text-indigo-600" bg="bg-indigo-50" />
         </div>
       )}
 

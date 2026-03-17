@@ -247,8 +247,9 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
       {data && (
         <>
           {/* Insight cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <InsightCard label="AVG. WORK HRS" value={data.summary.totalWorkHours > 0 && data.summary.present > 0 ? formatHrsMin(data.summary.totalWorkHours / data.summary.present) : '-'} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <InsightCard label="AVG. WORK HRS" value={data.summary.avgWorkHours > 0 ? formatHrsMin(data.summary.avgWorkHours) : '-'} />
+            <InsightCard label="AVG. ACTUAL HRS" value={data.summary.avgActualWorkHours > 0 ? formatHrsMin(data.summary.avgActualWorkHours) : '-'} />
             <InsightCard label="PRESENT DAYS" value={data.summary.present} />
             <InsightCard label="LATE MARKS" value={data.summary.lateMarks || 0} highlight={data.summary.lateMarks > 0 ? 'amber' : null} />
             <InsightCard label="REGULARIZED" value={data.summary.regularizedDays || 0} highlight={data.summary.regularizedDays > 0 ? 'blue' : null} />
