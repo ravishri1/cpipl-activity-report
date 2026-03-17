@@ -139,9 +139,9 @@ async function getMonthlyAttendance(userId, month, prisma) {
     }
   }
 
-  const workedDays = records.filter((r) => r.workHours > 0 || (r.checkIn && r.checkOut)).length;
-  summary.avgWorkHours = workedDays > 0 ? Math.round((totalOfficeHrs / workedDays) * 100) / 100 : 0;
-  summary.avgActualWorkHours = workedDays > 0 ? Math.round((totalActualHrs / workedDays) * 100) / 100 : 0;
+  // Monthly totals (not per-day averages)
+  summary.totalOfficeHours = Math.round(totalOfficeHrs * 100) / 100;       // total office time (includes breaks)
+  summary.totalActualWorkHours = Math.round(totalActualHrs * 100) / 100;   // total actual work (minus breaks)
 
   return { records, summary };
 }
@@ -594,9 +594,6 @@ async function getEmployeeCalendar(userId, month, prisma) {
     if ((d.totalWorkHrsRaw || 0) > 0) return sum + Math.max(0, d.totalWorkHrsRaw - BREAK_HRS);
     return sum;
   }, 0);
-  const avgWorkHrs = workedDays.length > 0 ? totalOfficeHrs / workedDays.length : 0;
-  const avgActualWorkHrs = workedDays.length > 0 ? totalActualHrs / workedDays.length : 0;
-
   const summary = {
     present: days.filter(d => d.status === 'present').length,
     absent: days.filter(d => d.status === 'absent').length,
@@ -605,8 +602,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
     holiday: days.filter(d => d.status === 'holiday').length,
     weekend: days.filter(d => d.status === 'weekend').length,
     totalWorkHours: Math.round(totalActualHrs * 100) / 100,
-    avgWorkHours: Math.round(avgWorkHrs * 100) / 100,           // includes breaks (office time)
-    avgActualWorkHours: Math.round(avgActualWorkHrs * 100) / 100, // excludes breaks
+    // Monthly totals (not per-day averages)
+    totalOfficeHours: Math.round(totalOfficeHrs * 100) / 100,       // total office time (includes breaks)
+    totalActualWorkHours: Math.round(totalActualHrs * 100) / 100,   // total actual work (minus breaks)
     // Policy enforcement summary
     lateMarks: lateMarksCount,
     regularizedDays: regularizedDaysCount,

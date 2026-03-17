@@ -215,8 +215,8 @@ export default function MyAttendance() {
           <StatCard label="Present" value={monthly.summary.present} color="text-emerald-600" bg="bg-emerald-50" />
           <StatCard label="Absent" value={monthly.summary.absent} color="text-red-600" bg="bg-red-50" />
           <StatCard label="On Leave" value={monthly.summary.onLeave} color="text-blue-600" bg="bg-blue-50" />
-          <StatCard label="Avg Work Hrs" value={formatHrsMin(monthly.summary.avgWorkHours)} color="text-purple-600" bg="bg-purple-50" />
-          <StatCard label="Avg Actual Hrs" value={formatHrsMin(monthly.summary.avgActualWorkHours)} color="text-indigo-600" bg="bg-indigo-50" />
+          <StatCard label="Total Work Hrs" value={formatHrsMin(monthly.summary.totalOfficeHours)} color="text-purple-600" bg="bg-purple-50" />
+          <StatCard label="Total Actual Hrs" value={formatHrsMin(monthly.summary.totalActualWorkHours)} color="text-indigo-600" bg="bg-indigo-50" />
         </div>
       )}
 
