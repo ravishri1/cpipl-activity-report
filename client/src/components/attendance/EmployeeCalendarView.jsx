@@ -33,7 +33,7 @@ const statusConfig = {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function EmployeeCalendarView({ userId, employeeName: employeeNameProp, onBack }) {
+export default function EmployeeCalendarView({ userId, employeeName: employeeNameProp, onBack, selfView = false }) {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
     try {
       const res = await api.post('/biometric/recalculate', { userId, date });
       setRecalcMsg({ type: 'success', text: `Recalculated: ${res.data.punchCount} punches → ${res.data.workHours?.toFixed(2)}h work, ${res.data.breakHours?.toFixed(2)}h break` });
-      const calRes = await api.get(`/attendance/employee-calendar?userId=${userId}&month=${month}`);
+      const calRes = await api.get(selfView ? `/attendance/my-calendar?month=${month}` : `/attendance/employee-calendar?userId=${userId}&month=${month}`);
       setData(calRes.data);
     } catch (err) {
       setRecalcMsg({ type: 'error', text: err.response?.data?.error || 'Recalculation failed' });
@@ -77,7 +77,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
         } catch {} // Skip days with no punches
       }
       setRecalcMsg({ type: 'success', text: `Recalculated ${recalculated} days` });
-      const calRes = await api.get(`/attendance/employee-calendar?userId=${userId}&month=${month}`);
+      const calRes = await api.get(selfView ? `/attendance/my-calendar?month=${month}` : `/attendance/employee-calendar?userId=${userId}&month=${month}`);
       setData(calRes.data);
     } catch (err) {
       setRecalcMsg({ type: 'error', text: err.response?.data?.error || 'Recalculation failed' });
@@ -91,7 +91,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
       setLoading(true);
       setError(null);
       try {
-        const res = await api.get(`/attendance/employee-calendar?userId=${userId}&month=${month}`);
+        const res = await api.get(selfView ? `/attendance/my-calendar?month=${month}` : `/attendance/employee-calendar?userId=${userId}&month=${month}`);
         setData(res.data);
         const todayStr = new Date().toISOString().split('T')[0];
         if (todayStr.startsWith(month)) {
@@ -228,16 +228,18 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white" title="Back to team view">
-          <ArrowLeft className="w-4 h-4 text-slate-600" />
-        </button>
-        <div className="flex-1">
-          <h2 className="text-lg font-bold text-slate-800">Attendance Info</h2>
-          <p className="text-sm text-slate-500">{employeeNameProp || data?.employeeName || 'Employee'}</p>
+      {/* Header — hide for self view (already inside My Attendance tabs) */}
+      {!selfView && (
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white" title="Back to team view">
+            <ArrowLeft className="w-4 h-4 text-slate-600" />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-slate-800">Attendance Info</h2>
+            <p className="text-sm text-slate-500">{employeeNameProp || data?.employeeName || 'Employee'}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && <AlertMessage type="error" message={error} />}
       {recalcMsg && <AlertMessage type={recalcMsg.type} message={recalcMsg.text} />}
@@ -292,15 +294,17 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                     {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
                   </h3>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleRecalculateMonth}
-                      disabled={recalculating}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
-                      title="Recalculate all days from biometric punches"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${recalculating ? 'animate-spin' : ''}`} />
-                      {recalculating ? 'Recalculating...' : 'Recalculate Month'}
-                    </button>
+                    {!selfView && (
+                      <button
+                        onClick={handleRecalculateMonth}
+                        disabled={recalculating}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                        title="Recalculate all days from biometric punches"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${recalculating ? 'animate-spin' : ''}`} />
+                        {recalculating ? 'Recalculating...' : 'Recalculate Month'}
+                      </button>
+                    )}
                     <button onClick={() => changeMonth(1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
                       Next <ChevronRight className="w-4 h-4" />
                     </button>
@@ -782,8 +786,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                       )}
                     </div>
 
-                    {/* Recalculate button */}
-                    {selectedDay.punches && selectedDay.punches.length > 0 && (
+                    {/* Recalculate button — admin only */}
+                    {!selfView && selectedDay.punches && selectedDay.punches.length > 0 && (
                       <div className="px-4 py-2 border-t border-slate-100">
                         <button
                           onClick={() => handleRecalculate(selectedDay.date)}

@@ -48,13 +48,6 @@ export default function EmployeeShiftInfo({ userId }) {
         </div>
       )}
 
-      {reason && reason !== 'Manager Decision' && (
-        <div className="text-sm">
-          <p className="text-blue-700 font-medium">Assignment Reason</p>
-          <p className="text-blue-900">{reason}</p>
-        </div>
-      )}
-
       {notes && (
         <div className="text-sm pt-2 border-t border-blue-100">
           <p className="text-blue-700 font-medium">Notes</p>

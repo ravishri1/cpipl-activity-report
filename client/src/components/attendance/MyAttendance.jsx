@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import EmployeeShiftInfo from '../shifts/EmployeeShiftInfo';
+import EmployeeCalendarView from './EmployeeCalendarView';
 import {
   Clock,
   LogIn,
@@ -15,6 +16,7 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
+  List,
 } from 'lucide-react';
 
 const statusConfig = {
@@ -34,6 +36,7 @@ export default function MyAttendance() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  const [view, setView] = useState('list'); // 'list' or 'calendar'
   const timerRef = useRef(null);
 
   const fetchData = async () => {
@@ -208,74 +211,107 @@ export default function MyAttendance() {
         </div>
       )}
 
-      {/* Month Navigation + Records */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <button onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <ChevronLeft className="w-4 h-4 text-slate-500" />
-          </button>
-          <h3 className="text-sm font-semibold text-slate-700">
-            {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
-          </h3>
-          <button onClick={() => changeMonth(1)} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </button>
-        </div>
-
-        {/* Records table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left">
-                <th className="px-4 py-2.5 font-medium text-slate-600">Date</th>
-                <th className="px-4 py-2.5 font-medium text-slate-600">Day</th>
-                <th className="px-4 py-2.5 font-medium text-slate-600">Status</th>
-                <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
-                <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
-                <th className="px-4 py-2.5 font-medium text-slate-600">Hours</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {monthly?.records?.length > 0 ? (
-                monthly.records.map((r) => {
-                  const cfg = statusConfig[r.status] || statusConfig.present;
-                  const StatusIcon = cfg.icon;
-                  const dateObj = new Date(r.date + 'T00:00:00');
-                  return (
-                    <tr key={r.date} className="hover:bg-slate-50">
-                      <td className="px-4 py-2">{r.date}</td>
-                      <td className="px-4 py-2 text-slate-500">
-                        {dateObj.toLocaleDateString('en-IN', { weekday: 'short' })}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
-                          <StatusIcon className="w-3 h-3" />
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">
-                        {r.checkIn ? new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">
-                        {r.checkOut ? new Date(r.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                      </td>
-                      <td className="px-4 py-2 font-medium text-slate-700">
-                        {r.workHours ? `${r.workHours.toFixed(1)}h` : '—'}
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    No attendance records for this month.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* View Toggle Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 pb-0">
+        <button
+          onClick={() => setView('list')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            view === 'list'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <List className="w-4 h-4" />
+          List View
+        </button>
+        <button
+          onClick={() => setView('calendar')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            view === 'calendar'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Calendar View
+        </button>
       </div>
+
+      {/* List View */}
+      {view === 'list' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <button onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-slate-100">
+              <ChevronLeft className="w-4 h-4 text-slate-500" />
+            </button>
+            <h3 className="text-sm font-semibold text-slate-700">
+              {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+            </h3>
+            <button onClick={() => changeMonth(1)} className="p-1.5 rounded-lg hover:bg-slate-100">
+              <ChevronRight className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Records table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-left">
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Date</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Day</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Status</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Check In</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Check Out</th>
+                  <th className="px-4 py-2.5 font-medium text-slate-600">Hours</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {monthly?.records?.length > 0 ? (
+                  monthly.records.map((r) => {
+                    const cfg = statusConfig[r.status] || statusConfig.present;
+                    const StatusIcon = cfg.icon;
+                    const dateObj = new Date(r.date + 'T00:00:00');
+                    return (
+                      <tr key={r.date} className="hover:bg-slate-50">
+                        <td className="px-4 py-2">{r.date}</td>
+                        <td className="px-4 py-2 text-slate-500">
+                          {dateObj.toLocaleDateString('en-IN', { weekday: 'short' })}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+                            <StatusIcon className="w-3 h-3" />
+                            {cfg.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-slate-600">
+                          {r.checkIn ? new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-slate-600">
+                          {r.checkOut ? new Date(r.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td className="px-4 py-2 font-medium text-slate-700">
+                          {r.workHours ? `${r.workHours.toFixed(1)}h` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      No attendance records for this month.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar View — reuse EmployeeCalendarView in self mode */}
+      {view === 'calendar' && user && (
+        <EmployeeCalendarView userId={user.id} selfView />
+      )}
     </div>
   );
 }
