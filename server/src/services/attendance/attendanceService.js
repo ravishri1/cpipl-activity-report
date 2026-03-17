@@ -330,7 +330,6 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
  */
 async function getEmployeeCalendar(userId, month, prisma) {
   const GRACE_MINUTES = 15;
-  const REQUIRED_WORK_HOURS = 9;
 
   const startDate = `${month}-01`;
   const [year, mon] = month.split('-').map(Number);
@@ -418,6 +417,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
 
   const shift = shiftAssignment?.shift;
   const shiftStartMin = shift ? parseTimeToMinutes(shift.startTime) : null;
+  const shiftEndMin = shift ? parseTimeToMinutes(shift.endTime) : null;
+  // Required total hours = shift duration (e.g., 10:15-19:00 = 8.75h)
+  const shiftDurationHrs = (shiftStartMin != null && shiftEndMin != null) ? (shiftEndMin - shiftStartMin) / 60 : 0;
 
   // Build calendar days array
   const days = [];
@@ -504,9 +506,11 @@ async function getEmployeeCalendar(userId, month, prisma) {
       isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
     }
 
-    if (!isExempt && isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null && dateStr !== today) {
-      // Skip short hours check for today — day not yet complete
-      shortHours = att.workHours < REQUIRED_WORK_HOURS;
+    if (!isExempt && isWorkingDay && (status === 'present' || status === 'half_day') && att?.checkIn && att?.checkOut && dateStr !== today && shiftDurationHrs > 0) {
+      // Use total time at office (checkOut - checkIn), NOT stored workHours (which may be biometric actual work)
+      // Compare against shift duration (e.g., 8.75h for 10:15-19:00)
+      const totalTimeAtOffice = (new Date(att.checkOut).getTime() - new Date(att.checkIn).getTime()) / (1000 * 60 * 60);
+      shortHours = totalTimeAtOffice < shiftDurationHrs;
     }
 
     if (!isExempt && isWorkingDay && (isLate || shortHours) && dateStr !== today) {
