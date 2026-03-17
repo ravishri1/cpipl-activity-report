@@ -530,4 +530,53 @@ router.post('/recalculate', authenticate, requireAdmin, asyncHandler(async (req,
   throw badRequest('Provide date, or userId+date');
 }));
 
+// POST /api/biometric/recalculate-all — bulk recalculate ALL employees for a month
+// Accessible via agent key (no login needed) so it can be triggered remotely
+router.post('/recalculate-all', asyncHandler(async (req, res) => {
+  // Auth: admin login OR agent key
+  const agentKey = req.headers['x-agent-key'] || req.body?.agentKey;
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const isAgent = agentKey === expectedKey;
+
+  if (!isAgent) {
+    // Fall back to admin auth check
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'team_lead')) {
+      return res.status(401).json({ error: 'Agent key or admin login required' });
+    }
+  }
+
+  const { month } = req.body; // "YYYY-MM"
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) throw badRequest('month required in YYYY-MM format');
+
+  const [year, mon] = month.split('-').map(Number);
+  const lastDay = new Date(year, mon, 0).getDate();
+
+  let totalRecalculated = 0;
+  const dailyResults = [];
+
+  for (let day = 1; day <= lastDay; day++) {
+    const date = `${month}-${String(day).padStart(2, '0')}`;
+
+    const userIds = await req.prisma.biometricPunch.findMany({
+      where: { punchDate: date, matchStatus: 'matched' },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+
+    let dayCount = 0;
+    for (const { userId: uid } of userIds) {
+      if (!uid) continue;
+      const result = await recalculateAttendanceFromPunches(req.prisma, uid, date);
+      if (result) dayCount++;
+    }
+
+    if (dayCount > 0) {
+      totalRecalculated += dayCount;
+      dailyResults.push({ date, employees: dayCount });
+    }
+  }
+
+  res.json({ month, totalRecalculated, days: dailyResults.length, details: dailyResults });
+}));
+
 module.exports = router;
