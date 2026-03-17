@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  ClipboardEdit, Plus, X, CheckCircle, XCircle, AlertCircle,
+  ClipboardEdit, X, CheckCircle, XCircle, AlertCircle,
   Clock, Trash2, Timer, ShieldAlert, AlertTriangle, ChevronDown,
   CheckSquare, Square, Send,
 } from 'lucide-react';
@@ -228,12 +228,7 @@ export default function AttendanceRegularization() {
             <h1 className="text-xl font-semibold text-slate-800">Attendance Regularization</h1>
             <p className="text-sm text-slate-500 mt-0.5">Request corrections for missed or incorrect check-in/out</p>
           </div>
-          <button
-            onClick={() => openForm()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-          >
-            <Plus size={16} /> New Request
-          </button>
+{/* No manual "New Request" — employees regularize only from late marks below */}
         </div>
         {/* Month selector */}
         <div className="flex items-center gap-3 mt-3">
@@ -627,13 +622,21 @@ export default function AttendanceRegularization() {
         </div>
       )}
 
-      {/* Requests Table — filtered by month */}
+      {/* Submitted Requests Table — filtered by month */}
       {monthRequests.length === 0 ? (
-        <EmptyState
-          icon={ClipboardEdit}
-          title="No regularization requests"
-          subtitle={`No requests for ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`}
-        />
+        eligibleLateMarks.length > 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+            <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+            <p className="text-sm font-medium text-amber-700">You have {eligibleLateMarks.length} unregularized late mark{eligibleLateMarks.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-amber-600 mt-1">Select dates above and submit regularization to avoid penalties</p>
+          </div>
+        ) : (
+          <EmptyState
+            icon={ClipboardEdit}
+            title="No regularization requests"
+            subtitle={`No requests for ${new Date(selectedMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`}
+          />
+        )
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
