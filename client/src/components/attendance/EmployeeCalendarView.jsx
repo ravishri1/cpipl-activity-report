@@ -15,6 +15,7 @@ import {
   Timer,
   ShieldAlert,
   ClipboardEdit,
+  RefreshCw,
 } from 'lucide-react';
 
 // Calendar cell colors — policy-aware
@@ -36,6 +37,51 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalcMsg, setRecalcMsg] = useState(null);
+
+  const handleRecalculate = async (date) => {
+    if (!window.confirm(`Recalculate attendance for ${date}? This will rebuild First In, Last Out, and Work Hours from all biometric punches.`)) return;
+    setRecalculating(true);
+    setRecalcMsg(null);
+    try {
+      const res = await api.post('/biometric/recalculate', { userId, date });
+      setRecalcMsg({ type: 'success', text: `Recalculated: ${res.data.punchCount} punches → ${res.data.workHours?.toFixed(2)}h work, ${res.data.breakHours?.toFixed(2)}h break` });
+      // Refresh calendar data
+      const calRes = await api.get(`/attendance/employee-calendar?userId=${userId}&month=${month}`);
+      setData(calRes.data);
+    } catch (err) {
+      setRecalcMsg({ type: 'error', text: err.response?.data?.error || 'Recalculation failed' });
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const handleRecalculateMonth = async () => {
+    const [y, m] = month.split('-');
+    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+    if (!window.confirm(`Recalculate attendance for ALL days in ${new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}? This may take a moment.`)) return;
+    setRecalculating(true);
+    setRecalcMsg(null);
+    try {
+      let recalculated = 0;
+      for (let d = 1; d <= lastDay; d++) {
+        const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+        try {
+          const res = await api.post('/biometric/recalculate', { userId, date: dateStr });
+          if (res.data.punchCount > 0) recalculated++;
+        } catch {} // Skip days with no punches
+      }
+      setRecalcMsg({ type: 'success', text: `Recalculated ${recalculated} days` });
+      // Refresh calendar data
+      const calRes = await api.get(`/attendance/employee-calendar?userId=${userId}&month=${month}`);
+      setData(calRes.data);
+    } catch (err) {
+      setRecalcMsg({ type: 'error', text: err.response?.data?.error || 'Recalculation failed' });
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchCalendar = async () => {
@@ -137,6 +183,7 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
       </div>
 
       {error && <AlertMessage type="error" message={error} />}
+      {recalcMsg && <AlertMessage type={recalcMsg.type} message={recalcMsg.text} />}
 
       {data && (
         <>
@@ -187,9 +234,20 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
                   <h3 className="text-base font-semibold text-slate-800">
                     {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
                   </h3>
-                  <button onClick={() => changeMonth(1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleRecalculateMonth}
+                      disabled={recalculating}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                      title="Recalculate all days from biometric punches"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${recalculating ? 'animate-spin' : ''}`} />
+                      {recalculating ? 'Recalculating...' : 'Recalculate Month'}
+                    </button>
+                    <button onClick={() => changeMonth(1)} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+                      Next <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Day headers */}
@@ -543,6 +601,20 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
                         <p className="text-xs text-slate-400 py-2">-</p>
                       )}
                     </div>
+
+                    {/* Recalculate button for this day */}
+                    {selectedDay.punches && selectedDay.punches.length > 0 && (
+                      <div className="px-4 py-2 border-t border-slate-100">
+                        <button
+                          onClick={() => handleRecalculate(selectedDay.date)}
+                          disabled={recalculating}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50 w-full justify-center"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${recalculating ? 'animate-spin' : ''}`} />
+                          {recalculating ? 'Recalculating...' : 'Recalculate from Punches'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Swipe Details */}
                     <SectionHeader title={`Swipes${selectedDay.workHours > 0 ? ` (Total: ${formatHrsMin(selectedDay.workHours)})` : ''}`} />
