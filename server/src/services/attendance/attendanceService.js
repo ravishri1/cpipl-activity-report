@@ -119,6 +119,8 @@ async function getMonthlyAttendance(userId, month, prisma) {
   };
 
   let totalOfficeHrs = 0;
+  let totalActualHrs = 0;
+  const BREAK_HRS = 1; // Standard break = 1 hour
 
   for (const r of records) {
     if (r.status === 'present') summary.present++;
@@ -130,13 +132,16 @@ async function getMonthlyAttendance(userId, month, prisma) {
     if (r.workHours) summary.totalWorkHours += r.workHours;
     // Total office time = checkOut - checkIn (includes breaks)
     if (r.checkIn && r.checkOut) {
-      totalOfficeHrs += (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 3600000;
+      const officeHrs = (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 3600000;
+      totalOfficeHrs += officeHrs;
+      // Actual work: use stored workHours if available, else officeTime - break
+      totalActualHrs += r.workHours > 0 ? r.workHours : Math.max(0, officeHrs - BREAK_HRS);
     }
   }
 
   const workedDays = records.filter((r) => r.workHours > 0 || (r.checkIn && r.checkOut)).length;
   summary.avgWorkHours = workedDays > 0 ? Math.round((totalOfficeHrs / workedDays) * 100) / 100 : 0;
-  summary.avgActualWorkHours = workedDays > 0 ? Math.round((summary.totalWorkHours / workedDays) * 100) / 100 : 0;
+  summary.avgActualWorkHours = workedDays > 0 ? Math.round((totalActualHrs / workedDays) * 100) / 100 : 0;
 
   return { records, summary };
 }
@@ -580,10 +585,15 @@ async function getEmployeeCalendar(userId, month, prisma) {
   const unregularizedLateMarks = days.filter(d => d.isLate && (!d.regularizationStatus || d.regularizationStatus !== 'approved')).length;
 
   // Avg Work Hrs = total office time (checkIn → checkOut, includes breaks)
-  // Avg Actual Work Hrs = biometric actual work (minus breaks)
+  // Avg Actual Work Hrs = biometric actual work (minus breaks), fallback to officeTime - 1hr break
+  const BREAK_HRS = 1;
   const workedDays = days.filter(d => (d.workHours || 0) > 0 || (d.totalWorkHrsRaw || 0) > 0);
   const totalOfficeHrs = workedDays.reduce((sum, d) => sum + (d.totalWorkHrsRaw || 0), 0);
-  const totalActualHrs = workedDays.reduce((sum, d) => sum + (d.workHours || 0), 0);
+  const totalActualHrs = workedDays.reduce((sum, d) => {
+    if ((d.workHours || 0) > 0) return sum + d.workHours;
+    if ((d.totalWorkHrsRaw || 0) > 0) return sum + Math.max(0, d.totalWorkHrsRaw - BREAK_HRS);
+    return sum;
+  }, 0);
   const avgWorkHrs = workedDays.length > 0 ? totalOfficeHrs / workedDays.length : 0;
   const avgActualWorkHrs = workedDays.length > 0 ? totalActualHrs / workedDays.length : 0;
 
