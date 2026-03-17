@@ -17,11 +17,5 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
-  ],
-  "crons": [
-    {
-      "path": "/api/biometric/cron-sync",
-      "schedule": "*/5 7-22 * * 1-6"
-    }
   ]
 }
