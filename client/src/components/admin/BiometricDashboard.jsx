@@ -152,19 +152,12 @@ function StatusTab() {
         <StatCard icon={Activity}     label="All-time Punches" value={status.totalPunches}  color="purple" />
       </div>
 
-      {/* Architecture note */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        <p className="font-medium mb-1">📡 eSSL Sync Architecture</p>
-        <p className="text-xs text-blue-600">
-          cpserver (<code>192.168.2.222:85</code>) is on your office LAN. The cloud app (Vercel) cannot reach it directly.
-          For automatic sync, run the <strong>Local Sync Agent</strong> on any office PC:
-        </p>
-        <code className="block mt-2 bg-blue-100 rounded px-3 py-2 text-xs font-mono">
-          cd server\src\services\biometric && node esslSyncAgent.js
-        </code>
-        <p className="text-xs text-blue-600 mt-2">
-          The agent auto-discovers all devices from the HR API and syncs every 5 minutes. All punches are stored — even unmatched enroll numbers.
-          Use "Test Connection" below to verify each device is reachable from this server.
+      {/* Sync status banner */}
+      <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
+        <p className="font-medium mb-1">✅ Auto-Sync Active</p>
+        <p className="text-xs text-green-600">
+          Biometric data syncs automatically from cpserver every 5 minutes via Windows Task Scheduler.
+          All punches use greytHR-style alternating IN/OUT logic (1st punch = IN, 2nd = OUT, etc.).
         </p>
       </div>
 
