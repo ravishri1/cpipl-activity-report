@@ -478,7 +478,8 @@ async function getEmployeeCalendar(userId, month, prisma) {
     }
     if (shift && att?.checkIn) {
       const ciMinutes = toISTMinutes(att.checkIn);
-      lateInMinutes = Math.max(0, ciMinutes - shiftStartMin);
+      // Subtract 15-min grace from Late In display (grace is company's internal allowance)
+      lateInMinutes = Math.max(0, ciMinutes - shiftStartMin - GRACE_MINUTES);
       if (lateInMinutes > 0) {
         lateIn = `${String(Math.floor(lateInMinutes / 60)).padStart(2, '0')}:${String(lateInMinutes % 60).padStart(2, '0')}`;
       }
