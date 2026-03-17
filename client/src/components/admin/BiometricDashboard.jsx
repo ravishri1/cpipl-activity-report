@@ -161,32 +161,9 @@ function StatusTab() {
         </p>
       </div>
 
-      {/* Sync controls */}
+      {/* Re-match button only */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-slate-600">Lookback:</label>
-            <select
-              value={lookbackDays}
-              onChange={e => setLookbackDays(parseInt(e.target.value))}
-              className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            >
-              <option value={1}>Today (1 day)</option>
-              <option value={2}>2 days</option>
-              <option value={3}>3 days</option>
-              <option value={7}>1 week</option>
-              <option value={15}>15 days</option>
-              <option value={30}>30 days</option>
-            </select>
-          </div>
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing}
-            className="flex items-center gap-1.5 text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncing && !syncingDeviceId ? 'animate-spin' : ''}`} />
-            Sync All Devices
-          </button>
           <button
             onClick={handleRematch}
             disabled={syncing}
@@ -196,60 +173,10 @@ function StatusTab() {
             Re-match unmatched
           </button>
           <p className="text-xs text-slate-400 ml-auto">
-            Fetches punch data from cpserver for the selected lookback period
+            Sync handled by cpserver Task Scheduler (every 5 min)
           </p>
         </div>
       </div>
-
-      {/* Test Connection Result */}
-      {testResult && (
-        <div className={`rounded-xl border p-4 text-sm ${testResult.status === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className={`font-semibold ${testResult.status === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-              {testResult.status === 'success' ? '✅ Connection Test Passed' : '❌ Connection Test Failed'}
-            </h4>
-            <button onClick={() => setTestResult(null)} className="text-slate-400 hover:text-slate-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <p className={`text-xs ${testResult.status === 'success' ? 'text-green-700' : 'text-red-700'}`}>
-            {testResult.message || testResult.error}
-          </p>
-          {testResult.status === 'success' && testResult.enrollNumbers?.length > 0 && (
-            <div className="mt-2">
-              <p className="text-xs font-medium text-green-700 mb-1">
-                Found {testResult.totalPunches} punches from {testResult.uniqueEmployees} unique enroll numbers:
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {testResult.enrollNumbers.map(en => (
-                  <span key={en} className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-mono">{en}</span>
-                ))}
-              </div>
-              {testResult.samplePunches?.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs font-medium text-green-700 mb-1">Sample punches:</p>
-                  {testResult.samplePunches.map((p, i) => (
-                    <p key={i} className="text-xs text-green-600 font-mono">
-                      {p.enrollNumber} → {p.punchTime} ({p.direction || 'auto'})
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {testResult.troubleshooting && (
-            <div className="mt-2">
-              <p className="text-xs font-medium text-red-700 mb-1">Troubleshooting:</p>
-              <ul className="text-xs text-red-600 list-disc list-inside">
-                {testResult.troubleshooting.map((t, i) => <li key={i}>{t}</li>)}
-              </ul>
-            </div>
-          )}
-          {testResult.esslUrl && (
-            <p className="text-xs text-slate-500 mt-2">eSSL URL: {testResult.esslUrl} | Serial: {testResult.serialNumber} | Time: {testResult.elapsed}</p>
-          )}
-        </div>
-      )}
 
       {/* Device cards */}
       <div>
@@ -284,24 +211,7 @@ function StatusTab() {
                     <p className="mt-2 text-xs text-slate-400 italic">Never synced</p>
                   )}
                   {d.isActive && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleSyncDevice(d.id)}
-                        disabled={syncing}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${isSyncingThis ? 'animate-spin' : ''}`} />
-                        Sync Now
-                      </button>
-                      <button
-                        onClick={() => handleTestConnection(d.id)}
-                        disabled={isTestingThis}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
-                      >
-                        {isTestingThis ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                        Test Connection
-                      </button>
-                    </div>
+                    <p className="mt-2 text-xs text-green-600">● Auto-syncing via cpserver</p>
                   )}
                 </div>
               );
