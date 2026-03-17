@@ -15,7 +15,7 @@ const router = express.Router();
 router.get('/devices', asyncHandler(async (req, res, next) => {
   // Allow local sync agent to fetch device list via agent key
   const agentKey = req.headers['x-agent-key'];
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   if (agentKey === expectedKey) {
     const devices = await req.prisma.biometricDevice.findMany({
       where: { isActive: true },
@@ -98,7 +98,7 @@ router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (re
 // Body: { agentKey: "...", deviceSerial: "CUB7240300491", punches: [...] }
 router.post('/sync', asyncHandler(async (req, res) => {
   // Simple shared-secret auth for the local agent
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   const { agentKey: bodyKey, deviceSerial, punches } = req.body || {};
   // Also accept key from x-agent-key header as fallback
   const agentKey = bodyKey || req.headers['x-agent-key'];
@@ -220,7 +220,7 @@ router.post('/test-connection/:id', authenticate, requireAdmin, asyncHandler(asy
 // POST /api/biometric/agent-sync — local agent pushes ALL devices data in one call
 // The multi-device agent fetches from all eSSL devices locally and pushes everything here
 router.post('/agent-sync', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   const agentKey = req.body.agentKey || req.headers['x-agent-key'];
   if (agentKey !== expectedKey) return res.status(401).json({ error: 'Invalid agent key' });
 

@@ -134,7 +134,7 @@ app.use((req, res, next) => {
 // The local biometric sync agent on cpserver uses these to communicate with the cloud app.
 app.get('/api/agent/devices', asyncHandler(async (req, res) => {
   const agentKey = req.headers['x-agent-key'];
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   if (agentKey !== expectedKey) {
     return res.status(401).json({ error: 'Invalid agent key' });
   }
@@ -146,7 +146,7 @@ app.get('/api/agent/devices', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/agent/sync', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   const agentKey = req.body.agentKey || req.headers['x-agent-key'];
   if (agentKey !== expectedKey) {
     return res.status(401).json({ error: 'Invalid agent key' });
@@ -195,7 +195,7 @@ app.post('/api/agent/sync', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/agent/sync-single', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
   const agentKey = req.body.agentKey || req.headers['x-agent-key'];
   if (agentKey !== expectedKey) {
     return res.status(401).json({ error: 'Invalid agent key' });
