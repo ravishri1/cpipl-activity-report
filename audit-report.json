@@ -1,23 +1,25 @@
 {
-  "timestamp": "2026-03-15T07:12:25.621Z",
+  "timestamp": "2026-03-17T05:17:54.994Z",
   "version": 2,
   "stats": {
-    "filesScanned": 108,
-    "apiCallsFound": 327,
-    "routesFound": 377,
+    "filesScanned": 111,
+    "apiCallsFound": 334,
+    "routesFound": 393,
     "issuesFound": 0
   },
-  "missingRoutes": [],
+  "missingRoutes": [
+    {
+      "file": "hooks\\useFetch.js",
+      "method": "GET",
+      "rawUrl": "${url}${sep}_t=${Date.now()}",
+      "url": ":param:param_t=",
+      "line": 18
+    }
+  ],
   "queryParamCalls": 0,
   "warnings": [
     {
       "file": "components\\admin\\ConfirmationManager.jsx",
-      "type": "MANUAL_FETCH",
-      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
-      "severity": "LOW"
-    },
-    {
-      "file": "components\\admin\\HolidayManager.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
       "severity": "LOW"
@@ -47,7 +49,7 @@
       "severity": "LOW"
     },
     {
-      "file": "components\\attendance\\TeamAttendance.jsx",
+      "file": "components\\attendance\\EmployeeCalendarView.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
       "severity": "LOW"
@@ -131,5 +133,5 @@
       "severity": "MEDIUM"
     }
   ],
-  "matchedCount": 327
+  "matchedCount": 333
 }
