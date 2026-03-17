@@ -471,8 +471,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
       totalWorkHrsRaw = Math.max(0, (coMs - ciMs) / (1000 * 60 * 60));
     }
     if (shift && att?.checkIn) {
-      const ciTime = new Date(att.checkIn);
-      const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+      const ciMinutes = toISTMinutes(att.checkIn);
       lateInMinutes = Math.max(0, ciMinutes - shiftStartMin);
       if (lateInMinutes > 0) {
         lateIn = `${String(Math.floor(lateInMinutes / 60)).padStart(2, '0')}:${String(lateInMinutes % 60).padStart(2, '0')}`;
@@ -480,8 +479,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
     }
     if (shift && att?.checkOut) {
       const shiftEndMin = parseTimeToMinutes(shift.endTime);
-      const coTime = new Date(att.checkOut);
-      const coMinutes = coTime.getHours() * 60 + coTime.getMinutes();
+      const coMinutes = toISTMinutes(att.checkOut);
       earlyOutMinutes = Math.max(0, shiftEndMin - coMinutes);
       if (earlyOutMinutes > 0) {
         earlyOut = `${String(Math.floor(earlyOutMinutes / 60)).padStart(2, '0')}:${String(earlyOutMinutes % 60).padStart(2, '0')}`;
@@ -499,8 +497,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
     const isWorkingDay = !isFuture && !isWeekend && !holiday && !leave;
 
     if (isWorkingDay && shift && att?.checkIn) {
-      const ciTime = new Date(att.checkIn);
-      const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+      const ciMinutes = toISTMinutes(att.checkIn);
       lateMinutes = Math.max(0, ciMinutes - shiftStartMin);
       isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
     }
@@ -589,6 +586,17 @@ async function getEmployeeCalendar(userId, month, prisma) {
 }
 
 /**
+ * Convert a DateTime to IST minutes since midnight.
+ * Vercel serverless runs in UTC, shift times are in IST — must convert.
+ */
+function toISTMinutes(dt) {
+  const d = new Date(dt);
+  // IST = UTC + 5:30
+  const utcMin = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return (utcMin + 330) % 1440; // 330 = 5h30m in minutes
+}
+
+/**
  * Parse "HH:MM" time string to minutes since midnight
  */
 function parseTimeToMinutes(timeStr) {
@@ -671,8 +679,7 @@ async function getLateMarksSummary(userId, month, prisma) {
     // Skip holidays
     if (holidaySet.has(att.date)) continue;
 
-    const ciTime = new Date(att.checkIn);
-    const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
+    const ciMinutes = toISTMinutes(att.checkIn);
     const lateMinutes = ciMinutes - shiftStartMin;
 
     if (lateMinutes > GRACE_MINUTES) {
