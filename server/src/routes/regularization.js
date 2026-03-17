@@ -118,18 +118,22 @@ router.post('/bulk', asyncHandler(async (req, res) => {
     if (typeof item.reason !== 'string' || item.reason.trim().length < 3) throw badRequest(`Reason must be at least 3 characters for ${item.date}`);
   }
 
-  const dates = items.map(i => i.date);
-  // Check for duplicate dates in request
-  if (new Set(dates).size !== dates.length) throw badRequest('Duplicate dates in request');
+  // Check for duplicate date+time combos in request
+  const keys = items.map(i => `${i.date}|${i.requestedIn || ''}|${i.requestedOut || ''}`);
+  if (new Set(keys).size !== keys.length) throw badRequest('Duplicate time entries in request');
 
-  // Check for existing pending requests for any of these dates
+  // Check for existing pending requests with same date + time range
+  const dates = [...new Set(items.map(i => i.date))];
   const existing = await req.prisma.attendanceRegularization.findMany({
     where: { userId: req.user.id, date: { in: dates }, status: 'pending' },
-    select: { date: true },
+    select: { date: true, requestedIn: true, requestedOut: true },
   });
   if (existing.length > 0) {
-    const dupDates = existing.map(e => e.date).join(', ');
-    throw badRequest(`Pending requests already exist for: ${dupDates}`);
+    const existingKeys = new Set(existing.map(e => `${e.date}|${e.requestedIn || ''}|${e.requestedOut || ''}`));
+    const dupes = items.filter(i => existingKeys.has(`${i.date}|${i.requestedIn || ''}|${i.requestedOut || ''}`));
+    if (dupes.length > 0) {
+      throw badRequest(`Pending requests already exist for: ${dupes.map(d => `${d.date} (${d.requestedIn}-${d.requestedOut})`).join(', ')}`);
+    }
   }
 
   // Create all in a transaction
@@ -161,11 +165,15 @@ router.post('/', asyncHandler(async (req, res) => {
     where: { userId_date: { userId: req.user.id, date } },
   });
 
-  // Prevent duplicate pending requests for same date
+  // Prevent duplicate pending requests for same date + time range
   const existing = await req.prisma.attendanceRegularization.findFirst({
-    where: { userId: req.user.id, date, status: 'pending' },
+    where: {
+      userId: req.user.id, date, status: 'pending',
+      requestedIn: requestedIn || null,
+      requestedOut: requestedOut || null,
+    },
   });
-  if (existing) throw badRequest('A pending regularization request already exists for this date');
+  if (existing) throw badRequest('A pending regularization request already exists for this time period');
 
   const request = await req.prisma.attendanceRegularization.create({
     data: {

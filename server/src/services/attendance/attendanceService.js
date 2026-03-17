@@ -714,9 +714,12 @@ async function getLateMarksSummary(userId, month, prisma) {
   const shiftStartMin = parseTimeToMinutes(shift.startTime);
   const holidaySet = new Set(holidays.map(h => h.date));
 
-  // Build regularization map (latest per date)
+  // Build regularization map keyed by date+time range (multiple per date possible)
   const regMap = {};
   for (const r of regularizations) {
+    const key = `${r.date}|${r.requestedIn || ''}|${r.requestedOut || ''}`;
+    if (!regMap[key]) regMap[key] = r;
+    // Also keep a date-only fallback for legacy entries (requestedIn = shift start)
     if (!regMap[r.date]) regMap[r.date] = r;
   }
 
@@ -741,18 +744,35 @@ async function getLateMarksSummary(userId, month, prisma) {
     if (rawLateMinutes > GRACE_MINUTES) {
       // Late minutes = time beyond grace period (grace is company's internal allowance)
       const lateMinutes = rawLateMinutes - GRACE_MINUTES;
-      const reg = regMap[att.date];
-      const regStatus = reg?.status || null;
-      if (regStatus === 'approved') regularizedCount++;
 
-      // Compute all out-periods from biometric punches for this date
+      // Grace-end to check-in (late arrival period)
+      const graceEndMin = shiftStartMin + GRACE_MINUTES;
+      const graceEndStr = `${String(Math.floor(graceEndMin / 60)).padStart(2, '0')}:${String(graceEndMin % 60).padStart(2, '0')}`;
+      const checkInStr = att.checkIn ? (() => { const d = new Date(att.checkIn); const h = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; return `${String(Math.floor((h % 1440) / 60)).padStart(2, '0')}:${String((h % 1440) % 60).padStart(2, '0')}`; })() : null;
+
+      // Build all missing periods as separate items (like greytHR)
+      const periods = [];
+
+      // Period 1: Late arrival
+      if (checkInStr) {
+        const lateKey = `${att.date}|${graceEndStr}|${checkInStr}`;
+        const lateReg = regMap[lateKey] || regMap[att.date];
+        const lateRegStatus = lateReg?.status || null;
+        periods.push({
+          type: 'late_arrival',
+          from: graceEndStr,
+          to: checkInStr,
+          minutes: lateMinutes,
+          regularizationStatus: lateRegStatus,
+        });
+        if (lateRegStatus === 'approved') regularizedCount++;
+      }
+
+      // Compute out-periods from biometric punches
       const dayPunches = punchesByDate[att.date] || [];
-      const outPeriods = [];
       let totalOutMinutes = 0;
 
       if (dayPunches.length >= 2) {
-        // greytHR-style: alternating IN/OUT. Even index = IN, Odd index = OUT
-        // Out periods = gaps between OUT punch and next IN punch
         for (let i = 1; i < dayPunches.length - 1; i += 2) {
           const outPunch = dayPunches[i]; // OUT
           const nextInPunch = dayPunches[i + 1]; // next IN
@@ -761,21 +781,24 @@ async function getLateMarksSummary(userId, month, prisma) {
             const inTime = new Date(nextInPunch.punchTime.replace(' ', 'T') + '+05:30');
             const gapMin = Math.round((inTime.getTime() - outTime.getTime()) / 60000);
             if (gapMin > 0) {
-              outPeriods.push({
-                out: outPunch.punchTime.slice(11, 16),
-                in: nextInPunch.punchTime.slice(11, 16),
+              const outStr = outPunch.punchTime.slice(11, 16);
+              const inStr = nextInPunch.punchTime.slice(11, 16);
+              const outKey = `${att.date}|${outStr}|${inStr}`;
+              const outReg = regMap[outKey];
+              const outRegStatus = outReg?.status || null;
+              periods.push({
+                type: 'out_period',
+                from: outStr,
+                to: inStr,
                 minutes: gapMin,
+                regularizationStatus: outRegStatus,
               });
               totalOutMinutes += gapMin;
+              if (outRegStatus === 'approved') regularizedCount++;
             }
           }
         }
       }
-
-      // Grace-end to check-in (late arrival period)
-      const graceEndMin = shiftStartMin + GRACE_MINUTES;
-      const graceEndStr = `${String(Math.floor(graceEndMin / 60)).padStart(2, '0')}:${String(graceEndMin % 60).padStart(2, '0')}`;
-      const checkInStr = att.checkIn ? (() => { const d = new Date(att.checkIn); const h = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; return `${String(Math.floor((h % 1440) / 60)).padStart(2, '0')}:${String((h % 1440) % 60).padStart(2, '0')}`; })() : null;
 
       lateMarks.push({
         date: att.date,
@@ -783,24 +806,27 @@ async function getLateMarksSummary(userId, month, prisma) {
         checkIn: att.checkIn,
         checkOut: att.checkOut || null,
         shiftStart: shift.startTime,
-        regularizationStatus: regStatus,
-        // Missing time breakdown
-        lateArrival: checkInStr ? { from: graceEndStr, to: checkInStr, minutes: lateMinutes } : null,
-        outPeriods,             // [{out: "13:28", in: "13:32", minutes: 4}, ...]
-        totalOutMinutes,        // total out time during work (from punches)
-        totalMissingMinutes: lateMinutes + totalOutMinutes, // grand total
+        // All missing periods as separate items (each needs its own regularization)
+        periods,
+        totalMissingMinutes: lateMinutes + totalOutMinutes,
         punchCount: dayPunches.length,
       });
     }
   }
 
   const totalLateMarks = lateMarks.length;
-  const unregularizedCount = totalLateMarks - regularizedCount;
+  // A date is "regularized" only if ALL its periods are approved
+  let dateRegularizedCount = 0;
+  for (const lm of lateMarks) {
+    const allApproved = lm.periods.length > 0 && lm.periods.every(p => p.regularizationStatus === 'approved');
+    if (allApproved) dateRegularizedCount++;
+  }
+  const unregularizedCount = totalLateMarks - dateRegularizedCount;
 
   return {
     lateMarks,
     totalLateMarks,
-    regularizedCount,
+    regularizedCount: dateRegularizedCount,
     unregularizedCount,
     halfDayDeductions: Math.floor(unregularizedCount / 3),
     month,
