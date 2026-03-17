@@ -222,7 +222,8 @@ async function processPunch(punch, prisma) {
 
 // ─── Recalculate attendance from ALL punches (greytHR-style) ─────────────────
 // This rebuilds checkIn, checkOut, workHours from scratch using all matched punches
-// for a given user+date. Handles First In, Last Out, session-based actual hours.
+// for a given user+date. Uses alternating IN/OUT logic like greytHR:
+// 1st punch = IN, 2nd = OUT, 3rd = IN, 4th = OUT, etc. (chronological order)
 async function recalculateAttendanceFromPunches(prisma, userId, date) {
   // Get ALL matched punches for this user+date, sorted by time
   const punches = await prisma.biometricPunch.findMany({
@@ -233,12 +234,21 @@ async function recalculateAttendanceFromPunches(prisma, userId, date) {
   if (punches.length === 0) return null;
 
   // Parse all punch times
-  const punchTimes = punches.map(p => ({
+  const punchTimes = punches.map((p, idx) => ({
     id: p.id,
     time: new Date(p.punchTime.replace(' ', 'T') + '+05:30'),
-    direction: p.direction,
+    // greytHR-style: alternate IN/OUT based on chronological order (not device)
+    direction: idx % 2 === 0 ? 'in' : 'out',
     timeStr: p.punchTime.slice(11, 16),
   }));
+
+  // Also update the stored direction in BiometricPunch to match greytHR logic
+  for (const p of punchTimes) {
+    await prisma.biometricPunch.update({
+      where: { id: p.id },
+      data: { direction: p.direction },
+    });
+  }
 
   // First In = earliest punch, Last Out = latest punch
   const firstIn = punchTimes[0].time;
@@ -247,22 +257,15 @@ async function recalculateAttendanceFromPunches(prisma, userId, date) {
   // Calculate total span (First In to Last Out)
   const totalSpanHours = lastOut ? (lastOut.getTime() - firstIn.getTime()) / 3600000 : 0;
 
-  // Calculate actual work hours by pairing IN/OUT sessions
-  // Group consecutive punches into sessions: IN→OUT = one session
+  // Calculate actual work hours by pairing alternating IN/OUT sessions
   let actualHours = 0;
-  let sessionStart = null;
-  for (const p of punchTimes) {
-    if (p.direction === 'in' || (!p.direction && !sessionStart)) {
-      if (!sessionStart) sessionStart = p.time;
-    } else if (p.direction === 'out' || (!p.direction && sessionStart)) {
-      if (sessionStart) {
-        actualHours += (p.time.getTime() - sessionStart.getTime()) / 3600000;
-        sessionStart = null;
-      }
+  for (let i = 0; i < punchTimes.length - 1; i += 2) {
+    const inPunch = punchTimes[i];
+    const outPunch = punchTimes[i + 1];
+    if (outPunch) {
+      actualHours += (outPunch.time.getTime() - inPunch.time.getTime()) / 3600000;
     }
   }
-  // If last punch is IN with no OUT, count up to now (if today) or ignore
-  // For completed days, unclosed sessions are not counted
 
   // Use actual session-based hours as workHours (like greytHR "Actual Work Hrs")
   const workHours = Math.round(actualHours * 100) / 100;
@@ -336,15 +339,18 @@ async function fetchFromDevice(device, lookbackDays = 1) {
 }
 
 // ─── Process and store punches for a device ──────────────────────────────────
+// Direction is assigned using greytHR-style alternating logic AFTER all punches
+// are stored. First punch of the day = IN, second = OUT, third = IN, etc.
 async function processAndStorePunches(prisma, device, rawPunches) {
   let inserted = 0, matched = 0, processed = 0;
 
+  // Step 1: Store all raw punches (direction will be set later)
+  const storedPunches = [];
   for (const p of rawPunches) {
     const punchDate = p.punchTime ? p.punchTime.slice(0, 10) : null;
     if (!p.enrollNumber || !p.punchTime || !punchDate) continue;
 
     const employee = await matchEmployee(p.enrollNumber, prisma);
-    const effectiveDirection = device.forceDirection || p.direction || null;
 
     let punch;
     try {
@@ -355,7 +361,7 @@ async function processAndStorePunches(prisma, device, rawPunches) {
           enrollNumber: p.enrollNumber,
           punchTime:    p.punchTime,
           punchDate:    punchDate,
-          direction:    effectiveDirection,
+          direction:    null, // Will be set by alternating logic
           workCode:     p.workCode  || null,
           rawData:      null,
           userId:       employee ? employee.id : null,
@@ -365,15 +371,48 @@ async function processAndStorePunches(prisma, device, rawPunches) {
       });
       inserted++;
       if (employee) matched++;
+      storedPunches.push(punch);
     } catch (e) {
       if (e.code === 'P2002') continue; // Duplicate punch — skip
       throw e;
     }
+  }
 
-    if (punch && employee) {
-      await processPunch(punch, prisma);
-      processed++;
+  // Step 2: For each user+date with new punches, recalculate alternating direction
+  // and rebuild attendance using greytHR-style logic
+  const userDatePairs = new Set();
+  for (const punch of storedPunches) {
+    if (punch.userId) {
+      userDatePairs.add(`${punch.userId}|${punch.punchDate}`);
     }
+  }
+
+  for (const pair of userDatePairs) {
+    const [uid, date] = pair.split('|');
+    const userId = parseInt(uid);
+
+    // Get ALL punches for this user+date sorted chronologically
+    const allPunches = await prisma.biometricPunch.findMany({
+      where: { userId, punchDate: date, matchStatus: 'matched' },
+      orderBy: { punchTime: 'asc' },
+    });
+
+    // Assign alternating direction: 1st=in, 2nd=out, 3rd=in, 4th=out...
+    for (let i = 0; i < allPunches.length; i++) {
+      const dir = i % 2 === 0 ? 'in' : 'out';
+      if (allPunches[i].direction !== dir) {
+        await prisma.biometricPunch.update({
+          where: { id: allPunches[i].id },
+          data: { direction: dir },
+        });
+      }
+      allPunches[i].direction = dir;
+    }
+
+    // Now process attendance using the corrected directions
+    // Use recalculate logic for accurate session-based hours
+    await recalculateAttendanceFromPunches(prisma, userId, date);
+    processed += allPunches.filter(p => storedPunches.some(sp => sp.id === p.id)).length;
   }
 
   return { inserted, matched, processed };
