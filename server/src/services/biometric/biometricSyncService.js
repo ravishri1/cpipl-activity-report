@@ -266,10 +266,10 @@ async function processAndStorePunches(prisma, device, rawPunches) {
 }
 
 // ─── Sync one device: fetch + process + update status ────────────────────────
-async function syncDevice(prisma, device) {
+async function syncDevice(prisma, device, lookbackDays = 1) {
   const startTime = Date.now();
   try {
-    const rawPunches = await fetchFromDevice(device, 1);
+    const rawPunches = await fetchFromDevice(device, lookbackDays);
     const result = await processAndStorePunches(prisma, device, rawPunches);
 
     await prisma.biometricDevice.update({
@@ -296,7 +296,7 @@ async function syncDevice(prisma, device) {
 }
 
 // ─── Sync all active devices (respects per-device interval) ──────────────────
-async function syncAllDevices(prisma) {
+async function syncAllDevices(prisma, lookbackDays = 1) {
   const devices = await prisma.biometricDevice.findMany({
     where: { isActive: true },
   });
@@ -324,7 +324,7 @@ async function syncAllDevices(prisma) {
       continue;
     }
 
-    const result = await syncDevice(prisma, device);
+    const result = await syncDevice(prisma, device, lookbackDays);
     if (result.status === 'success') synced++;
     else failed++;
     details.push(result);

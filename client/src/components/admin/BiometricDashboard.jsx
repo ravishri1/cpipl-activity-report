@@ -88,7 +88,29 @@ function StatCard({ icon: Icon, label, value, color = 'blue', sub }) {
 // ─── Tab: Status Overview ─────────────────────────────────────────────────────
 function StatusTab() {
   const { data: status, loading, error, refetch } = useFetch('/biometric/status', null);
-  const { execute, loading: syncing } = useApi();
+  const { execute, loading: syncing, error: syncErr, success } = useApi();
+  const [lookbackDays, setLookbackDays] = useState(1);
+  const [syncingDeviceId, setSyncingDeviceId] = useState(null);
+
+  const handleSyncAll = async () => {
+    try {
+      await execute(() => api.post('/biometric/sync-all', { lookbackDays }), 'Sync complete!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
+  };
+
+  const handleSyncDevice = async (deviceId) => {
+    setSyncingDeviceId(deviceId);
+    try {
+      await execute(() => api.post(`/biometric/sync-device/${deviceId}`, { lookbackDays }), 'Device synced!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
+    setSyncingDeviceId(null);
+  };
 
   const handleRematch = async () => {
     try {
@@ -105,6 +127,9 @@ function StatusTab() {
 
   return (
     <div className="space-y-6">
+      {success && <AlertMessage type="success" message={success} />}
+      {syncErr && <AlertMessage type="error" message={syncErr} />}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard icon={Fingerprint} label="Today's Punches"  value={status.todayPunches}   color="blue"  />
@@ -113,19 +138,49 @@ function StatusTab() {
         <StatCard icon={Activity}     label="All-time Punches" value={status.totalPunches}  color="purple" />
       </div>
 
-      {/* Device cards */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-slate-700">Registered Devices</h3>
+      {/* Sync controls */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-slate-600">Lookback:</label>
+            <select
+              value={lookbackDays}
+              onChange={e => setLookbackDays(parseInt(e.target.value))}
+              className="text-sm border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            >
+              <option value={1}>Today (1 day)</option>
+              <option value={2}>2 days</option>
+              <option value={3}>3 days</option>
+              <option value={7}>1 week</option>
+              <option value={15}>15 days</option>
+              <option value={30}>30 days</option>
+            </select>
+          </div>
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing}
+            className="flex items-center gap-1.5 text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing && !syncingDeviceId ? 'animate-spin' : ''}`} />
+            Sync All Devices
+          </button>
           <button
             onClick={handleRematch}
             disabled={syncing}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            <Link className="w-3.5 h-3.5" />
             Re-match unmatched
           </button>
+          <p className="text-xs text-slate-400 ml-auto">
+            Fetches punch data from eSSL devices for the selected lookback period
+          </p>
         </div>
+      </div>
+
+      {/* Device cards */}
+      <div>
+        <h3 className="font-semibold text-slate-700 mb-3">Registered Devices</h3>
 
         {status.devices.length === 0 ? (
           <EmptyState icon="🖥️" title="No devices" subtitle="Register a biometric device in the Devices tab." />
@@ -133,6 +188,7 @@ function StatusTab() {
           <div className="grid gap-3 sm:grid-cols-2">
             {status.devices.map(d => {
               const syncColor = SYNC_STATUS_STYLES[d.lastSyncStatus] ?? SYNC_STATUS_STYLES.default;
+              const isSyncingThis = syncingDeviceId === d.id;
               return (
                 <div key={d.id} className="bg-white rounded-xl border border-slate-200 p-4">
                   <div className="flex items-start justify-between">
@@ -145,13 +201,23 @@ function StatusTab() {
                     </span>
                   </div>
                   {d.lastSyncAt && (
-                    <div className={`mt-3 text-xs ${syncColor}`}>
+                    <div className={`mt-2 text-xs ${syncColor}`}>
                       <span className="font-medium">Last sync:</span>{' '}
                       {new Date(d.lastSyncAt).toLocaleString()} — {d.lastSyncMessage}
                     </div>
                   )}
                   {!d.lastSyncAt && (
-                    <p className="mt-3 text-xs text-slate-400 italic">Never synced</p>
+                    <p className="mt-2 text-xs text-slate-400 italic">Never synced</p>
+                  )}
+                  {d.isActive && (
+                    <button
+                      onClick={() => handleSyncDevice(d.id)}
+                      disabled={syncing}
+                      className="mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isSyncingThis ? 'animate-spin' : ''}`} />
+                      Sync Now
+                    </button>
                   )}
                 </div>
               );

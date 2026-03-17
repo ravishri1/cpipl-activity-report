@@ -11,8 +11,21 @@ const router = express.Router();
 // DEVICE MANAGEMENT
 // ══════════════════════════════════════════════════════════════════════════════
 
-// GET /api/biometric/devices — list all devices
-router.get('/devices', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+// GET /api/biometric/devices — list all devices (admin auth OR agent key)
+router.get('/devices', asyncHandler(async (req, res, next) => {
+  // Allow local sync agent to fetch device list via agent key
+  const agentKey = req.headers['x-agent-key'];
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  if (agentKey === expectedKey) {
+    const devices = await req.prisma.biometricDevice.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
+    return res.json(devices);
+  }
+  // Otherwise require admin auth
+  next();
+}), authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const devices = await req.prisma.biometricDevice.findMany({
     orderBy: { name: 'asc' },
     include: {
@@ -121,8 +134,32 @@ router.post('/sync', asyncHandler(async (req, res) => {
 
 // POST /api/biometric/sync-all — admin triggers server-side sync for all devices
 router.post('/sync-all', authenticate, requireAdmin, asyncHandler(async (req, res) => {
-  const result = await syncAllDevices(req.prisma);
+  const lookbackDays = parseInt(req.body.lookbackDays) || 1;
+  const result = await syncAllDevices(req.prisma, lookbackDays);
   res.json(result);
+}));
+
+// POST /api/biometric/sync-device/:id — admin triggers sync for a single device
+router.post('/sync-device/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const lookbackDays = parseInt(req.body.lookbackDays) || 1;
+  const device = await req.prisma.biometricDevice.findUnique({ where: { id } });
+  if (!device) throw notFound('Device');
+  if (!device.isActive) throw badRequest('Device is inactive');
+
+  const { syncDevice } = require('../services/biometric/biometricSyncService');
+  const result = await syncDevice(req.prisma, device, lookbackDays);
+  res.json(result);
+}));
+
+// GET /api/biometric/cron-sync — Vercel Cron endpoint (no auth, uses secret)
+router.get('/cron-sync', asyncHandler(async (req, res) => {
+  const secret = req.headers['authorization'];
+  const expected = `Bearer ${process.env.CRON_SECRET || 'cron-secret-key'}`;
+  if (secret !== expected) return res.status(401).json({ error: 'Unauthorized' });
+
+  const result = await syncAllDevices(req.prisma);
+  res.json({ ok: true, ...result });
 }));
 
 // ══════════════════════════════════════════════════════════════════════════════
