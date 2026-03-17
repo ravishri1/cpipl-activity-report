@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
-import EmployeeCalendarView from './EmployeeCalendarView';
 import {
   CheckSquare,
   CheckCircle2,
@@ -79,6 +79,7 @@ function getPeriodDates(key) {
 }
 
 export default function TeamAttendance() {
+  const navigate = useNavigate();
   const [period, setPeriod] = useState('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -86,7 +87,6 @@ export default function TeamAttendance() {
   const [employees, setEmployees] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(true);
-  const [calendarView, setCalendarView] = useState(null);
   const [filterName, setFilterName] = useState('');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
 
@@ -226,17 +226,6 @@ export default function TeamAttendance() {
     if (startDate === endDate) return startDate;
     return `${startDate} to ${endDate}`;
   };
-
-  // Calendar drill-down
-  if (calendarView) {
-    return (
-      <EmployeeCalendarView
-        userId={calendarView.userId}
-        employeeName={calendarView.name}
-        onBack={() => setCalendarView(null)}
-      />
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -439,7 +428,7 @@ export default function TeamAttendance() {
                       </td>
                       <td className="px-4 py-2.5">
                         <button
-                          onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
+                          onClick={() => navigate(`/admin/attendance/${emp.userId}`)}
                           className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                           title="View monthly calendar"
                         >
@@ -522,7 +511,7 @@ export default function TeamAttendance() {
                       </td>
                       <td className="px-4 py-2.5">
                         <button
-                          onClick={() => setCalendarView({ userId: emp.userId, name: emp.name })}
+                          onClick={() => navigate(`/admin/attendance/${emp.userId}`)}
                           className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                           title="View monthly calendar"
                         >

@@ -12,6 +12,7 @@ const ReportHistory = lazy(() => import('./components/reports/ReportHistory'));
 const Leaderboard = lazy(() => import('./components/leaderboard/Leaderboard'));
 const MyAttendance = lazy(() => import('./components/attendance/MyAttendance'));
 const TeamAttendance = lazy(() => import('./components/attendance/TeamAttendance'));
+const EmployeeCalendarRoute = lazy(() => import('./components/attendance/EmployeeCalendarRoute'));
 const MyLeave = lazy(() => import('./components/leave/MyLeave'));
 const LeaveApproval = lazy(() => import('./components/leave/LeaveApproval'));
 const EmployeeDirectory = lazy(() => import('./components/employees/EmployeeDirectory'));
@@ -178,6 +179,7 @@ function AppRoutes() {
 
                   {/* Admin / Team Lead shared routes */}
                   <Route path="/admin/attendance" element={<SeparatedRoute><AdminRoute><TeamAttendance /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/attendance/:userId" element={<SeparatedRoute><AdminRoute><EmployeeCalendarRoute /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />
 

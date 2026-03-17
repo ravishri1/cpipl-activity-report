@@ -338,7 +338,8 @@ async function getEmployeeCalendar(userId, month, prisma) {
   const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
   const today = new Date().toISOString().split('T')[0];
 
-  const [attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
+  const [user, attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true, employeeId: true } }),
     prisma.attendance.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
       orderBy: { date: 'asc' },
@@ -563,6 +564,8 @@ async function getEmployeeCalendar(userId, month, prisma) {
   };
 
   return {
+    employeeName: user?.name || null,
+    employeeId: user?.employeeId || null,
     days,
     summary,
     shift: shiftAssignment?.shift || null,

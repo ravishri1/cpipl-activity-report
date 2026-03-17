@@ -31,7 +31,7 @@ const statusConfig = {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
+export default function EmployeeCalendarView({ userId, employeeName: employeeNameProp, onBack }) {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -178,7 +178,7 @@ export default function EmployeeCalendarView({ userId, employeeName, onBack }) {
         </button>
         <div className="flex-1">
           <h2 className="text-lg font-bold text-slate-800">Attendance Info</h2>
-          <p className="text-sm text-slate-500">{employeeName}</p>
+          <p className="text-sm text-slate-500">{employeeNameProp || data?.employeeName || 'Employee'}</p>
         </div>
       </div>
 
