@@ -431,10 +431,10 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                               <>Full day minimum hours is not fulfilled and so, 0.5 day(s) of LOP will be deducted.</>
                             )}
                             {selectedDay.isLate && !selectedDay.shortHours && (
-                              <>Late by {selectedDay.lateMinutes} min (grace: 15 min). Every 3 unregularized late marks = 0.5 day deduction.</>
+                              <>Late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`} (grace: 15 min). Every 3 unregularized late marks = 0.5 day deduction.</>
                             )}
                             {selectedDay.isLate && selectedDay.shortHours && (
-                              <> Also late by {selectedDay.lateMinutes} min.</>
+                              <> Also late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`}.</>
                             )}
                           </p>
                         </div>
