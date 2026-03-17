@@ -3,7 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
-const { matchEmployee, processPunch, processAndStorePunches, syncAllDevices } = require('../services/biometric/biometricSyncService');
+const { matchEmployee, processPunch, processAndStorePunches, recalculateAttendanceFromPunches, syncAllDevices } = require('../services/biometric/biometricSyncService');
 
 const router = express.Router();
 
@@ -491,6 +491,43 @@ router.post('/rematch', authenticate, requireAdmin, asyncHandler(async (req, res
   }
 
   res.json({ checked: unmatched.length, matched, message: `Re-matched ${matched} previously unmatched punches` });
+}));
+
+// POST /api/biometric/recalculate — recalculate attendance from ALL punches for a user+date
+// This rebuilds First In, Last Out, Actual Hours, Break Hours from scratch (like greytHR)
+router.post('/recalculate', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, date } = req.body;
+  if (!userId && !date) throw badRequest('userId and/or date required');
+
+  // If both userId and date: recalculate for one user+date
+  if (userId && date) {
+    const result = await recalculateAttendanceFromPunches(req.prisma, parseInt(userId), date);
+    if (!result) return res.json({ message: 'No matched punches found for this user+date' });
+    return res.json({ recalculated: 1, ...result });
+  }
+
+  // If only date: recalculate for ALL users who have punches on that date
+  if (date) {
+    const userIds = await req.prisma.biometricPunch.findMany({
+      where: { punchDate: date, matchStatus: 'matched' },
+      select: { userId: true },
+      distinct: ['userId'],
+    });
+
+    let recalculated = 0;
+    const results = [];
+    for (const { userId: uid } of userIds) {
+      if (!uid) continue;
+      const result = await recalculateAttendanceFromPunches(req.prisma, uid, date);
+      if (result) {
+        recalculated++;
+        results.push({ userId: uid, workHours: result.workHours, breakHours: result.breakHours });
+      }
+    }
+    return res.json({ date, recalculated, results });
+  }
+
+  throw badRequest('Provide date, or userId+date');
 }));
 
 module.exports = router;

@@ -220,6 +220,91 @@ async function processPunch(punch, prisma) {
   }
 }
 
+// ─── Recalculate attendance from ALL punches (greytHR-style) ─────────────────
+// This rebuilds checkIn, checkOut, workHours from scratch using all matched punches
+// for a given user+date. Handles First In, Last Out, session-based actual hours.
+async function recalculateAttendanceFromPunches(prisma, userId, date) {
+  // Get ALL matched punches for this user+date, sorted by time
+  const punches = await prisma.biometricPunch.findMany({
+    where: { userId, punchDate: date, matchStatus: 'matched' },
+    orderBy: { punchTime: 'asc' },
+  });
+
+  if (punches.length === 0) return null;
+
+  // Parse all punch times
+  const punchTimes = punches.map(p => ({
+    id: p.id,
+    time: new Date(p.punchTime.replace(' ', 'T') + '+05:30'),
+    direction: p.direction,
+    timeStr: p.punchTime.slice(11, 16),
+  }));
+
+  // First In = earliest punch, Last Out = latest punch
+  const firstIn = punchTimes[0].time;
+  const lastOut = punchTimes.length > 1 ? punchTimes[punchTimes.length - 1].time : null;
+
+  // Calculate total span (First In to Last Out)
+  const totalSpanHours = lastOut ? (lastOut.getTime() - firstIn.getTime()) / 3600000 : 0;
+
+  // Calculate actual work hours by pairing IN/OUT sessions
+  // Group consecutive punches into sessions: IN→OUT = one session
+  let actualHours = 0;
+  let sessionStart = null;
+  for (const p of punchTimes) {
+    if (p.direction === 'in' || (!p.direction && !sessionStart)) {
+      if (!sessionStart) sessionStart = p.time;
+    } else if (p.direction === 'out' || (!p.direction && sessionStart)) {
+      if (sessionStart) {
+        actualHours += (p.time.getTime() - sessionStart.getTime()) / 3600000;
+        sessionStart = null;
+      }
+    }
+  }
+  // If last punch is IN with no OUT, count up to now (if today) or ignore
+  // For completed days, unclosed sessions are not counted
+
+  // Use actual session-based hours as workHours (like greytHR "Actual Work Hrs")
+  const workHours = Math.round(actualHours * 100) / 100;
+  const breakHours = Math.round((totalSpanHours - actualHours) * 100) / 100;
+
+  // Build notes
+  const firstInStr = punchTimes[0].timeStr;
+  const lastOutStr = lastOut ? punchTimes[punchTimes.length - 1].timeStr : null;
+
+  // Upsert attendance record
+  let attendance = await prisma.attendance.findUnique({
+    where: { userId_date: { userId, date } },
+  });
+
+  const attendanceData = {
+    checkIn: firstIn,
+    checkOut: lastOut || firstIn,
+    workHours,
+    status: 'present',
+    notes: `Biometric: In ${firstInStr}${lastOutStr ? ` | Out ${lastOutStr}` : ''} | Actual ${workHours.toFixed(2)}h | Break ${breakHours.toFixed(2)}h`,
+  };
+
+  if (attendance) {
+    attendance = await prisma.attendance.update({
+      where: { id: attendance.id },
+      data: attendanceData,
+    });
+  } else {
+    attendance = await prisma.attendance.create({
+      data: { userId, date, ...attendanceData },
+    });
+  }
+
+  // Mark all punches as processed and linked to this attendance
+  await prisma.biometricPunch.updateMany({
+    where: { userId, punchDate: date, matchStatus: 'matched' },
+    data: { attendanceId: attendance.id, processStatus: 'processed', processNote: 'Recalculated' },
+  });
+
+  return { attendance, punchCount: punches.length, workHours, breakHours, totalSpanHours: Math.round(totalSpanHours * 100) / 100 };
+}
+
 // ─── Fetch punches from one eSSL device via SOAP ─────────────────────────────
 async function fetchFromDevice(device, lookbackDays = 1) {
   if (!device.esslUrl) throw new Error(`Device ${device.name}: no esslUrl configured`);
@@ -366,6 +451,7 @@ module.exports = {
   matchEmployee,
   processPunch,
   processAndStorePunches,
+  recalculateAttendanceFromPunches,
   fetchFromDevice,
   syncDevice,
   syncAllDevices,
