@@ -461,21 +461,30 @@ async function getEmployeeCalendar(userId, month, prisma) {
     // Calculate late-in / early-out based on shift timing
     let lateIn = null;
     let earlyOut = null;
+    let lateInMinutes = 0;
+    let earlyOutMinutes = 0;
+    // Total work hours = simple diff between first in and last out (ignoring rules)
+    let totalWorkHrsRaw = 0;
+    if (att?.checkIn && att?.checkOut) {
+      const ciMs = new Date(att.checkIn).getTime();
+      const coMs = new Date(att.checkOut).getTime();
+      totalWorkHrsRaw = Math.max(0, (coMs - ciMs) / (1000 * 60 * 60));
+    }
     if (shift && att?.checkIn) {
       const ciTime = new Date(att.checkIn);
       const ciMinutes = ciTime.getHours() * 60 + ciTime.getMinutes();
-      if (ciMinutes > shiftStartMin + 5) { // 5-min grace for display
-        const diff = ciMinutes - shiftStartMin;
-        lateIn = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      lateInMinutes = Math.max(0, ciMinutes - shiftStartMin);
+      if (lateInMinutes > 0) {
+        lateIn = `${String(Math.floor(lateInMinutes / 60)).padStart(2, '0')}:${String(lateInMinutes % 60).padStart(2, '0')}`;
       }
     }
     if (shift && att?.checkOut) {
       const shiftEndMin = parseTimeToMinutes(shift.endTime);
       const coTime = new Date(att.checkOut);
       const coMinutes = coTime.getHours() * 60 + coTime.getMinutes();
-      if (coMinutes < shiftEndMin - 5) { // 5-min grace for display
-        const diff = shiftEndMin - coMinutes;
-        earlyOut = `${Math.floor(diff / 60)}h ${diff % 60}m`;
+      earlyOutMinutes = Math.max(0, shiftEndMin - coMinutes);
+      if (earlyOutMinutes > 0) {
+        earlyOut = `${String(Math.floor(earlyOutMinutes / 60)).padStart(2, '0')}:${String(earlyOutMinutes % 60).padStart(2, '0')}`;
       }
     }
 
@@ -523,9 +532,12 @@ async function getEmployeeCalendar(userId, month, prisma) {
       checkIn: att?.checkIn || null,
       checkOut: att?.checkOut || null,
       workHours: att?.workHours || null,
+      totalWorkHrsRaw,          // First In to Last Out (simple diff, no rules)
       notes: att?.notes || null,
       lateIn,
+      lateInMinutes,            // raw minutes late from shift start
       earlyOut,
+      earlyOutMinutes,          // raw minutes early from shift end
       punches: dayPunches,
       // Policy enforcement fields
       isLate,

@@ -17,7 +17,6 @@ import {
   ClipboardEdit,
   RefreshCw,
   Info,
-  X,
   Pencil,
 } from 'lucide-react';
 
@@ -176,27 +175,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
     return '';
   };
 
-  // Calculate break hours from punches (time between OUT and next IN)
-  const calcBreakHours = (punches) => {
-    if (!punches || punches.length < 3) return 0;
-    let breakMin = 0;
-    for (let i = 0; i < punches.length - 1; i++) {
-      if (punches[i].direction === 'out' && punches[i + 1]?.direction === 'in') {
-        const outTime = parsePunchTimeToMinutes(punches[i].time);
-        const inTime = parsePunchTimeToMinutes(punches[i + 1].time);
-        if (outTime != null && inTime != null && inTime > outTime) {
-          breakMin += (inTime - outTime);
-        }
-      }
-    }
-    return breakMin / 60;
-  };
-
-  // Calculate actual work hours (total - break)
-  const calcActualWorkHours = (workHours, breakHours) => {
-    if (!workHours) return 0;
-    return Math.max(0, workHours - breakHours);
-  };
+  // Break hours = fixed 1 hour as per company policy
+  const BREAK_HOURS = 1;
 
   // Calculate work hours within shift window
   const calcWorkInShift = (day, shift) => {
@@ -497,12 +477,20 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                       </div>
                     )}
 
-                    {/* Attendance Details — greytHR style with all columns */}
+                    {/* Attendance Details — greytHR style */}
                     {(() => {
-                      const breakHrs = calcBreakHours(selectedDay.punches);
-                      const actualWorkHrs = calcActualWorkHours(selectedDay.workHours, breakHrs);
+                      // Total Work Hrs = First In to Last Out (simple time diff, no rules)
+                      const totalHrsRaw = selectedDay.totalWorkHrsRaw || 0;
+                      // Break = 1 hour fixed as per company policy
+                      const breakHrs = (totalHrsRaw > 0 && selectedDay.checkIn && selectedDay.checkOut) ? BREAK_HOURS : 0;
+                      // Actual Work Hrs = Total - Break
+                      const actualWorkHrs = Math.max(0, totalHrsRaw - breakHrs);
+                      // Work hours within shift window
                       const workInShift = calcWorkInShift(selectedDay, data.shift);
-                      const lateInVal = selectedDay.isLate ? `${Math.floor(selectedDay.lateMinutes / 60) > 0 ? Math.floor(selectedDay.lateMinutes / 60) + 'h ' : ''}${selectedDay.lateMinutes % 60}m` : '-';
+                      // Late In — only show if beyond 15 min grace (isLate from backend)
+                      const lateInDisplay = selectedDay.lateIn || '-';
+                      // Early Out — always show if left before shift end
+                      const earlyOutDisplay = selectedDay.earlyOut || '-';
 
                       return (
                         <>
@@ -527,23 +515,25 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                     <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkOut)}</td>
                                     <td className="py-2.5 pr-2">
                                       {selectedDay.isLate ? (
-                                        <span className="text-amber-600 font-medium">{lateInVal}</span>
+                                        <span className="text-amber-600 font-medium">{lateInDisplay}</span>
                                       ) : '-'}
                                     </td>
                                     <td className="py-2.5 pr-2">
-                                      {selectedDay.earlyOut ? (
-                                        <span className="text-orange-600 font-medium">{selectedDay.earlyOut}</span>
+                                      {selectedDay.earlyOutMinutes > 0 ? (
+                                        <span className="text-orange-600 font-medium">{earlyOutDisplay}</span>
                                       ) : '-'}
                                     </td>
                                     <td className="py-2.5 pr-2 font-semibold">
-                                      {selectedDay.workHours > 0 ? (
+                                      {totalHrsRaw > 0 ? formatHrsMin(totalHrsRaw) : '-'}
+                                    </td>
+                                    <td className="py-2.5 pr-2">{breakHrs > 0 ? formatHrsMin(breakHrs) : '-'}</td>
+                                    <td className="py-2.5 pr-2 font-semibold">
+                                      {actualWorkHrs > 0 ? (
                                         <span className={!isSelectedDayToday && selectedDay.shortHours ? 'text-amber-600' : ''}>
-                                          {formatHrsMin(selectedDay.workHours)}
+                                          {formatHrsMin(actualWorkHrs)}
                                         </span>
                                       ) : '-'}
                                     </td>
-                                    <td className="py-2.5 pr-2">{breakHrs > 0 ? formatHrsMin(breakHrs) : '-'}</td>
-                                    <td className="py-2.5 pr-2 font-semibold">{actualWorkHrs > 0 ? formatHrsMin(actualWorkHrs) : '-'}</td>
                                     <td className="py-2.5 font-semibold">{data.shift && workInShift > 0 ? formatHrsMin(workInShift) : '-'}</td>
                                   </tr>
                                 </tbody>
@@ -839,11 +829,3 @@ function formatHrsMin(hours) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function parsePunchTimeToMinutes(timeStr) {
-  if (!timeStr) return null;
-  const parts = timeStr.split(' ');
-  const timePart = parts.length >= 2 ? parts[1] : parts[0];
-  const [h, m] = timePart.split(':').map(Number);
-  if (isNaN(h) || isNaN(m)) return null;
-  return h * 60 + m;
-}
