@@ -65,6 +65,7 @@ const MyCompOff = lazy(() => import('./components/compoff/MyCompOff'));
 const CompOffManager = lazy(() => import('./components/compoff/CompOffManager'));
 const RecruitmentManager = lazy(() => import('./components/recruitment/RecruitmentManager'));
 const RenewalManager = lazy(() => import('./components/admin/RenewalManager'));
+const AttendanceCalendarSearch = lazy(() => import('./components/attendance/AttendanceCalendarSearch'));
 const AttendanceRegularization = lazy(() => import('./components/attendance/AttendanceRegularization'));
 const RegularizationManager = lazy(() => import('./components/admin/RegularizationManager'));
 const AttendanceMuster = lazy(() => import('./components/admin/AttendanceMuster'));
@@ -179,6 +180,7 @@ function AppRoutes() {
 
                   {/* Admin / Team Lead shared routes */}
                   <Route path="/admin/attendance" element={<SeparatedRoute><AdminRoute><TeamAttendance /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/attendance/calendar" element={<SeparatedRoute><AdminRoute><AttendanceCalendarSearch /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/attendance/:userId" element={<SeparatedRoute><AdminRoute><EmployeeCalendarRoute /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />

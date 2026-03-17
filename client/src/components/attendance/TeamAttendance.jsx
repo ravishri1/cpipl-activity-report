@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import { useFetch } from '../../hooks/useFetch';
+import EmployeeCalendarView from './EmployeeCalendarView';
 import {
   CheckSquare,
   CheckCircle2,
@@ -13,6 +15,8 @@ import {
   ChevronRight,
   ChevronDown,
   CalendarRange,
+  List,
+  X,
 } from 'lucide-react';
 
 // Period presets — "single" = one day view, "range" = aggregated view
@@ -229,10 +233,30 @@ export default function TeamAttendance() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-        <CheckSquare className="w-6 h-6 text-blue-600" />
-        Team Attendance
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <CheckSquare className="w-6 h-6 text-blue-600" />
+          Team Attendance
+        </h1>
+
+        {/* View toggle tabs */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+          <button
+            onClick={() => navigate('/admin/attendance')}
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition bg-white text-blue-700 shadow-sm"
+          >
+            <List size={14} className="inline mr-1.5 -mt-0.5" />
+            List View
+          </button>
+          <button
+            onClick={() => navigate('/admin/attendance/calendar')}
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition text-gray-600 hover:text-gray-800"
+          >
+            <Calendar size={14} className="inline mr-1.5 -mt-0.5" />
+            Calendar View
+          </button>
+        </div>
+      </div>
 
       {/* Controls row */}
       <div className="flex flex-col gap-3">
