@@ -107,6 +107,7 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
 
 // POST /api/regularization/bulk — employee submits multiple requests at once
 router.post('/bulk', asyncHandler(async (req, res) => {
+  console.log('[Regularization Bulk] userId:', req.user.id, 'body:', JSON.stringify(req.body).substring(0, 500));
   const { requests: items } = req.body;
   if (!Array.isArray(items) || items.length === 0) throw badRequest('requests array is required and must not be empty');
   if (items.length > 20) throw badRequest('Maximum 20 requests at a time');

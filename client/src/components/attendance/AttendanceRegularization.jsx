@@ -135,6 +135,7 @@ export default function AttendanceRegularization() {
     setBulkReasons(reasons);
     setCommonReason('');
     clearBulk();
+    setBulkLocalErr('');
     setShowBulkModal(true);
   };
 
@@ -147,8 +148,14 @@ export default function AttendanceRegularization() {
     });
   };
 
+  const [bulkLocalErr, setBulkLocalErr] = useState('');
+
   const handleBulkSubmit = async () => {
-    if (!allBulkReasonsValid) return;
+    setBulkLocalErr('');
+    if (!allBulkReasonsValid) {
+      setBulkLocalErr('Please fill reason (min 3 chars) for every period.');
+      return;
+    }
 
     // Build requests — each period becomes a separate regularization entry
     const items = [];
@@ -163,16 +170,28 @@ export default function AttendanceRegularization() {
       });
     }
 
+    if (items.length === 0) {
+      setBulkLocalErr('No valid periods to submit.');
+      return;
+    }
+
     try {
       await execBulk(
         () => api.post('/regularization/bulk', { requests: items }),
-        `${items.length} regularization requests submitted!`
+        `${items.length} regularization request${items.length !== 1 ? 's' : ''} submitted successfully!`
       );
       setShowBulkModal(false);
       setSelectedPeriods(new Set());
+      setBulkLocalErr('');
+      // Scroll to top so user sees success message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       refetch().catch(() => {});
       refetchLate().catch(() => {});
-    } catch {}
+    } catch (err) {
+      // Show error prominently inside modal
+      const msg = err?.response?.data?.error || err?.message || 'Failed to submit. Please try again.';
+      setBulkLocalErr(msg);
+    }
   };
 
   const allBulkReasonsValid = useMemo(() =>
@@ -210,7 +229,15 @@ export default function AttendanceRegularization() {
       {/* Alerts */}
       {error       && <AlertMessage type="error"   message={error}       />}
       {lateErr     && <AlertMessage type="error"   message={lateErr}     />}
-      {bulkSuccess && <AlertMessage type="success" message={bulkSuccess} />}
+      {bulkSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 mb-2 animate-pulse">
+          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-green-800">{bulkSuccess}</p>
+            <p className="text-xs text-green-600 mt-0.5">Your requests are now pending admin approval.</p>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
@@ -355,6 +382,13 @@ export default function AttendanceRegularization() {
               <button onClick={() => setShowBulkModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-500" /></button>
             </div>
 
+            {/* Error/success alerts — ABOVE scroll area so always visible */}
+            {(bulkErr || bulkLocalErr) && (
+              <div className="px-6 pt-4 pb-0 flex-shrink-0">
+                <AlertMessage type="error" message={bulkLocalErr || bulkErr} />
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {profileData?.reportingManager && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
@@ -404,7 +438,7 @@ export default function AttendanceRegularization() {
                 })}
               </div>
 
-              {bulkErr && <AlertMessage type="error" message={bulkErr} />}
+              {/* Error display moved above scroll area */}
             </div>
 
             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 flex-shrink-0">
