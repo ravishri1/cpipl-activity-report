@@ -519,10 +519,10 @@ async function getEmployeeCalendar(userId, month, prisma) {
       needsRegularization = !reg || reg.status !== 'approved';
     }
 
-    // Count summary metrics
-    if (isLate) lateMarksCount++;
+    // Count summary metrics (skip today — day not yet complete)
+    if (isLate && dateStr !== today) lateMarksCount++;
     if (reg?.status === 'approved') regularizedDaysCount++;
-    if (shortHours) shortHoursDaysCount++;
+    if (shortHours && dateStr !== today) shortHoursDaysCount++;
 
     days.push({
       date: dateStr,
