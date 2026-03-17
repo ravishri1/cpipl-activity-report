@@ -496,12 +496,14 @@ async function getEmployeeCalendar(userId, month, prisma) {
       isLate = ciMinutes > shiftStartMin + GRACE_MINUTES;
     }
 
-    if (isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null) {
+    if (isWorkingDay && (status === 'present' || status === 'half_day') && att?.workHours != null && dateStr !== today) {
+      // Skip short hours check for today — day not yet complete
       shortHours = att.workHours < REQUIRED_WORK_HOURS;
     }
 
-    if (isWorkingDay && (isLate || shortHours)) {
+    if (isWorkingDay && (isLate || shortHours) && dateStr !== today) {
       // Needs regularization if no approved regularization exists
+      // Skip today — day is not yet complete
       needsRegularization = !reg || reg.status !== 'approved';
     }
 
