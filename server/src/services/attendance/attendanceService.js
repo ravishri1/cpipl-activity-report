@@ -665,7 +665,7 @@ async function getLateMarksSummary(userId, month, prisma) {
     return { lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0, month };
   }
 
-  const [attendances, holidays, shiftAssignment, regularizations] = await Promise.all([
+  const [attendances, holidays, shiftAssignment, regularizations, bioPunches] = await Promise.all([
     prisma.attendance.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
       orderBy: { date: 'asc' },
@@ -686,7 +686,18 @@ async function getLateMarksSummary(userId, month, prisma) {
       where: { userId, date: { gte: startDate, lte: endDate } },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.biometricPunch.findMany({
+      where: { userId, punchDate: { gte: startDate, lte: endDate }, matchStatus: 'matched' },
+      orderBy: { punchTime: 'asc' },
+    }),
   ]);
+
+  // Group punches by date
+  const punchesByDate = {};
+  for (const p of bioPunches) {
+    if (!punchesByDate[p.punchDate]) punchesByDate[p.punchDate] = [];
+    punchesByDate[p.punchDate].push(p);
+  }
 
   const shift = shiftAssignment?.shift;
   if (!shift) {
@@ -734,6 +745,38 @@ async function getLateMarksSummary(userId, month, prisma) {
       const regStatus = reg?.status || null;
       if (regStatus === 'approved') regularizedCount++;
 
+      // Compute all out-periods from biometric punches for this date
+      const dayPunches = punchesByDate[att.date] || [];
+      const outPeriods = [];
+      let totalOutMinutes = 0;
+
+      if (dayPunches.length >= 2) {
+        // greytHR-style: alternating IN/OUT. Even index = IN, Odd index = OUT
+        // Out periods = gaps between OUT punch and next IN punch
+        for (let i = 1; i < dayPunches.length - 1; i += 2) {
+          const outPunch = dayPunches[i]; // OUT
+          const nextInPunch = dayPunches[i + 1]; // next IN
+          if (outPunch && nextInPunch) {
+            const outTime = new Date(outPunch.punchTime.replace(' ', 'T') + '+05:30');
+            const inTime = new Date(nextInPunch.punchTime.replace(' ', 'T') + '+05:30');
+            const gapMin = Math.round((inTime.getTime() - outTime.getTime()) / 60000);
+            if (gapMin > 0) {
+              outPeriods.push({
+                out: outPunch.punchTime.slice(11, 16),
+                in: nextInPunch.punchTime.slice(11, 16),
+                minutes: gapMin,
+              });
+              totalOutMinutes += gapMin;
+            }
+          }
+        }
+      }
+
+      // Grace-end to check-in (late arrival period)
+      const graceEndMin = shiftStartMin + GRACE_MINUTES;
+      const graceEndStr = `${String(Math.floor(graceEndMin / 60)).padStart(2, '0')}:${String(graceEndMin % 60).padStart(2, '0')}`;
+      const checkInStr = att.checkIn ? (() => { const d = new Date(att.checkIn); const h = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; return `${String(Math.floor((h % 1440) / 60)).padStart(2, '0')}:${String((h % 1440) % 60).padStart(2, '0')}`; })() : null;
+
       lateMarks.push({
         date: att.date,
         lateMinutes,
@@ -741,6 +784,12 @@ async function getLateMarksSummary(userId, month, prisma) {
         checkOut: att.checkOut || null,
         shiftStart: shift.startTime,
         regularizationStatus: regStatus,
+        // Missing time breakdown
+        lateArrival: checkInStr ? { from: graceEndStr, to: checkInStr, minutes: lateMinutes } : null,
+        outPeriods,             // [{out: "13:28", in: "13:32", minutes: 4}, ...]
+        totalOutMinutes,        // total out time during work (from punches)
+        totalMissingMinutes: lateMinutes + totalOutMinutes, // grand total
+        punchCount: dayPunches.length,
       });
     }
   }
