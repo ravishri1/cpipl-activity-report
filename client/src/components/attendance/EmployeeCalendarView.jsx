@@ -417,26 +417,23 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                         <div className="flex items-center justify-between bg-amber-50 px-3 py-2">
                           <div className="flex items-center gap-2">
                             <Info className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                            <span className="text-xs font-semibold text-amber-800">
-                              {selectedDay.shortHours ? 'Full Day Minimum Hours' : 'Late Mark'}
-                            </span>
+                            <span className="text-xs font-semibold text-amber-800">Attendance Regularization Required</span>
                           </div>
                           <button onClick={() => setHideInsight(true)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
                             Hide
                           </button>
                         </div>
-                        <div className="px-3 py-2 bg-white border-t border-amber-100">
-                          <p className="text-xs text-slate-600">
-                            {selectedDay.shortHours && (
-                              <>Full day minimum hours is not fulfilled and so, 0.5 day(s) of LOP will be deducted.</>
-                            )}
-                            {selectedDay.isLate && !selectedDay.shortHours && (
-                              <>Late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`} (grace: 15 min). Every 3 unregularized late marks = 0.5 day deduction.</>
-                            )}
-                            {selectedDay.isLate && selectedDay.shortHours && (
-                              <> Also late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`}.</>
-                            )}
-                          </p>
+                        <div className="px-3 py-2 bg-white border-t border-amber-100 space-y-1">
+                          {selectedDay.isLate && (
+                            <p className="text-xs text-slate-600">
+                              Late by {selectedDay.lateMinutes >= 60 ? `${Math.floor(selectedDay.lateMinutes / 60)} hr ${selectedDay.lateMinutes % 60} min` : `${selectedDay.lateMinutes} min`} (grace: 15 min). Every 3 unregularized late marks = 0.5 day deduction.
+                            </p>
+                          )}
+                          {selectedDay.shortHours && (
+                            <p className="text-xs text-slate-600">
+                              Full day minimum hours (9 hrs) is not fulfilled. 0.5 day(s) of LOP will be deducted.
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
