@@ -81,6 +81,32 @@ router.post(
   })
 );
 
+// GET /api/shifts/employee-list - List employees assigned to a shift (admin)
+router.get(
+  '/employee-list',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { shiftId } = req.query;
+    if (!shiftId) throw badRequest('shiftId is required');
+
+    const assignments = await req.prisma.shiftAssignment.findMany({
+      where: {
+        shiftId: parseInt(shiftId),
+        status: 'active',
+      },
+      include: {
+        user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } },
+      },
+      orderBy: { user: { name: 'asc' } },
+    });
+
+    res.json({
+      employees: assignments.map(a => a.user),
+      total: assignments.length,
+    });
+  })
+);
+
 // GET /api/shifts/my - Get current user's shift info
 router.get(
   '/my',
