@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../../utils/api';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
@@ -121,6 +121,19 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
   // Check if selected day is today (day not complete — skip regularization warnings)
   const isSelectedDayToday = selectedDay?.date === today;
 
+  // Build penalty date set: only complete groups of 3 unregularized late marks get yellow
+  // Incomplete remainder stays green (no penalty yet)
+  const penaltyDates = useMemo(() => {
+    if (!data?.days) return new Set();
+    const unregLate = data.days.filter(d =>
+      d.isLate && d.date !== today &&
+      (!d.regularizationStatus || d.regularizationStatus !== 'approved')
+    ).map(d => d.date);
+    // Only complete groups of 3 become penalty dates
+    const penaltyCount = Math.floor(unregLate.length / 3) * 3;
+    return new Set(unregLate.slice(0, penaltyCount));
+  }, [data?.days, today]);
+
   // Build calendar grid with Sunday start
   const buildGrid = () => {
     if (!data?.days) return [];
@@ -151,27 +164,25 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
 
   const shiftCode = data?.shift?.name ? getShiftCode(data.shift.name) : '';
 
-  // Cell background — greytHR style: light yellow/amber for needs-regularization (not red)
+  // Cell background — only penalty dates (complete groups of 3 late marks) get yellow
   const getCellBg = (cell) => {
     if (!cell) return '';
-    // Don't mark today as needing regularization — day is in progress
-    const isCellToday = cell.date === today;
     // Regularization approved → blue
     if (cell.regularizationStatus === 'approved') return 'bg-blue-50';
-    // Needs regularization — light amber/yellow like greytHR (skip for today)
-    if (cell.needsRegularization && !isCellToday) return 'bg-amber-50';
     // Regularization pending → light amber
     if (cell.regularizationStatus === 'pending') return 'bg-amber-50/60';
+    // Penalty date (part of a complete group of 3 unregularized late marks) → light yellow
+    if (penaltyDates.has(cell.date)) return 'bg-amber-50';
     return (statusConfig[cell.status] || statusConfig.future).bg;
   };
 
   // Cell border indicator
   const getCellBorder = (cell) => {
     if (!cell) return '';
-    const isCellToday = cell.date === today;
     if (cell.regularizationStatus === 'approved') return 'border-l-[3px] border-l-blue-400';
-    if (cell.needsRegularization && !isCellToday) return 'border-l-[3px] border-l-amber-400';
     if (cell.regularizationStatus === 'pending') return 'border-l-[3px] border-l-amber-400';
+    // Only penalty dates (complete group of 3) get amber border
+    if (penaltyDates.has(cell.date)) return 'border-l-[3px] border-l-amber-400';
     return '';
   };
 
@@ -347,7 +358,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                               {cell.regularizationStatus === 'pending' && (
                                 <Clock className="w-3 h-3 text-amber-500" />
                               )}
-                              {cell.needsRegularization && !cell.regularizationStatus && (
+                              {penaltyDates.has(cell.date) && !cell.regularizationStatus && (
                                 <AlertTriangle className="w-3 h-3 text-amber-500" />
                               )}
                             </div>
