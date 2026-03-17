@@ -159,30 +159,59 @@ async function processPunch(punch, prisma) {
       data: { attendanceId: attendance.id, processStatus: 'processed', processNote: `Clock-in created (${timeStr})` },
     });
   } else if (direction === 'in') {
-    await prisma.biometricPunch.update({
-      where: { id: punch.id },
-      data: { attendanceId: attendance.id, processStatus: 'skipped', processNote: 'Duplicate entry punch (already clocked in)' },
-    });
+    // Update checkIn only if this punch is EARLIER than current checkIn (first in wins)
+    if (attendance.checkIn && punchDateTime < attendance.checkIn) {
+      const workHours = attendance.checkOut
+        ? (attendance.checkOut.getTime() - punchDateTime.getTime()) / 3600000
+        : null;
+      await prisma.attendance.update({
+        where: { id: attendance.id },
+        data: {
+          checkIn: punchDateTime,
+          ...(workHours !== null && { workHours: Math.round(workHours * 100) / 100 }),
+          notes: attendance.notes
+            ? attendance.notes + ` | Earlier clock-in ${timeStr}`
+            : `Biometric clock-in ${timeStr}`,
+        },
+      });
+      await prisma.biometricPunch.update({
+        where: { id: punch.id },
+        data: { attendanceId: attendance.id, processStatus: 'processed', processNote: `Earlier clock-in updated (${timeStr})` },
+      });
+    } else {
+      await prisma.biometricPunch.update({
+        where: { id: punch.id },
+        data: { attendanceId: attendance.id, processStatus: 'skipped', processNote: 'Entry punch (not earlier than existing clock-in)' },
+      });
+    }
   } else if (
-    !attendance.checkOut &&
     attendance.checkIn &&
     (direction === 'out' || (!direction && punchDateTime > attendance.checkIn))
   ) {
-    const workHours = (punchDateTime.getTime() - attendance.checkIn.getTime()) / 3600000;
-    attendance = await prisma.attendance.update({
-      where: { id: attendance.id },
-      data: {
-        checkOut:  punchDateTime,
-        workHours: Math.round(workHours * 100) / 100,
-        notes: attendance.notes
-          ? attendance.notes + ` | Biometric clock-out ${timeStr}`
-          : `Biometric clock-out ${timeStr}`,
-      },
-    });
-    await prisma.biometricPunch.update({
-      where: { id: punch.id },
-      data: { attendanceId: attendance.id, processStatus: 'processed', processNote: `Clock-out updated (${timeStr})` },
-    });
+    // Update checkOut if: no checkOut yet, OR this punch is LATER than current checkOut (last out wins)
+    const isLater = !attendance.checkOut || punchDateTime > attendance.checkOut;
+    if (isLater) {
+      const workHours = (punchDateTime.getTime() - attendance.checkIn.getTime()) / 3600000;
+      attendance = await prisma.attendance.update({
+        where: { id: attendance.id },
+        data: {
+          checkOut:  punchDateTime,
+          workHours: Math.round(workHours * 100) / 100,
+          notes: attendance.notes
+            ? attendance.notes + ` | Biometric clock-out ${timeStr}`
+            : `Biometric clock-out ${timeStr}`,
+        },
+      });
+      await prisma.biometricPunch.update({
+        where: { id: punch.id },
+        data: { attendanceId: attendance.id, processStatus: 'processed', processNote: `Clock-out updated (${timeStr})` },
+      });
+    } else {
+      await prisma.biometricPunch.update({
+        where: { id: punch.id },
+        data: { attendanceId: attendance.id, processStatus: 'skipped', processNote: `Out punch not later than existing checkout` },
+      });
+    }
   } else {
     await prisma.biometricPunch.update({
       where: { id: punch.id },
