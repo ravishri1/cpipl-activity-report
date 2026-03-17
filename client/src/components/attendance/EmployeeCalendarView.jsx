@@ -514,8 +514,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                     <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkIn)}</td>
                                     <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkOut)}</td>
                                     <td className="py-2.5 pr-2">
-                                      {selectedDay.isLate ? (
-                                        <span className="text-amber-600 font-medium">{lateInDisplay}</span>
+                                      {selectedDay.lateInMinutes > 0 ? (
+                                        <span className={`font-medium ${selectedDay.isLate ? 'text-amber-600' : 'text-slate-600'}`}>{lateInDisplay}</span>
                                       ) : '-'}
                                     </td>
                                     <td className="py-2.5 pr-2">
