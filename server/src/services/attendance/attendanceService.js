@@ -114,8 +114,13 @@ async function getMonthlyAttendance(userId, month, prisma) {
     holiday: 0,
     weekend: 0,
     totalWorkHours: 0,
-    avgWorkHours: 0,
+    avgWorkHours: 0,           // avg office time per day (checkIn→checkOut, includes breaks)
+    avgActualWorkHours: 0,     // avg actual work per day (minus breaks)
   };
+
+  let totalOfficeHrs = 0;
+  let totalActualHrs = 0;
+  const BREAK_HRS = 1;
 
   for (const r of records) {
     if (r.status === 'present') summary.present++;
@@ -125,10 +130,16 @@ async function getMonthlyAttendance(userId, month, prisma) {
     else if (r.status === 'holiday') summary.holiday++;
     else if (r.status === 'weekend') summary.weekend++;
     if (r.workHours) summary.totalWorkHours += r.workHours;
+    if (r.checkIn && r.checkOut) {
+      const officeHrs = (new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) / 3600000;
+      totalOfficeHrs += officeHrs;
+      totalActualHrs += r.workHours > 0 ? r.workHours : Math.max(0, officeHrs - BREAK_HRS);
+    }
   }
 
-  const workedDays = records.filter((r) => r.workHours > 0).length;
-  summary.avgWorkHours = workedDays > 0 ? Math.round((summary.totalWorkHours / workedDays) * 100) / 100 : 0;
+  const workedDays = records.filter((r) => r.workHours > 0 || (r.checkIn && r.checkOut)).length;
+  summary.avgWorkHours = workedDays > 0 ? Math.round((totalOfficeHrs / workedDays) * 100) / 100 : 0;
+  summary.avgActualWorkHours = workedDays > 0 ? Math.round((totalActualHrs / workedDays) * 100) / 100 : 0;
 
   return { records, summary };
 }
@@ -571,6 +582,17 @@ async function getEmployeeCalendar(userId, month, prisma) {
   // Count unregularized late marks (late AND no approved regularization)
   const unregularizedLateMarks = days.filter(d => d.isLate && (!d.regularizationStatus || d.regularizationStatus !== 'approved')).length;
 
+  // Avg Work Hrs = avg office time per day (includes breaks)
+  // Avg Actual Work Hrs = avg actual work per day (minus breaks)
+  const BREAK_HRS = 1;
+  const workedDays = days.filter(d => (d.workHours || 0) > 0 || (d.totalWorkHrsRaw || 0) > 0);
+  const totalOfficeHrs = workedDays.reduce((sum, d) => sum + (d.totalWorkHrsRaw || 0), 0);
+  const totalActualHrs = workedDays.reduce((sum, d) => {
+    if ((d.workHours || 0) > 0) return sum + d.workHours;
+    if ((d.totalWorkHrsRaw || 0) > 0) return sum + Math.max(0, d.totalWorkHrsRaw - BREAK_HRS);
+    return sum;
+  }, 0);
+
   const summary = {
     present: days.filter(d => d.status === 'present').length,
     absent: days.filter(d => d.status === 'absent').length,
@@ -578,7 +600,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
     onLeave: days.filter(d => d.status === 'on_leave').length,
     holiday: days.filter(d => d.status === 'holiday').length,
     weekend: days.filter(d => d.status === 'weekend').length,
-    totalWorkHours: Math.round(days.reduce((sum, d) => sum + (d.workHours || 0), 0) * 100) / 100,
+    totalWorkHours: Math.round(totalActualHrs * 100) / 100,
+    avgWorkHours: workedDays.length > 0 ? Math.round((totalOfficeHrs / workedDays.length) * 100) / 100 : 0,
+    avgActualWorkHours: workedDays.length > 0 ? Math.round((totalActualHrs / workedDays.length) * 100) / 100 : 0,
     // Policy enforcement summary
     lateMarks: lateMarksCount,
     regularizedDays: regularizedDaysCount,
