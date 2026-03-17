@@ -359,6 +359,80 @@ router.post(
   })
 );
 
+// POST /api/shifts/bulk-assign - Bulk assign shift to multiple employees
+router.post(
+  '/bulk-assign',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    requireFields(req.body, 'userIds', 'shiftId', 'effectiveFrom');
+    const { userIds, shiftId, effectiveFrom, effectiveTo, reason } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) throw badRequest('userIds must be a non-empty array');
+    const shiftIdNum = parseInt(shiftId);
+    if (isNaN(shiftIdNum)) throw badRequest('Invalid shiftId');
+
+    // Verify shift exists
+    const shift = await req.prisma.shift.findUnique({ where: { id: shiftIdNum } });
+    if (!shift) throw notFound('Shift');
+
+    const today = new Date().toISOString().split('T')[0];
+    const status = effectiveFrom > today ? 'pending' : 'active';
+    const results = { assigned: 0, skipped: 0, errors: [] };
+
+    for (const uid of userIds) {
+      const userIdNum = parseInt(uid);
+      if (isNaN(userIdNum)) { results.skipped++; continue; }
+
+      try {
+        // Expire overlapping active/pending assignments
+        await req.prisma.shiftAssignment.updateMany({
+          where: {
+            userId: userIdNum,
+            status: { in: ['active', 'pending'] },
+            effectiveFrom: { lte: effectiveTo || '9999-12-31' },
+            OR: [
+              { effectiveTo: null },
+              { effectiveTo: { gte: effectiveFrom } },
+            ],
+          },
+          data: { status: 'expired', effectiveTo: effectiveFrom },
+        });
+
+        // Create new assignment
+        await req.prisma.shiftAssignment.create({
+          data: {
+            userId: userIdNum,
+            shiftId: shiftIdNum,
+            assignedBy: req.user.id,
+            effectiveFrom,
+            effectiveTo: effectiveTo || null,
+            reason: reason || 'Bulk Assignment',
+            status,
+          },
+        });
+
+        // Update user's shift field
+        if (status === 'active') {
+          await req.prisma.user.update({
+            where: { id: userIdNum },
+            data: { shift: shift.name },
+          });
+        }
+
+        results.assigned++;
+      } catch (err) {
+        results.errors.push({ userId: userIdNum, error: err.message });
+        results.skipped++;
+      }
+    }
+
+    res.json({
+      message: `Shift assigned to ${results.assigned} employee(s)${results.skipped ? `, ${results.skipped} skipped` : ''}`,
+      ...results,
+    });
+  })
+);
+
 // ═══════════════════════════════════════════════
 // SHIFT ASSIGNMENTS (named routes — before /:id)
 // ═══════════════════════════════════════════════
