@@ -162,6 +162,117 @@ router.get('/cron-sync', asyncHandler(async (req, res) => {
   res.json({ ok: true, ...result });
 }));
 
+// POST /api/biometric/test-connection/:id — test eSSL SOAP connection for a device
+router.post('/test-connection/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const device = await req.prisma.biometricDevice.findUnique({ where: { id } });
+  if (!device) throw notFound('Device');
+
+  const { fetchFromDevice } = require('../services/biometric/biometricSyncService');
+  const startTime = Date.now();
+  try {
+    const punches = await fetchFromDevice(device, 1);
+    const elapsed = Date.now() - startTime;
+
+    // Sample first 5 punches for preview
+    const sample = punches.slice(0, 5).map(p => ({
+      enrollNumber: p.enrollNumber,
+      punchTime: p.punchTime,
+      direction: p.direction,
+    }));
+
+    // Count unique enroll numbers
+    const uniqueEnrolls = [...new Set(punches.map(p => p.enrollNumber))];
+
+    res.json({
+      status: 'success',
+      device: device.name,
+      esslUrl: device.esslUrl,
+      serialNumber: device.serialNumber,
+      elapsed: `${elapsed}ms`,
+      totalPunches: punches.length,
+      uniqueEmployees: uniqueEnrolls.length,
+      enrollNumbers: uniqueEnrolls,
+      samplePunches: sample,
+      message: punches.length > 0
+        ? `Connected! Found ${punches.length} punches from ${uniqueEnrolls.length} employees`
+        : 'Connected but no punches found for today. Try increasing lookback days.',
+    });
+  } catch (err) {
+    res.json({
+      status: 'failed',
+      device: device.name,
+      esslUrl: device.esslUrl,
+      serialNumber: device.serialNumber,
+      elapsed: `${Date.now() - startTime}ms`,
+      error: err.message,
+      troubleshooting: [
+        'Check if cpserver/eSSL URL is reachable from this server',
+        'Verify API credentials (apiUser, apiPassword, apiKey, companyCode)',
+        'Verify serial number matches the device registered in eTimetracklite',
+        'Check if eTimetracklite SOAP API is running on cpserver',
+        `Tried URL: ${device.esslUrl}/IClock/WebService.asmx`,
+      ],
+    });
+  }
+}));
+
+// POST /api/biometric/agent-sync — local agent pushes ALL devices data in one call
+// The multi-device agent fetches from all eSSL devices locally and pushes everything here
+router.post('/agent-sync', asyncHandler(async (req, res) => {
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'biometric-sync-key';
+  const agentKey = req.body.agentKey || req.headers['x-agent-key'];
+  if (agentKey !== expectedKey) return res.status(401).json({ error: 'Invalid agent key' });
+
+  const { devices: deviceData } = req.body;
+  if (!Array.isArray(deviceData) || deviceData.length === 0) {
+    return res.json({ message: 'No device data received', results: [] });
+  }
+
+  const results = [];
+  for (const dd of deviceData) {
+    const { deviceSerial, punches = [] } = dd;
+    if (!deviceSerial) continue;
+
+    const device = await req.prisma.biometricDevice.findUnique({
+      where: { serialNumber: deviceSerial },
+    });
+    if (!device) {
+      results.push({ device: deviceSerial, status: 'skipped', reason: 'Unknown device serial' });
+      continue;
+    }
+
+    if (punches.length === 0) {
+      // Update last sync even with 0 punches
+      await req.prisma.biometricDevice.update({
+        where: { id: device.id },
+        data: {
+          lastSyncAt: new Date(),
+          lastSyncStatus: 'success',
+          lastSyncMessage: '0 new punches, 0 matched, 0 processed',
+        },
+      });
+      results.push({ device: device.name, status: 'success', inserted: 0, matched: 0, processed: 0 });
+      continue;
+    }
+
+    const result = await processAndStorePunches(req.prisma, device, punches);
+
+    await req.prisma.biometricDevice.update({
+      where: { id: device.id },
+      data: {
+        lastSyncAt: new Date(),
+        lastSyncStatus: 'success',
+        lastSyncMessage: `${result.inserted} new punches, ${result.matched} matched, ${result.processed} processed`,
+      },
+    });
+
+    results.push({ device: device.name, status: 'success', ...result });
+  }
+
+  res.json({ received: deviceData.length, results });
+}));
+
 // ══════════════════════════════════════════════════════════════════════════════
 // PUNCH MANAGEMENT & STATUS
 // ══════════════════════════════════════════════════════════════════════════════

@@ -158,10 +158,8 @@ function parseSoapResponse(xml) {
   return punches;
 }
 
-// ─── Push punches to cloud HR app ─────────────────────────────────────────────
+// ─── Push punches to cloud HR app (single device) ───────────────────────────
 async function pushToHrApp(deviceSerial, punches) {
-  if (!punches.length) return { inserted: 0, matched: 0, processed: 0 };
-
   const payload = JSON.stringify({
     agentKey:     CONFIG.hrAgentKey,
     deviceSerial: deviceSerial,
@@ -169,6 +167,28 @@ async function pushToHrApp(deviceSerial, punches) {
   });
 
   const hrUrl = new URL('/api/biometric/sync', CONFIG.hrApiUrl);
+  const res   = await httpRequest(hrUrl.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type':   'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+    },
+  }, payload);
+
+  if (res.status !== 200) {
+    throw new Error(`HR API returned ${res.status}: ${res.body.slice(0, 300)}`);
+  }
+  return JSON.parse(res.body);
+}
+
+// ─── Push ALL devices data in one call (batch) ──────────────────────────────
+async function pushBatchToHrApp(allDeviceData) {
+  const payload = JSON.stringify({
+    agentKey: CONFIG.hrAgentKey,
+    devices: allDeviceData,
+  });
+
+  const hrUrl = new URL('/api/biometric/agent-sync', CONFIG.hrApiUrl);
   const res   = await httpRequest(hrUrl.toString(), {
     method: 'POST',
     headers: {
@@ -284,15 +304,63 @@ async function runMultiSync() {
     return;
   }
 
+  // Fetch from ALL devices locally, then push everything to cloud in one batch
+  const allDeviceData = [];
   let synced = 0, failed = 0, skipped = 0;
+
   for (const device of devices) {
-    const result = await syncOneDevice(device, fromDate, now);
-    if (result.status === 'success') synced++;
-    else if (result.status === 'failed') failed++;
-    else skipped++;
+    const label = `${device.name} (${device.serialNumber})`;
+
+    if (!device.esslUrl) {
+      console.log(`  ⏭️  ${label}: No eSSL URL — skipping`);
+      skipped++;
+      continue;
+    }
+    if (!device.apiUser || !device.apiPassword) {
+      console.log(`  ⏭️  ${label}: Missing API credentials — skipping`);
+      skipped++;
+      continue;
+    }
+
+    try {
+      console.log(`  🔄 ${label}: Fetching from ${device.esslUrl}...`);
+      const punches = await fetchFromEssl(device, fromDate, now);
+      console.log(`     ✅ Fetched ${punches.length} punch records`);
+      allDeviceData.push({ deviceSerial: device.serialNumber, punches });
+      synced++;
+    } catch (err) {
+      console.log(`     ❌ Error: ${err.message}`);
+      // Still push empty data so cloud knows we attempted
+      allDeviceData.push({ deviceSerial: device.serialNumber, punches: [] });
+      failed++;
+    }
   }
 
-  console.log(`\n  Summary: ${synced} synced, ${failed} failed, ${skipped} skipped`);
+  // Push all data to cloud in one batch call
+  if (allDeviceData.length > 0) {
+    try {
+      console.log(`\n  📤 Pushing data for ${allDeviceData.length} devices to cloud...`);
+      const totalPunches = allDeviceData.reduce((sum, d) => sum + d.punches.length, 0);
+      console.log(`     Total punches to push: ${totalPunches}`);
+      const result = await pushBatchToHrApp(allDeviceData);
+      console.log(`     ✅ Cloud response:`, JSON.stringify(result.results?.map(r => `${r.device}: ${r.status} (${r.inserted || 0} new, ${r.matched || 0} matched)`)));
+    } catch (err) {
+      console.error(`     ❌ Batch push failed: ${err.message}`);
+      // Fallback: push individually
+      console.log('     🔄 Falling back to individual device push...');
+      for (const dd of allDeviceData) {
+        if (dd.punches.length === 0) continue;
+        try {
+          const result = await pushToHrApp(dd.deviceSerial, dd.punches);
+          console.log(`     ${dd.deviceSerial}: ${result.inserted || 0} new, ${result.matched || 0} matched`);
+        } catch (e) {
+          console.error(`     ${dd.deviceSerial}: Push failed — ${e.message}`);
+        }
+      }
+    }
+  }
+
+  console.log(`\n  Summary: ${synced} fetched, ${failed} failed, ${skipped} skipped`);
 }
 
 // ─── Single-device sync cycle (legacy) ─────────────────────────────────────

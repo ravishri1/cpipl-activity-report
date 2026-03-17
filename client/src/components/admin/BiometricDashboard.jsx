@@ -91,6 +91,8 @@ function StatusTab() {
   const { execute, loading: syncing, error: syncErr, success } = useApi();
   const [lookbackDays, setLookbackDays] = useState(1);
   const [syncingDeviceId, setSyncingDeviceId] = useState(null);
+  const [testResult, setTestResult] = useState(null);
+  const [testingDeviceId, setTestingDeviceId] = useState(null);
 
   const handleSyncAll = async () => {
     try {
@@ -110,6 +112,18 @@ function StatusTab() {
       // Error displayed by useApi
     }
     setSyncingDeviceId(null);
+  };
+
+  const handleTestConnection = async (deviceId) => {
+    setTestingDeviceId(deviceId);
+    setTestResult(null);
+    try {
+      const res = await api.post(`/biometric/test-connection/${deviceId}`);
+      setTestResult(res.data);
+    } catch (err) {
+      setTestResult({ status: 'failed', error: err.response?.data?.error || err.message });
+    }
+    setTestingDeviceId(null);
   };
 
   const handleRematch = async () => {
@@ -136,6 +150,22 @@ function StatusTab() {
         <StatCard icon={AlertTriangle} label="Unmatched Today" value={status.unmatchedToday} color="red"   />
         <StatCard icon={Clock}        label="Pending Process" value={status.pendingProcess}  color="amber" />
         <StatCard icon={Activity}     label="All-time Punches" value={status.totalPunches}  color="purple" />
+      </div>
+
+      {/* Architecture note */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+        <p className="font-medium mb-1">📡 eSSL Sync Architecture</p>
+        <p className="text-xs text-blue-600">
+          cpserver (<code>192.168.2.222:85</code>) is on your office LAN. The cloud app (Vercel) cannot reach it directly.
+          For automatic sync, run the <strong>Local Sync Agent</strong> on any office PC:
+        </p>
+        <code className="block mt-2 bg-blue-100 rounded px-3 py-2 text-xs font-mono">
+          cd server\src\services\biometric && node esslSyncAgent.js
+        </code>
+        <p className="text-xs text-blue-600 mt-2">
+          The agent auto-discovers all devices from the HR API and syncs every 5 minutes. All punches are stored — even unmatched enroll numbers.
+          Use "Test Connection" below to verify each device is reachable from this server.
+        </p>
       </div>
 
       {/* Sync controls */}
@@ -173,10 +203,60 @@ function StatusTab() {
             Re-match unmatched
           </button>
           <p className="text-xs text-slate-400 ml-auto">
-            Fetches punch data from eSSL devices for the selected lookback period
+            Fetches punch data from cpserver for the selected lookback period
           </p>
         </div>
       </div>
+
+      {/* Test Connection Result */}
+      {testResult && (
+        <div className={`rounded-xl border p-4 text-sm ${testResult.status === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className={`font-semibold ${testResult.status === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+              {testResult.status === 'success' ? '✅ Connection Test Passed' : '❌ Connection Test Failed'}
+            </h4>
+            <button onClick={() => setTestResult(null)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className={`text-xs ${testResult.status === 'success' ? 'text-green-700' : 'text-red-700'}`}>
+            {testResult.message || testResult.error}
+          </p>
+          {testResult.status === 'success' && testResult.enrollNumbers?.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-green-700 mb-1">
+                Found {testResult.totalPunches} punches from {testResult.uniqueEmployees} unique enroll numbers:
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {testResult.enrollNumbers.map(en => (
+                  <span key={en} className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-mono">{en}</span>
+                ))}
+              </div>
+              {testResult.samplePunches?.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-green-700 mb-1">Sample punches:</p>
+                  {testResult.samplePunches.map((p, i) => (
+                    <p key={i} className="text-xs text-green-600 font-mono">
+                      {p.enrollNumber} → {p.punchTime} ({p.direction || 'auto'})
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {testResult.troubleshooting && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-red-700 mb-1">Troubleshooting:</p>
+              <ul className="text-xs text-red-600 list-disc list-inside">
+                {testResult.troubleshooting.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            </div>
+          )}
+          {testResult.esslUrl && (
+            <p className="text-xs text-slate-500 mt-2">eSSL URL: {testResult.esslUrl} | Serial: {testResult.serialNumber} | Time: {testResult.elapsed}</p>
+          )}
+        </div>
+      )}
 
       {/* Device cards */}
       <div>
@@ -189,6 +269,7 @@ function StatusTab() {
             {status.devices.map(d => {
               const syncColor = SYNC_STATUS_STYLES[d.lastSyncStatus] ?? SYNC_STATUS_STYLES.default;
               const isSyncingThis = syncingDeviceId === d.id;
+              const isTestingThis = testingDeviceId === d.id;
               return (
                 <div key={d.id} className="bg-white rounded-xl border border-slate-200 p-4">
                   <div className="flex items-start justify-between">
@@ -210,14 +291,24 @@ function StatusTab() {
                     <p className="mt-2 text-xs text-slate-400 italic">Never synced</p>
                   )}
                   {d.isActive && (
-                    <button
-                      onClick={() => handleSyncDevice(d.id)}
-                      disabled={syncing}
-                      className="mt-3 flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isSyncingThis ? 'animate-spin' : ''}`} />
-                      Sync Now
-                    </button>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => handleSyncDevice(d.id)}
+                        disabled={syncing}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isSyncingThis ? 'animate-spin' : ''}`} />
+                        Sync Now
+                      </button>
+                      <button
+                        onClick={() => handleTestConnection(d.id)}
+                        disabled={isTestingThis}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {isTestingThis ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                        Test Connection
+                      </button>
+                    </div>
                   )}
                 </div>
               );
