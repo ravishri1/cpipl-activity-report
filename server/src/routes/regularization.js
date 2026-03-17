@@ -137,10 +137,11 @@ router.post('/bulk', asyncHandler(async (req, res) => {
     }
   }
 
-  // Create all in a transaction
-  const created = await req.prisma.$transaction(
-    items.map(item =>
-      req.prisma.attendanceRegularization.create({
+  // Create all in a transaction (interactive for better error handling)
+  const created = await req.prisma.$transaction(async (tx) => {
+    const results = [];
+    for (const item of items) {
+      const entry = await tx.attendanceRegularization.create({
         data: {
           userId: req.user.id,
           date: item.date,
@@ -148,10 +149,13 @@ router.post('/bulk', asyncHandler(async (req, res) => {
           requestedOut: item.requestedOut || null,
           reason: item.reason.trim(),
         },
-      })
-    )
-  );
+      });
+      results.push(entry);
+    }
+    return results;
+  });
 
+  console.log('[Regularization Bulk] Success — created', created.length, 'entries for userId:', req.user.id);
   res.status(201).json({ count: created.length, requests: created });
 }));
 

@@ -149,9 +149,12 @@ export default function AttendanceRegularization() {
   };
 
   const [bulkLocalErr, setBulkLocalErr] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState('');
 
   const handleBulkSubmit = async () => {
     setBulkLocalErr('');
+    setSubmitSuccess('');
+
     if (!allBulkReasonsValid) {
       setBulkLocalErr('Please fill reason (min 3 chars) for every period.');
       return;
@@ -176,20 +179,26 @@ export default function AttendanceRegularization() {
     }
 
     try {
-      await execBulk(
+      const result = await execBulk(
         () => api.post('/regularization/bulk', { requests: items }),
         `${items.length} regularization request${items.length !== 1 ? 's' : ''} submitted successfully!`
       );
+      // Success — close modal, show success on main page
       setShowBulkModal(false);
       setSelectedPeriods(new Set());
       setBulkLocalErr('');
-      // Scroll to top so user sees success message
+      setSubmitSuccess(`${items.length} regularization request${items.length !== 1 ? 's' : ''} submitted! Pending admin approval.`);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      refetch().catch(() => {});
-      refetchLate().catch(() => {});
+      // Refresh data
+      try { await refetch(); } catch {}
+      try { await refetchLate(); } catch {}
     } catch (err) {
       // Show error prominently inside modal
-      const msg = err?.response?.data?.error || err?.message || 'Failed to submit. Please try again.';
+      console.error('[Regularization Bulk Submit Error]', err);
+      const msg = err?.response?.data?.error
+        || err?.response?.data?.message
+        || err?.message
+        || 'Failed to submit. Please check your network and try again.';
       setBulkLocalErr(msg);
     }
   };
@@ -229,13 +238,16 @@ export default function AttendanceRegularization() {
       {/* Alerts */}
       {error       && <AlertMessage type="error"   message={error}       />}
       {lateErr     && <AlertMessage type="error"   message={lateErr}     />}
-      {bulkSuccess && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 mb-2 animate-pulse">
-          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-green-800">{bulkSuccess}</p>
+      {(bulkSuccess || submitSuccess) && (
+        <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 flex items-center gap-3 mb-4 shadow-sm">
+          <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-green-800">{submitSuccess || bulkSuccess}</p>
             <p className="text-xs text-green-600 mt-0.5">Your requests are now pending admin approval.</p>
           </div>
+          <button onClick={() => { setSubmitSuccess(''); clearBulk(); }} className="text-green-400 hover:text-green-600 p-1">
+            <X size={16} />
+          </button>
         </div>
       )}
 
@@ -382,10 +394,16 @@ export default function AttendanceRegularization() {
               <button onClick={() => setShowBulkModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-500" /></button>
             </div>
 
-            {/* Error/success alerts — ABOVE scroll area so always visible */}
+            {/* Error alerts — ABOVE scroll area, always visible */}
             {(bulkErr || bulkLocalErr) && (
-              <div className="px-6 pt-4 pb-0 flex-shrink-0">
-                <AlertMessage type="error" message={bulkLocalErr || bulkErr} />
+              <div className="px-6 pt-3 pb-0 flex-shrink-0">
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3 flex items-start gap-2">
+                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-800">Submission Failed</p>
+                    <p className="text-xs text-red-600 mt-0.5">{bulkLocalErr || bulkErr}</p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -447,9 +465,18 @@ export default function AttendanceRegularization() {
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setShowBulkModal(false)} className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
-                <button onClick={handleBulkSubmit} disabled={bulkSaving || !allBulkReasonsValid} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  <Send size={14} />
-                  {bulkSaving ? 'Submitting...' : `Submit ${selectedPeriods.size} Request${selectedPeriods.size !== 1 ? 's' : ''}`}
+                <button onClick={handleBulkSubmit} disabled={bulkSaving || !allBulkReasonsValid} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 min-w-[180px] justify-center">
+                  {bulkSaving ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      Submit {selectedPeriods.size} Request{selectedPeriods.size !== 1 ? 's' : ''}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
