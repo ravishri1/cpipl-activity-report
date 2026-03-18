@@ -239,6 +239,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/shift-roster',              label: 'Shift Roster',           icon: Calendar },
     { to: '/admin/leave-requests',           label: 'Leave Requests',         icon: ClipboardCheck },
     { to: '/admin/leave-granter',            label: 'Leave Granter',          icon: Gift },
+    { to: '/admin/leave-dashboard',          label: 'Leave Dashboard',        icon: BarChart3 },
     { to: '/admin/holidays',                 label: 'Holidays',               icon: CalendarDays },
     { to: '/admin/payroll',                  label: 'Payroll',                icon: CreditCard },
     { to: '/admin/salary-setup',             label: 'Salary Setup',           icon: Banknote },

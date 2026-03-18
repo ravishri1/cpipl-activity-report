@@ -465,4 +465,158 @@ router.get('/team-calendar', asyncHandler(async (req, res) => {
   });
 }));
 
+// ─── Admin Leave Dashboard — Full employee leave overview ────────
+
+// GET /api/leave/admin/dashboard?year=2025&userId=X&department=Y
+// Returns: per-employee leave balances, leave request history, comp-off history
+router.get('/admin/dashboard', requireAdmin, asyncHandler(async (req, res) => {
+  const fyYear = parseInt(req.query.year) || getFinancialYear();
+  const { start, end } = getFYRange(fyYear);
+  const userId = req.query.userId ? parseInt(req.query.userId) : null;
+  const department = req.user.role === 'team_lead' ? req.user.department : (req.query.department || null);
+
+  // Build user filter
+  const userWhere = { isActive: true };
+  if (userId) userWhere.id = userId;
+  if (department) userWhere.department = department;
+
+  // 1. Get all employees
+  const employees = await req.prisma.user.findMany({
+    where: userWhere,
+    select: {
+      id: true, name: true, employeeId: true, department: true, designation: true,
+      dateOfJoining: true, confirmationDate: true, confirmationStatus: true,
+      probationEndDate: true, driveProfilePhotoUrl: true, profilePhotoUrl: true,
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  if (employees.length === 0) {
+    return res.json({ employees: [], fyYear, fyLabel: getFYLabel(fyYear) });
+  }
+
+  const employeeIds = employees.map(e => e.id);
+
+  // 2. Get leave balances for all employees in this FY
+  const balances = await getAllBalances(fyYear, department, req.prisma);
+
+  // Group balances by userId
+  const balancesByUser = {};
+  for (const b of balances) {
+    if (!balancesByUser[b.userId]) balancesByUser[b.userId] = [];
+    balancesByUser[b.userId].push(b);
+  }
+
+  // 3. Get ALL leave requests for this FY (approved, pending, rejected, cancelled)
+  const requests = await req.prisma.leaveRequest.findMany({
+    where: {
+      userId: { in: employeeIds },
+      startDate: { gte: start, lte: end },
+    },
+    include: {
+      leaveType: { select: { name: true, code: true } },
+    },
+    orderBy: { startDate: 'desc' },
+  });
+
+  // Group requests by userId
+  const requestsByUser = {};
+  for (const r of requests) {
+    if (!requestsByUser[r.userId]) requestsByUser[r.userId] = [];
+    requestsByUser[r.userId].push(r);
+  }
+
+  // 4. Get comp-off balances + requests for the calendar year
+  const calYear = new Date().getFullYear();
+  const compOffBalances = await req.prisma.compOffBalance.findMany({
+    where: { userId: { in: employeeIds }, year: calYear },
+  });
+  const compOffBalByUser = {};
+  for (const c of compOffBalances) {
+    compOffBalByUser[c.userId] = c;
+  }
+
+  const compOffRequests = await req.prisma.compOffRequest.findMany({
+    where: { userId: { in: employeeIds } },
+    orderBy: { createdAt: 'desc' },
+    take: 500, // limit
+  });
+  const compOffReqByUser = {};
+  for (const c of compOffRequests) {
+    if (!compOffReqByUser[c.userId]) compOffReqByUser[c.userId] = [];
+    compOffReqByUser[c.userId].push(c);
+  }
+
+  // 5. Assemble per-employee dashboard data
+  const result = employees.map(emp => {
+    const empBalances = (balancesByUser[emp.id] || []).map(b => ({
+      id: b.id,
+      leaveType: b.leaveType,
+      opening: b.opening || 0,
+      credited: b.credited,
+      total: b.total,
+      used: b.used,
+      available: b.available,
+      onProbation: b.onProbation,
+      probationAllowance: b.probationAllowance,
+      joiningMonth: b.joiningMonth,
+    }));
+
+    const empRequests = (requestsByUser[emp.id] || []).map(r => ({
+      id: r.id,
+      leaveType: r.leaveType,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      days: r.days,
+      session: r.session,
+      reason: r.reason,
+      status: r.status,
+      reviewNote: r.reviewNote,
+      createdAt: r.createdAt,
+    }));
+
+    const compOff = compOffBalByUser[emp.id] || { earned: 0, used: 0, balance: 0 };
+    const compOffHistory = compOffReqByUser[emp.id] || [];
+
+    // Summary counts
+    const approved = empRequests.filter(r => r.status === 'approved');
+    const pending = empRequests.filter(r => r.status === 'pending');
+    const totalApprovedDays = approved.reduce((sum, r) => sum + r.days, 0);
+
+    return {
+      employee: emp,
+      balances: empBalances,
+      requests: empRequests,
+      compOff: {
+        earned: compOff.earned,
+        used: compOff.used,
+        balance: compOff.balance,
+        history: compOffHistory.map(c => ({
+          id: c.id,
+          type: c.type,
+          workDate: c.workDate,
+          days: c.days,
+          reason: c.reason,
+          status: c.status,
+          createdAt: c.createdAt,
+        })),
+      },
+      summary: {
+        totalApprovedDays,
+        pendingCount: pending.length,
+        approvedCount: approved.length,
+        rejectedCount: empRequests.filter(r => r.status === 'rejected').length,
+        cancelledCount: empRequests.filter(r => r.status === 'cancelled').length,
+      },
+    };
+  });
+
+  res.json({
+    employees: result,
+    fyYear,
+    fyLabel: getFYLabel(fyYear),
+    totalEmployees: employees.length,
+  });
+}));
+
 module.exports = router;

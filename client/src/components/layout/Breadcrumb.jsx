@@ -51,6 +51,7 @@ const ROUTE_MAP = {
   '/admin/team':                    { label: 'Team Management',           parent: 'Organization' },
   '/admin/leave-requests':          { label: 'Leave Requests',            parent: 'Organization' },
   '/admin/leave-granter':           { label: 'Leave Granter',             parent: 'Organization' },
+  '/admin/leave-dashboard':         { label: 'Leave Dashboard',           parent: 'Organization' },
   '/admin/expense-claims':          { label: 'Expense Claims',            parent: 'Organization' },
   '/admin/attendance':              { label: 'Team Attendance',           parent: 'Organization' },
   '/admin/payroll':                 { label: 'Payroll',                   parent: 'Organization' },
