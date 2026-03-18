@@ -161,27 +161,10 @@ router.post('/bulk-confirm', requireAdmin, asyncHandler(async (req, res) => {
       if (employee.employeeType !== 'internal') { errors.push({ userId, error: 'Not internal' }); continue; }
       if (employee.confirmationStatus === 'confirmed') { errors.push({ userId, error: 'Already confirmed' }); continue; }
 
-      await req.prisma.$transaction([
-        req.prisma.user.update({
-          where: { id: userId },
-          data: { confirmationStatus: 'confirmed', confirmedAt: today, benefitsUnlocked: true },
-        }),
-        req.prisma.insuranceCard.create({
-          data: {
-            userId,
-            uploadedById: req.user.id,
-            status: 'pending_setup',
-            cardNumber: `PENDING-${employee.employeeId || userId}`,
-            provider: 'Pending',
-            planName: 'Pending Setup',
-            coverageAmount: 0,
-            premium: 0,
-            startDate: today,
-            endDate: today,
-            notes: 'Auto-created on bulk employee confirmation.',
-          },
-        }),
-      ]);
+      await req.prisma.user.update({
+        where: { id: userId },
+        data: { confirmationStatus: 'confirmed', confirmedAt: today, benefitsUnlocked: true },
+      });
 
       confirmed.push({ userId, name: employee.name });
 
@@ -289,31 +272,14 @@ router.post('/:userId/confirm', requireAdmin, asyncHandler(async (req, res) => {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  await req.prisma.$transaction([
-    req.prisma.user.update({
-      where: { id: userId },
-      data: {
-        confirmationStatus: 'confirmed',
-        confirmedAt: today,
-        benefitsUnlocked: true,
-      },
-    }),
-    req.prisma.insuranceCard.create({
-      data: {
-        userId,
-        uploadedById: req.user.id,
-        status: 'pending_setup',
-        cardNumber: `PENDING-${employee.employeeId || userId}`,
-        provider: 'Pending',
-        planName: 'Pending Setup',
-        coverageAmount: 0,
-        premium: 0,
-        startDate: today,
-        endDate: today,
-        notes: 'Auto-created on employee confirmation. Admin must complete setup.',
-      },
-    }),
-  ]);
+  await req.prisma.user.update({
+    where: { id: userId },
+    data: {
+      confirmationStatus: 'confirmed',
+      confirmedAt: today,
+      benefitsUnlocked: true,
+    },
+  });
 
   try {
     if (employee.email) {
@@ -338,7 +304,7 @@ router.post('/:userId/confirm', requireAdmin, asyncHandler(async (req, res) => {
   }
 
   res.json({
-    message: `${employee.name} has been confirmed. Insurance card placeholder created.`,
+    message: `${employee.name} has been confirmed successfully.`,
     confirmedAt: today,
     benefitsUnlocked: true,
   });
