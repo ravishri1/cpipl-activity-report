@@ -173,6 +173,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
     if (cell.regularizationStatus === 'pending') return 'bg-amber-50/60';
     // Penalty date (part of a complete group of 3 unregularized late marks) → light yellow
     if (penaltyDates.has(cell.date)) return 'bg-amber-50';
+    // Today = white background (day still in progress)
+    if (cell.date === today) return 'bg-white';
     return (statusConfig[cell.status] || statusConfig.future).bg;
   };
 
