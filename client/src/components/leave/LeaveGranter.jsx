@@ -327,8 +327,9 @@ export default function LeaveGranter() {
         <EditGrantModal
           grant={editGrant}
           fyYear={fyYear}
+          execute={execute}
           onClose={() => setEditGrant(null)}
-          onSuccess={() => { setEditGrant(null); refetch(); }}
+          onDone={() => { setEditGrant(null); refetch(); }}
         />
       )}
 
@@ -345,7 +346,7 @@ export default function LeaveGranter() {
 }
 
 // ─── Edit Grant Modal ────────────────────────────────────
-function EditGrantModal({ grant, fyYear, onClose, onSuccess }) {
+function EditGrantModal({ grant, fyYear, execute, onClose, onDone }) {
   const [form, setForm] = useState({
     totalGranted: String(grant.totalGranted),
     probationAllowance: String(grant.probationAllowance || ''),
@@ -362,13 +363,16 @@ function EditGrantModal({ grant, fyYear, onClose, onSuccess }) {
     setError('');
     setSubmitting(true);
     try {
-      await api.put(`/leave/admin/grants/${grant.id}`, {
-        totalGranted: parseFloat(form.totalGranted),
-        probationAllowance: isConfirmed ? null : parseFloat(form.probationAllowance || 0),
-        joiningMonth: form.joiningMonth ? parseInt(form.joiningMonth) : null,
-        notes: form.notes || null,
-      });
-      onSuccess();
+      await execute(
+        () => api.put(`/leave/admin/grants/${grant.id}`, {
+          totalGranted: parseFloat(form.totalGranted),
+          probationAllowance: isConfirmed ? null : parseFloat(form.probationAllowance || 0),
+          joiningMonth: form.joiningMonth ? parseInt(form.joiningMonth) : null,
+          notes: form.notes || null,
+        }),
+        'Grant updated successfully'
+      );
+      onDone();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update grant.');
     } finally {
