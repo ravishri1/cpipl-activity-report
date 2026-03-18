@@ -1,21 +1,526 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { driveImageUrl } from '../../utils/formatters';
+import { useApi } from '../../hooks/useApi';
+import { driveImageUrl, formatDate } from '../../utils/formatters';
+import { useAuth } from '../../context/AuthContext';
+import LoadingSpinner from '../shared/LoadingSpinner';
+import AlertMessage from '../shared/AlertMessage';
 import {
-  Users,
-  Search,
-  User,
-  Mail,
-  Phone,
-  Building2,
-  LayoutGrid,
-  List,
-  UserCheck,
-  MapPin,
+  Users, Search, User, Mail, Phone, Building2, LayoutGrid, List,
+  UserCheck, Download, Upload, RefreshCw, ChevronDown, X, Check,
+  FileSpreadsheet, AlertTriangle, CheckCircle2, Edit3,
 } from 'lucide-react';
 
+// ── CSV helpers ────────────────────────────────────────────
+function downloadCSV(filename, headers, rows) {
+  const escape = (v) => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return { headers: [], rows: [] };
+
+  const parseRow = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseRow(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseRow(lines[i]);
+    if (vals.every(v => !v)) continue;
+    const row = {};
+    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+    rows.push(row);
+  }
+  return { headers, rows };
+}
+
+const EXPORT_FIELDS = [
+  { key: 'employeeId', label: 'Employee ID' },
+  { key: 'name', label: 'Employee Name' },
+  { key: 'email', label: 'Email' },
+  { key: 'department', label: 'Department' },
+  { key: 'designation', label: 'Designation' },
+  { key: 'dateOfJoining', label: 'Date of Joining' },
+  { key: 'dateOfBirth', label: 'Date of Birth' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'personalEmail', label: 'Personal Email' },
+  { key: 'employmentType', label: 'Employment Type' },
+  { key: 'employmentStatus', label: 'Employment Status' },
+  { key: 'role', label: 'Role' },
+  { key: 'reportingManager', label: 'Reporting Manager' },
+  { key: 'company', label: 'Company' },
+  { key: 'location', label: 'Location' },
+  { key: 'bloodGroup', label: 'Blood Group' },
+  { key: 'maritalStatus', label: 'Marital Status' },
+  { key: 'fatherName', label: 'Father Name' },
+  { key: 'spouseName', label: 'Spouse Name' },
+  { key: 'nationality', label: 'Nationality' },
+  { key: 'religion', label: 'Religion' },
+  { key: 'placeOfBirth', label: 'Place of Birth' },
+  { key: 'address', label: 'Current Address' },
+  { key: 'permanentAddress', label: 'Permanent Address' },
+  { key: 'aadhaarNumber', label: 'Aadhaar Number' },
+  { key: 'panNumber', label: 'PAN Number' },
+  { key: 'passportNumber', label: 'Passport Number' },
+  { key: 'passportExpiry', label: 'Passport Expiry' },
+  { key: 'drivingLicense', label: 'Driving License' },
+  { key: 'uanNumber', label: 'UAN Number' },
+  { key: 'bankName', label: 'Bank Name' },
+  { key: 'bankAccountNumber', label: 'Bank Account Number' },
+  { key: 'bankBranch', label: 'Bank Branch' },
+  { key: 'bankIfscCode', label: 'IFSC Code' },
+  { key: 'confirmationDate', label: 'Confirmation Date' },
+  { key: 'confirmationStatus', label: 'Confirmation Status' },
+  { key: 'probationEndDate', label: 'Probation End Date' },
+  { key: 'noticePeriodDays', label: 'Notice Period Days' },
+  { key: 'previousExperience', label: 'Previous Experience (years)' },
+  { key: 'grade', label: 'Grade' },
+  { key: 'shift', label: 'Shift' },
+  { key: 'emergencyContact', label: 'Emergency Contact' },
+  { key: 'isActive', label: 'Active' },
+];
+
+// ── Import Modal ─────────────────────────────────────────
+function ImportModal({ onClose, onDone }) {
+  const [step, setStep] = useState('upload'); // upload | preview | result
+  const [csvData, setCsvData] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [mode, setMode] = useState('upsert');
+  const [result, setResult] = useState(null);
+  const { execute, loading, error, success } = useApi();
+  const fileRef = useRef();
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const { headers, rows } = parseCSV(text);
+    if (rows.length === 0) return;
+    setCsvData({ headers, rows, filename: file.name });
+
+    try {
+      const res = await execute(
+        () => api.post('/import/preview', { headers, rows: rows.slice(0, 200) }),
+        'CSV parsed successfully'
+      );
+      setPreview(res);
+      setStep('preview');
+    } catch {
+      // error displayed by useApi
+    }
+  };
+
+  const handleExecute = async () => {
+    if (!csvData || !preview) return;
+    try {
+      const res = await execute(
+        () => api.post('/import/execute', {
+          rows: csvData.rows,
+          mapping: preview.mapping,
+          mode,
+        }),
+        'Import completed!'
+      );
+      setResult(res);
+      setStep('result');
+    } catch {
+      // error displayed by useApi
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await api.get('/import/template');
+      const cols = res.data.columns;
+      downloadCSV('employee-import-template.csv', cols, []);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Upload className="w-5 h-5 text-blue-600" />
+            Import Employees
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5 text-slate-400" /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {error && <AlertMessage type="error" message={error} />}
+          {success && <AlertMessage type="success" message={success} />}
+
+          {step === 'upload' && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">Upload a CSV file with employee data. Existing employees will be matched by email, employee ID, or name.</p>
+
+              <div className="flex items-center gap-3">
+                <button onClick={handleDownloadTemplate}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-200">
+                  <Download className="w-3.5 h-3.5" /> Download Template
+                </button>
+              </div>
+
+              <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                onClick={() => fileRef.current?.click()}>
+                <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm text-slate-600 font-medium">Click to select CSV file</p>
+                <p className="text-xs text-slate-400 mt-1">Supports .csv files</p>
+                <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="hidden" />
+              </div>
+
+              {loading && <LoadingSpinner />}
+            </div>
+          )}
+
+          {step === 'preview' && preview && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="bg-blue-50 rounded-lg px-3 py-2">
+                  <span className="text-xs text-blue-500 font-medium">Rows</span>
+                  <p className="text-lg font-bold text-blue-700">{csvData.rows.length}</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg px-3 py-2">
+                  <span className="text-xs text-emerald-500 font-medium">Mapped Fields</span>
+                  <p className="text-lg font-bold text-emerald-700">{Object.keys(preview.mapping).length}</p>
+                </div>
+                {preview.unmappedHeaders?.length > 0 && (
+                  <div className="bg-amber-50 rounded-lg px-3 py-2">
+                    <span className="text-xs text-amber-500 font-medium">Unmapped</span>
+                    <p className="text-lg font-bold text-amber-700">{preview.unmappedHeaders.length}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Field mapping */}
+              <div>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase mb-2">Field Mapping</h3>
+                <div className="grid grid-cols-2 gap-1.5 max-h-[200px] overflow-y-auto bg-slate-50 rounded-lg p-3">
+                  {Object.entries(preview.mapping).map(([csv, db]) => (
+                    <div key={csv} className="flex items-center gap-1 text-xs">
+                      <span className="text-slate-500 truncate">{csv}</span>
+                      <span className="text-slate-300">→</span>
+                      <span className="font-medium text-emerald-700">{db}</span>
+                    </div>
+                  ))}
+                </div>
+                {preview.unmappedHeaders?.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    <AlertTriangle className="w-3 h-3 inline mr-1" />
+                    Unmapped columns (will be ignored): {preview.unmappedHeaders.join(', ')}
+                  </p>
+                )}
+              </div>
+
+              {/* Mode selector */}
+              <div>
+                <h3 className="text-xs font-semibold text-slate-600 uppercase mb-2">Import Mode</h3>
+                <div className="flex items-center gap-2">
+                  {[
+                    { key: 'upsert', label: 'Create + Update', desc: 'Create new employees & update existing' },
+                    { key: 'create', label: 'Create Only', desc: 'Only add new employees' },
+                    { key: 'update', label: 'Update Only', desc: 'Only update existing employees' },
+                  ].map(m => (
+                    <button key={m.key} onClick={() => setMode(m.key)}
+                      className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                        mode === m.key ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'
+                      }`}>
+                      <p className={`text-xs font-semibold ${mode === m.key ? 'text-blue-700' : 'text-slate-700'}`}>{m.label}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{m.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview table */}
+              {preview.preview?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-600 uppercase mb-2">Preview (first {preview.preview.length} rows)</h3>
+                  <div className="overflow-x-auto bg-slate-50 rounded-lg">
+                    <table className="text-xs">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          {Object.keys(preview.preview[0]).map(k => (
+                            <th key={k} className="px-2 py-1.5 font-medium text-slate-600 whitespace-nowrap">{k}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.preview.map((row, i) => (
+                          <tr key={i} className="border-t border-slate-200">
+                            {Object.values(row).map((v, j) => (
+                              <td key={j} className="px-2 py-1.5 text-slate-700 whitespace-nowrap max-w-[150px] truncate">{v}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button onClick={() => { setStep('upload'); setPreview(null); setCsvData(null); }}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Back</button>
+                <button onClick={handleExecute} disabled={loading}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Import {csvData.rows.length} rows
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'result' && result && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-50 rounded-lg p-4 text-center">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-emerald-700">{result.created}</p>
+                  <p className="text-xs text-emerald-500">Created</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <RefreshCw className="w-6 h-6 text-blue-500 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-blue-700">{result.updated}</p>
+                  <p className="text-xs text-blue-500">Updated</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-4 text-center">
+                  <AlertTriangle className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-slate-600">{result.skipped}</p>
+                  <p className="text-xs text-slate-400">Skipped</p>
+                </div>
+              </div>
+
+              {result.errors?.length > 0 && (
+                <div className="bg-red-50 rounded-lg p-3 max-h-[200px] overflow-y-auto">
+                  <h4 className="text-xs font-semibold text-red-700 mb-2">Errors ({result.errors.length})</h4>
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-600 mb-0.5">
+                      Row {e.row}: {e.error}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button onClick={() => { onDone(); onClose(); }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Update Modal ────────────────────────────────────
+function BulkUpdateModal({ employees, onClose, onDone }) {
+  const [field, setField] = useState('');
+  const [value, setValue] = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+  const [bulkSearch, setBulkSearch] = useState('');
+  const { execute, loading, error, success } = useApi();
+
+  const filteredEmps = useMemo(() => {
+    if (!bulkSearch) return employees;
+    const s = bulkSearch.toLowerCase();
+    return employees.filter(e => e.name.toLowerCase().includes(s) || (e.employeeId || '').toLowerCase().includes(s));
+  }, [employees, bulkSearch]);
+
+  const handleSelectAll = () => {
+    if (selectAll) { setSelected(new Set()); setSelectAll(false); }
+    else { setSelected(new Set(filteredEmps.map(e => e.id))); setSelectAll(true); }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const BULK_FIELDS = [
+    { key: 'department', label: 'Department', type: 'text' },
+    { key: 'designation', label: 'Designation', type: 'text' },
+    { key: 'location', label: 'Location', type: 'text' },
+    { key: 'shift', label: 'Shift', type: 'text' },
+    { key: 'grade', label: 'Grade', type: 'text' },
+    { key: 'employmentType', label: 'Employment Type', type: 'select', options: ['full_time', 'part_time', 'contract', 'intern'] },
+    { key: 'role', label: 'Role', type: 'select', options: ['member', 'team_lead', 'admin'] },
+    { key: 'confirmationStatus', label: 'Confirmation Status', type: 'select', options: ['pending', 'extended', 'confirmed'] },
+    { key: 'noticePeriodDays', label: 'Notice Period Days', type: 'number' },
+    { key: 'confirmationDate', label: 'Confirmation Date', type: 'date' },
+    { key: 'probationEndDate', label: 'Probation End Date', type: 'date' },
+  ];
+
+  const selectedField = BULK_FIELDS.find(f => f.key === field);
+
+  const handleBulkUpdate = async () => {
+    if (!field || selected.size === 0) return;
+    if (!window.confirm(`Update "${selectedField?.label}" to "${value}" for ${selected.size} employees?`)) return;
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const userId of selected) {
+        try {
+          const payload = {};
+          if (selectedField?.type === 'number') payload[field] = parseInt(value);
+          else payload[field] = value;
+          await api.put(`/users/${userId}/profile`, payload);
+          successCount++;
+        } catch {
+          errorCount++;
+        }
+      }
+      await execute(() => Promise.resolve({ data: { successCount, errorCount } }),
+        `Updated ${successCount} employees${errorCount > 0 ? `, ${errorCount} failed` : ''}`
+      );
+      if (successCount > 0) onDone();
+    } catch {
+      // handled by useApi
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Edit3 className="w-5 h-5 text-indigo-600" />
+            Bulk Update Employees
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5 text-slate-400" /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {error && <AlertMessage type="error" message={error} />}
+          {success && <AlertMessage type="success" message={success} />}
+
+          {/* Field + Value */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Field to Update</label>
+              <select value={field} onChange={e => { setField(e.target.value); setValue(''); }}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                <option value="">Select field...</option>
+                {BULK_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">New Value</label>
+              {selectedField?.type === 'select' ? (
+                <select value={value} onChange={e => setValue(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  <option value="">Select value...</option>
+                  {selectedField.options.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                </select>
+              ) : selectedField?.type === 'date' ? (
+                <input type="date" value={value} onChange={e => setValue(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              ) : selectedField?.type === 'number' ? (
+                <input type="number" value={value} onChange={e => setValue(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              ) : (
+                <input type="text" value={value} onChange={e => setValue(e.target.value)} placeholder="Enter value..."
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              )}
+            </div>
+          </div>
+
+          {/* Employee selection */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-600 uppercase">Select Employees ({selected.size} selected)</span>
+              <div className="flex items-center gap-2">
+                <input type="text" value={bulkSearch} onChange={e => setBulkSearch(e.target.value)}
+                  placeholder="Search..." className="border border-slate-200 rounded px-2 py-1 text-xs w-32" />
+                <button onClick={handleSelectAll} className="text-xs text-blue-600 hover:underline">
+                  {selectAll ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+            </div>
+            <div className="border border-slate-200 rounded-lg max-h-[300px] overflow-y-auto">
+              {filteredEmps.map(emp => (
+                <label key={emp.id}
+                  className={`flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-50 ${selected.has(emp.id) ? 'bg-blue-50' : ''}`}>
+                  <input type="checkbox" checked={selected.has(emp.id)} onChange={() => toggleSelect(emp.id)}
+                    className="rounded border-slate-300 text-blue-600" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-700">{emp.name}</span>
+                    <span className="text-xs text-slate-400 ml-2">{emp.employeeId} · {emp.department}</span>
+                  </div>
+                  {field && (
+                    <span className="text-xs text-slate-400 truncate max-w-[120px]">
+                      Current: {emp[field] || '—'}
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+            <button onClick={handleBulkUpdate} disabled={loading || !field || !value || selected.size === 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Update {selected.size} employees
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════
 export default function EmployeeDirectory() {
+  const { user: authUser } = useAuth();
+  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'sub_admin' || authUser?.role === 'team_lead';
+
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -24,36 +529,80 @@ export default function EmployeeDirectory() {
   const [company, setCompany] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
   const [loading, setLoading] = useState(true);
+  const [showImport, setShowImport] = useState(false);
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [empRes, deptRes] = await Promise.all([
+        api.get('/users/directory', { params: { search, department, company } }),
+        api.get('/users/departments'),
+      ]);
+      setEmployees(empRes.data.users || empRes.data);
+      setDepartments(deptRes.data);
+    } catch (err) {
+      console.error('Directory error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [search, department, company]);
 
   useEffect(() => {
     api.get('/companies').then((r) => setCompanies(r.data)).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [empRes, deptRes] = await Promise.all([
-          api.get('/users/directory', { params: { search, department, company } }),
-          api.get('/users/departments'),
-        ]);
-        setEmployees(empRes.data.users || empRes.data);
-        setDepartments(deptRes.data);
-      } catch (err) {
-        console.error('Directory error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [search, department, company]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/users/export', { params: { activeOnly: 'true', department, company } });
+      const data = res.data;
+      const headers = EXPORT_FIELDS.map(f => f.label);
+      const rows = data.map(emp => EXPORT_FIELDS.map(f => {
+        if (f.key === 'reportingManager') return emp.reportingManager?.name || '';
+        if (f.key === 'company') return emp.company?.shortName || emp.company?.name || '';
+        if (f.key === 'isActive') return emp.isActive ? 'Yes' : 'No';
+        return emp[f.key] ?? '';
+      }));
+      downloadCSV(`employees-export-${new Date().toISOString().split('T')[0]}.csv`, headers, rows);
+    } catch (err) {
+      console.error('Export error:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-        <Users className="w-6 h-6 text-blue-600" />
-        Employee Directory
-        <span className="text-sm font-normal text-slate-400 ml-1">({employees.length})</span>
-      </h1>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <Users className="w-6 h-6 text-blue-600" />
+          Employee Directory
+          <span className="text-sm font-normal text-slate-400 ml-1">({employees.length})</span>
+        </h1>
+
+        {/* Admin Actions */}
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <button onClick={handleExport} disabled={exporting}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Export CSV
+            </button>
+            <button onClick={() => setShowImport(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
+              <Upload className="w-3.5 h-3.5" /> Import
+            </button>
+            <button onClick={() => setShowBulkUpdate(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-colors">
+              <Edit3 className="w-3.5 h-3.5" /> Bulk Update
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -105,9 +654,7 @@ export default function EmployeeDirectory() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-        </div>
+        <LoadingSpinner />
       ) : employees.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
           <Users className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -215,6 +762,10 @@ export default function EmployeeDirectory() {
           </table>
         </div>
       )}
+
+      {/* Modals */}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onDone={fetchData} />}
+      {showBulkUpdate && <BulkUpdateModal employees={employees} onClose={() => setShowBulkUpdate(false)} onDone={fetchData} />}
     </div>
   );
 }

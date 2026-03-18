@@ -113,6 +113,37 @@ router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHan
 // Employee Directory & Profile (HR)
 // ═══════════════════════════════════════════════
 
+// GET /api/users/export — Export all employee data (admin only)
+router.get('/export', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const where = {};
+  if (req.query.activeOnly === 'true') where.isActive = true;
+  if (req.query.department && req.query.department !== 'all') where.department = req.query.department;
+  if (req.query.company && req.query.company !== 'all') where.companyId = parseInt(req.query.company);
+
+  const employees = await req.prisma.user.findMany({
+    where,
+    select: {
+      id: true, employeeId: true, name: true, email: true, role: true,
+      department: true, designation: true, dateOfJoining: true, dateOfBirth: true,
+      employmentType: true, employmentStatus: true, phone: true, personalEmail: true,
+      gender: true, bloodGroup: true, maritalStatus: true, nationality: true,
+      fatherName: true, spouseName: true, religion: true, placeOfBirth: true,
+      address: true, permanentAddress: true,
+      aadhaarNumber: true, panNumber: true, passportNumber: true, passportExpiry: true,
+      drivingLicense: true, uanNumber: true,
+      bankName: true, bankAccountNumber: true, bankBranch: true, bankIfscCode: true,
+      confirmationDate: true, confirmationStatus: true, probationEndDate: true,
+      noticePeriodDays: true, previousExperience: true, location: true, grade: true, shift: true,
+      isActive: true, emergencyContact: true,
+      reportingManager: { select: { name: true, employeeId: true } },
+      company: { select: { name: true, shortName: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  res.json(employees);
+}));
+
 // GET /api/users/directory — Employee directory (all active users, public fields)
 router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const where = { isActive: true };
