@@ -15,6 +15,10 @@ const {
   getPendingRequests,
   initializeFYBalances,
   getAllBalances,
+  grantLeave,
+  getLeaveGrants,
+  deleteLeaveGrant,
+  calendarToFYMonth,
 } = require('../services/leave/leaveService');
 const { notifyUsers } = require('../utils/notify');
 
@@ -247,6 +251,114 @@ router.put('/admin/types/:id', requireAdmin, asyncHandler(async (req, res) => {
 
   const updated = await req.prisma.leaveType.update({ where: { id }, data });
   res.json(updated);
+}));
+
+// ─── Leave Granter (Admin) ─────────────────────────────
+
+// GET /api/leave/admin/grants?year=2025 — List all leave grants
+router.get('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
+  const fyYear = parseInt(req.query.year) || getFinancialYear();
+  const grants = await getLeaveGrants(fyYear, req.prisma);
+  res.json(grants);
+}));
+
+// POST /api/leave/admin/grants — Grant leave to an employee
+router.post('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'leaveTypeId', 'fyYear', 'totalGranted');
+  const grant = await grantLeave(req.user.id, {
+    userId: parseInt(req.body.userId),
+    leaveTypeId: parseInt(req.body.leaveTypeId),
+    fyYear: parseInt(req.body.fyYear),
+    totalGranted: parseFloat(req.body.totalGranted),
+    probationAllowance: req.body.probationAllowance !== undefined ? parseFloat(req.body.probationAllowance) : 1,
+    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
+    notes: req.body.notes || null,
+  }, req.prisma);
+  res.status(201).json(grant);
+}));
+
+// DELETE /api/leave/admin/grants/:id — Remove a leave grant
+router.delete('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const result = await deleteLeaveGrant(id, req.prisma);
+  res.json(result);
+}));
+
+// GET /api/leave/admin/employees-for-grant?year=2025 — Employees without grants for this FY
+router.get('/admin/employees-for-grant', requireAdmin, asyncHandler(async (req, res) => {
+  const fyYear = parseInt(req.query.year) || getFinancialYear();
+
+  const users = await req.prisma.user.findMany({
+    where: { isActive: true },
+    select: {
+      id: true, name: true, employeeId: true, department: true,
+      dateOfJoining: true, confirmationDate: true, confirmationStatus: true, probationEndDate: true,
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  // Get existing grants for this FY
+  const existingGrants = await req.prisma.leaveGranter.findMany({
+    where: { fyYear },
+    select: { userId: true, leaveTypeId: true },
+  });
+
+  const grantSet = new Set(existingGrants.map(g => `${g.userId}-${g.leaveTypeId}`));
+
+  // Calculate suggested values for mid-year joiners
+  const enriched = users.map(u => {
+    let suggestedJoiningMonth = null;
+    let suggestedTotal = 12;
+    let onProbation = false;
+
+    if (u.dateOfJoining) {
+      const joinDate = new Date(u.dateOfJoining);
+      const joinCalMonth = joinDate.getMonth(); // 0-indexed
+      const joinCalYear = joinDate.getFullYear();
+      const joinFY = joinCalMonth >= 3 ? joinCalYear : joinCalYear - 1;
+
+      if (joinFY === fyYear) {
+        // Joined in this FY — pro-rate
+        suggestedJoiningMonth = calendarToFYMonth(joinCalMonth, joinCalYear, fyYear);
+        suggestedTotal = Math.max(12 - (suggestedJoiningMonth - 1), 0);
+      }
+
+      // Check probation (6 months from joining)
+      const today = new Date(Date.now() + 330 * 60 * 1000);
+      const sixMonths = new Date(joinDate);
+      sixMonths.setMonth(sixMonths.getMonth() + 6);
+      if (today < sixMonths && u.confirmationStatus !== 'confirmed' && !u.confirmationDate) {
+        onProbation = true;
+      }
+    }
+
+    if (u.probationEndDate) {
+      const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+      if (u.probationEndDate > today && u.confirmationStatus !== 'confirmed') {
+        onProbation = true;
+      }
+    }
+
+    return {
+      ...u,
+      suggestedJoiningMonth,
+      suggestedTotal,
+      onProbation,
+      hasGrant: (leaveTypeId) => grantSet.has(`${u.id}-${leaveTypeId}`),
+    };
+  });
+
+  // Serialize hasGrant results for all active leave types
+  const leaveTypes = await req.prisma.leaveType.findMany({ where: { isActive: true } });
+  const result = enriched.map(u => {
+    const grants = {};
+    for (const lt of leaveTypes) {
+      grants[lt.id] = grantSet.has(`${u.id}-${lt.id}`);
+    }
+    return { ...u, hasGrant: undefined, existingGrants: grants };
+  });
+
+  res.json({ employees: result, leaveTypes });
 }));
 
 // GET /api/leave/team-calendar?month=2026-03 — Team leave calendar

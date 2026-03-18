@@ -123,6 +123,8 @@ model User {
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
   leaveBalances      LeaveBalance[]
+  leaveGrantsReceived LeaveGranter[]  @relation("LeaveGranterUser")
+  leaveGrantsGiven    LeaveGranter[]  @relation("LeaveGranterAdmin")
   documents          EmployeeDocument[]
   educations         Education[]
   familyMembers      FamilyMember[]
@@ -427,6 +429,7 @@ model LeaveType {
 
   balances LeaveBalance[]
   requests LeaveRequest[]
+  granters LeaveGranter[]
 }
 
 model LeaveBalance {
@@ -438,11 +441,33 @@ model LeaveBalance {
   total       Float @default(0)                 // annual entitlement (e.g., 12)
   used        Float @default(0)                 // consumed (approved leaves)
   balance     Float @default(0)                 // available = opening + credited - used (kept in sync)
+  probationAllowance Float?                     // leaves usable during probation (e.g., 1). null = no restriction
+  joiningMonth       Int?                       // 1-12 (FY month employee joined, for pro-rated accrual)
 
   user      User      @relation(fields: [userId], references: [id])
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
 
   @@unique([userId, leaveTypeId, year])
+}
+
+model LeaveGranter {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  leaveTypeId Int
+  fyYear      Int                               // financial year start year
+  totalGranted Float                            // total leaves granted for this FY (e.g., 6 for mid-year joiner)
+  probationAllowance Float @default(1)          // usable during probation period (e.g., 1)
+  joiningMonth Int?                             // FY month of joining (1=Apr, 12=Mar). null = full year
+  notes       String?                           // admin notes
+  grantedBy   Int                               // admin userId who granted
+  grantedAt   DateTime @default(now())
+
+  user      User      @relation("LeaveGranterUser", fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+  granter   User      @relation("LeaveGranterAdmin", fields: [grantedBy], references: [id])
+
+  @@unique([userId, leaveTypeId, fyYear])
+  @@index([userId])
 }
 
 model LeaveRequest {

@@ -15,6 +15,7 @@ const TeamAttendance = lazy(() => import('./components/attendance/TeamAttendance
 const EmployeeCalendarRoute = lazy(() => import('./components/attendance/EmployeeCalendarRoute'));
 const MyLeave = lazy(() => import('./components/leave/MyLeave'));
 const LeaveApproval = lazy(() => import('./components/leave/LeaveApproval'));
+const LeaveGranter = lazy(() => import('./components/leave/LeaveGranter'));
 const EmployeeDirectory = lazy(() => import('./components/employees/EmployeeDirectory'));
 const EmployeeProfile = lazy(() => import('./components/employees/EmployeeProfile'));
 const TeamManagement = lazy(() => import('./components/admin/TeamManagement'));
@@ -183,6 +184,7 @@ function AppRoutes() {
                   <Route path="/admin/attendance/calendar" element={<SeparatedRoute><AdminRoute><AttendanceCalendarSearch /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/attendance/:userId" element={<SeparatedRoute><AdminRoute><EmployeeCalendarRoute /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/leave-requests" element={<SeparatedRoute><AdminRoute><LeaveApproval /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/leave-granter" element={<SeparatedRoute><AdminRoute><LeaveGranter /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/expense-claims" element={<SeparatedRoute><AdminRoute><ExpenseApproval /></AdminRoute></SeparatedRoute>} />
 
                   {/* Admin-only routes */}

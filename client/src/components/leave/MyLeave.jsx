@@ -7,7 +7,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import {
   CalendarOff, Plus, Clock, CheckCircle2, XCircle, Ban, Trash2,
-  ChevronLeft, ChevronRight, TrendingUp, Calendar, Info,
+  ChevronLeft, ChevronRight, TrendingUp, Calendar, Info, Lock, Shield,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -120,9 +120,11 @@ export default function MyLeave() {
       {/* Balance Cards — greytHR style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {balances.map((b) => {
-          const pct = b.total > 0 ? Math.min((b.used / (b.opening + b.credited)) * 100, 100) : 0;
+          const totalPool = b.opening + b.credited;
+          const pct = totalPool > 0 ? Math.min((b.used / totalPool) * 100, 100) : 0;
+          const hasFrozen = b.onProbation && b.frozenBalance > 0;
           return (
-            <div key={b.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div key={b.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${hasFrozen ? 'border-amber-200' : 'border-slate-200'}`}>
               {/* Card header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -131,12 +133,20 @@ export default function MyLeave() {
                   </span>
                   <h3 className="text-sm font-semibold text-slate-700">{b.leaveType.name}</h3>
                 </div>
-                {b.leaveType.accrualType === 'monthly' && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />
-                    Monthly
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {b.leaveType.accrualType === 'monthly' && (
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3" />
+                      Monthly
+                    </span>
+                  )}
+                  {b.onProbation && b.probationAllowance !== null && (
+                    <span className="text-[10px] text-amber-600 flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded">
+                      <Shield className="w-3 h-3" />
+                      Probation
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Balance display */}
@@ -145,6 +155,16 @@ export default function MyLeave() {
                   <span className="text-3xl font-bold text-blue-600">{b.available}</span>
                   <span className="text-sm text-slate-400">days available</span>
                 </div>
+
+                {/* Frozen balance notice */}
+                {hasFrozen && (
+                  <div className="flex items-center gap-1.5 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-xs text-amber-700">
+                      <strong>{b.frozenBalance}</strong> leaves frozen until confirmation
+                    </span>
+                  </div>
+                )}
 
                 {/* Progress bar */}
                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-3">
@@ -155,7 +175,7 @@ export default function MyLeave() {
                 </div>
 
                 {/* Breakdown — greytHR style */}
-                <div className="grid grid-cols-4 gap-1 text-center">
+                <div className={`grid gap-1 text-center ${hasFrozen ? 'grid-cols-5' : 'grid-cols-4'}`}>
                   <div className="bg-slate-50 rounded-lg py-1.5 px-1">
                     <p className="text-[10px] text-slate-400 uppercase font-medium">Opening</p>
                     <p className="text-sm font-bold text-slate-700">{b.opening}</p>
@@ -168,6 +188,12 @@ export default function MyLeave() {
                     <p className="text-[10px] text-red-400 uppercase font-medium">Availed</p>
                     <p className="text-sm font-bold text-red-600">{b.used}</p>
                   </div>
+                  {hasFrozen && (
+                    <div className="bg-amber-50 rounded-lg py-1.5 px-1">
+                      <p className="text-[10px] text-amber-500 uppercase font-medium">Frozen</p>
+                      <p className="text-sm font-bold text-amber-600">{b.frozenBalance}</p>
+                    </div>
+                  )}
                   <div className="bg-blue-50 rounded-lg py-1.5 px-1">
                     <p className="text-[10px] text-blue-400 uppercase font-medium">Balance</p>
                     <p className="text-sm font-bold text-blue-700">{b.available}</p>
@@ -190,10 +216,18 @@ export default function MyLeave() {
       {balances.some(b => b.leaveType.accrualType === 'monthly') && (
         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
           <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-blue-700">
-            <strong>Monthly accrual:</strong> 1 leave is added to your balance on the 1st of every month.
-            {getFYLabel(fyYear)} runs from April {fyYear} to March {fyYear + 1}.
-          </p>
+          <div className="text-xs text-blue-700">
+            <p>
+              <strong>Monthly accrual:</strong> 1 leave is added to your balance on the 1st of every month.
+              {getFYLabel(fyYear)} runs from April {fyYear} to March {fyYear + 1}.
+            </p>
+            {balances.some(b => b.onProbation && b.probationAllowance !== null) && (
+              <p className="mt-1 text-amber-700">
+                <strong>Probation:</strong> You are on probation. Only {balances.find(b => b.onProbation)?.probationAllowance || 1} leave(s)
+                can be used during probation. Remaining accrued leaves will be unlocked after confirmation.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

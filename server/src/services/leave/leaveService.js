@@ -1,13 +1,14 @@
 // ═══════════════════════════════════════════════
 // Leave Management Service — Financial Year, Monthly Accrual (Bucket System)
 // FY: April 1 to March 31 | Privilege Leave: 12/year, 1/month bucket
+// Probation: Leaves accrue monthly but are FROZEN until confirmation.
+//   During probation, only `probationAllowance` (default 1) is usable.
+//   After confirmation, all accrued past-month leaves become available instantly.
 // ═══════════════════════════════════════════════
 
 /**
  * Get the financial year start year for a given date
  * FY runs April 1 to March 31
- * e.g., March 2026 → FY 2025 (Apr 2025 - Mar 2026)
- *       June 2026 → FY 2026 (Apr 2026 - Mar 2027)
  */
 function getFinancialYear(dateStr) {
   const d = dateStr ? new Date(dateStr) : new Date(Date.now() + 330 * 60 * 1000);
@@ -16,9 +17,6 @@ function getFinancialYear(dateStr) {
   return month >= 3 ? year : year - 1;
 }
 
-/**
- * Get FY date range
- */
 function getFYRange(fyYear) {
   return {
     start: `${fyYear}-04-01`,
@@ -26,77 +24,131 @@ function getFYRange(fyYear) {
   };
 }
 
-/**
- * Get FY label like "2025-26"
- */
 function getFYLabel(fyYear) {
   return `${fyYear}-${String(fyYear + 1).slice(2)}`;
 }
 
 /**
+ * Convert a calendar month (0-11) + year to FY month (1-12)
+ * April = 1, May = 2, ..., March = 12
+ */
+function calendarToFYMonth(calMonth, calYear, fyYear) {
+  if (calYear === fyYear && calMonth >= 3) {
+    return calMonth - 3 + 1; // Apr=1, May=2, ..., Dec=9
+  } else if (calYear === fyYear + 1 && calMonth < 3) {
+    return 9 + calMonth + 1; // Jan=10, Feb=11, Mar=12
+  }
+  return calMonth >= 3 ? calMonth - 3 + 1 : 9 + calMonth + 1;
+}
+
+/**
  * Calculate months elapsed in a financial year (for monthly accrual)
  * April = month 1, March = month 12
+ * If joiningMonth is provided, only count from joining month onwards
  */
-function getMonthsElapsed(fyYear) {
+function getMonthsElapsed(fyYear, joiningMonth) {
   const now = new Date(Date.now() + 330 * 60 * 1000); // IST
   const currentMonth = now.getMonth(); // 0-indexed
   const currentYear = now.getFullYear();
 
   let months;
   if (currentYear === fyYear && currentMonth >= 3) {
-    // Same year, April onwards: Apr(3)=1, May(4)=2, ..., Dec(11)=9
     months = currentMonth - 3 + 1;
   } else if (currentYear === fyYear + 1 && currentMonth < 3) {
-    // Next year, Jan-Mar: Jan(0)=10, Feb(1)=11, Mar(2)=12
     months = 9 + currentMonth + 1;
   } else if (currentYear > fyYear + 1 || (currentYear === fyYear + 1 && currentMonth >= 3)) {
-    months = 12; // FY fully elapsed
+    months = 12;
   } else {
-    months = 0; // Future FY
+    months = 0;
   }
 
-  return Math.min(months, 12);
+  months = Math.min(months, 12);
+
+  // If employee joined mid-year, only credit from their joining month
+  if (joiningMonth && joiningMonth > 1) {
+    months = Math.max(months - (joiningMonth - 1), 0);
+  }
+
+  return months;
 }
 
 /**
  * Calculate credited leaves based on accrual type
  */
-function calculateCredited(leaveType, fyYear) {
+function calculateCredited(leaveType, fyYear, joiningMonth) {
   if (leaveType.accrualType === 'yearly' || leaveType.accrualType === 'none') {
-    return leaveType.defaultBalance; // All at once
+    return leaveType.defaultBalance;
   }
-  // Monthly bucket: 1 per month
-  const monthsElapsed = getMonthsElapsed(fyYear);
-  return Math.min(monthsElapsed * (leaveType.accrualAmount || 1), leaveType.defaultBalance);
+  // Monthly bucket: 1 per month (pro-rated for mid-year joiners)
+  const monthsElapsed = getMonthsElapsed(fyYear, joiningMonth || null);
+  const maxBalance = joiningMonth
+    ? Math.max(12 - (joiningMonth - 1), 0) * (leaveType.accrualAmount || 1)
+    : leaveType.defaultBalance;
+  return Math.min(monthsElapsed * (leaveType.accrualAmount || 1), maxBalance);
 }
 
 /**
- * Calculate available balance = opening + credited - used
+ * Check if user is on probation
  */
-function calculateAvailable(balance, leaveType, fyYear) {
-  const credited = calculateCredited(leaveType, fyYear);
-  return (balance.opening || 0) + credited - (balance.used || 0);
+function isOnProbation(user) {
+  if (!user) return false;
+  // Confirmed users are NOT on probation
+  if (user.confirmationStatus === 'confirmed') return false;
+  if (user.confirmationDate) return false; // has confirmation date = confirmed
+
+  // If probation end date exists and is in the future → on probation
+  if (user.probationEndDate) {
+    const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+    return user.probationEndDate > today;
+  }
+
+  // If dateOfJoining exists, check if within 6 months
+  if (user.dateOfJoining) {
+    const today = new Date(Date.now() + 330 * 60 * 1000);
+    const joinDate = new Date(user.dateOfJoining);
+    const sixMonthsLater = new Date(joinDate);
+    sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+    return today < sixMonthsLater;
+  }
+
+  return false;
+}
+
+/**
+ * Get usable balance considering probation
+ * During probation: min(probationAllowance, credited) - used
+ * After confirmation: opening + credited - used (normal)
+ */
+function calculateAvailableWithProbation(balance, leaveType, fyYear, user) {
+  const joiningMonth = balance.joiningMonth || null;
+  const credited = calculateCredited(leaveType, fyYear, joiningMonth);
+  const totalPool = (balance.opening || 0) + credited;
+  const onProbation = isOnProbation(user);
+
+  if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
+    // During probation: can only use up to probationAllowance
+    const usable = Math.min(balance.probationAllowance, totalPool);
+    return Math.max(usable - balance.used, 0);
+  }
+
+  // Normal (confirmed or no restriction)
+  return Math.max(totalPool - balance.used, 0);
 }
 
 /**
  * Calculate business days between two dates, excluding weekends and holidays
  */
 async function calculateLeaveDays(startDate, endDate, session, prisma) {
-  // Single day with half-day session
   if (startDate === endDate && (session === 'first_half' || session === 'second_half')) {
-    // Check if it's a weekend or holiday
     const d = new Date(startDate);
     if (d.getDay() === 0 || d.getDay() === 6) return 0;
-    const isHoliday = await prisma.holiday.findFirst({
-      where: { date: startDate },
-    });
+    const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate } });
     if (isHoliday) return 0;
     return 0.5;
   }
 
   const start = new Date(startDate);
   const end = new Date(endDate);
-
   const holidays = await prisma.holiday.findMany({
     where: { date: { gte: startDate, lte: endDate } },
     select: { date: true },
@@ -118,7 +170,7 @@ async function calculateLeaveDays(startDate, endDate, session, prisma) {
 }
 
 /**
- * Ensure LeaveBalance record exists for user+type+FY, auto-initialize if missing
+ * Ensure LeaveBalance record exists for user+type+FY
  */
 async function ensureBalance(userId, leaveTypeId, fyYear, prisma) {
   let balance = await prisma.leaveBalance.findUnique({
@@ -127,9 +179,13 @@ async function ensureBalance(userId, leaveTypeId, fyYear, prisma) {
   });
 
   if (!balance) {
-    // Auto-create balance for this FY
     const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
     if (!leaveType) return null;
+
+    // Check if there's a grant for this user+type+FY
+    const grant = await prisma.leaveGranter.findUnique({
+      where: { userId_leaveTypeId_fyYear: { userId, leaveTypeId, fyYear } },
+    });
 
     // Check carry forward from previous FY
     let opening = 0;
@@ -139,7 +195,7 @@ async function ensureBalance(userId, leaveTypeId, fyYear, prisma) {
         include: { leaveType: true },
       });
       if (prevBalance) {
-        const prevCredited = calculateCredited(leaveType, fyYear - 1);
+        const prevCredited = calculateCredited(leaveType, fyYear - 1, prevBalance.joiningMonth);
         const prevAvailable = (prevBalance.opening || 0) + prevCredited - prevBalance.used;
         opening = Math.min(Math.max(prevAvailable, 0), leaveType.maxCarryForward || 0);
       }
@@ -151,9 +207,11 @@ async function ensureBalance(userId, leaveTypeId, fyYear, prisma) {
         leaveTypeId,
         year: fyYear,
         opening,
-        total: leaveType.defaultBalance,
+        total: grant ? grant.totalGranted : leaveType.defaultBalance,
         used: 0,
-        balance: opening, // Will be recalculated dynamically
+        balance: opening,
+        probationAllowance: grant ? grant.probationAllowance : null,
+        joiningMonth: grant ? grant.joiningMonth : null,
       },
       include: { leaveType: true },
     });
@@ -164,7 +222,6 @@ async function ensureBalance(userId, leaveTypeId, fyYear, prisma) {
 
 /**
  * Get leave balances for a user in a financial year
- * Returns balance cards with opening, credited, used, available
  */
 async function getLeaveBalance(userId, fyYear, prisma) {
   const leaveTypes = await prisma.leaveType.findMany({
@@ -172,13 +229,41 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     orderBy: { name: 'asc' },
   });
 
+  // Fetch user for probation check
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, dateOfJoining: true, confirmationDate: true,
+      confirmationStatus: true, probationEndDate: true,
+    },
+  });
+
+  const onProbation = isOnProbation(user);
+
   const balances = [];
   for (const lt of leaveTypes) {
     const bal = await ensureBalance(userId, lt.id, fyYear, prisma);
     if (!bal) continue;
 
-    const credited = calculateCredited(lt, fyYear);
-    const available = (bal.opening || 0) + credited - bal.used;
+    const joiningMonth = bal.joiningMonth || null;
+    const credited = calculateCredited(lt, fyYear, joiningMonth);
+    const totalPool = (bal.opening || 0) + credited;
+
+    // Calculate available based on probation status
+    let available;
+    let frozenBalance = 0;
+    if (onProbation && bal.probationAllowance !== null && bal.probationAllowance !== undefined) {
+      const usable = Math.min(bal.probationAllowance, totalPool);
+      available = Math.max(usable - bal.used, 0);
+      frozenBalance = Math.max(totalPool - bal.probationAllowance - bal.used, 0);
+    } else {
+      available = Math.max(totalPool - bal.used, 0);
+    }
+
+    // Calculate max possible for this FY (for mid-year joiners)
+    const maxEntitlement = joiningMonth
+      ? Math.max(12 - (joiningMonth - 1), 0) * (lt.accrualAmount || 1)
+      : lt.defaultBalance;
 
     balances.push({
       id: bal.id,
@@ -189,7 +274,12 @@ async function getLeaveBalance(userId, fyYear, prisma) {
       credited,
       total: bal.total,
       used: bal.used,
-      available: Math.max(available, 0),
+      available,
+      frozenBalance,       // leaves accrued but locked during probation
+      onProbation,
+      probationAllowance: bal.probationAllowance,
+      joiningMonth,
+      maxEntitlement,
       leaveType: { id: lt.id, name: lt.name, code: lt.code, accrualType: lt.accrualType },
       fyLabel: getFYLabel(fyYear),
     });
@@ -204,8 +294,7 @@ async function getLeaveBalance(userId, fyYear, prisma) {
 async function applyLeave(userId, data, prisma) {
   const { leaveTypeId, startDate, endDate, session, reason } = data;
 
-  // Validate dates
-  const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0]; // IST
+  const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
   if (startDate < today) {
     throw new Error('Cannot apply for leave on past dates.');
   }
@@ -213,7 +302,6 @@ async function applyLeave(userId, data, prisma) {
     throw new Error('End date must be on or after start date.');
   }
 
-  // Validate leave type
   const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
   if (!leaveType || !leaveType.isActive) {
     throw new Error('Invalid leave type.');
@@ -231,7 +319,6 @@ async function applyLeave(userId, data, prisma) {
     throw new Error('You already have a leave request overlapping with these dates.');
   }
 
-  // Calculate days
   const effectiveSession = session || 'full_day';
   const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma);
   if (days <= 0) {
@@ -245,21 +332,47 @@ async function applyLeave(userId, data, prisma) {
     throw new Error('Leave balance not found.');
   }
 
-  const credited = calculateCredited(leaveType, fyYear);
-  const available = (balance.opening || 0) + credited - balance.used;
+  // Fetch user for probation check
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, name: true, dateOfJoining: true, confirmationDate: true,
+      confirmationStatus: true, probationEndDate: true,
+    },
+  });
 
-  if (available < days) {
-    throw new Error(
-      `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
-    );
+  const joiningMonth = balance.joiningMonth || null;
+  const credited = calculateCredited(leaveType, fyYear, joiningMonth);
+  const totalPool = (balance.opening || 0) + credited;
+  const onProbation = isOnProbation(user);
+
+  let available;
+  if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
+    // During probation: only probationAllowance is usable
+    const usable = Math.min(balance.probationAllowance, totalPool);
+    available = Math.max(usable - balance.used, 0);
+
+    if (available < days) {
+      const probEndStr = user.probationEndDate || 'confirmation';
+      throw new Error(
+        `You are on probation. Only ${balance.probationAllowance} ${leaveType.name} leave(s) can be used during probation. ` +
+        `Available: ${available.toFixed(1)}, Requested: ${days}. ` +
+        `Remaining leaves will be unlocked after ${probEndStr}.`
+      );
+    }
+  } else {
+    available = Math.max(totalPool - balance.used, 0);
+    if (available < days) {
+      throw new Error(
+        `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
+      );
+    }
   }
 
-  // Validate reason
   if (!reason || reason.trim().length < 5) {
     throw new Error('Please provide a reason (minimum 5 characters).');
   }
 
-  // Create request
   const request = await prisma.leaveRequest.create({
     data: {
       userId,
@@ -316,7 +429,7 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
     const fyYear = getFinancialYear(request.startDate);
     const balance = await ensureBalance(request.userId, request.leaveTypeId, fyYear, prisma);
     if (balance) {
-      const credited = calculateCredited(request.leaveType, fyYear);
+      const credited = calculateCredited(request.leaveType, fyYear, balance.joiningMonth);
       const newUsed = balance.used + request.days;
       const newAvailable = (balance.opening || 0) + credited - newUsed;
       await prisma.leaveBalance.update({
@@ -354,12 +467,11 @@ async function cancelLeave(requestId, userId, prisma) {
     data: { status: 'cancelled' },
   });
 
-  // Restore balance if was approved
   if (wasApproved) {
     const fyYear = getFinancialYear(request.startDate);
     const balance = await ensureBalance(request.userId, request.leaveTypeId, fyYear, prisma);
     if (balance) {
-      const credited = calculateCredited(request.leaveType, fyYear);
+      const credited = calculateCredited(request.leaveType, fyYear, balance.joiningMonth);
       const newUsed = balance.used - request.days;
       const newAvailable = (balance.opening || 0) + credited - newUsed;
       await prisma.leaveBalance.update({
@@ -455,23 +567,156 @@ async function getAllBalances(fyYear, department, prisma) {
       user: userWhere,
     },
     include: {
-      user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } },
+      user: {
+        select: {
+          id: true, name: true, employeeId: true, department: true, designation: true,
+          dateOfJoining: true, confirmationDate: true, confirmationStatus: true, probationEndDate: true,
+        },
+      },
       leaveType: { select: { id: true, name: true, code: true, accrualType: true, accrualAmount: true, defaultBalance: true } },
     },
     orderBy: [{ user: { name: 'asc' } }, { leaveType: { name: 'asc' } }],
   });
 
-  // Enrich with credited/available calculations
   return balances.map((b) => {
-    const credited = calculateCredited(b.leaveType, fyYear);
-    const available = (b.opening || 0) + credited - b.used;
+    const joiningMonth = b.joiningMonth || null;
+    const credited = calculateCredited(b.leaveType, fyYear, joiningMonth);
+    const onProbation = isOnProbation(b.user);
+    const totalPool = (b.opening || 0) + credited;
+    let available;
+    if (onProbation && b.probationAllowance !== null && b.probationAllowance !== undefined) {
+      available = Math.max(Math.min(b.probationAllowance, totalPool) - b.used, 0);
+    } else {
+      available = Math.max(totalPool - b.used, 0);
+    }
     return {
       ...b,
       credited,
-      available: Math.max(available, 0),
+      available,
+      onProbation,
       fyLabel: getFYLabel(fyYear),
     };
   });
+}
+
+/**
+ * Admin: Grant leave to an employee (Leave Granter)
+ */
+async function grantLeave(adminId, data, prisma) {
+  const { userId, leaveTypeId, fyYear, totalGranted, probationAllowance, joiningMonth, notes } = data;
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
+  if (!user) throw new Error('Employee not found.');
+
+  const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
+  if (!leaveType || !leaveType.isActive) throw new Error('Invalid leave type.');
+
+  // Upsert the grant record
+  const grant = await prisma.leaveGranter.upsert({
+    where: { userId_leaveTypeId_fyYear: { userId, leaveTypeId, fyYear } },
+    update: {
+      totalGranted,
+      probationAllowance: probationAllowance ?? 1,
+      joiningMonth: joiningMonth || null,
+      notes: notes || null,
+      grantedBy: adminId,
+      grantedAt: new Date(),
+    },
+    create: {
+      userId,
+      leaveTypeId,
+      fyYear,
+      totalGranted,
+      probationAllowance: probationAllowance ?? 1,
+      joiningMonth: joiningMonth || null,
+      notes: notes || null,
+      grantedBy: adminId,
+    },
+    include: {
+      user: { select: { name: true, employeeId: true } },
+      leaveType: { select: { name: true, code: true } },
+      granter: { select: { name: true } },
+    },
+  });
+
+  // Update the corresponding LeaveBalance
+  const balance = await prisma.leaveBalance.findUnique({
+    where: { userId_leaveTypeId_year: { userId, leaveTypeId, year: fyYear } },
+  });
+
+  if (balance) {
+    await prisma.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        total: totalGranted,
+        probationAllowance: probationAllowance ?? 1,
+        joiningMonth: joiningMonth || null,
+      },
+    });
+  } else {
+    await prisma.leaveBalance.create({
+      data: {
+        userId,
+        leaveTypeId,
+        year: fyYear,
+        opening: 0,
+        total: totalGranted,
+        used: 0,
+        balance: 0,
+        probationAllowance: probationAllowance ?? 1,
+        joiningMonth: joiningMonth || null,
+      },
+    });
+  }
+
+  return grant;
+}
+
+/**
+ * Admin: Get all leave grants for a FY
+ */
+async function getLeaveGrants(fyYear, prisma) {
+  return prisma.leaveGranter.findMany({
+    where: { fyYear },
+    include: {
+      user: {
+        select: {
+          id: true, name: true, employeeId: true, department: true,
+          dateOfJoining: true, confirmationDate: true, confirmationStatus: true, probationEndDate: true,
+        },
+      },
+      leaveType: { select: { id: true, name: true, code: true } },
+      granter: { select: { name: true } },
+    },
+    orderBy: [{ user: { name: 'asc' } }, { leaveType: { name: 'asc' } }],
+  });
+}
+
+/**
+ * Admin: Delete a leave grant
+ */
+async function deleteLeaveGrant(grantId, prisma) {
+  const grant = await prisma.leaveGranter.findUnique({ where: { id: grantId } });
+  if (!grant) throw new Error('Grant not found.');
+
+  // Reset balance to default
+  const leaveType = await prisma.leaveType.findUnique({ where: { id: grant.leaveTypeId } });
+  const balance = await prisma.leaveBalance.findUnique({
+    where: { userId_leaveTypeId_year: { userId: grant.userId, leaveTypeId: grant.leaveTypeId, year: grant.fyYear } },
+  });
+  if (balance) {
+    await prisma.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        total: leaveType?.defaultBalance || 12,
+        probationAllowance: null,
+        joiningMonth: null,
+      },
+    });
+  }
+
+  await prisma.leaveGranter.delete({ where: { id: grantId } });
+  return { message: 'Leave grant removed. Balance reset to default.' };
 }
 
 module.exports = {
@@ -490,4 +735,9 @@ module.exports = {
   getPendingRequests,
   initializeFYBalances,
   getAllBalances,
+  grantLeave,
+  getLeaveGrants,
+  deleteLeaveGrant,
+  isOnProbation,
+  calendarToFYMonth,
 };
