@@ -57,11 +57,12 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
   };
 
   const handleSave = async () => {
+    // Send all selected employees with their current field values
     const payload = updates.map(u => ({
       userId: u.userId,
-      ...(u.confirmationDate ? { confirmationDate: u.confirmationDate } : {}),
-      ...(u.probationEndDate ? { probationEndDate: u.probationEndDate } : {}),
-      ...(u.confirmationStatus ? { confirmationStatus: u.confirmationStatus } : {}),
+      confirmationDate: u.confirmationDate || null,
+      probationEndDate: u.probationEndDate || null,
+      confirmationStatus: u.confirmationStatus || null,
     })).filter(u => u.confirmationDate || u.probationEndDate || u.confirmationStatus);
 
     if (payload.length === 0) {
@@ -72,8 +73,9 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await api.put('/confirmation/bulk-update', { updates: payload });
-      onDone(`${res.data.message || res.data.results?.length + ' employee(s) updated'}`);
+      await api.put('/confirmation/bulk-update', { updates: payload });
+      // Immediately reload page to show fresh data from backend
+      window.location.reload();
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Bulk update failed.';
       setError(msg);
@@ -191,7 +193,7 @@ function ExtendModal({ employee, onClose, onDone }) {
     setError(null);
     try {
       await api.post(`/confirmation/${employee.id}/extend`, { newDueDate, reason });
-      onDone('Confirmation due date extended successfully.');
+      window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to extend confirmation.');
       setSaving(false);
@@ -260,7 +262,7 @@ function ConfirmModal({ employee, onClose, onDone }) {
     setError(null);
     try {
       await api.post(`/confirmation/${employee.id}/confirm`);
-      onDone('Employee confirmed! Benefits unlocked and insurance card created.');
+      window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to confirm employee.');
       setSaving(false);
@@ -324,11 +326,10 @@ function BulkConfirmModal({ employees, onClose, onDone }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await api.post('/confirmation/bulk-confirm', {
+      await api.post('/confirmation/bulk-confirm', {
         userIds: employees.map(e => e.id),
       });
-      const msg = `${res.data.confirmed?.length || 0} employee(s) confirmed.${res.data.errors?.length ? ` ${res.data.errors.length} error(s).` : ''}`;
-      onDone(msg);
+      window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || 'Bulk confirm failed.');
       setSaving(false);
