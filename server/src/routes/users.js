@@ -113,6 +113,40 @@ router.post('/:id/photo', authenticate, express.json({ limit: '5mb' }), asyncHan
 // Employee Directory & Profile (HR)
 // ═══════════════════════════════════════════════
 
+// POST /api/users/backfill-dates — Backfill confirmationDate & probationEndDate from DOJ + 6 months
+// Only updates records where DOJ exists but confirmationDate or probationEndDate is missing
+router.post('/backfill-dates', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const users = await req.prisma.user.findMany({
+    where: {
+      dateOfJoining: { not: null },
+      OR: [
+        { confirmationDate: null },
+        { probationEndDate: null },
+      ],
+    },
+    select: { id: true, name: true, dateOfJoining: true, confirmationDate: true, probationEndDate: true, confirmationStatus: true },
+  });
+
+  let updated = 0;
+  for (const u of users) {
+    const dojDate = new Date(u.dateOfJoining);
+    dojDate.setMonth(dojDate.getMonth() + 6);
+    const sixMonthDate = dojDate.toISOString().slice(0, 10);
+
+    const data = {};
+    if (!u.confirmationDate) data.confirmationDate = sixMonthDate;
+    if (!u.probationEndDate) data.probationEndDate = sixMonthDate;
+    if (!u.confirmationStatus) data.confirmationStatus = 'pending';
+
+    if (Object.keys(data).length > 0) {
+      await req.prisma.user.update({ where: { id: u.id }, data });
+      updated++;
+    }
+  }
+
+  res.json({ message: `Backfilled ${updated} employees`, total: users.length, updated });
+}));
+
 // GET /api/users/export — Export all employee data (admin only)
 router.get('/export', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const where = {};
@@ -291,6 +325,16 @@ router.put('/:id/profile', authenticate, asyncHandler(async (req, res) => {
 
   const oldUser = await req.prisma.user.findUnique({ where: { id: targetId } });
 
+  // Auto-calculate confirmationDate & probationEndDate when DOJ changes (DOJ + 6 months)
+  // Only auto-set if the field is NOT being explicitly set in this request
+  if (isAdmin && data.dateOfJoining && data.dateOfJoining !== oldUser?.dateOfJoining) {
+    const dojDate = new Date(data.dateOfJoining);
+    dojDate.setMonth(dojDate.getMonth() + 6);
+    const sixMonthDate = dojDate.toISOString().slice(0, 10);
+    if (req.body.confirmationDate === undefined) data.confirmationDate = sixMonthDate;
+    if (req.body.probationEndDate === undefined) data.probationEndDate = sixMonthDate;
+  }
+
   const user = await req.prisma.user.update({
     where: { id: targetId },
     data,
@@ -399,14 +443,16 @@ router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler
     employeeType,
   };
 
-  // Auto-set confirmation due date for internal employees (DOJ + 6 months)
+  // Auto-set confirmation + probation dates for employees (DOJ + 6 months)
   const doj = req.body.dateOfJoining;
-  if (employeeType === 'internal' && doj) {
+  if (doj) {
+    createData.dateOfJoining = doj;
     const dojDate = new Date(doj);
     dojDate.setMonth(dojDate.getMonth() + 6);
-    createData.confirmationDate = dojDate.toISOString().slice(0, 10);
-    createData.confirmationStatus = 'pending';
-    createData.dateOfJoining = doj;
+    const sixMonthDate = dojDate.toISOString().slice(0, 10);
+    if (!req.body.confirmationDate) createData.confirmationDate = sixMonthDate;
+    if (!req.body.probationEndDate) createData.probationEndDate = sixMonthDate;
+    if (!req.body.confirmationStatus) createData.confirmationStatus = 'pending';
   }
 
   const user = await req.prisma.user.create({ data: createData });

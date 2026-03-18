@@ -187,6 +187,15 @@ router.post('/execute', authenticate, requireAdmin, asyncHandler(async (req, res
         if (mapped[f]) { const nd = normalizeDate(mapped[f]); if (nd) data[f] = nd; }
       });
 
+      // Auto-calculate confirmationDate & probationEndDate from DOJ + 6 months (if not explicitly provided)
+      if (data.dateOfJoining) {
+        const dojDate = new Date(data.dateOfJoining);
+        dojDate.setMonth(dojDate.getMonth() + 6);
+        const sixMonthDate = dojDate.toISOString().slice(0, 10);
+        if (!data.confirmationDate) data.confirmationDate = sixMonthDate;
+        if (!data.probationEndDate) data.probationEndDate = sixMonthDate;
+      }
+
       if (mapped.employmentType) data.employmentType = normalizeEmploymentType(mapped.employmentType);
       if (mapped.employmentStatus) {
         const status = String(mapped.employmentStatus).toLowerCase().trim();
