@@ -589,8 +589,9 @@ export default function ConfirmationManager() {
     setSelectedIds(new Set());
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 5000);
+    // Always refetch BOTH lists to ensure fresh data from backend
     fetchEmployees();
-    if (tab === 'all') fetchAllEmployees();
+    fetchAllEmployees();
   };
 
   // Current data set based on tab
