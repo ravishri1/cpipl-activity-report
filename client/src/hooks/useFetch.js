@@ -21,7 +21,9 @@ export function useFetch(url, initialData = null, deps = []) {
   useEffect(() => {
     if (url) {
       state.setLoading(true);
-      state.execute(() => api.get(url)).catch(() => {});
+      // Add cache-buster to prevent stale responses on hard refresh
+      const sep = url.includes('?') ? '&' : '?';
+      state.execute(() => api.get(`${url}${sep}_t=${Date.now()}`)).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, ...deps]);

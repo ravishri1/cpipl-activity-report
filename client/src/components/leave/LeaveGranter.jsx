@@ -569,10 +569,7 @@ function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
         fyYear: importYear,
       });
       setResult(res.data);
-      // Always trigger refetch after import completes (even if some rows failed)
-      if (res.data.success > 0) {
-        setTimeout(() => onSuccess(), 1500);
-      }
+      // User clicks "Done" button to close modal and trigger refetch
     } catch (err) {
       setError(err.response?.data?.error || 'Import failed.');
     } finally {
