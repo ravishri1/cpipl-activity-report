@@ -73,9 +73,9 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
     setSaving(true);
     setError(null);
     try {
-      await api.put('/confirmation/bulk-update', { updates: payload });
-      // Immediately reload page to show fresh data from backend
-      window.location.reload();
+      const res = await api.put('/confirmation/bulk-update', { updates: payload });
+      // Pass updated results back so parent can update state without a second API call
+      onDone(`${res.data.message || 'Updated'}`, res.data.results);
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Bulk update failed.';
       setError(msg);
@@ -193,7 +193,7 @@ function ExtendModal({ employee, onClose, onDone }) {
     setError(null);
     try {
       await api.post(`/confirmation/${employee.id}/extend`, { newDueDate, reason });
-      window.location.reload();
+      onDone('Confirmation extended.');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to extend confirmation.');
       setSaving(false);
@@ -262,7 +262,7 @@ function ConfirmModal({ employee, onClose, onDone }) {
     setError(null);
     try {
       await api.post(`/confirmation/${employee.id}/confirm`);
-      window.location.reload();
+      onDone('Employee confirmed.');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to confirm employee.');
       setSaving(false);
@@ -329,7 +329,7 @@ function BulkConfirmModal({ employees, onClose, onDone }) {
       await api.post('/confirmation/bulk-confirm', {
         userIds: employees.map(e => e.id),
       });
-      window.location.reload();
+      onDone('Employees confirmed.');
     } catch (err) {
       setError(err.response?.data?.error || 'Bulk confirm failed.');
       setSaving(false);
@@ -581,9 +581,26 @@ export default function ConfirmationManager() {
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
   useEffect(() => { if (tab === 'all') fetchAllEmployees(); }, [tab, fetchAllEmployees]);
 
-  const handleDone = (msg) => {
-    // Full page reload to guarantee fresh data from backend
-    window.location.reload();
+  const handleDone = (msg, updatedResults) => {
+    // Close modals and clear selection
+    setExtendTarget(null);
+    setConfirmTarget(null);
+    setShowBulkUpdate(false);
+    setShowBulkConfirm(false);
+    setSelectedIds(new Set());
+    setSuccess(msg);
+    setTimeout(() => setSuccess(null), 5000);
+
+    // If we have updated results from bulk-update, merge into local state instantly
+    if (updatedResults && Array.isArray(updatedResults)) {
+      const updateMap = new Map(updatedResults.map(r => [r.id, r]));
+      setEmployees(prev => prev.map(e => updateMap.has(e.id) ? { ...e, ...updateMap.get(e.id) } : e));
+      setAllEmployees(prev => prev.map(e => updateMap.has(e.id) ? { ...e, ...updateMap.get(e.id) } : e));
+    }
+
+    // Background refetch to sync fully (non-blocking, no loading spinner)
+    fetchEmployees();
+    fetchAllEmployees();
   };
 
   // Current data set based on tab
