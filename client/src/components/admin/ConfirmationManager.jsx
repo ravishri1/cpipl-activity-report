@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import {
   UserCheck, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight,
-  X, Loader2, Calendar, History, User, Search, Upload, Download, Edit3,
+  X, Loader2, Calendar, History, User, Search, Edit3,
   CheckSquare, Square, MinusSquare,
 } from 'lucide-react';
 import AlertMessage from '../shared/AlertMessage';
@@ -31,18 +31,6 @@ function DueBadge({ dateStr }) {
   if (days <= 7)
     return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Due in {days}d</span>;
   return <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{days}d left</span>;
-}
-
-function downloadCSV(rows, headers, filename) {
-  const bom = '\uFEFF';
-  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ─── Bulk Update Modal ───────────────────────────────────────────────────────
@@ -179,170 +167,6 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
                        disabled:opacity-50 flex items-center gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Save All Changes
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── CSV Import Modal ────────────────────────────────────────────────────────
-function ImportModal({ onClose, onDone }) {
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleFileChange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    setFile(f);
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length < 2) { setError('CSV must have a header row and at least one data row.'); return; }
-
-        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-        const empIdIdx = headers.findIndex(h => h === 'employeeid' || h === 'employee_id' || h === 'emp_id' || h === 'id');
-        const confDateIdx = headers.findIndex(h => h === 'confirmationdate' || h === 'confirmation_date' || h === 'conf_date');
-        const probDateIdx = headers.findIndex(h => h === 'probationenddate' || h === 'probation_end_date' || h === 'probation_date');
-        const statusIdx = headers.findIndex(h => h === 'confirmationstatus' || h === 'confirmation_status' || h === 'status');
-
-        if (empIdIdx === -1) {
-          setError('CSV must have an "employeeId" column to identify employees.');
-          return;
-        }
-
-        const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-          const row = {
-            employeeId: cols[empIdIdx] || '',
-            confirmationDate: confDateIdx !== -1 ? cols[confDateIdx] || '' : '',
-            probationEndDate: probDateIdx !== -1 ? cols[probDateIdx] || '' : '',
-            confirmationStatus: statusIdx !== -1 ? cols[statusIdx] || '' : '',
-          };
-          if (row.employeeId) rows.push(row);
-        }
-        setPreview(rows);
-      } catch {
-        setError('Failed to parse CSV file.');
-      }
-    };
-    reader.readAsText(f);
-  };
-
-  const handleImport = async () => {
-    if (preview.length === 0) { setError('No valid rows to import.'); return; }
-    setSaving(true);
-    setError(null);
-
-    try {
-      // First, resolve employeeId → userId
-      const allEmps = await api.get('/confirmation/all');
-      const empMap = {};
-      allEmps.data.forEach(e => {
-        if (e.employeeId) empMap[e.employeeId.toLowerCase()] = e.id;
-      });
-
-      const updates = [];
-      const notFound = [];
-      for (const row of preview) {
-        const userId = empMap[row.employeeId.toLowerCase()];
-        if (!userId) { notFound.push(row.employeeId); continue; }
-        const update = { userId };
-        if (row.confirmationDate) update.confirmationDate = row.confirmationDate;
-        if (row.probationEndDate) update.probationEndDate = row.probationEndDate;
-        if (row.confirmationStatus && ['pending', 'extended', 'confirmed'].includes(row.confirmationStatus))
-          update.confirmationStatus = row.confirmationStatus;
-        updates.push(update);
-      }
-
-      if (updates.length === 0) {
-        setError(`No matching employees found. Not found: ${notFound.join(', ')}`);
-        setSaving(false);
-        return;
-      }
-
-      const res = await api.put('/confirmation/bulk-update', { updates });
-      const msg = `${res.data.results?.length || 0} updated.${notFound.length > 0 ? ` ${notFound.length} employee ID(s) not found: ${notFound.join(', ')}` : ''}`;
-      onDone(msg);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Import failed.');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <Upload className="w-5 h-5 text-green-600" /> Import Confirmation Data
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4 flex-1 overflow-auto">
-          {error && <AlertMessage type="error" message={error} />}
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
-            <p className="font-medium mb-1">CSV Format Required:</p>
-            <code className="block bg-white/50 p-2 rounded text-[11px]">
-              employeeId,confirmationDate,probationEndDate,confirmationStatus<br />
-              EMP001,2026-06-15,2026-06-15,pending<br />
-              EMP002,2026-07-01,2026-07-01,confirmed
-            </code>
-            <p className="mt-1">Columns: <strong>employeeId</strong> (required), confirmationDate, probationEndDate, confirmationStatus (pending/extended/confirmed)</p>
-          </div>
-
-          <input type="file" accept=".csv" onChange={handleFileChange}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg
-                       file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700
-                       hover:file:bg-blue-100 cursor-pointer" />
-
-          {preview.length > 0 && (
-            <div className="border border-slate-200 rounded-lg overflow-auto max-h-60">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Employee ID</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Conf. Date</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Probation End</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.slice(0, 20).map((r, i) => (
-                    <tr key={i} className="border-b border-slate-100">
-                      <td className="px-3 py-1.5 font-medium">{r.employeeId}</td>
-                      <td className="px-3 py-1.5">{r.confirmationDate || '—'}</td>
-                      <td className="px-3 py-1.5">{r.probationEndDate || '—'}</td>
-                      <td className="px-3 py-1.5">{r.confirmationStatus || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {preview.length > 20 && (
-                <p className="text-xs text-slate-400 px-3 py-2">Showing 20 of {preview.length} rows</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-          <button onClick={handleImport} disabled={saving || preview.length === 0}
-            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700
-                       disabled:opacity-50 flex items-center gap-2">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Import {preview.length} Row{preview.length !== 1 ? 's' : ''}
           </button>
         </div>
       </div>
@@ -724,7 +548,6 @@ export default function ConfirmationManager() {
   const [historyTarget, setHistoryTarget] = useState(null);
   const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
-  const [showImport, setShowImport] = useState(false);
 
   // All employees (for "all" tab)
   const [allEmployees, setAllEmployees] = useState([]);
@@ -763,7 +586,6 @@ export default function ConfirmationManager() {
     setConfirmTarget(null);
     setShowBulkUpdate(false);
     setShowBulkConfirm(false);
-    setShowImport(false);
     setSelectedIds(new Set());
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 5000);
@@ -807,18 +629,6 @@ export default function ConfirmationManager() {
   const dueToday = employees.filter(e => daysUntil(e.confirmationDate) === 0).length;
   const dueSoon = employees.filter(e => { const d = daysUntil(e.confirmationDate); return d > 0 && d <= 7; }).length;
 
-  // Export CSV
-  const handleExport = () => {
-    const data = (tab === 'all' ? allEmployees : employees);
-    const headers = ['Employee ID', 'Name', 'Department', 'Designation', 'Date of Joining', 'Confirmation Date', 'Probation End Date', 'Status', 'Confirmed At', 'Reporting Manager'];
-    const rows = data.map(e => [
-      e.employeeId, e.name, e.department, e.designation, e.dateOfJoining,
-      e.confirmationDate, e.probationEndDate, e.confirmationStatus, e.confirmedAt,
-      e.reportingManager?.name,
-    ]);
-    downloadCSV(rows, headers, `confirmations_${tab}_${new Date().toISOString().slice(0, 10)}.csv`);
-  };
-
   return (
     <div className="h-full flex flex-col">
       {/* ── Sticky Header ── */}
@@ -836,19 +646,6 @@ export default function ConfirmationManager() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowImport(true)}
-              className="px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg
-                         hover:bg-slate-50 flex items-center gap-1.5 text-slate-600">
-              <Upload className="w-3.5 h-3.5" /> Import CSV
-            </button>
-            <button onClick={handleExport}
-              className="px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg
-                         hover:bg-slate-50 flex items-center gap-1.5 text-slate-600">
-              <Download className="w-3.5 h-3.5" /> Export
-            </button>
-          </div>
         </div>
 
         {/* Tabs */}
@@ -1037,9 +834,6 @@ export default function ConfirmationManager() {
           onClose={() => setShowBulkConfirm(false)}
           onDone={handleDone}
         />
-      )}
-      {showImport && (
-        <ImportModal onClose={() => setShowImport(false)} onDone={handleDone} />
       )}
     </div>
   );
