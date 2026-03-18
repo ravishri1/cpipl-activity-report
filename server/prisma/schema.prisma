@@ -459,6 +459,7 @@ model LeaveGranter {
   probationAllowance Float @default(1)          // usable during probation period (e.g., 1)
   joiningMonth Int?                             // FY month of joining (1=Apr, 12=Mar). null = full year
   notes       String?                           // admin notes
+  isLocked    Boolean  @default(false)          // locked for payroll — prevents edit/delete
   grantedBy   Int                               // admin userId who granted
   grantedAt   DateTime @default(now())
 

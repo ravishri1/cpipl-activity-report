@@ -697,11 +697,73 @@ async function getLeaveGrants(fyYear, prisma) {
 }
 
 /**
+ * Admin: Update a leave grant (edit)
+ */
+async function updateLeaveGrant(adminId, grantId, data, prisma) {
+  const grant = await prisma.leaveGranter.findUnique({ where: { id: grantId } });
+  if (!grant) throw new Error('Grant not found.');
+  if (grant.isLocked) throw new Error('This grant is locked for payroll. Unlock it first to make changes.');
+
+  const { totalGranted, probationAllowance, joiningMonth, notes } = data;
+  const effectiveProbation = probationAllowance !== null && probationAllowance !== undefined ? probationAllowance : 0;
+
+  const updated = await prisma.leaveGranter.update({
+    where: { id: grantId },
+    data: {
+      totalGranted,
+      probationAllowance: effectiveProbation,
+      joiningMonth: joiningMonth || null,
+      notes: notes || null,
+      grantedBy: adminId,
+      grantedAt: new Date(),
+    },
+    include: {
+      user: { select: { name: true, employeeId: true } },
+      leaveType: { select: { name: true, code: true } },
+      granter: { select: { name: true } },
+    },
+  });
+
+  // Update the corresponding LeaveBalance
+  const balanceProbation = probationAllowance !== null && probationAllowance !== undefined ? probationAllowance : null;
+  const balance = await prisma.leaveBalance.findUnique({
+    where: { userId_leaveTypeId_year: { userId: grant.userId, leaveTypeId: grant.leaveTypeId, year: grant.fyYear } },
+  });
+  if (balance) {
+    await prisma.leaveBalance.update({
+      where: { id: balance.id },
+      data: {
+        total: totalGranted,
+        probationAllowance: balanceProbation,
+        joiningMonth: joiningMonth || null,
+      },
+    });
+  }
+
+  return updated;
+}
+
+/**
+ * Admin: Toggle lock/unlock on a leave grant (for payroll)
+ */
+async function toggleGrantLock(grantId, prisma) {
+  const grant = await prisma.leaveGranter.findUnique({ where: { id: grantId } });
+  if (!grant) throw new Error('Grant not found.');
+
+  const updated = await prisma.leaveGranter.update({
+    where: { id: grantId },
+    data: { isLocked: !grant.isLocked },
+  });
+  return { id: updated.id, isLocked: updated.isLocked, message: updated.isLocked ? 'Grant locked for payroll.' : 'Grant unlocked.' };
+}
+
+/**
  * Admin: Delete a leave grant
  */
 async function deleteLeaveGrant(grantId, prisma) {
   const grant = await prisma.leaveGranter.findUnique({ where: { id: grantId } });
   if (!grant) throw new Error('Grant not found.');
+  if (grant.isLocked) throw new Error('This grant is locked for payroll. Unlock it first to delete.');
 
   // Reset balance to default
   const leaveType = await prisma.leaveType.findUnique({ where: { id: grant.leaveTypeId } });
@@ -740,6 +802,8 @@ module.exports = {
   initializeFYBalances,
   getAllBalances,
   grantLeave,
+  updateLeaveGrant,
+  toggleGrantLock,
   getLeaveGrants,
   deleteLeaveGrant,
   isOnProbation,

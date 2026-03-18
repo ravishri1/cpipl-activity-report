@@ -8,7 +8,7 @@ import EmptyState from '../shared/EmptyState';
 import { formatDate } from '../../utils/formatters';
 import {
   Gift, Plus, Trash2, ChevronLeft, ChevronRight, Users, Shield, Clock,
-  CheckCircle2, AlertTriangle, Search, X, Info,
+  CheckCircle2, AlertTriangle, Search, X, Info, Pencil, Lock, Unlock,
 } from 'lucide-react';
 
 function getCurrentFY() {
@@ -20,9 +20,12 @@ function getFYLabel(year) {
   return `FY ${year}-${String(year + 1).slice(2)}`;
 }
 
+const fyMonthNames = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+
 export default function LeaveGranter() {
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [showModal, setShowModal] = useState(false);
+  const [editGrant, setEditGrant] = useState(null); // grant object to edit
   const [search, setSearch] = useState('');
 
   const { data: grants, loading, error: fetchErr, refetch } = useFetch(
@@ -45,10 +48,20 @@ export default function LeaveGranter() {
     );
   }, [grants, search]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (g) => {
+    if (g.isLocked) return alert('This grant is locked for payroll. Unlock it first.');
     if (!window.confirm('Remove this leave grant? Balance will reset to default.')) return;
     try {
-      await execute(() => api.delete(`/leave/admin/grants/${id}`), 'Grant removed');
+      await execute(() => api.delete(`/leave/admin/grants/${g.id}`), 'Grant removed');
+      refetch();
+    } catch {}
+  };
+
+  const handleToggleLock = async (g) => {
+    const action = g.isLocked ? 'unlock' : 'lock';
+    if (!window.confirm(`${g.isLocked ? 'Unlock' : 'Lock'} this grant for payroll?`)) return;
+    try {
+      await execute(() => api.put(`/leave/admin/grants/${g.id}/lock`), `Grant ${action}ed for payroll`);
       refetch();
     } catch {}
   };
@@ -104,13 +117,8 @@ export default function LeaveGranter() {
         <div className="text-xs text-blue-700">
           <p><strong>Leave Granter</strong> assigns leave policies to employees with probation rules.</p>
           <p className="mt-1">
-            <strong>Probation rule:</strong> During probation, only the "Probation Allowance" number of leaves are usable.
-            Remaining leaves accrue monthly (bucket system) but stay frozen until confirmation.
-            After confirmation, all accrued past-month leaves unlock instantly.
-          </p>
-          <p className="mt-1">
-            <strong>Mid-year joiners:</strong> Leaves are pro-rated based on joining month.
-            e.g., Sept joiner gets 7 leaves (Sept to March = 7 months).
+            <strong>Lock for payroll:</strong> Lock a grant to prevent accidental edits/deletes.
+            Locked entries are safe for payroll processing.
           </p>
         </div>
       </div>
@@ -174,48 +182,81 @@ export default function LeaveGranter() {
                     <th className="px-4 py-2 font-medium text-slate-500 text-xs">Leave Type</th>
                     <th className="px-4 py-2 font-medium text-slate-500 text-xs">Total Granted</th>
                     <th className="px-4 py-2 font-medium text-slate-500 text-xs">Probation Allowance</th>
-                    <th className="px-4 py-2 font-medium text-slate-500 text-xs">Joining Month (FY)</th>
+                    <th className="px-4 py-2 font-medium text-slate-500 text-xs">Joining Month</th>
                     <th className="px-4 py-2 font-medium text-slate-500 text-xs">Notes</th>
-                    <th className="px-4 py-2 font-medium text-slate-500 text-xs">Granted By</th>
+                    <th className="px-4 py-2 font-medium text-slate-500 text-xs">Status</th>
                     <th className="px-4 py-2 font-medium text-slate-500 text-xs">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {userGrants.map(g => {
-                    const fyMonthNames = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
-                    return (
-                      <tr key={g.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2.5">
-                          <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded">
-                            {g.leaveType.code}
-                          </span>
-                          <span className="ml-1.5 text-slate-600">{g.leaveType.name}</span>
-                        </td>
-                        <td className="px-4 py-2.5 font-bold text-slate-800">{g.totalGranted}</td>
-                        <td className="px-4 py-2.5">
+                  {userGrants.map(g => (
+                    <tr key={g.id} className={`hover:bg-slate-50 ${g.isLocked ? 'bg-green-50/30' : ''}`}>
+                      <td className="px-4 py-2.5">
+                        <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded">
+                          {g.leaveType.code}
+                        </span>
+                        <span className="ml-1.5 text-slate-600">{g.leaveType.name}</span>
+                      </td>
+                      <td className="px-4 py-2.5 font-bold text-slate-800">{g.totalGranted}</td>
+                      <td className="px-4 py-2.5">
+                        {g.probationAllowance > 0 ? (
                           <span className="flex items-center gap-1 text-amber-700">
                             <Shield className="w-3 h-3" />
                             {g.probationAllowance} usable
                           </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-600">
-                          {g.joiningMonth ? `${fyMonthNames[g.joiningMonth - 1]} (Month ${g.joiningMonth})` : 'Full Year'}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs max-w-[150px] truncate">{g.notes || '-'}</td>
-                        <td className="px-4 py-2.5 text-slate-500 text-xs">{g.granter?.name}</td>
-                        <td className="px-4 py-2.5">
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">
+                        {g.joiningMonth ? `${fyMonthNames[g.joiningMonth - 1]} (Month ${g.joiningMonth})` : 'Full Year'}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs max-w-[150px] truncate" title={g.notes || ''}>{g.notes || '-'}</td>
+                      <td className="px-4 py-2.5">
+                        {g.isLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
+                            <Lock className="w-3 h-3" /> Locked
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded-full">
+                            <Unlock className="w-3 h-3" /> Open
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={() => handleDelete(g.id)}
+                            onClick={() => setEditGrant(g)}
+                            disabled={saving || g.isLocked}
+                            className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={g.isLocked ? 'Unlock to edit' : 'Edit grant'}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleLock(g)}
                             disabled={saving}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-700"
-                            title="Remove grant"
+                            className={`p-1.5 rounded-lg disabled:opacity-50 ${
+                              g.isLocked
+                                ? 'hover:bg-amber-50 text-amber-500 hover:text-amber-700'
+                                : 'hover:bg-green-50 text-green-500 hover:text-green-700'
+                            }`}
+                            title={g.isLocked ? 'Unlock for editing' : 'Lock for payroll'}
+                          >
+                            {g.isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(g)}
+                            disabled={saving || g.isLocked}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={g.isLocked ? 'Unlock to delete' : 'Remove grant'}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -223,19 +264,166 @@ export default function LeaveGranter() {
         </div>
       )}
 
-      {/* Grant Modal */}
+      {/* Grant Modal (new) */}
       {showModal && (
         <GrantModal
           fyYear={fyYear}
+          existingGrants={grants}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); refetch(); }}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editGrant && (
+        <EditGrantModal
+          grant={editGrant}
+          onClose={() => setEditGrant(null)}
+          onSuccess={() => { setEditGrant(null); refetch(); }}
         />
       )}
     </div>
   );
 }
 
-function GrantModal({ fyYear, onClose, onSuccess }) {
+// ─── Edit Grant Modal ────────────────────────────────────
+function EditGrantModal({ grant, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    totalGranted: String(grant.totalGranted),
+    probationAllowance: String(grant.probationAllowance || ''),
+    joiningMonth: grant.joiningMonth ? String(grant.joiningMonth) : '',
+    notes: grant.notes || '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const isConfirmed = grant.user.confirmationStatus === 'confirmed' || !!grant.user.confirmationDate;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await api.put(`/leave/admin/grants/${grant.id}`, {
+        totalGranted: parseFloat(form.totalGranted),
+        probationAllowance: isConfirmed ? null : parseFloat(form.probationAllowance || 0),
+        joiningMonth: form.joiningMonth ? parseInt(form.joiningMonth) : null,
+        notes: form.notes || null,
+      });
+      onSuccess();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update grant.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+          <div>
+            <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-blue-600" />
+              Edit Grant
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {grant.user.name} — {grant.leaveType.code} ({grant.leaveType.name})
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="text-sm bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {isConfirmed && (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs text-emerald-700 font-medium">Confirmed employee — no probation restriction</span>
+            </div>
+          )}
+
+          {/* Total */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Total Leaves for FY *</label>
+            <input
+              type="number"
+              value={form.totalGranted}
+              onChange={e => setForm({ ...form, totalGranted: e.target.value })}
+              required min="0" max="365" step="0.5"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
+            />
+          </div>
+
+          {/* Probation Allowance */}
+          {!isConfirmed && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Probation Allowance *</label>
+              <input
+                type="number"
+                value={form.probationAllowance}
+                onChange={e => setForm({ ...form, probationAllowance: e.target.value })}
+                required min="0" max="365" step="0.5"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
+              />
+            </div>
+          )}
+
+          {/* Joining Month */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Joining Month (FY)</label>
+            <select
+              value={form.joiningMonth}
+              onChange={e => setForm({ ...form, joiningMonth: e.target.value })}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
+            >
+              <option value="">Full Year (April start)</option>
+              {fyMonthNames.map((m, i) => (
+                <option key={i} value={i + 1}>{m} (Month {i + 1})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => setForm({ ...form, notes: e.target.value })}
+              rows={2}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !form.totalGranted}
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Grant Modal (new grant) ────────────────────────────
+function GrantModal({ fyYear, existingGrants, onClose, onSuccess }) {
   const [step, setStep] = useState(1);
   const [selectedUser, setSelectedUser] = useState(null);
   const [search, setSearch] = useState('');
@@ -253,6 +441,15 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
   const employees = data?.employees || [];
   const leaveTypes = data?.leaveTypes || [];
 
+  // Build a set of existing grants for quick lookup
+  const existingSet = useMemo(() => {
+    const set = new Set();
+    for (const g of existingGrants || []) {
+      set.add(`${g.userId}-${g.leaveTypeId}`);
+    }
+    return set;
+  }, [existingGrants]);
+
   const filtered = useMemo(() => {
     if (!search) return employees;
     const s = search.toLowerCase();
@@ -265,7 +462,6 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
 
   const handleSelectUser = (user) => {
     setSelectedUser(user);
-    // Auto-fill suggested values based on employee status
     const isConfirmed = user.confirmationStatus === 'confirmed' || !!user.confirmationDate;
     if (user.suggestedJoiningMonth) {
       setForm(f => ({
@@ -287,6 +483,11 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
 
   const isConfirmed = selectedUser && (selectedUser.confirmationStatus === 'confirmed' || !!selectedUser.confirmationDate);
 
+  // Check if selected leave type already has a grant for this user+FY
+  const selectedLeaveTypeAlreadyGranted = selectedUser && form.leaveTypeId
+    ? existingSet.has(`${selectedUser.id}-${parseInt(form.leaveTypeId)}`)
+    : false;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -297,7 +498,6 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
         leaveTypeId: parseInt(form.leaveTypeId),
         fyYear,
         totalGranted: parseFloat(form.totalGranted),
-        // Confirmed employees: no probation restriction (null). Probation: limit usable leaves.
         probationAllowance: isConfirmed ? null : parseFloat(form.probationAllowance),
         joiningMonth: form.joiningMonth ? parseInt(form.joiningMonth) : null,
         notes: form.notes || null,
@@ -309,8 +509,6 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
       setSubmitting(false);
     }
   };
-
-  const fyMonthNames = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -348,33 +546,47 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                   />
                 </div>
                 <div className="space-y-1 max-h-[50vh] overflow-y-auto">
-                  {filtered.map(emp => (
-                    <button
-                      key={emp.id}
-                      onClick={() => handleSelectUser(emp)}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-blue-50 text-left transition-colors"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-slate-800">{emp.name}</p>
-                        <p className="text-xs text-slate-400">
-                          {emp.employeeId} · {emp.department}
-                          {emp.dateOfJoining && ` · Joined ${formatDate(emp.dateOfJoining)}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {emp.onProbation && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
-                            <Clock className="w-3 h-3" /> Probation
-                          </span>
-                        )}
-                        {emp.suggestedJoiningMonth && (
-                          <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
-                            Mid-year ({fyMonthNames[emp.suggestedJoiningMonth - 1]})
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
+                  {filtered.map(emp => {
+                    // Count how many leave types this employee already has granted
+                    const grantedCount = leaveTypes.filter(lt => existingSet.has(`${emp.id}-${lt.id}`)).length;
+                    const allGranted = grantedCount === leaveTypes.length && leaveTypes.length > 0;
+                    return (
+                      <button
+                        key={emp.id}
+                        onClick={() => handleSelectUser(emp)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
+                          allGranted ? 'bg-green-50/50 hover:bg-green-50' : 'hover:bg-blue-50'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{emp.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {emp.employeeId} · {emp.department}
+                            {emp.dateOfJoining && ` · Joined ${formatDate(emp.dateOfJoining)}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {grantedCount > 0 && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              allGranted ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {allGranted ? 'All assigned' : `${grantedCount}/${leaveTypes.length} assigned`}
+                            </span>
+                          )}
+                          {emp.onProbation && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                              <Clock className="w-3 h-3" /> Probation
+                            </span>
+                          )}
+                          {emp.suggestedJoiningMonth && (
+                            <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                              Mid-year ({fyMonthNames[emp.suggestedJoiningMonth - 1]})
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                   {filtered.length === 0 && (
                     <p className="text-center text-slate-400 py-6 text-sm">No employees found</p>
                   )}
@@ -441,14 +653,28 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
               >
                 <option value="">Select leave type</option>
-                {leaveTypes.map(lt => (
-                  <option key={lt.id} value={lt.id}>
-                    {lt.name} ({lt.code})
-                    {selectedUser.existingGrants?.[lt.id] ? ' — Already granted' : ''}
-                  </option>
-                ))}
+                {leaveTypes.map(lt => {
+                  const alreadyGranted = existingSet.has(`${selectedUser.id}-${lt.id}`);
+                  return (
+                    <option key={lt.id} value={lt.id}>
+                      {lt.name} ({lt.code})
+                      {alreadyGranted ? ' — Already assigned' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
+
+            {/* Already assigned warning */}
+            {selectedLeaveTypeAlreadyGranted && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-amber-700">
+                  <p><strong>Already assigned!</strong> This leave type is already granted to {selectedUser.name} for {getFYLabel(fyYear)}.</p>
+                  <p className="mt-0.5">Submitting will <strong>update</strong> the existing grant with the new values below.</p>
+                </div>
+              </div>
+            )}
 
             {/* Total Granted */}
             <div className={`grid gap-4 ${isConfirmed ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -460,10 +686,7 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                   type="number"
                   value={form.totalGranted}
                   onChange={e => setForm({ ...form, totalGranted: e.target.value })}
-                  required
-                  min="0"
-                  max="365"
-                  step="0.5"
+                  required min="0" max="365" step="0.5"
                   placeholder="e.g., 12 or 6"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
                 />
@@ -480,10 +703,7 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                     type="number"
                     value={form.probationAllowance}
                     onChange={e => setForm({ ...form, probationAllowance: e.target.value })}
-                    required
-                    min="0"
-                    max="365"
-                    step="0.5"
+                    required min="0" max="365" step="0.5"
                     placeholder="e.g., 1"
                     className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
                   />
@@ -575,7 +795,7 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                 ) : (
                   <Gift className="w-4 h-4" />
                 )}
-                {submitting ? 'Granting...' : 'Grant Leave'}
+                {submitting ? 'Granting...' : selectedLeaveTypeAlreadyGranted ? 'Update Grant' : 'Grant Leave'}
               </button>
             </div>
           </form>

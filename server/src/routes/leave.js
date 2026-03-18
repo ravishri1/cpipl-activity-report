@@ -16,6 +16,8 @@ const {
   initializeFYBalances,
   getAllBalances,
   grantLeave,
+  updateLeaveGrant,
+  toggleGrantLock,
   getLeaveGrants,
   deleteLeaveGrant,
   calendarToFYMonth,
@@ -275,6 +277,27 @@ router.post('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
     notes: req.body.notes || null,
   }, req.prisma);
   res.status(201).json(grant);
+}));
+
+// PUT /api/leave/admin/grants/:id — Edit a leave grant
+router.put('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  requireFields(req.body, 'totalGranted');
+  const updated = await updateLeaveGrant(req.user.id, id, {
+    totalGranted: parseFloat(req.body.totalGranted),
+    probationAllowance: req.body.probationAllowance !== null && req.body.probationAllowance !== undefined
+      ? parseFloat(req.body.probationAllowance) : null,
+    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
+    notes: req.body.notes || null,
+  }, req.prisma);
+  res.json(updated);
+}));
+
+// PUT /api/leave/admin/grants/:id/lock — Toggle lock/unlock for payroll
+router.put('/admin/grants/:id/lock', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const result = await toggleGrantLock(id, req.prisma);
+  res.json(result);
 }));
 
 // DELETE /api/leave/admin/grants/:id — Remove a leave grant
