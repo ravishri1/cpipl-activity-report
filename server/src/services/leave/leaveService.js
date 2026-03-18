@@ -88,6 +88,43 @@ function calculateCredited(leaveType, fyYear, joiningMonth) {
 }
 
 /**
+ * Calculate actual used days from approved LeaveRequest records
+ * This is the source of truth — not the stored `used` field in LeaveBalance
+ */
+async function calculateUsedFromRequests(userId, leaveTypeId, fyYear, prisma) {
+  const { start, end } = getFYRange(fyYear);
+  const result = await prisma.leaveRequest.aggregate({
+    where: {
+      userId,
+      leaveTypeId,
+      status: 'approved',
+      startDate: { gte: start, lte: end },
+    },
+    _sum: { days: true },
+  });
+  return result._sum.days || 0;
+}
+
+/**
+ * Sync the stored `used` field with actual approved requests (auto-reconciliation)
+ * Returns the corrected used value
+ */
+async function reconcileUsed(balance, prisma) {
+  const actualUsed = await calculateUsedFromRequests(
+    balance.userId, balance.leaveTypeId, balance.year, prisma
+  );
+  // If stored value doesn't match actual, fix it
+  if (Math.abs(balance.used - actualUsed) > 0.001) {
+    await prisma.leaveBalance.update({
+      where: { id: balance.id },
+      data: { used: actualUsed },
+    });
+    return actualUsed;
+  }
+  return balance.used;
+}
+
+/**
  * Check if user is on probation
  */
 function isOnProbation(user) {
@@ -245,6 +282,9 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     const bal = await ensureBalance(userId, lt.id, fyYear, prisma);
     if (!bal) continue;
 
+    // Reconcile used with actual approved leave requests (source of truth)
+    const used = await reconcileUsed(bal, prisma);
+
     const joiningMonth = bal.joiningMonth || null;
     const credited = calculateCredited(lt, fyYear, joiningMonth);
     const totalPool = (bal.opening || 0) + credited;
@@ -254,10 +294,10 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     let frozenBalance = 0;
     if (onProbation && bal.probationAllowance !== null && bal.probationAllowance !== undefined) {
       const usable = Math.min(bal.probationAllowance, totalPool);
-      available = Math.max(usable - bal.used, 0);
-      frozenBalance = Math.max(totalPool - bal.probationAllowance - bal.used, 0);
+      available = Math.max(usable - used, 0);
+      frozenBalance = Math.max(totalPool - bal.probationAllowance - used, 0);
     } else {
-      available = Math.max(totalPool - bal.used, 0);
+      available = Math.max(totalPool - used, 0);
     }
 
     // Calculate max possible for this FY (for mid-year joiners)
@@ -273,7 +313,7 @@ async function getLeaveBalance(userId, fyYear, prisma) {
       opening: bal.opening || 0,
       credited,
       total: bal.total,
-      used: bal.used,
+      used,
       available,
       frozenBalance,       // leaves accrued but locked during probation
       onProbation,
@@ -341,6 +381,9 @@ async function applyLeave(userId, data, prisma) {
     },
   });
 
+  // Reconcile used from actual approved requests (source of truth)
+  const actualUsed = await reconcileUsed(balance, prisma);
+
   const joiningMonth = balance.joiningMonth || null;
   const credited = calculateCredited(leaveType, fyYear, joiningMonth);
   const totalPool = (balance.opening || 0) + credited;
@@ -350,7 +393,7 @@ async function applyLeave(userId, data, prisma) {
   if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
     // During probation: only probationAllowance is usable
     const usable = Math.min(balance.probationAllowance, totalPool);
-    available = Math.max(usable - balance.used, 0);
+    available = Math.max(usable - actualUsed, 0);
 
     if (available < days) {
       const probEndStr = user.probationEndDate || 'confirmation';
@@ -361,7 +404,7 @@ async function applyLeave(userId, data, prisma) {
       );
     }
   } else {
-    available = Math.max(totalPool - balance.used, 0);
+    available = Math.max(totalPool - actualUsed, 0);
     if (available < days) {
       throw new Error(
         `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
@@ -578,25 +621,30 @@ async function getAllBalances(fyYear, department, prisma) {
     orderBy: [{ user: { name: 'asc' } }, { leaveType: { name: 'asc' } }],
   });
 
-  return balances.map((b) => {
+  // Reconcile used values from actual approved leave requests
+  const reconciled = [];
+  for (const b of balances) {
+    const used = await reconcileUsed(b, prisma);
     const joiningMonth = b.joiningMonth || null;
     const credited = calculateCredited(b.leaveType, fyYear, joiningMonth);
     const onProbation = isOnProbation(b.user);
     const totalPool = (b.opening || 0) + credited;
     let available;
     if (onProbation && b.probationAllowance !== null && b.probationAllowance !== undefined) {
-      available = Math.max(Math.min(b.probationAllowance, totalPool) - b.used, 0);
+      available = Math.max(Math.min(b.probationAllowance, totalPool) - used, 0);
     } else {
-      available = Math.max(totalPool - b.used, 0);
+      available = Math.max(totalPool - used, 0);
     }
-    return {
+    reconciled.push({
       ...b,
+      used,
       credited,
       available,
       onProbation,
       fyLabel: getFYLabel(fyYear),
-    };
-  });
+    });
+  }
+  return reconciled;
 }
 
 /**
@@ -648,11 +696,14 @@ async function grantLeave(adminId, data, prisma) {
 
   // For balance: null probationAllowance = no restriction (confirmed), number = cap during probation
   const balanceProbation = probationAllowance !== null && probationAllowance !== undefined ? probationAllowance : null;
+  // Always recalculate used from actual approved requests (source of truth)
+  const actualUsed = await calculateUsedFromRequests(userId, leaveTypeId, fyYear, prisma);
   if (balance) {
     await prisma.leaveBalance.update({
       where: { id: balance.id },
       data: {
         total: totalGranted,
+        used: actualUsed,
         probationAllowance: balanceProbation,
         joiningMonth: joiningMonth || null,
       },
@@ -665,7 +716,7 @@ async function grantLeave(adminId, data, prisma) {
         year: fyYear,
         opening: 0,
         total: totalGranted,
-        used: 0,
+        used: actualUsed,
         balance: 0,
         probationAllowance: balanceProbation,
         joiningMonth: joiningMonth || null,
@@ -792,6 +843,8 @@ module.exports = {
   getMonthsElapsed,
   calculateCredited,
   calculateLeaveDays,
+  calculateUsedFromRequests,
+  reconcileUsed,
   ensureBalance,
   getLeaveBalance,
   applyLeave,

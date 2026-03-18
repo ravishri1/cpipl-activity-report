@@ -393,12 +393,6 @@ function EditGrantModal({ grant, fyYear, saving, onClose, onSave }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && (
-            <div className="text-sm bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-lg flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
 
           {/* FY Year badge */}
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
