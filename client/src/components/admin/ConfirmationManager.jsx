@@ -262,7 +262,7 @@ function ConfirmModal({ employee, onClose, onDone }) {
     setError(null);
     try {
       await api.post(`/confirmation/${employee.id}/confirm`);
-      onDone('Employee confirmed.');
+      onDone('Employee confirmed.', null, [employee.id]);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to confirm employee.');
       setSaving(false);
@@ -329,7 +329,7 @@ function BulkConfirmModal({ employees, onClose, onDone }) {
       await api.post('/confirmation/bulk-confirm', {
         userIds: employees.map(e => e.id),
       });
-      onDone('Employees confirmed.');
+      onDone('Employees confirmed.', null, employees.map(e => e.id));
     } catch (err) {
       setError(err.response?.data?.error || 'Bulk confirm failed.');
       setSaving(false);
@@ -581,7 +581,7 @@ export default function ConfirmationManager() {
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
   useEffect(() => { if (tab === 'all') fetchAllEmployees(); }, [tab, fetchAllEmployees]);
 
-  const handleDone = (msg, updatedResults) => {
+  const handleDone = (msg, updatedResults, confirmedIds) => {
     // Close modals and clear selection
     setExtendTarget(null);
     setConfirmTarget(null);
@@ -590,6 +590,13 @@ export default function ConfirmationManager() {
     setSelectedIds(new Set());
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 5000);
+
+    // If employees were confirmed, remove them from pending list instantly
+    if (confirmedIds && confirmedIds.length > 0) {
+      const idSet = new Set(confirmedIds);
+      setEmployees(prev => prev.filter(e => !idSet.has(e.id)));
+      setAllEmployees(prev => prev.map(e => idSet.has(e.id) ? { ...e, confirmationStatus: 'confirmed' } : e));
+    }
 
     // If we have updated results from bulk-update, merge into local state instantly
     if (updatedResults && Array.isArray(updatedResults)) {
