@@ -41,10 +41,10 @@ export default function MyLeave() {
   const [filter, setFilter] = useState('all');
 
   const { data: balances, loading: balLoading, error: balErr, refetch: refetchBal } = useFetch(
-    `/leave/balance?year=${fyYear}`, []
+    `/leave/balance?year=${fyYear}`, [], [fyYear]
   );
   const { data: requests, loading: reqLoading, error: reqErr, refetch: refetchReq } = useFetch(
-    `/leave/my?year=${fyYear}&status=${filter}`, []
+    `/leave/my?year=${fyYear}&status=${filter}`, [], [fyYear, filter]
   );
   const { execute, loading: actionLoading, error: actionErr, success } = useApi();
 

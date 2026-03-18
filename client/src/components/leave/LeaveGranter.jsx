@@ -26,7 +26,7 @@ export default function LeaveGranter() {
   const [search, setSearch] = useState('');
 
   const { data: grants, loading, error: fetchErr, refetch } = useFetch(
-    `/leave/admin/grants?year=${fyYear}`, []
+    `/leave/admin/grants?year=${fyYear}`, [], [fyYear]
   );
   const { execute, loading: saving, error: saveErr, success } = useApi();
 

@@ -38,7 +38,7 @@ export default function LeaveApproval() {
 
   // All requests (for history tab)
   const { data: allRequests, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch(
-    `/leave/all-requests?year=${fyYear}&status=${statusFilter}`, []
+    `/leave/all-requests?year=${fyYear}&status=${statusFilter}`, [], [fyYear, statusFilter]
   );
 
   const { execute, loading: actionLoading, error: actionErr, success } = useApi();
