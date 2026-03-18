@@ -553,7 +553,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                 <tbody>
                                   <tr className="text-slate-700">
                                     <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkIn)}</td>
-                                    <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkOut)}</td>
+                                    <td className="py-2.5 pr-2 font-semibold">{isSelectedDayToday ? <span className="text-blue-500 text-[10px] italic">In Progress</span> : formatTime(selectedDay.checkOut)}</td>
                                     <td className="py-2.5 pr-2">
                                       {selectedDay.lateInMinutes > 0 ? (
                                         <span className={`font-medium ${selectedDay.isLate ? 'text-amber-600' : 'text-slate-600'}`}>{lateInDisplay}</span>
@@ -637,7 +637,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                           const s2End = data.shift.endTime;
 
                           const firstIn = selectedDay.checkIn ? formatTime(selectedDay.checkIn) : '-';
-                          const lastOut = selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-';
+                          const lastOut = isSelectedDayToday ? null : (selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-');
 
                           // Calculate session durations
                           const s1Dur = (lunchStart - startMin) / 60;
@@ -682,7 +682,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                   </div>
                                   <div>
                                     <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
-                                    <div className="text-xs font-semibold text-blue-600">{lastOut}</div>
+                                    <div className="text-xs font-semibold text-blue-600">{lastOut || <span className="text-blue-500 text-[10px] italic">In Progress</span>}</div>
                                   </div>
                                 </div>
                               </div>
@@ -701,7 +701,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                             </div>
                             <div>
                               <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
-                              <div className="text-xs font-semibold text-blue-600">{selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-'}</div>
+                              <div className="text-xs font-semibold text-blue-600">{isSelectedDayToday ? <span className="text-blue-500 text-[10px] italic">In Progress</span> : (selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-')}</div>
                             </div>
                           </div>
                         </div>

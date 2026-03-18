@@ -282,7 +282,7 @@ async function recalculateAttendanceFromPunches(prisma, userId, date) {
 
   const attendanceData = {
     checkIn: firstIn,
-    checkOut: lastOut || firstIn,
+    checkOut: lastOut || null,  // Don't set checkOut when only 1 punch (day still in progress)
     workHours,
     status: 'present',
     notes: `Biometric: In ${firstInStr}${lastOutStr ? ` | Out ${lastOutStr}` : ''} | Actual ${workHours.toFixed(2)}h | Break ${breakHours.toFixed(2)}h`,

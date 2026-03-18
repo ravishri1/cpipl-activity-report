@@ -481,8 +481,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
     let lateInMinutes = 0;
     let earlyOutMinutes = 0;
     // Total work hours = simple diff between first in and last out (ignoring rules)
+    // Skip for today — day is not yet complete, would show misleading hours
     let totalWorkHrsRaw = 0;
-    if (att?.checkIn && att?.checkOut) {
+    if (att?.checkIn && att?.checkOut && dateStr !== today) {
       const ciMs = new Date(att.checkIn).getTime();
       const coMs = new Date(att.checkOut).getTime();
       totalWorkHrsRaw = Math.max(0, (coMs - ciMs) / (1000 * 60 * 60));
@@ -495,7 +496,8 @@ async function getEmployeeCalendar(userId, month, prisma) {
         lateIn = `${String(Math.floor(lateInMinutes / 60)).padStart(2, '0')}:${String(lateInMinutes % 60).padStart(2, '0')}`;
       }
     }
-    if (shift && att?.checkOut) {
+    if (shift && att?.checkOut && dateStr !== today) {
+      // Skip early-out calculation for today — day is not yet complete
       const shiftEndMin = parseTimeToMinutes(shift.endTime);
       const coMinutes = toISTMinutes(att.checkOut);
       earlyOutMinutes = Math.max(0, shiftEndMin - coMinutes);
