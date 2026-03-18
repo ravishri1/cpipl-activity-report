@@ -8,7 +8,7 @@ import { formatDate } from '../../utils/formatters';
 import {
   BarChart3, Users, ChevronLeft, ChevronRight, Search, User, Calendar,
   CheckCircle2, XCircle, Clock, AlertTriangle, TrendingUp, ChevronDown,
-  ChevronUp, Filter, Download,
+  ChevronUp, CalendarDays,
 } from 'lucide-react';
 
 const statusStyles = {
@@ -24,6 +24,21 @@ const compOffStatusStyles = {
   rejected: 'bg-red-100 text-red-700',
 };
 
+// Calendar cell styles for leave
+const leaveCalStyles = {
+  approved:  { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', label: 'Approved' },
+  pending:   { bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-300',   label: 'Pending' },
+  rejected:  { bg: 'bg-red-50',      text: 'text-red-400',     border: 'border-red-200',     label: 'Rejected' },
+  cancelled: { bg: 'bg-slate-50',    text: 'text-slate-400',   border: 'border-slate-200',   label: 'Cancelled' },
+  holiday:   { bg: 'bg-orange-50',   text: 'text-orange-500',  border: 'border-orange-200',  label: 'Holiday' },
+  weekend:   { bg: 'bg-slate-50',    text: 'text-slate-400',   border: 'border-slate-100',   label: 'Weekend' },
+  compoff:   { bg: 'bg-purple-100',  text: 'text-purple-700',  border: 'border-purple-300',  label: 'Comp-Off' },
+};
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
 function getCurrentFY() {
   const now = new Date();
   return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -33,16 +48,292 @@ function getFYLabel(year) {
   return `FY ${year}-${String(year + 1).slice(2)}`;
 }
 
+// Get FY months (Apr-Mar) for the given FY year
+function getFYMonths(fyYear) {
+  const months = [];
+  for (let m = 3; m < 12; m++) months.push({ year: fyYear, month: m }); // Apr-Dec
+  for (let m = 0; m < 3; m++) months.push({ year: fyYear + 1, month: m }); // Jan-Mar
+  return months;
+}
+
+// ── Leave Calendar Component (per employee) ──────────────────
+function LeaveCalendar({ requests, compOffHistory, fyYear, holidays }) {
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+
+  // Find current FY month index for initial state
+  const fyMonths = getFYMonths(fyYear);
+  const initialIdx = fyMonths.findIndex(m => m.year === now.getFullYear() && m.month === now.getMonth());
+  const [monthIdx, setMonthIdx] = useState(initialIdx >= 0 ? initialIdx : 0);
+
+  const { year: calYear, month: calMonth } = fyMonths[monthIdx] || fyMonths[0];
+  const monthLabel = `${MONTH_NAMES[calMonth]} ${calYear}`;
+
+  // Build date map for leave requests — expand each request to individual dates
+  const dateMap = useMemo(() => {
+    const map = {}; // dateStr => { status, leaveType, session, reason, days }
+
+    // Map approved/pending leave requests
+    for (const r of requests) {
+      if (r.status === 'cancelled') continue; // skip cancelled in calendar
+      const start = new Date(r.startDate);
+      const end = new Date(r.endDate);
+      const cur = new Date(start);
+      while (cur <= end) {
+        const ds = cur.toISOString().split('T')[0];
+        const dayOfWeek = cur.getDay();
+        // Skip weekends
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          // Priority: approved > pending > rejected
+          const existing = map[ds];
+          const priority = { approved: 3, pending: 2, rejected: 1 };
+          if (!existing || (priority[r.status] || 0) > (priority[existing.status] || 0)) {
+            map[ds] = {
+              status: r.status,
+              leaveType: r.leaveType?.code || r.leaveType?.name || 'Leave',
+              session: r.session,
+              reason: r.reason,
+              days: r.days,
+            };
+          }
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // Map comp-off (approved earn days)
+    for (const c of (compOffHistory || [])) {
+      if (c.status === 'approved' && c.type === 'redeem') {
+        const ds = c.workDate;
+        if (!map[ds]) {
+          map[ds] = { status: 'compoff', leaveType: 'CO', session: 'full_day', reason: c.reason || 'Comp-Off Redeem' };
+        }
+      }
+    }
+
+    return map;
+  }, [requests, compOffHistory]);
+
+  // Holiday set
+  const holidayMap = useMemo(() => {
+    const m = {};
+    for (const h of (holidays || [])) {
+      m[h.date] = h.name;
+    }
+    return m;
+  }, [holidays]);
+
+  // Build calendar grid
+  const calendarDays = useMemo(() => {
+    const firstDay = new Date(calYear, calMonth, 1);
+    const lastDay = new Date(calYear, calMonth + 1, 0);
+    const startPad = firstDay.getDay(); // 0=Sun
+    const totalDays = lastDay.getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    const cells = [];
+
+    // Empty cells for padding
+    for (let i = 0; i < startPad; i++) {
+      cells.push({ empty: true });
+    }
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dateObj = new Date(calYear, calMonth, d);
+      const dateStr = dateObj.toISOString().split('T')[0];
+      const dayOfWeek = dateObj.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isHoliday = !!holidayMap[dateStr];
+      const leave = dateMap[dateStr];
+      const isToday = dateStr === today;
+      const isFuture = dateStr > today;
+
+      let style = null;
+      let tooltip = '';
+
+      if (leave) {
+        if (leave.status === 'compoff') {
+          style = leaveCalStyles.compoff;
+          tooltip = `Comp-Off: ${leave.reason}`;
+        } else {
+          style = leaveCalStyles[leave.status];
+          const sess = leave.session === 'first_half' ? ' (1st Half)' : leave.session === 'second_half' ? ' (2nd Half)' : '';
+          tooltip = `${leave.leaveType}${sess} — ${style?.label || leave.status}\n${leave.reason}`;
+        }
+      } else if (isHoliday) {
+        style = leaveCalStyles.holiday;
+        tooltip = `Holiday: ${holidayMap[dateStr]}`;
+      } else if (isWeekend) {
+        style = leaveCalStyles.weekend;
+        tooltip = dayOfWeek === 0 ? 'Sunday' : 'Saturday';
+      }
+
+      cells.push({
+        day: d,
+        dateStr,
+        isWeekend,
+        isHoliday,
+        isToday,
+        isFuture,
+        leave,
+        style,
+        tooltip,
+        holidayName: holidayMap[dateStr] || null,
+      });
+    }
+
+    return cells;
+  }, [calYear, calMonth, dateMap, holidayMap]);
+
+  // Count leaves in this month
+  const monthStats = useMemo(() => {
+    let approved = 0, pending = 0;
+    calendarDays.forEach(c => {
+      if (c.leave?.status === 'approved') approved++;
+      if (c.leave?.status === 'pending') pending++;
+    });
+    return { approved, pending };
+  }, [calendarDays]);
+
+  return (
+    <div>
+      {/* Month Navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setMonthIdx(i => Math.max(0, i - 1))}
+            disabled={monthIdx === 0}
+            className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"
+          >
+            <ChevronLeft className="w-4 h-4 text-slate-600" />
+          </button>
+          <span className="text-sm font-semibold text-slate-700 px-2 min-w-[140px] text-center">
+            {monthLabel}
+          </span>
+          <button
+            onClick={() => setMonthIdx(i => Math.min(fyMonths.length - 1, i + 1))}
+            disabled={monthIdx >= fyMonths.length - 1}
+            className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"
+          >
+            <ChevronRight className="w-4 h-4 text-slate-600" />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          {monthStats.approved > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-200 border border-emerald-400"></span>
+              {monthStats.approved} approved
+            </span>
+          )}
+          {monthStats.pending > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-200 border border-amber-400"></span>
+              {monthStats.pending} pending
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-px bg-slate-200 rounded-lg overflow-hidden border border-slate-200">
+        {/* Day headers */}
+        {DAY_NAMES.map(d => (
+          <div key={d} className="bg-slate-100 text-center py-1.5 text-[10px] font-semibold text-slate-500 uppercase">
+            {d}
+          </div>
+        ))}
+
+        {/* Calendar cells */}
+        {calendarDays.map((cell, idx) => {
+          if (cell.empty) {
+            return <div key={`e-${idx}`} className="bg-white min-h-[52px]" />;
+          }
+
+          const { day, style, tooltip, isToday, leave, isHoliday, holidayName } = cell;
+          const bgClass = style ? `${style.bg} ${style.border}` : 'bg-white';
+          const textClass = style ? style.text : 'text-slate-700';
+
+          return (
+            <div
+              key={cell.dateStr}
+              className={`relative min-h-[52px] p-1 ${bgClass} ${isToday ? 'ring-2 ring-blue-400 ring-inset' : ''} group cursor-default`}
+              title={tooltip}
+            >
+              <span className={`text-xs font-medium ${textClass}`}>{day}</span>
+
+              {/* Leave indicator */}
+              {leave && leave.status !== 'compoff' && (
+                <div className="mt-0.5">
+                  <span className={`text-[9px] font-bold ${style?.text || ''} block leading-tight`}>
+                    {leave.leaveType}
+                  </span>
+                  {leave.session !== 'full_day' && (
+                    <span className="text-[8px] text-slate-500 block">
+                      {leave.session === 'first_half' ? '½ AM' : '½ PM'}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Comp-Off indicator */}
+              {leave && leave.status === 'compoff' && (
+                <div className="mt-0.5">
+                  <span className="text-[9px] font-bold text-purple-700 block">CO</span>
+                </div>
+              )}
+
+              {/* Holiday name */}
+              {isHoliday && !leave && (
+                <div className="mt-0.5">
+                  <span className="text-[8px] text-orange-500 block leading-tight truncate" title={holidayName}>
+                    {holidayName}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-3 mt-3 text-[10px]">
+        {[
+          { style: leaveCalStyles.approved, label: 'Approved Leave' },
+          { style: leaveCalStyles.pending, label: 'Pending Leave' },
+          { style: leaveCalStyles.compoff, label: 'Comp-Off' },
+          { style: leaveCalStyles.holiday, label: 'Holiday' },
+          { style: leaveCalStyles.weekend, label: 'Weekend' },
+        ].map(l => (
+          <span key={l.label} className="flex items-center gap-1">
+            <span className={`w-3 h-3 rounded-sm ${l.style.bg} border ${l.style.border}`}></span>
+            <span className="text-slate-500">{l.label}</span>
+          </span>
+        ))}
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-sm bg-white ring-2 ring-blue-400"></span>
+          <span className="text-slate-500">Today</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────
 export default function AdminLeaveDashboard() {
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('all');
   const [expandedEmp, setExpandedEmp] = useState(null);
-  const [activeTab, setActiveTab] = useState({}); // per employee: 'balance' | 'history' | 'compoff'
+  const [activeTab, setActiveTab] = useState({}); // per employee: 'balance' | 'history' | 'calendar' | 'compoff'
 
   const { data, loading, error: fetchErr } = useFetch(
     `/leave/admin/dashboard?year=${fyYear}`, { employees: [] }, [fyYear]
   );
+
+  // Fetch holidays for the FY range (Apr year to Mar year+1)
+  const { data: holidays } = useFetch(`/holidays?year=${fyYear}`, []);
+  const { data: holidays2 } = useFetch(`/holidays?year=${fyYear + 1}`, []);
+  const allHolidays = useMemo(() => [...(holidays || []), ...(holidays2 || [])], [holidays, holidays2]);
 
   const employees = data?.employees || [];
 
@@ -245,16 +536,17 @@ export default function AdminLeaveDashboard() {
                 {isExpanded && (
                   <div className="border-t border-slate-100 px-5 pb-5">
                     {/* Tab bar */}
-                    <div className="flex items-center gap-1 border-b border-slate-100 mt-2 mb-4">
+                    <div className="flex items-center gap-1 border-b border-slate-100 mt-2 mb-4 overflow-x-auto">
                       {[
                         { key: 'balance', label: 'Leave Balance', icon: BarChart3 },
                         { key: 'history', label: `Leave History (${requests.length})`, icon: Calendar },
+                        { key: 'calendar', label: 'Calendar View', icon: CalendarDays },
                         { key: 'compoff', label: 'Comp-Off', icon: AlertTriangle },
                       ].map(t => (
                         <button
                           key={t.key}
                           onClick={() => setEmpTab(emp.id, t.key)}
-                          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+                          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                             empTab === t.key
                               ? 'border-blue-600 text-blue-600'
                               : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -379,6 +671,16 @@ export default function AdminLeaveDashboard() {
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {/* Calendar Tab */}
+                    {empTab === 'calendar' && (
+                      <LeaveCalendar
+                        requests={requests}
+                        compOffHistory={compOff.history}
+                        fyYear={fyYear}
+                        holidays={allHolidays}
+                      />
                     )}
 
                     {/* Comp-Off Tab */}
