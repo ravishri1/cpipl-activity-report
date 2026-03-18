@@ -83,7 +83,6 @@ router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
 // ── PUT /api/confirmation/bulk-update — bulk update confirmation dates / status ──
 // MUST be before /:userId routes
 router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
-  console.log('[BULK-UPDATE] Called with body:', JSON.stringify(req.body).slice(0, 500));
   const { updates } = req.body;
   if (!Array.isArray(updates) || updates.length === 0) {
     throw badRequest('updates array is required and must not be empty');
@@ -92,7 +91,8 @@ router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
     throw badRequest('Maximum 200 updates at a time');
   }
 
-  const results = [];
+  // Build all update operations first, then run in a single transaction
+  const operations = [];
   for (const u of updates) {
     const userId = parseId(u.userId);
     const data = {};
@@ -121,17 +121,22 @@ router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
 
     if (Object.keys(data).length === 0) continue;
 
-    console.log(`[BULK-UPDATE] Updating user ${userId} with:`, JSON.stringify(data));
-    const updated = await req.prisma.user.update({
-      where: { id: userId },
-      data,
-      select: { id: true, name: true, confirmationDate: true, probationEndDate: true, confirmationStatus: true },
-    });
-    console.log(`[BULK-UPDATE] Result for user ${userId}:`, JSON.stringify(updated));
-    results.push(updated);
+    operations.push(
+      req.prisma.user.update({
+        where: { id: userId },
+        data,
+        select: { id: true, name: true, confirmationDate: true, probationEndDate: true, confirmationStatus: true },
+      })
+    );
   }
 
-  console.log(`[BULK-UPDATE] Done. ${results.length} updated.`);
+  if (operations.length === 0) {
+    return res.json({ message: '0 employee(s) updated', results: [] });
+  }
+
+  // Execute all updates in a single transaction (much faster than one-by-one)
+  const results = await req.prisma.$transaction(operations);
+
   res.json({ message: `${results.length} employee(s) updated`, results });
 }));
 

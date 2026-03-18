@@ -580,7 +580,7 @@ export default function ConfirmationManager() {
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
   useEffect(() => { if (tab === 'all') fetchAllEmployees(); }, [tab, fetchAllEmployees]);
 
-  const handleDone = (msg) => {
+  const handleDone = async (msg) => {
     setExtendTarget(null);
     setConfirmTarget(null);
     setShowBulkUpdate(false);
@@ -588,9 +588,8 @@ export default function ConfirmationManager() {
     setSelectedIds(new Set());
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 5000);
-    // Always refetch BOTH lists to ensure fresh data from backend
-    fetchEmployees();
-    fetchAllEmployees();
+    // Always refetch BOTH lists and await them to ensure fresh data shows immediately
+    await Promise.all([fetchEmployees(), fetchAllEmployees()]);
   };
 
   // Current data set based on tab
