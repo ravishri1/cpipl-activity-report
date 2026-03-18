@@ -83,6 +83,7 @@ router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
 // ── PUT /api/confirmation/bulk-update — bulk update confirmation dates / status ──
 // MUST be before /:userId routes
 router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
+  console.log('[BULK-UPDATE] Called with body:', JSON.stringify(req.body).slice(0, 500));
   const { updates } = req.body;
   if (!Array.isArray(updates) || updates.length === 0) {
     throw badRequest('updates array is required and must not be empty');
@@ -120,14 +121,17 @@ router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
 
     if (Object.keys(data).length === 0) continue;
 
+    console.log(`[BULK-UPDATE] Updating user ${userId} with:`, JSON.stringify(data));
     const updated = await req.prisma.user.update({
       where: { id: userId },
       data,
       select: { id: true, name: true, confirmationDate: true, probationEndDate: true, confirmationStatus: true },
     });
+    console.log(`[BULK-UPDATE] Result for user ${userId}:`, JSON.stringify(updated));
     results.push(updated);
   }
 
+  console.log(`[BULK-UPDATE] Done. ${results.length} updated.`);
   res.json({ message: `${results.length} employee(s) updated`, results });
 }));
 
