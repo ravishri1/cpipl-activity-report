@@ -57,14 +57,12 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
   };
 
   const handleSave = async () => {
-    const payload = updates
-      .filter(u => u.confirmationDate || u.probationEndDate || u.confirmationStatus)
-      .map(u => ({
-        userId: u.userId,
-        ...(u.confirmationDate && { confirmationDate: u.confirmationDate }),
-        ...(u.probationEndDate && { probationEndDate: u.probationEndDate }),
-        ...(u.confirmationStatus && { confirmationStatus: u.confirmationStatus }),
-      }));
+    const payload = updates.map(u => ({
+      userId: u.userId,
+      ...(u.confirmationDate ? { confirmationDate: u.confirmationDate } : {}),
+      ...(u.probationEndDate ? { probationEndDate: u.probationEndDate } : {}),
+      ...(u.confirmationStatus ? { confirmationStatus: u.confirmationStatus } : {}),
+    })).filter(u => u.confirmationDate || u.probationEndDate || u.confirmationStatus);
 
     if (payload.length === 0) {
       setError('No changes to save.');
@@ -75,9 +73,10 @@ function BulkUpdateModal({ employees, onClose, onDone }) {
     setError(null);
     try {
       const res = await api.put('/confirmation/bulk-update', { updates: payload });
-      onDone(`${res.data.results?.length || 0} employee(s) updated successfully.`);
+      onDone(`${res.data.message || res.data.results?.length + ' employee(s) updated'}`);
     } catch (err) {
-      setError(err.response?.data?.error || 'Bulk update failed.');
+      const msg = err.response?.data?.error || err.message || 'Bulk update failed.';
+      setError(msg);
       setSaving(false);
     }
   };
