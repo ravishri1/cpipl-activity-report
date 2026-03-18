@@ -553,28 +553,27 @@ export default function ConfirmationManager() {
   const [allEmployees, setAllEmployees] = useState([]);
   const [allLoading, setAllLoading] = useState(false);
 
-  const fetchEmployees = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchEmployees = useCallback(async (background = false) => {
+    if (!background) { setLoading(true); setError(null); }
     try {
       const res = await api.get('/confirmation/due');
       setEmployees(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load confirmation data.');
+      if (!background) setError(err.response?.data?.error || 'Failed to load confirmation data.');
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
-  const fetchAllEmployees = useCallback(async () => {
-    setAllLoading(true);
+  const fetchAllEmployees = useCallback(async (background = false) => {
+    if (!background) setAllLoading(true);
     try {
       const res = await api.get('/confirmation/all');
       setAllEmployees(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load all employees.');
+      if (!background) setError(err.response?.data?.error || 'Failed to load all employees.');
     } finally {
-      setAllLoading(false);
+      if (!background) setAllLoading(false);
     }
   }, []);
 
@@ -605,9 +604,11 @@ export default function ConfirmationManager() {
       setAllEmployees(prev => prev.map(e => updateMap.has(e.id) ? { ...e, ...updateMap.get(e.id) } : e));
     }
 
-    // Background refetch to sync fully (non-blocking, no loading spinner)
-    fetchEmployees();
-    fetchAllEmployees();
+    // Background refetch after short delay to let DB commit, no loading spinner
+    setTimeout(() => {
+      fetchEmployees(true);
+      fetchAllEmployees(true);
+    }, 2000);
   };
 
   // Current data set based on tab
