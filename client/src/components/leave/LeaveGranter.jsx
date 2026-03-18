@@ -571,8 +571,9 @@ function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
         fyYear: importYear,
       });
       setResult(res.data);
+      // Always trigger refetch after import completes (even if some rows failed)
       if (res.data.success > 0) {
-        setTimeout(() => onSuccess(), 2000);
+        setTimeout(() => onSuccess(), 1500);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Import failed.');
@@ -730,13 +731,24 @@ function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
-          >
-            {result ? 'Close' : 'Cancel'}
-          </button>
+          {result ? (
+            <button
+              type="button"
+              onClick={onSuccess}
+              className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Done
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+            >
+              Cancel
+            </button>
+          )}
           {!result && (
             <button
               onClick={handleImport}

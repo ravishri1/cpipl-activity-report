@@ -264,50 +264,8 @@ router.get('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
   res.json(grants);
 }));
 
-// POST /api/leave/admin/grants — Grant leave to an employee
-router.post('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
-  requireFields(req.body, 'userId', 'leaveTypeId', 'fyYear', 'totalGranted');
-  const grant = await grantLeave(req.user.id, {
-    userId: parseInt(req.body.userId),
-    leaveTypeId: parseInt(req.body.leaveTypeId),
-    fyYear: parseInt(req.body.fyYear),
-    totalGranted: parseFloat(req.body.totalGranted),
-    probationAllowance: req.body.probationAllowance !== undefined && req.body.probationAllowance !== null ? parseFloat(req.body.probationAllowance) : null,
-    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
-    notes: req.body.notes || null,
-  }, req.prisma);
-  res.status(201).json(grant);
-}));
-
-// PUT /api/leave/admin/grants/:id — Edit a leave grant
-router.put('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
-  const id = parseId(req.params.id);
-  requireFields(req.body, 'totalGranted');
-  const updated = await updateLeaveGrant(req.user.id, id, {
-    totalGranted: parseFloat(req.body.totalGranted),
-    probationAllowance: req.body.probationAllowance !== null && req.body.probationAllowance !== undefined
-      ? parseFloat(req.body.probationAllowance) : null,
-    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
-    notes: req.body.notes || null,
-  }, req.prisma);
-  res.json(updated);
-}));
-
-// PUT /api/leave/admin/grants/:id/lock — Toggle lock/unlock for payroll
-router.put('/admin/grants/:id/lock', requireAdmin, asyncHandler(async (req, res) => {
-  const id = parseId(req.params.id);
-  const result = await toggleGrantLock(id, req.prisma);
-  res.json(result);
-}));
-
-// DELETE /api/leave/admin/grants/:id — Remove a leave grant
-router.delete('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
-  const id = parseId(req.params.id);
-  const result = await deleteLeaveGrant(id, req.prisma);
-  res.json(result);
-}));
-
 // POST /api/leave/admin/grants/bulk-import — Bulk import grants from CSV data
+// ⚠️ Must be BEFORE the generic POST /admin/grants route so Express matches it first
 router.post('/admin/grants/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
   const { rows, fyYear } = req.body;
   if (!rows || !Array.isArray(rows) || rows.length === 0) throw badRequest('No data to import');
@@ -356,7 +314,7 @@ router.post('/admin/grants/bulk-import', requireAdmin, asyncHandler(async (req, 
       const lt = ltMap[ltCode.toLowerCase()];
       if (!lt) { results.errors.push(`Row ${rowNum}: Leave type "${ltCode}" not found`); results.skipped++; continue; }
 
-      if (!total || total <= 0) { results.errors.push(`Row ${rowNum}: Invalid total granted`); results.skipped++; continue; }
+      if (!total || total <= 0) { results.errors.push(`Row ${rowNum}: Invalid total granted "${total}"`); results.skipped++; continue; }
 
       await grantLeave(req.user.id, {
         userId: user.id,
@@ -375,6 +333,49 @@ router.post('/admin/grants/bulk-import', requireAdmin, asyncHandler(async (req, 
   }
 
   res.json(results);
+}));
+
+// POST /api/leave/admin/grants — Grant leave to an employee
+router.post('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'leaveTypeId', 'fyYear', 'totalGranted');
+  const grant = await grantLeave(req.user.id, {
+    userId: parseInt(req.body.userId),
+    leaveTypeId: parseInt(req.body.leaveTypeId),
+    fyYear: parseInt(req.body.fyYear),
+    totalGranted: parseFloat(req.body.totalGranted),
+    probationAllowance: req.body.probationAllowance !== undefined && req.body.probationAllowance !== null ? parseFloat(req.body.probationAllowance) : null,
+    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
+    notes: req.body.notes || null,
+  }, req.prisma);
+  res.status(201).json(grant);
+}));
+
+// PUT /api/leave/admin/grants/:id — Edit a leave grant
+router.put('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  requireFields(req.body, 'totalGranted');
+  const updated = await updateLeaveGrant(req.user.id, id, {
+    totalGranted: parseFloat(req.body.totalGranted),
+    probationAllowance: req.body.probationAllowance !== null && req.body.probationAllowance !== undefined
+      ? parseFloat(req.body.probationAllowance) : null,
+    joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
+    notes: req.body.notes || null,
+  }, req.prisma);
+  res.json(updated);
+}));
+
+// PUT /api/leave/admin/grants/:id/lock — Toggle lock/unlock for payroll
+router.put('/admin/grants/:id/lock', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const result = await toggleGrantLock(id, req.prisma);
+  res.json(result);
+}));
+
+// DELETE /api/leave/admin/grants/:id — Remove a leave grant
+router.delete('/admin/grants/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const result = await deleteLeaveGrant(id, req.prisma);
+  res.json(result);
 }));
 
 // GET /api/leave/admin/employees-for-grant?year=2025 — Employees without grants for this FY
