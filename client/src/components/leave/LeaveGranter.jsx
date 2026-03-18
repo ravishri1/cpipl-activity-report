@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -9,7 +9,7 @@ import { formatDate } from '../../utils/formatters';
 import {
   Gift, Plus, Trash2, ChevronLeft, ChevronRight, Users, Shield, Clock,
   CheckCircle2, AlertTriangle, Search, X, Info, Pencil, Lock, Unlock,
-  Download, Upload, FileSpreadsheet,
+  Download, Upload, UserCheck, UserX,
 } from 'lucide-react';
 
 function getCurrentFY() {
@@ -27,7 +27,7 @@ export default function LeaveGranter() {
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [showModal, setShowModal] = useState(false);
   const [editGrant, setEditGrant] = useState(null);
-  const [showImport, setShowImport] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [search, setSearch] = useState('');
 
   const { data: grants, loading, error: fetchErr, refetch } = useFetch(
@@ -143,12 +143,12 @@ export default function LeaveGranter() {
             Export
           </button>
           <button
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50"
-            title="Bulk import grants from CSV"
+            onClick={() => setShowBulk(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm"
+            title="Bulk grant leave to all employees"
           >
-            <Upload className="w-4 h-4" />
-            Import
+            <Users className="w-4 h-4" />
+            Bulk Grant
           </button>
           <button
             onClick={() => setShowModal(true)}
@@ -173,8 +173,7 @@ export default function LeaveGranter() {
             <strong>Lock for payroll:</strong> Lock a grant to prevent accidental edits/deletes.
           </p>
           <p className="mt-1">
-            <strong>Bulk import/export:</strong> Export current year data as CSV, or import from CSV.
-            CSV format: Employee ID, Leave Type Code, Total Granted, Probation Allowance, Joining Month, Notes.
+            <strong>Bulk Grant:</strong> Assign leave to all employees at once. Confirmed employees get full entitlement, probation employees get limited allowance.
           </p>
         </div>
       </div>
@@ -198,7 +197,7 @@ export default function LeaveGranter() {
         <EmptyState
           icon={Gift}
           title="No leave grants"
-          subtitle={`No leave grants assigned for ${getFYLabel(fyYear)}. Click "Grant Leave" or "Import" to assign.`}
+          subtitle={`No leave grants assigned for ${getFYLabel(fyYear)}. Click "Bulk Grant" or "Grant Leave" to assign.`}
         />
       ) : (
         <div className="space-y-4">
@@ -341,12 +340,13 @@ export default function LeaveGranter() {
         />
       )}
 
-      {/* Import Modal */}
-      {showImport && (
-        <ImportModal
+      {/* Bulk Grant Modal */}
+      {showBulk && (
+        <BulkGrantModal
           fyYear={fyYear}
-          onClose={() => setShowImport(false)}
-          onSuccess={() => { setShowImport(false); refetch(); }}
+          existingGrants={grants}
+          onClose={() => setShowBulk(false)}
+          onSuccess={() => { setShowBulk(false); refetch(); }}
         />
       )}
     </div>
@@ -484,120 +484,165 @@ function EditGrantModal({ grant, fyYear, saving, onClose, onSave }) {
   );
 }
 
-// ─── Import Modal ────────────────────────────────────────
-function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
-  const [importYear, setImportYear] = useState(defaultFY);
-  const [csvData, setCsvData] = useState(null);
-  const [fileName, setFileName] = useState('');
-  const [importing, setImporting] = useState(false);
+// ─── Bulk Grant Modal ────────────────────────────────────
+function BulkGrantModal({ fyYear, existingGrants, onClose, onSuccess }) {
+  const [leaveTypeId, setLeaveTypeId] = useState('');
+  const [confirmedTotal, setConfirmedTotal] = useState('12');
+  const [probTotal, setProbTotal] = useState('12');
+  const [probAllowance, setProbAllowance] = useState('1');
+  const [selected, setSelected] = useState(new Set());
+  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-  const fileRef = useRef(null);
 
-  const parseCSV = (text) => {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-      // Simple CSV parse (handles quoted fields)
-      const vals = [];
-      let current = '';
-      let inQuotes = false;
-      for (const ch of lines[i]) {
-        if (ch === '"') { inQuotes = !inQuotes; continue; }
-        if (ch === ',' && !inQuotes) { vals.push(current.trim()); current = ''; continue; }
-        current += ch;
-      }
-      vals.push(current.trim());
+  const { data, loading } = useFetch(`/leave/admin/employees-for-grant?year=${fyYear}`, {});
+  const employees = data?.employees || [];
+  const leaveTypes = data?.leaveTypes || [];
 
-      const row = {};
-      headers.forEach((h, idx) => {
-        // Map common header names to our API field names
-        const key = mapHeader(h);
-        if (key) row[key] = vals[idx] || '';
-      });
-      if (Object.keys(row).length > 0) rows.push(row);
+  // Build set of existing grants for quick lookup
+  const existingSet = useMemo(() => {
+    const set = new Set();
+    for (const g of existingGrants || []) set.add(`${g.userId}-${g.leaveTypeId}`);
+    return set;
+  }, [existingGrants]);
+
+  // Split employees into confirmed and probation
+  const { confirmed, probation } = useMemo(() => {
+    const conf = [], prob = [];
+    for (const emp of employees) {
+      const isConf = emp.confirmationStatus === 'confirmed' || !!emp.confirmationDate;
+      if (isConf) conf.push(emp);
+      else prob.push(emp);
     }
-    return rows;
-  };
+    return { confirmed: conf, probation: prob };
+  }, [employees]);
 
-  const mapHeader = (h) => {
-    const lower = h.toLowerCase().replace(/[\s_-]+/g, '');
-    if (['employeeid', 'empid', 'id'].includes(lower)) return 'employeeId';
-    if (['name', 'employeename', 'empname'].includes(lower)) return 'name';
-    if (['leavetype', 'leavetypecode', 'type', 'code'].includes(lower)) return 'leaveType';
-    if (['totalgranted', 'total', 'granted', 'leaves'].includes(lower)) return 'totalGranted';
-    if (['probationallowance', 'probation', 'allowance'].includes(lower)) return 'probationAllowance';
-    if (['joiningmonth', 'month', 'joinmonth'].includes(lower)) return 'joiningMonth';
-    if (['notes', 'note', 'remarks'].includes(lower)) return 'notes';
-    return null;
-  };
-
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
+  // When leave type changes, auto-select employees that don't have a grant yet
+  const handleLeaveTypeChange = (ltId) => {
+    setLeaveTypeId(ltId);
     setResult(null);
     setError('');
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const rows = parseCSV(ev.target.result);
-        if (rows.length === 0) {
-          setError('No valid data rows found in CSV. Check format.');
-          setCsvData(null);
-        } else {
-          setCsvData(rows);
-        }
-      } catch {
-        setError('Failed to parse CSV file.');
-        setCsvData(null);
+    if (!ltId) { setSelected(new Set()); return; }
+    const newSel = new Set();
+    for (const emp of employees) {
+      if (!existingSet.has(`${emp.id}-${parseInt(ltId)}`)) {
+        newSel.add(emp.id);
       }
-    };
-    reader.readAsText(file);
+    }
+    setSelected(newSel);
   };
 
-  const handleImport = async () => {
-    if (!csvData || csvData.length === 0) return;
-    setImporting(true);
+  const toggleEmployee = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleGroup = (group) => {
+    const groupIds = group.map(e => e.id);
+    const allSelected = groupIds.every(id => selected.has(id));
+    setSelected(prev => {
+      const next = new Set(prev);
+      groupIds.forEach(id => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const handleBulkGrant = async () => {
+    if (!leaveTypeId || selected.size === 0) return;
+    setSubmitting(true);
     setError('');
     setResult(null);
     try {
-      const res = await api.post('/leave/admin/grants/bulk-import', {
-        rows: csvData,
-        fyYear: importYear,
+      const grants = [];
+      for (const emp of employees) {
+        if (!selected.has(emp.id)) continue;
+        const isConf = emp.confirmationStatus === 'confirmed' || !!emp.confirmationDate;
+        const total = isConf ? parseFloat(confirmedTotal) : parseFloat(probTotal);
+        // Use pro-rated total if mid-year joiner
+        const proRatedTotal = emp.suggestedJoiningMonth ? Math.max(total - (emp.suggestedJoiningMonth - 1), 0) : total;
+        grants.push({
+          userId: emp.id,
+          employeeName: emp.name,
+          totalGranted: proRatedTotal,
+          probationAllowance: isConf ? null : parseFloat(probAllowance),
+          joiningMonth: emp.suggestedJoiningMonth || null,
+          notes: isConf ? 'Bulk grant (confirmed)' : `Bulk grant (probation, ${probAllowance} allowed)`,
+        });
+      }
+      const res = await api.post('/leave/admin/grants/bulk', {
+        grants,
+        fyYear,
+        leaveTypeId: parseInt(leaveTypeId),
       });
       setResult(res.data);
-      // User clicks "Done" button to close modal and trigger refetch
     } catch (err) {
-      setError(err.response?.data?.error || 'Import failed.');
+      setError(err.response?.data?.error || 'Bulk grant failed.');
     } finally {
-      setImporting(false);
+      setSubmitting(false);
     }
   };
 
-  const handleDownloadTemplate = () => {
-    const csv = 'Employee ID,Leave Type Code,Total Granted,Probation Allowance,Joining Month,Notes\nCOLOR001,PL,12,,,"Full year employee"\nCOLOR002,PL,7,1,6,"Mid-year joiner, Sept start"';
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Leave_Grant_Template_${getFYLabel(importYear).replace(/\s/g, '_')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const selectedLT = leaveTypes.find(lt => lt.id === parseInt(leaveTypeId));
+
+  const renderEmployeeRow = (emp, isConf) => {
+    const hasGrant = leaveTypeId && existingSet.has(`${emp.id}-${parseInt(leaveTypeId)}`);
+    const isChecked = selected.has(emp.id);
+    const total = isConf ? parseFloat(confirmedTotal || 12) : parseFloat(probTotal || 12);
+    const proRated = emp.suggestedJoiningMonth ? Math.max(total - (emp.suggestedJoiningMonth - 1), 0) : total;
+
+    return (
+      <tr key={emp.id} className={`text-xs ${hasGrant ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'}`}>
+        <td className="px-3 py-2">
+          <input
+            type="checkbox"
+            checked={isChecked}
+            disabled={!leaveTypeId || hasGrant}
+            onChange={() => toggleEmployee(emp.id)}
+            className="rounded border-slate-300 text-blue-600"
+          />
+        </td>
+        <td className="px-3 py-2">
+          <p className="font-medium text-slate-800">{emp.name}</p>
+          <p className="text-[10px] text-slate-400">{emp.employeeId} · {emp.department}</p>
+        </td>
+        <td className="px-3 py-2 text-center font-bold text-slate-800">{proRated}</td>
+        <td className="px-3 py-2 text-center">
+          {!isConf ? (
+            <span className="text-amber-700 font-medium">{probAllowance} usable</span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </td>
+        <td className="px-3 py-2 text-center text-slate-500">
+          {emp.suggestedJoiningMonth ? `${fyMonthNames[emp.suggestedJoiningMonth - 1]}` : 'Full Year'}
+        </td>
+        <td className="px-3 py-2 text-center">
+          {hasGrant ? (
+            <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">Already Granted</span>
+          ) : (
+            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">New</span>
+          )}
+        </td>
+      </tr>
+    );
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden max-h-[85vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
           <div>
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-              <Upload className="w-5 h-5 text-blue-600" />
-              Bulk Import Grants
+              <Users className="w-5 h-5 text-emerald-600" />
+              Bulk Grant Leave — {getFYLabel(fyYear)}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Upload a CSV file to assign grants in bulk</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Assign leave to all employees at once. Confirmed = full entitlement, Probation = limited allowance.
+            </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-200">
             <X className="w-4 h-4 text-slate-500" />
@@ -612,110 +657,172 @@ function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
             </div>
           )}
 
-          {/* FY Year selection */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Import for Financial Year *</label>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-1 py-1">
-                <button onClick={() => setImportYear(y => y - 1)} className="p-1.5 rounded hover:bg-slate-100">
-                  <ChevronLeft className="w-4 h-4 text-slate-600" />
-                </button>
-                <span className="text-sm font-semibold text-slate-700 px-3 min-w-[100px] text-center">
-                  {getFYLabel(importYear)}
-                </span>
-                <button
-                  onClick={() => setImportYear(y => y + 1)}
-                  disabled={importYear >= getCurrentFY() + 1}
-                  className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"
-                >
-                  <ChevronRight className="w-4 h-4 text-slate-600" />
-                </button>
-              </div>
+          {/* Config row */}
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Leave Type *</label>
+              <select
+                value={leaveTypeId}
+                onChange={e => handleLeaveTypeChange(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+              >
+                <option value="">Select leave type</option>
+                {leaveTypes.map(lt => (
+                  <option key={lt.id} value={lt.id}>{lt.code} — {lt.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                <UserCheck className="w-3 h-3 inline mr-1 text-emerald-600" />
+                Confirmed Total
+              </label>
+              <input
+                type="number"
+                value={confirmedTotal}
+                onChange={e => setConfirmedTotal(e.target.value)}
+                min="0" max="365" step="0.5"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                <UserX className="w-3 h-3 inline mr-1 text-amber-600" />
+                Probation Total
+              </label>
+              <input
+                type="number"
+                value={probTotal}
+                onChange={e => setProbTotal(e.target.value)}
+                min="0" max="365" step="0.5"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">
+                <Shield className="w-3 h-3 inline mr-1 text-amber-600" />
+                Probation Usable
+              </label>
+              <input
+                type="number"
+                value={probAllowance}
+                onChange={e => setProbAllowance(e.target.value)}
+                min="0" max="365" step="0.5"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                title="How many days a probation employee can actually use"
+              />
             </div>
           </div>
 
-          {/* Template download */}
+          {/* Info */}
           <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-blue-700">
-              <p>CSV must have headers: <strong>Employee ID, Leave Type Code, Total Granted</strong> (required).</p>
-              <p className="mt-0.5">Optional columns: Probation Allowance, Joining Month (1-12), Notes.</p>
-              <p className="mt-0.5">If employee already has a grant for this leave type + year, it will be <strong>updated</strong>.</p>
-              <button
-                type="button"
-                onClick={handleDownloadTemplate}
-                className="mt-1.5 inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                Download template CSV
-              </button>
+            <div className="text-[11px] text-blue-700">
+              <p><strong>Confirmed:</strong> Get <strong>{confirmedTotal || 12}</strong> days (pro-rated for mid-year joiners). No probation restriction.</p>
+              <p className="mt-0.5"><strong>Probation:</strong> Get <strong>{probTotal || 12}</strong> days total but only <strong>{probAllowance || 1}</strong> usable until confirmed. Rest stays locked.</p>
+              <p className="mt-0.5">Already-granted employees are skipped (shown greyed out). Existing grants can be edited individually.</p>
             </div>
           </div>
 
-          {/* File upload */}
-          <div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFile}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl py-6 hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
-            >
-              <Upload className="w-5 h-5 text-slate-400" />
-              <span className="text-sm text-slate-500">
-                {fileName ? fileName : 'Click to upload CSV file'}
-              </span>
-            </button>
-          </div>
-
-          {/* Preview */}
-          {csvData && (
-            <div className="bg-slate-50 rounded-lg border border-slate-200 p-3">
-              <p className="text-xs font-semibold text-slate-700 mb-2">
-                Preview: {csvData.length} row{csvData.length !== 1 ? 's' : ''} found
-              </p>
-              <div className="max-h-40 overflow-y-auto text-xs">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-slate-500">
-                      <th className="px-2 py-1">#</th>
-                      <th className="px-2 py-1">Emp ID</th>
-                      <th className="px-2 py-1">Type</th>
-                      <th className="px-2 py-1">Total</th>
-                      <th className="px-2 py-1">Prob.</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {csvData.slice(0, 10).map((r, i) => (
-                      <tr key={i}>
-                        <td className="px-2 py-1 text-slate-400">{i + 1}</td>
-                        <td className="px-2 py-1 font-medium">{r.employeeId || r.name || '-'}</td>
-                        <td className="px-2 py-1">{r.leaveType || '-'}</td>
-                        <td className="px-2 py-1 font-bold">{r.totalGranted || '-'}</td>
-                        <td className="px-2 py-1">{r.probationAllowance || '-'}</td>
-                      </tr>
-                    ))}
-                    {csvData.length > 10 && (
-                      <tr><td colSpan={5} className="px-2 py-1 text-slate-400 text-center">...and {csvData.length - 10} more</td></tr>
-                    )}
-                  </tbody>
-                </table>
+          {loading ? (
+            <div className="py-8 text-center text-slate-400 text-sm">Loading employees...</div>
+          ) : !leaveTypeId ? (
+            <div className="py-8 text-center text-slate-400 text-sm">Select a leave type to see employees</div>
+          ) : (
+            <>
+              {/* Confirmed Employees */}
+              <div className="border border-emerald-200 rounded-xl overflow-hidden">
+                <div className="bg-emerald-50 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-600" />
+                    <span className="text-sm font-semibold text-emerald-800">
+                      Confirmed Employees ({confirmed.length})
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-emerald-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={confirmed.length > 0 && confirmed.every(e => selected.has(e.id) || existingSet.has(`${e.id}-${parseInt(leaveTypeId)}`))}
+                      onChange={() => toggleGroup(confirmed.filter(e => !existingSet.has(`${e.id}-${parseInt(leaveTypeId)}`)))}
+                      className="rounded border-emerald-400 text-emerald-600"
+                    />
+                    Select all
+                  </label>
+                </div>
+                {confirmed.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">No confirmed employees</div>
+                ) : (
+                  <div className="max-h-52 overflow-y-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-[10px] text-slate-500 uppercase bg-slate-50/80">
+                          <th className="px-3 py-1.5 w-8"></th>
+                          <th className="px-3 py-1.5 text-left">Employee</th>
+                          <th className="px-3 py-1.5 text-center">Total</th>
+                          <th className="px-3 py-1.5 text-center">Prob. Limit</th>
+                          <th className="px-3 py-1.5 text-center">Join Month</th>
+                          <th className="px-3 py-1.5 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {confirmed.map(emp => renderEmployeeRow(emp, true))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
+
+              {/* Probation Employees */}
+              <div className="border border-amber-200 rounded-xl overflow-hidden">
+                <div className="bg-amber-50 px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserX className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-semibold text-amber-800">
+                      Probation Employees ({probation.length})
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-amber-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={probation.length > 0 && probation.every(e => selected.has(e.id) || existingSet.has(`${e.id}-${parseInt(leaveTypeId)}`))}
+                      onChange={() => toggleGroup(probation.filter(e => !existingSet.has(`${e.id}-${parseInt(leaveTypeId)}`)))}
+                      className="rounded border-amber-400 text-amber-600"
+                    />
+                    Select all
+                  </label>
+                </div>
+                {probation.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">No probation employees</div>
+                ) : (
+                  <div className="max-h-52 overflow-y-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-[10px] text-slate-500 uppercase bg-slate-50/80">
+                          <th className="px-3 py-1.5 w-8"></th>
+                          <th className="px-3 py-1.5 text-left">Employee</th>
+                          <th className="px-3 py-1.5 text-center">Total</th>
+                          <th className="px-3 py-1.5 text-center">Prob. Limit</th>
+                          <th className="px-3 py-1.5 text-center">Join Month</th>
+                          <th className="px-3 py-1.5 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {probation.map(emp => renderEmployeeRow(emp, false))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
-          {/* Import result */}
+          {/* Result */}
           {result && (
             <div className={`rounded-lg border px-3 py-2.5 text-sm ${result.success > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
               <p className="font-semibold text-slate-800">
-                Import complete: {result.success} success, {result.skipped} skipped
+                ✅ Bulk grant complete: {result.success} granted, {result.skipped} skipped
               </p>
-              {result.errors.length > 0 && (
+              {result.errors?.length > 0 && (
                 <ul className="mt-1.5 text-xs text-red-600 space-y-0.5 max-h-24 overflow-y-auto">
                   {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
                 </ul>
@@ -724,40 +831,41 @@ function ImportModal({ fyYear: defaultFY, onClose, onSuccess }) {
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100">
-          {result ? (
-            <button
-              type="button"
-              onClick={onSuccess}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Done
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
-            >
-              Cancel
-            </button>
-          )}
-          {!result && (
-            <button
-              onClick={handleImport}
-              disabled={importing || !csvData}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {importing ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4" />
-              )}
-              {importing ? `Importing ${csvData?.length || 0} rows...` : `Import ${csvData?.length || 0} Grants`}
-            </button>
-          )}
+        {/* Footer */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
+          <div className="text-xs text-slate-500">
+            {leaveTypeId ? `${selected.size} employee${selected.size !== 1 ? 's' : ''} selected` : 'Select a leave type first'}
+          </div>
+          <div className="flex items-center gap-2">
+            {result ? (
+              <button
+                type="button"
+                onClick={onSuccess}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Done
+              </button>
+            ) : (
+              <>
+                <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkGrant}
+                  disabled={submitting || !leaveTypeId || selected.size === 0}
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Gift className="w-4 h-4" />
+                  )}
+                  {submitting ? `Granting...` : `Grant to ${selected.size} Employees`}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -264,70 +264,34 @@ router.get('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
   res.json(grants);
 }));
 
-// POST /api/leave/admin/grants/bulk-import — Bulk import grants from CSV data
+// POST /api/leave/admin/grants/bulk — Bulk grant leave to multiple employees
 // ⚠️ Must be BEFORE the generic POST /admin/grants route so Express matches it first
-router.post('/admin/grants/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
-  const { rows, fyYear } = req.body;
-  if (!rows || !Array.isArray(rows) || rows.length === 0) throw badRequest('No data to import');
+router.post('/admin/grants/bulk', requireAdmin, asyncHandler(async (req, res) => {
+  const { grants: grantRows, fyYear, leaveTypeId } = req.body;
+  if (!grantRows || !Array.isArray(grantRows) || grantRows.length === 0) throw badRequest('No employees selected');
   if (!fyYear) throw badRequest('Financial year is required');
+  if (!leaveTypeId) throw badRequest('Leave type is required');
 
   const year = parseInt(fyYear);
-  const leaveTypes = await req.prisma.leaveType.findMany({ where: { isActive: true } });
-  const ltMap = {};
-  for (const lt of leaveTypes) {
-    ltMap[lt.code.toLowerCase()] = lt;
-    ltMap[lt.name.toLowerCase()] = lt;
-  }
-
-  const users = await req.prisma.user.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true, employeeId: true },
-  });
-  const userByEmpId = {};
-  const userByName = {};
-  for (const u of users) {
-    if (u.employeeId) userByEmpId[u.employeeId.toLowerCase()] = u;
-    userByName[u.name.toLowerCase()] = u;
-  }
-
+  const ltId = parseInt(leaveTypeId);
   const results = { success: 0, skipped: 0, errors: [] };
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 1;
+  for (let i = 0; i < grantRows.length; i++) {
+    const row = grantRows[i];
     try {
-      const empId = (row.employeeId || row.employee_id || '').trim();
-      const empName = (row.name || row.employee_name || row.employeeName || '').trim();
-      const ltCode = (row.leaveType || row.leave_type || row.leaveTypeCode || '').trim();
-      const total = parseFloat(row.totalGranted || row.total_granted || row.total || 0);
-      const probation = row.probationAllowance !== undefined && row.probationAllowance !== ''
-        ? parseFloat(row.probationAllowance || row.probation_allowance || 0)
-        : null;
-      const jMonth = row.joiningMonth || row.joining_month ? parseInt(row.joiningMonth || row.joining_month) : null;
-      const notes = (row.notes || '').trim() || null;
-
-      // Find user
-      const user = (empId && userByEmpId[empId.toLowerCase()]) || (empName && userByName[empName.toLowerCase()]);
-      if (!user) { results.errors.push(`Row ${rowNum}: Employee "${empId || empName}" not found`); results.skipped++; continue; }
-
-      // Find leave type
-      const lt = ltMap[ltCode.toLowerCase()];
-      if (!lt) { results.errors.push(`Row ${rowNum}: Leave type "${ltCode}" not found`); results.skipped++; continue; }
-
-      if (!total || total <= 0) { results.errors.push(`Row ${rowNum}: Invalid total granted "${total}"`); results.skipped++; continue; }
-
       await grantLeave(req.user.id, {
-        userId: user.id,
-        leaveTypeId: lt.id,
+        userId: parseInt(row.userId),
+        leaveTypeId: ltId,
         fyYear: year,
-        totalGranted: total,
-        probationAllowance: probation,
-        joiningMonth: jMonth,
-        notes,
+        totalGranted: parseFloat(row.totalGranted),
+        probationAllowance: row.probationAllowance !== null && row.probationAllowance !== undefined
+          ? parseFloat(row.probationAllowance) : null,
+        joiningMonth: row.joiningMonth ? parseInt(row.joiningMonth) : null,
+        notes: row.notes || null,
       }, req.prisma);
       results.success++;
     } catch (err) {
-      results.errors.push(`Row ${rowNum}: ${err.message}`);
+      results.errors.push(`${row.employeeName || 'Employee'}: ${err.message}`);
       results.skipped++;
     }
   }
