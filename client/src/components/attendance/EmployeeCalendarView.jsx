@@ -513,19 +513,15 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
 
                     {/* Attendance Details — greytHR style */}
                     {(() => {
-                      // Total Work Hrs = First In to Last Out (simple time diff, no rules)
-                      const totalHrsRaw = selectedDay.totalWorkHrsRaw || 0;
-                      // Break = 1 hour fixed as per company policy
+                      // For today, skip all hour calculations — day not yet complete
+                      const totalHrsRaw = isSelectedDayToday ? 0 : (selectedDay.totalWorkHrsRaw || 0);
                       const breakHrs = (totalHrsRaw > 0 && selectedDay.checkIn && selectedDay.checkOut) ? BREAK_HOURS : 0;
-                      // Actual Work Hrs = Total - Break
                       const actualWorkHrs = Math.max(0, totalHrsRaw - breakHrs);
-                      // Work hours within shift window
-                      const workInShift = calcWorkInShift(selectedDay, data.shift);
-                      // Shift duration for shortfall/excess
+                      const workInShift = isSelectedDayToday ? 0 : calcWorkInShift(selectedDay, data.shift);
                       const shiftDuration = getShiftDurationHrs(data.shift);
-                      const shiftWorkExpected = shiftDuration > 0 ? shiftDuration - BREAK_HOURS : 0; // expected actual work = shift - break
-                      const shortfallHrs = (shiftWorkExpected > 0 && actualWorkHrs > 0 && actualWorkHrs < shiftWorkExpected) ? (shiftWorkExpected - actualWorkHrs) : 0;
-                      const excessHrs = (shiftWorkExpected > 0 && actualWorkHrs > shiftWorkExpected) ? (actualWorkHrs - shiftWorkExpected) : 0;
+                      const shiftWorkExpected = shiftDuration > 0 ? shiftDuration - BREAK_HOURS : 0;
+                      const shortfallHrs = isSelectedDayToday ? 0 : ((shiftWorkExpected > 0 && actualWorkHrs > 0 && actualWorkHrs < shiftWorkExpected) ? (shiftWorkExpected - actualWorkHrs) : 0);
+                      const excessHrs = isSelectedDayToday ? 0 : ((shiftWorkExpected > 0 && actualWorkHrs > shiftWorkExpected) ? (actualWorkHrs - shiftWorkExpected) : 0);
                       // Late In display
                       const lateInDisplay = selectedDay.lateIn || '-';
                       // Early Out display
@@ -553,14 +549,14 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                 <tbody>
                                   <tr className="text-slate-700">
                                     <td className="py-2.5 pr-2 font-semibold">{formatTime(selectedDay.checkIn)}</td>
-                                    <td className="py-2.5 pr-2 font-semibold">{isSelectedDayToday ? <span className="text-blue-500 text-[10px] italic">In Progress</span> : formatTime(selectedDay.checkOut)}</td>
+                                    <td className="py-2.5 pr-2 font-semibold">{isSelectedDayToday ? '-' : formatTime(selectedDay.checkOut)}</td>
                                     <td className="py-2.5 pr-2">
                                       {selectedDay.lateInMinutes > 0 ? (
                                         <span className={`font-medium ${selectedDay.isLate ? 'text-amber-600' : 'text-slate-600'}`}>{lateInDisplay}</span>
                                       ) : '-'}
                                     </td>
                                     <td className="py-2.5 pr-2">
-                                      {selectedDay.earlyOutMinutes > 0 ? (
+                                      {!isSelectedDayToday && selectedDay.earlyOutMinutes > 0 ? (
                                         <span className="text-orange-600 font-medium">{earlyOutDisplay}</span>
                                       ) : '-'}
                                     </td>
@@ -682,7 +678,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                   </div>
                                   <div>
                                     <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
-                                    <div className="text-xs font-semibold text-blue-600">{lastOut || <span className="text-blue-500 text-[10px] italic">In Progress</span>}</div>
+                                    <div className="text-xs font-semibold text-blue-600">{lastOut || '-'}</div>
                                   </div>
                                 </div>
                               </div>
@@ -701,7 +697,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                             </div>
                             <div>
                               <div className="text-[10px] text-slate-400 mb-0.5">Last Out</div>
-                              <div className="text-xs font-semibold text-blue-600">{isSelectedDayToday ? <span className="text-blue-500 text-[10px] italic">In Progress</span> : (selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-')}</div>
+                              <div className="text-xs font-semibold text-blue-600">{isSelectedDayToday ? '-' : (selectedDay.checkOut ? formatTime(selectedDay.checkOut) : '-')}</div>
                             </div>
                           </div>
                         </div>
