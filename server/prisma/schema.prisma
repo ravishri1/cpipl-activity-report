@@ -416,9 +416,11 @@ model Attendance {
 
 model LeaveType {
   id              Int      @id @default(autoincrement())
-  name            String   @unique              // "Casual Leave", "Sick Leave", "Earned Leave"
-  code            String   @unique              // "CL", "SL", "EL"
-  defaultBalance  Float    @default(0)          // annual entitlement
+  name            String   @unique              // "Privilege Leave"
+  code            String   @unique              // "PL"
+  defaultBalance  Float    @default(0)          // annual entitlement (e.g., 12)
+  accrualType     String   @default("monthly")  // "monthly" = 1/month bucket, "yearly" = all at once, "none"
+  accrualAmount   Float    @default(1)          // how many credited per period (1/month for PL)
   carryForward    Boolean  @default(false)
   maxCarryForward Float    @default(0)
   isActive        Boolean  @default(true)
@@ -431,10 +433,11 @@ model LeaveBalance {
   id          Int   @id @default(autoincrement())
   userId      Int
   leaveTypeId Int
-  year        Int                               // 2026
-  total       Float @default(0)                 // allocated
-  used        Float @default(0)                 // consumed
-  balance     Float @default(0)                 // remaining = total - used
+  year        Int                               // financial year START year (2025 = FY Apr 2025 - Mar 2026)
+  opening     Float @default(0)                 // carry forward from previous FY
+  total       Float @default(0)                 // annual entitlement (e.g., 12)
+  used        Float @default(0)                 // consumed (approved leaves)
+  balance     Float @default(0)                 // available = opening + credited - used (kept in sync)
 
   user      User      @relation(fields: [userId], references: [id])
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
@@ -449,6 +452,7 @@ model LeaveRequest {
   startDate   String                            // "YYYY-MM-DD"
   endDate     String                            // "YYYY-MM-DD"
   days        Float                             // computed (supports half-days: 0.5)
+  session     String    @default("full_day")    // "full_day", "first_half", "second_half"
   reason      String
   status      String    @default("pending")     // pending, approved, rejected, cancelled
   reviewedBy  Int?                              // userId of approver
