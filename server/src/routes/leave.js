@@ -270,7 +270,7 @@ router.post('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
     leaveTypeId: parseInt(req.body.leaveTypeId),
     fyYear: parseInt(req.body.fyYear),
     totalGranted: parseFloat(req.body.totalGranted),
-    probationAllowance: req.body.probationAllowance !== undefined ? parseFloat(req.body.probationAllowance) : 1,
+    probationAllowance: req.body.probationAllowance !== undefined && req.body.probationAllowance !== null ? parseFloat(req.body.probationAllowance) : null,
     joiningMonth: req.body.joiningMonth ? parseInt(req.body.joiningMonth) : null,
     notes: req.body.notes || null,
   }, req.prisma);

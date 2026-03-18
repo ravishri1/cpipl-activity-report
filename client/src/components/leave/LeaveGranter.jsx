@@ -265,18 +265,27 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
 
   const handleSelectUser = (user) => {
     setSelectedUser(user);
-    // Auto-fill suggested values
+    // Auto-fill suggested values based on employee status
+    const isConfirmed = user.confirmationStatus === 'confirmed' || !!user.confirmationDate;
     if (user.suggestedJoiningMonth) {
       setForm(f => ({
         ...f,
         joiningMonth: String(user.suggestedJoiningMonth),
         totalGranted: String(user.suggestedTotal),
+        probationAllowance: isConfirmed ? String(user.suggestedTotal) : '1',
       }));
     } else {
-      setForm(f => ({ ...f, joiningMonth: '', totalGranted: '12' }));
+      setForm(f => ({
+        ...f,
+        joiningMonth: '',
+        totalGranted: '12',
+        probationAllowance: isConfirmed ? '12' : '1',
+      }));
     }
     setStep(2);
   };
+
+  const isConfirmed = selectedUser && (selectedUser.confirmationStatus === 'confirmed' || !!selectedUser.confirmationDate);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -288,7 +297,8 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
         leaveTypeId: parseInt(form.leaveTypeId),
         fyYear,
         totalGranted: parseFloat(form.totalGranted),
-        probationAllowance: parseFloat(form.probationAllowance),
+        // Confirmed employees: no probation restriction (null). Probation: limit usable leaves.
+        probationAllowance: isConfirmed ? null : parseFloat(form.probationAllowance),
         joiningMonth: form.joiningMonth ? parseInt(form.joiningMonth) : null,
         notes: form.notes || null,
       });
@@ -402,15 +412,24 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
               </button>
             </div>
 
-            {selectedUser.onProbation && (
+            {isConfirmed ? (
+              <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-emerald-700">
+                  <p><strong>Employee is confirmed.</strong> All granted leaves will be fully available (no probation restriction).</p>
+                  {selectedUser.confirmationDate && <p className="mt-0.5">Confirmed on: {formatDate(selectedUser.confirmationDate)}</p>}
+                </div>
+              </div>
+            ) : selectedUser.onProbation ? (
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-amber-700">
                   <p><strong>Employee is on probation.</strong></p>
                   <p>Only "Probation Allowance" leaves will be usable. Remaining accrued leaves stay frozen until confirmation.</p>
+                  {selectedUser.dateOfJoining && <p className="mt-0.5">Joined: {formatDate(selectedUser.dateOfJoining)}</p>}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* Leave Type */}
             <div>
@@ -432,7 +451,7 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
             </div>
 
             {/* Total Granted */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${isConfirmed ? 'grid-cols-1' : 'grid-cols-2'}`}>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Total Leaves for FY *
@@ -452,25 +471,27 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
                   Pro-rated for mid-year joiners. Full year = 12.
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Probation Allowance *
-                </label>
-                <input
-                  type="number"
-                  value={form.probationAllowance}
-                  onChange={e => setForm({ ...form, probationAllowance: e.target.value })}
-                  required
-                  min="0"
-                  max="365"
-                  step="0.5"
-                  placeholder="e.g., 1"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Leaves usable during probation. Rest frozen until confirmation.
-                </p>
-              </div>
+              {!isConfirmed && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Probation Allowance *
+                  </label>
+                  <input
+                    type="number"
+                    value={form.probationAllowance}
+                    onChange={e => setForm({ ...form, probationAllowance: e.target.value })}
+                    required
+                    min="0"
+                    max="365"
+                    step="0.5"
+                    placeholder="e.g., 1"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Leaves usable during probation. Rest frozen until confirmation.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Joining Month */}
@@ -506,25 +527,32 @@ function GrantModal({ fyYear, onClose, onSuccess }) {
             </div>
 
             {/* Summary */}
-            {form.totalGranted && form.probationAllowance && (
+            {form.totalGranted && (
               <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
                 <p className="text-xs font-semibold text-blue-700 mb-1">Grant Summary</p>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
+                {isConfirmed ? (
+                  <div className="text-center">
                     <p className="text-lg font-bold text-blue-700">{form.totalGranted}</p>
-                    <p className="text-[10px] text-blue-500">Total for FY</p>
+                    <p className="text-[10px] text-blue-500">Total leaves for FY (all available via monthly bucket)</p>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-amber-600">{form.probationAllowance}</p>
-                    <p className="text-[10px] text-amber-500">During Probation</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-blue-700">{form.totalGranted}</p>
+                      <p className="text-[10px] text-blue-500">Total for FY</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-amber-600">{form.probationAllowance}</p>
+                      <p className="text-[10px] text-amber-500">During Probation</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-emerald-600">
+                        {Math.max(parseFloat(form.totalGranted || 0) - parseFloat(form.probationAllowance || 0), 0)}
+                      </p>
+                      <p className="text-[10px] text-emerald-500">Unlocked After Confirmation</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-emerald-600">
-                      {Math.max(parseFloat(form.totalGranted || 0) - parseFloat(form.probationAllowance || 0), 0)}
-                    </p>
-                    <p className="text-[10px] text-emerald-500">Unlocked After Confirmation</p>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 

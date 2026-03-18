@@ -612,11 +612,13 @@ async function grantLeave(adminId, data, prisma) {
   if (!leaveType || !leaveType.isActive) throw new Error('Invalid leave type.');
 
   // Upsert the grant record
+  // probationAllowance: null = no restriction (confirmed employee), number = cap during probation
+  const effectiveProbation = probationAllowance !== null && probationAllowance !== undefined ? probationAllowance : 0;
   const grant = await prisma.leaveGranter.upsert({
     where: { userId_leaveTypeId_fyYear: { userId, leaveTypeId, fyYear } },
     update: {
       totalGranted,
-      probationAllowance: probationAllowance ?? 1,
+      probationAllowance: effectiveProbation,
       joiningMonth: joiningMonth || null,
       notes: notes || null,
       grantedBy: adminId,
@@ -627,7 +629,7 @@ async function grantLeave(adminId, data, prisma) {
       leaveTypeId,
       fyYear,
       totalGranted,
-      probationAllowance: probationAllowance ?? 1,
+      probationAllowance: effectiveProbation,
       joiningMonth: joiningMonth || null,
       notes: notes || null,
       grantedBy: adminId,
@@ -644,12 +646,14 @@ async function grantLeave(adminId, data, prisma) {
     where: { userId_leaveTypeId_year: { userId, leaveTypeId, year: fyYear } },
   });
 
+  // For balance: null probationAllowance = no restriction (confirmed), number = cap during probation
+  const balanceProbation = probationAllowance !== null && probationAllowance !== undefined ? probationAllowance : null;
   if (balance) {
     await prisma.leaveBalance.update({
       where: { id: balance.id },
       data: {
         total: totalGranted,
-        probationAllowance: probationAllowance ?? 1,
+        probationAllowance: balanceProbation,
         joiningMonth: joiningMonth || null,
       },
     });
@@ -663,7 +667,7 @@ async function grantLeave(adminId, data, prisma) {
         total: totalGranted,
         used: 0,
         balance: 0,
-        probationAllowance: probationAllowance ?? 1,
+        probationAllowance: balanceProbation,
         joiningMonth: joiningMonth || null,
       },
     });
