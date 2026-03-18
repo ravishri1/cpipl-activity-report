@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
 import {
   UserCheck, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight,
-  X, Loader2, Calendar, History, User, Search,
+  X, Loader2, Calendar, History, User, Search, Upload, Download, Edit3,
+  CheckSquare, Square, MinusSquare,
 } from 'lucide-react';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -30,6 +31,323 @@ function DueBadge({ dateStr }) {
   if (days <= 7)
     return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Due in {days}d</span>;
   return <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{days}d left</span>;
+}
+
+function downloadCSV(rows, headers, filename) {
+  const bom = '\uFEFF';
+  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Bulk Update Modal ───────────────────────────────────────────────────────
+function BulkUpdateModal({ employees, onClose, onDone }) {
+  const [updates, setUpdates] = useState(() =>
+    employees.map(e => ({
+      userId: e.id,
+      name: e.name,
+      employeeId: e.employeeId,
+      confirmationDate: e.confirmationDate || '',
+      probationEndDate: e.probationEndDate || '',
+      confirmationStatus: e.confirmationStatus || 'pending',
+    }))
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const setField = (idx, field, val) => {
+    setUpdates(prev => prev.map((u, i) => i === idx ? { ...u, [field]: val } : u));
+  };
+
+  const setAllDates = (field, value) => {
+    setUpdates(prev => prev.map(u => ({ ...u, [field]: value })));
+  };
+
+  const handleSave = async () => {
+    const payload = updates
+      .filter(u => u.confirmationDate || u.probationEndDate || u.confirmationStatus)
+      .map(u => ({
+        userId: u.userId,
+        ...(u.confirmationDate && { confirmationDate: u.confirmationDate }),
+        ...(u.probationEndDate && { probationEndDate: u.probationEndDate }),
+        ...(u.confirmationStatus && { confirmationStatus: u.confirmationStatus }),
+      }));
+
+    if (payload.length === 0) {
+      setError('No changes to save.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.put('/confirmation/bulk-update', { updates: payload });
+      onDone(`${res.data.results?.length || 0} employee(s) updated successfully.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Bulk update failed.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-blue-600" />
+              Bulk Update — {employees.length} Employee{employees.length > 1 ? 's' : ''}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Edit confirmation dates, probation dates, and status in bulk</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        {error && <div className="px-6 pt-3"><AlertMessage type="error" message={error} /></div>}
+
+        {/* Quick fill bar */}
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-3 items-center text-xs">
+          <span className="text-slate-500 font-medium">Quick fill all:</span>
+          <div className="flex items-center gap-1">
+            <label className="text-slate-500">Conf. Date:</label>
+            <input type="date" className="border border-slate-200 rounded px-2 py-1 text-xs"
+              onChange={e => setAllDates('confirmationDate', e.target.value)} />
+          </div>
+          <div className="flex items-center gap-1">
+            <label className="text-slate-500">Probation End:</label>
+            <input type="date" className="border border-slate-200 rounded px-2 py-1 text-xs"
+              onChange={e => setAllDates('probationEndDate', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-3">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white">
+              <tr className="text-left border-b border-slate-200">
+                <th className="py-2 pr-3 font-medium text-slate-600 text-xs">Employee</th>
+                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Confirmation Date</th>
+                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Probation End Date</th>
+                <th className="py-2 px-3 font-medium text-slate-600 text-xs">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {updates.map((u, idx) => (
+                <tr key={u.userId} className="border-b border-slate-100">
+                  <td className="py-2.5 pr-3">
+                    <p className="font-medium text-slate-700">{u.name}</p>
+                    <p className="text-xs text-slate-400">{u.employeeId}</p>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <input type="date" value={u.confirmationDate}
+                      onChange={e => setField(idx, 'confirmationDate', e.target.value)}
+                      className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs w-full" />
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <input type="date" value={u.probationEndDate}
+                      onChange={e => setField(idx, 'probationEndDate', e.target.value)}
+                      className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs w-full" />
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <select value={u.confirmationStatus}
+                      onChange={e => setField(idx, 'confirmationStatus', e.target.value)}
+                      className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white">
+                      <option value="pending">Pending</option>
+                      <option value="extended">Extended</option>
+                      <option value="confirmed">Confirmed</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                       disabled:opacity-50 flex items-center gap-2">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save All Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CSV Import Modal ────────────────────────────────────────────────────────
+function ImportModal({ onClose, onDone }) {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleFileChange = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').filter(l => l.trim());
+        if (lines.length < 2) { setError('CSV must have a header row and at least one data row.'); return; }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+        const empIdIdx = headers.findIndex(h => h === 'employeeid' || h === 'employee_id' || h === 'emp_id' || h === 'id');
+        const confDateIdx = headers.findIndex(h => h === 'confirmationdate' || h === 'confirmation_date' || h === 'conf_date');
+        const probDateIdx = headers.findIndex(h => h === 'probationenddate' || h === 'probation_end_date' || h === 'probation_date');
+        const statusIdx = headers.findIndex(h => h === 'confirmationstatus' || h === 'confirmation_status' || h === 'status');
+
+        if (empIdIdx === -1) {
+          setError('CSV must have an "employeeId" column to identify employees.');
+          return;
+        }
+
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+          const row = {
+            employeeId: cols[empIdIdx] || '',
+            confirmationDate: confDateIdx !== -1 ? cols[confDateIdx] || '' : '',
+            probationEndDate: probDateIdx !== -1 ? cols[probDateIdx] || '' : '',
+            confirmationStatus: statusIdx !== -1 ? cols[statusIdx] || '' : '',
+          };
+          if (row.employeeId) rows.push(row);
+        }
+        setPreview(rows);
+      } catch {
+        setError('Failed to parse CSV file.');
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const handleImport = async () => {
+    if (preview.length === 0) { setError('No valid rows to import.'); return; }
+    setSaving(true);
+    setError(null);
+
+    try {
+      // First, resolve employeeId → userId
+      const allEmps = await api.get('/confirmation/all');
+      const empMap = {};
+      allEmps.data.forEach(e => {
+        if (e.employeeId) empMap[e.employeeId.toLowerCase()] = e.id;
+      });
+
+      const updates = [];
+      const notFound = [];
+      for (const row of preview) {
+        const userId = empMap[row.employeeId.toLowerCase()];
+        if (!userId) { notFound.push(row.employeeId); continue; }
+        const update = { userId };
+        if (row.confirmationDate) update.confirmationDate = row.confirmationDate;
+        if (row.probationEndDate) update.probationEndDate = row.probationEndDate;
+        if (row.confirmationStatus && ['pending', 'extended', 'confirmed'].includes(row.confirmationStatus))
+          update.confirmationStatus = row.confirmationStatus;
+        updates.push(update);
+      }
+
+      if (updates.length === 0) {
+        setError(`No matching employees found. Not found: ${notFound.join(', ')}`);
+        setSaving(false);
+        return;
+      }
+
+      const res = await api.put('/confirmation/bulk-update', { updates });
+      const msg = `${res.data.results?.length || 0} updated.${notFound.length > 0 ? ` ${notFound.length} employee ID(s) not found: ${notFound.join(', ')}` : ''}`;
+      onDone(msg);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Import failed.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+            <Upload className="w-5 h-5 text-green-600" /> Import Confirmation Data
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4 flex-1 overflow-auto">
+          {error && <AlertMessage type="error" message={error} />}
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+            <p className="font-medium mb-1">CSV Format Required:</p>
+            <code className="block bg-white/50 p-2 rounded text-[11px]">
+              employeeId,confirmationDate,probationEndDate,confirmationStatus<br />
+              EMP001,2026-06-15,2026-06-15,pending<br />
+              EMP002,2026-07-01,2026-07-01,confirmed
+            </code>
+            <p className="mt-1">Columns: <strong>employeeId</strong> (required), confirmationDate, probationEndDate, confirmationStatus (pending/extended/confirmed)</p>
+          </div>
+
+          <input type="file" accept=".csv" onChange={handleFileChange}
+            className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg
+                       file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700
+                       hover:file:bg-blue-100 cursor-pointer" />
+
+          {preview.length > 0 && (
+            <div className="border border-slate-200 rounded-lg overflow-auto max-h-60">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Employee ID</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Conf. Date</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Probation End</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.slice(0, 20).map((r, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      <td className="px-3 py-1.5 font-medium">{r.employeeId}</td>
+                      <td className="px-3 py-1.5">{r.confirmationDate || '—'}</td>
+                      <td className="px-3 py-1.5">{r.probationEndDate || '—'}</td>
+                      <td className="px-3 py-1.5">{r.confirmationStatus || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.length > 20 && (
+                <p className="text-xs text-slate-400 px-3 py-2">Showing 20 of {preview.length} rows</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button onClick={handleImport} disabled={saving || preview.length === 0}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700
+                       disabled:opacity-50 flex items-center gap-2">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Import {preview.length} Row{preview.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Extend Modal ─────────────────────────────────────────────────────────────
@@ -174,6 +492,71 @@ function ConfirmModal({ employee, onClose, onDone }) {
   );
 }
 
+// ─── Bulk Confirm Modal ──────────────────────────────────────────────────────
+function BulkConfirmModal({ employees, onClose, onDone }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleBulkConfirm = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.post('/confirmation/bulk-confirm', {
+        userIds: employees.map(e => e.id),
+      });
+      const msg = `${res.data.confirmed?.length || 0} employee(s) confirmed.${res.data.errors?.length ? ` ${res.data.errors.length} error(s).` : ''}`;
+      onDone(msg);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Bulk confirm failed.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-800">Bulk Confirm Employees</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-green-800">
+                  Confirming {employees.length} employee{employees.length > 1 ? 's' : ''}
+                </p>
+                <div className="mt-2 max-h-32 overflow-y-auto">
+                  {employees.map(e => (
+                    <p key={e.id} className="text-xs text-green-700">• {e.name} ({e.employeeId})</p>
+                  ))}
+                </div>
+                <p className="text-xs text-green-700 mt-2">
+                  For each employee: status → confirmed, benefits unlocked, insurance card created, confirmation letter sent.
+                </p>
+              </div>
+            </div>
+          </div>
+          {error && <AlertMessage type="error" message={error} />}
+        </div>
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button onClick={handleBulkConfirm} disabled={saving}
+            className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700
+                       disabled:opacity-50 flex items-center gap-2">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            <CheckCircle2 className="w-4 h-4" />
+            Confirm All ({employees.length})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── History Drawer ───────────────────────────────────────────────────────────
 function HistoryDrawer({ employee, onClose }) {
   const [history, setHistory] = useState([]);
@@ -248,7 +631,7 @@ function HistoryDrawer({ employee, onClose }) {
 }
 
 // ─── Employee Row ─────────────────────────────────────────────────────────────
-function EmployeeRow({ emp, onExtend, onConfirm, onHistory }) {
+function EmployeeRow({ emp, selected, onToggle, onExtend, onConfirm, onHistory }) {
   const days = daysUntil(emp.confirmationDate);
   const isOverdue = days !== null && days < 0;
   const isDueToday = days === 0;
@@ -259,7 +642,16 @@ function EmployeeRow({ emp, onExtend, onConfirm, onHistory }) {
       ${isOverdue ? 'bg-red-50 hover:bg-red-100' :
         isDueToday ? 'bg-amber-50 hover:bg-amber-100' :
         isDueSoon ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-slate-50'}`}>
-      <td className="px-5 py-4">
+      <td className="px-3 py-4">
+        <button onClick={() => onToggle(emp.id)} className="p-0.5">
+          {selected ? (
+            <CheckSquare className="w-4.5 h-4.5 text-blue-600" />
+          ) : (
+            <Square className="w-4.5 h-4.5 text-slate-300" />
+          )}
+        </button>
+      </td>
+      <td className="px-3 py-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
             <User className="w-4 h-4 text-slate-500" />
@@ -321,11 +713,22 @@ export default function ConfirmationManager() {
   const [success, setSuccess] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [tab, setTab] = useState('pending'); // pending | all
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Modals/drawers
   const [extendTarget, setExtendTarget] = useState(null);
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+
+  // All employees (for "all" tab)
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [allLoading, setAllLoading] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -340,27 +743,81 @@ export default function ConfirmationManager() {
     }
   }, []);
 
+  const fetchAllEmployees = useCallback(async () => {
+    setAllLoading(true);
+    try {
+      const res = await api.get('/confirmation/all');
+      setAllEmployees(res.data);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to load all employees.');
+    } finally {
+      setAllLoading(false);
+    }
+  }, []);
+
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+  useEffect(() => { if (tab === 'all') fetchAllEmployees(); }, [tab, fetchAllEmployees]);
 
   const handleDone = (msg) => {
     setExtendTarget(null);
     setConfirmTarget(null);
+    setShowBulkUpdate(false);
+    setShowBulkConfirm(false);
+    setShowImport(false);
+    setSelectedIds(new Set());
     setSuccess(msg);
-    setTimeout(() => setSuccess(null), 4000);
+    setTimeout(() => setSuccess(null), 5000);
     fetchEmployees();
+    if (tab === 'all') fetchAllEmployees();
   };
 
-  // Derived / filtered list
-  const filtered = employees.filter(e => {
+  // Current data set based on tab
+  const currentData = tab === 'pending' ? employees : allEmployees;
+  const currentLoading = tab === 'pending' ? loading : allLoading;
+
+  // Filtering
+  const filtered = currentData.filter(e => {
     const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase()) ||
       (e.employeeId || '').toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || e.confirmationStatus === statusFilter;
     return matchSearch && matchStatus;
   });
 
+  // Selection helpers
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(e => e.id)));
+    }
+  };
+
+  const selectedEmployees = filtered.filter(e => selectedIds.has(e.id));
+
+  // Stats
   const overdue = employees.filter(e => daysUntil(e.confirmationDate) < 0).length;
   const dueToday = employees.filter(e => daysUntil(e.confirmationDate) === 0).length;
   const dueSoon = employees.filter(e => { const d = daysUntil(e.confirmationDate); return d > 0 && d <= 7; }).length;
+
+  // Export CSV
+  const handleExport = () => {
+    const data = (tab === 'all' ? allEmployees : employees);
+    const headers = ['Employee ID', 'Name', 'Department', 'Designation', 'Date of Joining', 'Confirmation Date', 'Probation End Date', 'Status', 'Confirmed At', 'Reporting Manager'];
+    const rows = data.map(e => [
+      e.employeeId, e.name, e.department, e.designation, e.dateOfJoining,
+      e.confirmationDate, e.probationEndDate, e.confirmationStatus, e.confirmedAt,
+      e.reportingManager?.name,
+    ]);
+    downloadCSV(rows, headers, `confirmations_${tab}_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -378,6 +835,40 @@ export default function ConfirmationManager() {
               </p>
             </div>
           </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowImport(true)}
+              className="px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg
+                         hover:bg-slate-50 flex items-center gap-1.5 text-slate-600">
+              <Upload className="w-3.5 h-3.5" /> Import CSV
+            </button>
+            <button onClick={handleExport}
+              className="px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-lg
+                         hover:bg-slate-50 flex items-center gap-1.5 text-slate-600">
+              <Download className="w-3.5 h-3.5" /> Export
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mt-4 border-b border-slate-200 -mb-[1px]">
+          {[
+            { key: 'pending', label: 'Pending Confirmations', count: employees.length },
+            { key: 'all', label: 'All Employees' },
+          ].map(t => (
+            <button key={t.key} onClick={() => { setTab(t.key); setSelectedIds(new Set()); setSearch(''); setStatusFilter('all'); }}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}>
+              {t.label}
+              {t.count > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Search + filter */}
@@ -397,8 +888,35 @@ export default function ConfirmationManager() {
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="extended">Extended</option>
+            <option value="confirmed">Confirmed</option>
           </select>
         </div>
+
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="mt-3 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
+            <span className="text-sm font-medium text-blue-800">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex-1" />
+            <button onClick={() => setShowBulkUpdate(true)}
+              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700
+                         flex items-center gap-1.5">
+              <Edit3 className="w-3.5 h-3.5" /> Bulk Update Dates
+            </button>
+            {selectedEmployees.some(e => e.confirmationStatus !== 'confirmed') && (
+              <button onClick={() => setShowBulkConfirm(true)}
+                className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700
+                           flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Bulk Confirm
+              </button>
+            )}
+            <button onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -406,43 +924,44 @@ export default function ConfirmationManager() {
         {error && <AlertMessage type="error" message={error} />}
         {success && <AlertMessage type="success" message={success} />}
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Pending', value: employees.length, icon: Clock, color: 'blue' },
-            { label: 'Overdue', value: overdue, icon: AlertTriangle, color: 'red' },
-            { label: 'Due Today', value: dueToday, icon: Calendar, color: 'amber' },
-            { label: 'Due This Week', value: dueSoon, icon: ChevronRight, color: 'yellow' },
-          ].map(stat => (
-            <div key={stat.label} className={`bg-${stat.color}-50 border border-${stat.color}-100
-                rounded-xl p-4 flex items-center gap-3`}>
-              <stat.icon className={`w-5 h-5 text-${stat.color}-600 shrink-0`} />
-              <div>
-                <p className="text-xs text-slate-500">{stat.label}</p>
-                <p className={`text-xl font-bold text-${stat.color}-700`}>{stat.value}</p>
+        {/* Summary cards (only for pending tab) */}
+        {tab === 'pending' && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Pending', value: employees.length, icon: Clock, bg: 'bg-blue-50', border: 'border-blue-100', iconColor: 'text-blue-600', textColor: 'text-blue-700' },
+              { label: 'Overdue', value: overdue, icon: AlertTriangle, bg: 'bg-red-50', border: 'border-red-100', iconColor: 'text-red-600', textColor: 'text-red-700' },
+              { label: 'Due Today', value: dueToday, icon: Calendar, bg: 'bg-amber-50', border: 'border-amber-100', iconColor: 'text-amber-600', textColor: 'text-amber-700' },
+              { label: 'Due This Week', value: dueSoon, icon: ChevronRight, bg: 'bg-yellow-50', border: 'border-yellow-100', iconColor: 'text-yellow-600', textColor: 'text-yellow-700' },
+            ].map(stat => (
+              <div key={stat.label} className={`${stat.bg} border ${stat.border} rounded-xl p-4 flex items-center gap-3`}>
+                <stat.icon className={`w-5 h-5 ${stat.iconColor} shrink-0`} />
+                <div>
+                  <p className="text-xs text-slate-500">{stat.label}</p>
+                  <p className={`text-xl font-bold ${stat.textColor}`}>{stat.value}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Table */}
-        {loading ? (
+        {currentLoading ? (
           <LoadingSpinner />
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
             <UserCheck className="w-14 h-14 mx-auto mb-4 opacity-30" />
             <p className="text-lg font-medium text-slate-500">
-              {employees.length === 0 ? 'No confirmations pending' : 'No matches found'}
+              {currentData.length === 0 ? 'No employees found' : 'No matches found'}
             </p>
             <p className="text-sm mt-1">
-              {employees.length === 0
-                ? 'All internal employees are confirmed or have future confirmation dates.'
+              {currentData.length === 0
+                ? (tab === 'pending' ? 'All internal employees are confirmed or have future confirmation dates.' : 'No internal employees found.')
                 : 'Try adjusting your search or filter.'}
             </p>
           </div>
         ) : (
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            {overdue > 0 && (
+            {tab === 'pending' && overdue > 0 && (
               <div className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-b border-red-200">
                 <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
                 <p className="text-sm text-red-700 font-medium">
@@ -454,7 +973,18 @@ export default function ConfirmationManager() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['Employee', 'Department', 'Due Date', 'Status', 'Reporting Manager', 'Actions'].map(h => (
+                    <th className="px-3 py-3 w-10">
+                      <button onClick={toggleSelectAll} className="p-0.5">
+                        {selectedIds.size === filtered.length && filtered.length > 0 ? (
+                          <CheckSquare className="w-4.5 h-4.5 text-blue-600" />
+                        ) : selectedIds.size > 0 ? (
+                          <MinusSquare className="w-4.5 h-4.5 text-blue-400" />
+                        ) : (
+                          <Square className="w-4.5 h-4.5 text-slate-300" />
+                        )}
+                      </button>
+                    </th>
+                    {['Employee', 'Department', 'Due Date', 'Status', 'Manager', 'Actions'].map(h => (
                       <th key={h}
                         className={`px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide
                           ${h === 'Actions' ? 'text-right' : 'text-left'}`}>
@@ -468,6 +998,8 @@ export default function ConfirmationManager() {
                     <EmployeeRow
                       key={emp.id}
                       emp={emp}
+                      selected={selectedIds.has(emp.id)}
+                      onToggle={toggleSelect}
                       onExtend={setExtendTarget}
                       onConfirm={setConfirmTarget}
                       onHistory={setHistoryTarget}
@@ -478,7 +1010,8 @@ export default function ConfirmationManager() {
             </div>
             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
               <p className="text-xs text-slate-500">
-                Showing {filtered.length} of {employees.length} employee{employees.length !== 1 ? 's' : ''} pending confirmation
+                Showing {filtered.length} of {currentData.length} employee{currentData.length !== 1 ? 's' : ''}
+                {tab === 'pending' ? ' pending confirmation' : ''}
               </p>
             </div>
           </div>
@@ -487,24 +1020,26 @@ export default function ConfirmationManager() {
 
       {/* ── Modals / Drawers ── */}
       {extendTarget && (
-        <ExtendModal
-          employee={extendTarget}
-          onClose={() => setExtendTarget(null)}
-          onDone={handleDone}
-        />
+        <ExtendModal employee={extendTarget} onClose={() => setExtendTarget(null)} onDone={handleDone} />
       )}
       {confirmTarget && (
-        <ConfirmModal
-          employee={confirmTarget}
-          onClose={() => setConfirmTarget(null)}
+        <ConfirmModal employee={confirmTarget} onClose={() => setConfirmTarget(null)} onDone={handleDone} />
+      )}
+      {historyTarget && (
+        <HistoryDrawer employee={historyTarget} onClose={() => setHistoryTarget(null)} />
+      )}
+      {showBulkUpdate && (
+        <BulkUpdateModal employees={selectedEmployees} onClose={() => setShowBulkUpdate(false)} onDone={handleDone} />
+      )}
+      {showBulkConfirm && (
+        <BulkConfirmModal
+          employees={selectedEmployees.filter(e => e.confirmationStatus !== 'confirmed')}
+          onClose={() => setShowBulkConfirm(false)}
           onDone={handleDone}
         />
       )}
-      {historyTarget && (
-        <HistoryDrawer
-          employee={historyTarget}
-          onClose={() => setHistoryTarget(null)}
-        />
+      {showImport && (
+        <ImportModal onClose={() => setShowImport(false)} onDone={handleDone} />
       )}
     </div>
   );

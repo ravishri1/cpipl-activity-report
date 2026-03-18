@@ -221,4 +221,148 @@ router.get('/:userId/history', asyncHandler(async (req, res) => {
   res.json(extensions);
 }));
 
+// ── PUT /api/confirmation/bulk-update — bulk update confirmation dates / probation end dates ──
+router.put('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
+  const { updates } = req.body;
+  // updates: [{ userId, confirmationDate?, probationEndDate?, confirmationStatus? }]
+  if (!Array.isArray(updates) || updates.length === 0) {
+    throw badRequest('updates array is required and must not be empty');
+  }
+  if (updates.length > 200) {
+    throw badRequest('Maximum 200 updates at a time');
+  }
+
+  const results = [];
+  for (const u of updates) {
+    const userId = parseId(u.userId);
+    const data = {};
+    if (u.confirmationDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(u.confirmationDate)) {
+        throw badRequest(`Invalid date format for user ${userId}: ${u.confirmationDate}`);
+      }
+      data.confirmationDate = u.confirmationDate;
+    }
+    if (u.probationEndDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(u.probationEndDate)) {
+        throw badRequest(`Invalid date format for user ${userId}: ${u.probationEndDate}`);
+      }
+      data.probationEndDate = u.probationEndDate;
+    }
+    if (u.confirmationStatus) {
+      if (!['pending', 'extended', 'confirmed'].includes(u.confirmationStatus)) {
+        throw badRequest(`Invalid status for user ${userId}: ${u.confirmationStatus}`);
+      }
+      data.confirmationStatus = u.confirmationStatus;
+      if (u.confirmationStatus === 'confirmed') {
+        data.confirmedAt = new Date().toISOString().slice(0, 10);
+        data.benefitsUnlocked = true;
+      }
+    }
+
+    if (Object.keys(data).length === 0) continue;
+
+    const updated = await req.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: { id: true, name: true, confirmationDate: true, probationEndDate: true, confirmationStatus: true },
+    });
+    results.push(updated);
+  }
+
+  res.json({ message: `${results.length} employee(s) updated`, results });
+}));
+
+// ── POST /api/confirmation/bulk-confirm — bulk confirm multiple employees ──
+router.post('/bulk-confirm', requireAdmin, asyncHandler(async (req, res) => {
+  const { userIds } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    throw badRequest('userIds array is required');
+  }
+  if (userIds.length > 50) {
+    throw badRequest('Maximum 50 confirmations at a time');
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const confirmed = [];
+  const errors = [];
+
+  for (const uid of userIds) {
+    const userId = parseId(uid);
+    try {
+      const employee = await req.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, employeeId: true, employeeType: true, confirmationStatus: true, email: true },
+      });
+      if (!employee) { errors.push({ userId, error: 'Not found' }); continue; }
+      if (employee.employeeType !== 'internal') { errors.push({ userId, error: 'Not internal' }); continue; }
+      if (employee.confirmationStatus === 'confirmed') { errors.push({ userId, error: 'Already confirmed' }); continue; }
+
+      await req.prisma.$transaction([
+        req.prisma.user.update({
+          where: { id: userId },
+          data: { confirmationStatus: 'confirmed', confirmedAt: today, benefitsUnlocked: true },
+        }),
+        req.prisma.insuranceCard.create({
+          data: {
+            userId,
+            uploadedById: req.user.id,
+            status: 'pending_setup',
+            cardNumber: `PENDING-${employee.employeeId || userId}`,
+            provider: 'Pending',
+            planName: 'Pending Setup',
+            coverageAmount: 0,
+            premium: 0,
+            startDate: today,
+            endDate: today,
+            notes: 'Auto-created on bulk employee confirmation.',
+          },
+        }),
+      ]);
+
+      confirmed.push({ userId, name: employee.name });
+
+      // Send confirmation letter (non-blocking)
+      if (employee.email) {
+        sendConfirmationLetter(employee.email, employee.name, today).catch(() => {});
+      }
+    } catch (e) {
+      errors.push({ userId, error: e.message });
+    }
+  }
+
+  res.json({
+    message: `${confirmed.length} employee(s) confirmed`,
+    confirmed,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+}));
+
+// ── GET /api/confirmation/all — list ALL internal employees with confirmation info (for bulk update) ──
+router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
+  const employees = await req.prisma.user.findMany({
+    where: {
+      employeeType: 'internal',
+      isActive: true,
+    },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      employeeId: true,
+      designation: true,
+      department: true,
+      dateOfJoining: true,
+      confirmationDate: true,
+      probationEndDate: true,
+      confirmationStatus: true,
+      confirmedAt: true,
+      benefitsUnlocked: true,
+      reportingManager: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+  res.json(employees);
+}));
+
 module.exports = router;
