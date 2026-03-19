@@ -67,10 +67,49 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ═══ Security: CORS — restrict to own domains only ═══
+const allowedOrigins = [
+  'https://eod.colorpapers.in',
+  'https://cpipl-activity-report.vercel.app',
+  'https://colorpapers.in',
+  'https://zgts.in',
+];
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.push('http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174');
+}
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, server-to-server)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
+// ═══ Security: Request body size limits ═══
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ═══ Security: Rate limiting ═══
+const rateLimit = require('express-rate-limit');
+// General API rate limit: 200 requests per minute per IP
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a minute.' },
+});
+// Strict rate limit for auth endpoints: 20 requests per minute per IP
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please try again in a minute.' },
+});
+app.use('/api/', generalLimiter);
+app.use('/api/auth', authLimiter);
 
 // ═══ Security: Block indexing, scraping, and caching ═══
 app.use((req, res, next) => {
@@ -79,6 +118,10 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // HSTS — enforce HTTPS for 1 year, include subdomains
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // CSP — restrict script/style sources to self + Clerk
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com https://lh3.googleusercontent.com https://drive.google.com https://*.clerk.com; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://api.clerk.com; frame-src https://*.clerk.accounts.dev https://challenges.cloudflare.com; object-src 'none'; base-uri 'self';");
   next();
 });
 

@@ -51,30 +51,30 @@ async function authenticate(req, res, next) {
   try {
     const token = authHeader.split(' ')[1];
 
-    // Try test JWT first (for development/testing)
-    // Allow test JWTs if they contain userId and email fields
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'test-secret-key');
-      if (decoded.userId && decoded.email) {
-        // This is a test JWT token
-        const testDbUser = await req.prisma.user.findUnique({ where: { email: decoded.email } });
-        if (testDbUser) {
-          const isSeparated = (testDbUser.employmentStatus || 'active') === 'separated';
-          req.user = {
-            id: testDbUser.id,
-            email: testDbUser.email,
-            role: testDbUser.role,
-            name: testDbUser.name,
-            department: testDbUser.department,
-            companyId: testDbUser.companyId,
-            employmentStatus: testDbUser.employmentStatus,
-            isSeparated,
-          };
-          return next();
+    // Try test JWT first (ONLY in development/testing — disabled in production)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'test-secret-key');
+        if (decoded.userId && decoded.email) {
+          const testDbUser = await req.prisma.user.findUnique({ where: { email: decoded.email } });
+          if (testDbUser) {
+            const isSeparated = (testDbUser.employmentStatus || 'active') === 'separated';
+            req.user = {
+              id: testDbUser.id,
+              email: testDbUser.email,
+              role: testDbUser.role,
+              name: testDbUser.name,
+              department: testDbUser.department,
+              companyId: testDbUser.companyId,
+              employmentStatus: testDbUser.employmentStatus,
+              isSeparated,
+            };
+            return next();
+          }
         }
+      } catch (testErr) {
+        // Not a test JWT, fall through to Clerk verification
       }
-    } catch (testErr) {
-      // Not a test JWT, fall through to Clerk verification
     }
 
     // Build verification options — networkless if jwtKey is available
