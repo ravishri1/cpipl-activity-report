@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../../utils/api';
-import { X, CalendarOff, Send, AlertTriangle, Users } from 'lucide-react';
+import { X, CalendarOff, Send, AlertTriangle, Users, UserCheck } from 'lucide-react';
 
 export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }) {
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -14,9 +14,11 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [overlap, setOverlap] = useState(null);
+  const [approver, setApprover] = useState(null);
 
   useEffect(() => {
     api.get('/leave/types').then((res) => setLeaveTypes(res.data)).catch(() => {});
+    api.get('/leave/my-approver').then((res) => setApprover(res.data)).catch(() => {});
   }, []);
 
   // Check overlap when dates change
@@ -82,6 +84,31 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Approver info */}
+          {approver && (
+            <div className="flex items-center gap-2.5 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
+              <UserCheck className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <span className="text-xs text-blue-600 font-medium">Approver:</span>
+              {approver.driveProfilePhotoUrl || approver.profilePhotoUrl ? (
+                <img
+                  src={approver.driveProfilePhotoUrl || approver.profilePhotoUrl}
+                  alt={approver.name}
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-blue-200 flex items-center justify-center text-[10px] font-bold text-blue-700">
+                  {approver.name?.charAt(0)?.toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <span className="text-xs font-semibold text-blue-800">{approver.name}</span>
+                {approver.designation && (
+                  <span className="text-[10px] text-blue-500 ml-1">({approver.designation})</span>
+                )}
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="text-sm bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-lg flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />

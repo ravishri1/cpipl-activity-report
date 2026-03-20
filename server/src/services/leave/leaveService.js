@@ -582,7 +582,15 @@ async function getPendingRequests(department, prisma) {
       user: { ...userWhere, isActive: true },
     },
     include: {
-      user: { select: { id: true, name: true, department: true, employeeId: true, profilePhotoUrl: true, driveProfilePhotoUrl: true } },
+      user: {
+        select: {
+          id: true, name: true, department: true, employeeId: true,
+          profilePhotoUrl: true, driveProfilePhotoUrl: true,
+          reportingManager: {
+            select: { id: true, name: true, designation: true, profilePhotoUrl: true, driveProfilePhotoUrl: true },
+          },
+        },
+      },
       leaveType: { select: { name: true, code: true } },
     },
     orderBy: { createdAt: 'asc' },

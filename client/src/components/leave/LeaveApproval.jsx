@@ -8,7 +8,7 @@ import EmptyState from '../shared/EmptyState';
 import { formatDate } from '../../utils/formatters';
 import {
   ClipboardCheck, CheckCircle2, XCircle, Clock, User, MessageSquare,
-  ChevronLeft, ChevronRight, Calendar, Filter, Users,
+  ChevronLeft, ChevronRight, Calendar, Filter, Users, UserCheck,
 } from 'lucide-react';
 
 const statusStyles = {
@@ -133,6 +133,26 @@ export default function LeaveApproval() {
                         </div>
                       </div>
 
+                      {/* Reporting Manager */}
+                      {r.user.reportingManager && (
+                        <div className="flex items-center gap-2 mb-3 px-2.5 py-1.5 bg-slate-50 rounded-lg w-fit">
+                          <UserCheck className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="text-[10px] text-slate-400 font-medium">Reports to</span>
+                          {r.user.reportingManager.driveProfilePhotoUrl || r.user.reportingManager.profilePhotoUrl ? (
+                            <img
+                              src={r.user.reportingManager.driveProfilePhotoUrl || r.user.reportingManager.profilePhotoUrl}
+                              alt={r.user.reportingManager.name}
+                              className="w-5 h-5 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[9px] font-bold text-blue-600">
+                              {r.user.reportingManager.name?.charAt(0)?.toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-slate-600">{r.user.reportingManager.name}</span>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                         <div>
                           <p className="text-[10px] uppercase text-slate-400 font-medium">Type</p>
@@ -243,6 +263,7 @@ export default function LeaveApproval() {
                 <thead>
                   <tr className="bg-slate-50 text-left">
                     <th className="px-4 py-2.5 font-medium text-slate-600">Employee</th>
+                    <th className="px-4 py-2.5 font-medium text-slate-600">Manager</th>
                     <th className="px-4 py-2.5 font-medium text-slate-600">Type</th>
                     <th className="px-4 py-2.5 font-medium text-slate-600">From</th>
                     <th className="px-4 py-2.5 font-medium text-slate-600">To</th>
@@ -257,6 +278,26 @@ export default function LeaveApproval() {
                       <td className="px-4 py-2.5">
                         <p className="text-sm font-medium text-slate-700">{r.user?.name}</p>
                         <p className="text-xs text-slate-400">{r.user?.department}</p>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {r.user?.reportingManager ? (
+                          <div className="flex items-center gap-1.5">
+                            {r.user.reportingManager.driveProfilePhotoUrl || r.user.reportingManager.profilePhotoUrl ? (
+                              <img
+                                src={r.user.reportingManager.driveProfilePhotoUrl || r.user.reportingManager.profilePhotoUrl}
+                                alt={r.user.reportingManager.name}
+                                className="w-5 h-5 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[9px] font-bold text-blue-600">
+                                {r.user.reportingManager.name?.charAt(0)?.toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-xs text-slate-600">{r.user.reportingManager.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <span className="bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded">
@@ -275,7 +316,7 @@ export default function LeaveApproval() {
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                         No requests found for {getFYLabel(fyYear)}
                       </td>
                     </tr>

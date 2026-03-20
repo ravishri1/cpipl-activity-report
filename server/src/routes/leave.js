@@ -60,6 +60,19 @@ router.get('/balance', asyncHandler(async (req, res) => {
   res.json(balances);
 }));
 
+// GET /api/leave/my-approver — Get current user's reporting manager (for apply modal)
+router.get('/my-approver', asyncHandler(async (req, res) => {
+  const user = await req.prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: {
+      reportingManager: {
+        select: { id: true, name: true, designation: true, department: true, profilePhotoUrl: true, driveProfilePhotoUrl: true },
+      },
+    },
+  });
+  res.json(user?.reportingManager || null);
+}));
+
 // GET /api/leave/my?year=2025&status=all — Own leave requests in FY
 router.get('/my', asyncHandler(async (req, res) => {
   const fyYear = parseInt(req.query.year) || getFinancialYear();
@@ -150,7 +163,15 @@ router.get('/all-requests', requireAdmin, asyncHandler(async (req, res) => {
   const requests = await req.prisma.leaveRequest.findMany({
     where,
     include: {
-      user: { select: { id: true, name: true, employeeId: true, department: true } },
+      user: {
+        select: {
+          id: true, name: true, employeeId: true, department: true,
+          profilePhotoUrl: true, driveProfilePhotoUrl: true,
+          reportingManager: {
+            select: { id: true, name: true, designation: true, profilePhotoUrl: true, driveProfilePhotoUrl: true },
+          },
+        },
+      },
       leaveType: { select: { name: true, code: true } },
     },
     orderBy: { createdAt: 'desc' },
