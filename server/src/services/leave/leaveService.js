@@ -182,7 +182,7 @@ function calculateAvailableWithProbation(balance, leaveType, fyYear, user) {
  * @param {object} prisma
  * @param {number} [userId] - optional, to look up per-user weekly off pattern
  */
-async function calculateLeaveDays(startDate, endDate, session, prisma, userId) {
+async function calculateLeaveDays(startDate, endDate, session, prisma, userId, { sandwichLeave = false } = {}) {
   // Resolve user's weekly off days (or default Sat+Sun)
   const baseOffDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
 
@@ -203,6 +203,14 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId) {
     const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate } });
     if (isHoliday) return 0;
     return 0.5;
+  }
+
+  // Sandwich leave: count ALL calendar days (weekends/holidays included)
+  if (sandwichLeave) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    return totalDays;
   }
 
   const start = new Date(startDate);
@@ -394,7 +402,12 @@ async function applyLeave(userId, data, prisma) {
   }
 
   const effectiveSession = session || 'full_day';
-  const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId);
+
+  // Check sandwich leave setting
+  const sandwichSetting = await prisma.setting.findUnique({ where: { key: 'sandwich_leave_enabled' } });
+  const sandwichLeave = sandwichSetting?.value === 'true';
+
+  const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId, { sandwichLeave });
   if (days <= 0) {
     throw new Error('Selected dates have no working days (all weekends/holidays).');
   }

@@ -15,6 +15,7 @@ export default function Settings() {
     photo_ai_model: '',
     photo_ai_prompt: '',
     photo_ai_prompt_male_extra: '',
+    sandwich_leave_enabled: 'false',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -125,6 +126,48 @@ export default function Settings() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* ═══ Leave Policies ═══ */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
+          🗓️ Leave Policies
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">Configure how leave days are calculated.</p>
+
+        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-700">Sandwich Leave Policy</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              When enabled, weekends &amp; holidays between two leave days are also counted as leave.
+              <br />
+              <span className="text-slate-400">Example: Leave on Fri + Mon → Sat &amp; Sun also counted = 4 days instead of 2</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              const newVal = settings.sandwich_leave_enabled === 'true' ? 'false' : 'true';
+              try {
+                await api.put('/settings', { sandwich_leave_enabled: newVal });
+                setSettings(s => ({ ...s, sandwich_leave_enabled: newVal }));
+                setSuccess(`Sandwich leave ${newVal === 'true' ? 'enabled' : 'disabled'}!`);
+                setTimeout(() => setSuccess(''), 3000);
+              } catch (err) {
+                console.error('Toggle sandwich leave error:', err);
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              settings.sandwich_leave_enabled === 'true' ? 'bg-blue-600' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                settings.sandwich_leave_enabled === 'true' ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* ═══ AI Configuration ═══ */}
