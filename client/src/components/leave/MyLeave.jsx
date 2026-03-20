@@ -152,63 +152,72 @@ export default function MyLeave() {
 
               {/* Balance display */}
               <div className="px-4 py-3">
-                <div className="flex items-baseline gap-1 mb-3">
-                  {isUnlimited ? (
-                    <>
-                      <span className="text-2xl font-bold text-slate-500">∞</span>
-                      <span className="text-sm text-slate-400">unlimited</span>
-                    </>
-                  ) : (
-                    <>
+                {isUnlimited ? (
+                  <>
+                    {/* LOP: show used count in red */}
+                    <div className="flex items-baseline gap-1 mb-3">
+                      <span className="text-3xl font-bold text-red-600">{b.used}</span>
+                      <span className="text-sm text-red-400">LOP Used</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1 text-center">
+                      <div className="bg-red-50 rounded-lg py-1.5 px-3">
+                        <p className="text-[10px] text-red-400 uppercase font-medium">Total LOP Days</p>
+                        <p className="text-sm font-bold text-red-600">{b.used}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-baseline gap-1 mb-3">
                       <span className="text-3xl font-bold text-blue-600">{b.available}</span>
                       <span className="text-sm text-slate-400">days available</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Frozen balance notice */}
-                {hasFrozen && (
-                  <div className="flex items-center gap-1.5 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-                    <Lock className="w-3.5 h-3.5 text-amber-600" />
-                    <span className="text-xs text-amber-700">
-                      <strong>{b.frozenBalance}</strong> leaves frozen until confirmation
-                    </span>
-                  </div>
-                )}
-
-                {/* Progress bar */}
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-3">
-                  <div
-                    className={`h-full rounded-full transition-all ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-400' : 'bg-emerald-500'}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-
-                {/* Breakdown — greytHR style */}
-                <div className={`grid gap-1 text-center ${hasFrozen ? 'grid-cols-5' : 'grid-cols-4'}`}>
-                  <div className="bg-slate-50 rounded-lg py-1.5 px-1">
-                    <p className="text-[10px] text-slate-400 uppercase font-medium">Opening</p>
-                    <p className="text-sm font-bold text-slate-700">{b.opening}</p>
-                  </div>
-                  <div className="bg-emerald-50 rounded-lg py-1.5 px-1">
-                    <p className="text-[10px] text-emerald-500 uppercase font-medium">Credited</p>
-                    <p className="text-sm font-bold text-emerald-700">{b.credited}</p>
-                  </div>
-                  <div className="bg-red-50 rounded-lg py-1.5 px-1">
-                    <p className="text-[10px] text-red-400 uppercase font-medium">Availed</p>
-                    <p className="text-sm font-bold text-red-600">{b.used}</p>
-                  </div>
-                  {hasFrozen && (
-                    <div className="bg-amber-50 rounded-lg py-1.5 px-1">
-                      <p className="text-[10px] text-amber-500 uppercase font-medium">Frozen</p>
-                      <p className="text-sm font-bold text-amber-600">{b.frozenBalance}</p>
                     </div>
-                  )}
-                  <div className="bg-blue-50 rounded-lg py-1.5 px-1">
-                    <p className="text-[10px] text-blue-400 uppercase font-medium">Balance</p>
-                    <p className="text-sm font-bold text-blue-700">{isUnlimited ? '∞' : b.available}</p>
-                  </div>
-                </div>
+
+                    {/* Frozen balance notice */}
+                    {hasFrozen && (
+                      <div className="flex items-center gap-1.5 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                        <Lock className="w-3.5 h-3.5 text-amber-600" />
+                        <span className="text-xs text-amber-700">
+                          <strong>{b.frozenBalance}</strong> leaves frozen until confirmation
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Progress bar */}
+                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-3">
+                      <div
+                        className={`h-full rounded-full transition-all ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {/* Breakdown — greytHR style */}
+                    <div className={`grid gap-1 text-center ${hasFrozen ? 'grid-cols-5' : 'grid-cols-4'}`}>
+                      <div className="bg-slate-50 rounded-lg py-1.5 px-1">
+                        <p className="text-[10px] text-slate-400 uppercase font-medium">Opening</p>
+                        <p className="text-sm font-bold text-slate-700">{b.opening}</p>
+                      </div>
+                      <div className="bg-emerald-50 rounded-lg py-1.5 px-1">
+                        <p className="text-[10px] text-emerald-500 uppercase font-medium">Credited</p>
+                        <p className="text-sm font-bold text-emerald-700">{b.credited}</p>
+                      </div>
+                      <div className="bg-red-50 rounded-lg py-1.5 px-1">
+                        <p className="text-[10px] text-red-400 uppercase font-medium">Availed</p>
+                        <p className="text-sm font-bold text-red-600">{b.used}</p>
+                      </div>
+                      {hasFrozen && (
+                        <div className="bg-amber-50 rounded-lg py-1.5 px-1">
+                          <p className="text-[10px] text-amber-500 uppercase font-medium">Frozen</p>
+                          <p className="text-sm font-bold text-amber-600">{b.frozenBalance}</p>
+                        </div>
+                      )}
+                      <div className="bg-blue-50 rounded-lg py-1.5 px-1">
+                        <p className="text-[10px] text-blue-400 uppercase font-medium">Balance</p>
+                        <p className="text-sm font-bold text-blue-700">{b.available}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );
