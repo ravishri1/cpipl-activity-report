@@ -533,6 +533,16 @@ function WeeklyOffTab() {
                 <p className="text-sm text-slate-400 text-center py-4">No employees found.</p>
               ) : (
                 <div className="space-y-1">
+                  <label className="flex items-center gap-3 p-2 rounded-lg bg-blue-50 border border-blue-100 cursor-pointer mb-2">
+                    <input type="checkbox"
+                      checked={filteredEmployees.length > 0 && filteredEmployees.every(u => selectedUsers.includes(u.id))}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedUsers(filteredEmployees.map(u => u.id));
+                        else setSelectedUsers([]);
+                      }}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-sm font-semibold text-blue-700">Select All ({filteredEmployees.length})</span>
+                  </label>
                   {filteredEmployees.map(u => (
                     <label key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
                       <input type="checkbox" checked={selectedUsers.includes(u.id)}
