@@ -229,7 +229,9 @@ export default function ShiftRoster() {
         const dayData = emp.days[d.date];
         if (!dayData) { row.push('-'); return; }
         const { status, shiftName, leaveCode } = dayData;
-        if (status === 'OFF') row.push('OFF');
+        if (status === 'WO') row.push('WO');
+        else if (status === 'H') row.push('H');
+        else if (status === 'OFF') row.push('OFF');
         else if (leaveCode) { const sc = shiftName ? shiftCodeMap[shiftName]?.code : null; row.push(sc ? `${sc}:${leaveCode}` : leaveCode); }
         else if (shiftName) row.push(shiftCodeMap[shiftName]?.code || shiftCode(shiftName));
         else row.push('-');
@@ -244,7 +246,7 @@ export default function ShiftRoster() {
       filteredRoster.forEach(emp => {
         const dayData = emp.days[d.date];
         if (!dayData) return;
-        if (dayData.status === 'OFF') off++;
+        if (dayData.status === 'WO' || dayData.status === 'H' || dayData.status === 'OFF') off++;
         else if (dayData.leaveCode) leave++;
         else if (dayData.shiftName) present++;
       });
@@ -281,6 +283,8 @@ export default function ShiftRoster() {
   const renderCell = (dayData) => {
     if (!dayData) return <span className="text-gray-300">-</span>;
     const { status, shiftName, leaveCode } = dayData;
+    if (status === 'WO') return <span className="text-orange-500 font-bold text-[10px]">WO</span>;
+    if (status === 'H') return <span className="text-green-600 font-bold text-[10px]">H</span>;
     if (status === 'OFF') return <span className="text-red-500 font-bold text-[10px]">OFF</span>;
     if (leaveCode) {
       const sc = shiftName ? shiftCodeMap[shiftName]?.code : null;

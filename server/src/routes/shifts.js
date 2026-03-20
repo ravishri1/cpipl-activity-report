@@ -341,8 +341,8 @@ router.get(
 
         // Determine display status
         let status = null; // null = normal shift day
-        if (isWeekend) { status = 'OFF'; offCount++; }
-        else if (isHoliday) { status = 'OFF'; offCount++; }
+        if (isWeekend) { status = 'WO'; offCount++; }      // Weekly Off
+        else if (isHoliday) { status = 'H'; offCount++; }   // Holiday
         else if (leaveCode) { status = leaveCode; } // "PL", "CL", "LOP", "COF", etc.
 
         days[dateStr] = {
