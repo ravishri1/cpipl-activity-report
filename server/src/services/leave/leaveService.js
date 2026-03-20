@@ -286,7 +286,11 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     const used = await reconcileUsed(bal, prisma);
 
     const joiningMonth = bal.joiningMonth || null;
-    const credited = calculateCredited(lt, fyYear, joiningMonth);
+    // For comp-off (accrualType 'none' with defaultBalance 0), credits come from
+    // approved CompOffRequests which directly update LeaveBalance.total.
+    // So use the stored total instead of recalculating from accrual formula.
+    const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
+    const credited = isCompOffType ? (bal.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
     const totalPool = (bal.opening || 0) + credited;
 
     // Calculate available based on probation status
@@ -626,7 +630,8 @@ async function getAllBalances(fyYear, department, prisma) {
   for (const b of balances) {
     const used = await reconcileUsed(b, prisma);
     const joiningMonth = b.joiningMonth || null;
-    const credited = calculateCredited(b.leaveType, fyYear, joiningMonth);
+    const isCompOffType = b.leaveType.accrualType === 'none' && b.leaveType.defaultBalance === 0;
+    const credited = isCompOffType ? (b.total || 0) : calculateCredited(b.leaveType, fyYear, joiningMonth);
     const onProbation = isOnProbation(b.user);
     const totalPool = (b.opening || 0) + credited;
     let available;
