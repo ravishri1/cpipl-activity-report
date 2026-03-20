@@ -28,32 +28,43 @@ async function checkNonWorkingDay(prisma, dateStr) {
   };
 }
 
+// ── Helper: get the COF leave type ID ──
+async function getCompOffLeaveTypeId(prisma) {
+  const lt = await prisma.leaveType.findFirst({ where: { code: 'COF' } });
+  if (!lt) return null;
+  return lt.id;
+}
+
+// ── Helper: get financial year start year from a date ──
+function getFYYear(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const month = d.getMonth(); // 0-indexed (0=Jan, 3=Apr)
+  const year = d.getFullYear();
+  return month >= 3 ? year : year - 1; // FY starts in April
+}
+
 // ── GET /api/comp-off/validate-date?date=YYYY-MM-DD ──
-// Frontend calls this when user picks a date to earn comp-off
 router.get('/validate-date', asyncHandler(async (req, res) => {
   const { date } = req.query;
   if (!date) throw badRequest('date query param required');
 
-  // 1. Check if date is in the future
   const today = new Date().toISOString().slice(0, 10);
   if (date > today) {
-    return res.json({ isValid: false, error: 'Cannot earn comp-off for future dates', maxDays: 0 });
+    return res.json({ isValid: false, error: 'Cannot apply comp-off for future dates', maxDays: 0 });
   }
 
-  // 2. Check if it's a non-working day
   const dayInfo = await checkNonWorkingDay(req.prisma, date);
   if (!dayInfo.isNonWorkingDay) {
     return res.json({ isValid: false, error: 'This is a regular working day — comp-off not applicable', ...dayInfo, maxDays: 0 });
   }
 
-  // 3. Check attendance
   const attendance = await req.prisma.attendance.findUnique({
     where: { userId_date: { userId: req.user.id, date } },
     select: { status: true, workHours: true, checkIn: true, checkOut: true },
   });
 
   if (!attendance || !attendance.checkIn) {
-    return res.json({ isValid: false, error: 'No attendance found for this date. You must have punched in to earn comp-off.', ...dayInfo, attendance: null, maxDays: 0 });
+    return res.json({ isValid: false, error: 'No attendance found for this date. You must have punched in to apply comp-off.', ...dayInfo, attendance: null, maxDays: 0 });
   }
 
   const hours = attendance.workHours || 0;
@@ -66,7 +77,6 @@ router.get('/validate-date', asyncHandler(async (req, res) => {
     });
   }
 
-  // 4. Check for duplicate
   const existing = await req.prisma.compOffRequest.findFirst({
     where: { userId: req.user.id, workDate: date, type: 'earn', status: { in: ['pending', 'approved'] } },
   });
@@ -78,7 +88,6 @@ router.get('/validate-date', asyncHandler(async (req, res) => {
     });
   }
 
-  // 5. Determine max days
   const maxDays = hours >= 9 ? 1 : 0.5;
 
   res.json({
@@ -97,20 +106,16 @@ router.get('/validate-date', asyncHandler(async (req, res) => {
 // ── GET /api/comp-off/balance/me ──
 router.get('/balance/me', asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const year = parseInt(req.query.year) || new Date().getFullYear();
-  let bal = await req.prisma.compOffBalance.findUnique({ where: { userId_year: { userId, year } } });
-  if (!bal) bal = { userId, year, earned: 0, used: 0, balance: 0 };
-  res.json(bal);
-}));
+  // Get balance from LeaveBalance (COF leave type) instead of CompOffBalance
+  const leaveTypeId = await getCompOffLeaveTypeId(req.prisma);
+  if (!leaveTypeId) return res.json({ earned: 0, used: 0, balance: 0 });
 
-// ── GET /api/comp-off/balance/:userId ──
-router.get('/balance/:userId', asyncHandler(async (req, res) => {
-  const userId = parseId(req.params.userId);
-  if (!isAdminRole(req.user) && req.user.id !== userId) throw forbidden();
-  const year = parseInt(req.query.year) || new Date().getFullYear();
-  let bal = await req.prisma.compOffBalance.findUnique({ where: { userId_year: { userId, year } } });
-  if (!bal) bal = { userId, year, earned: 0, used: 0, balance: 0 };
-  res.json(bal);
+  const fyYear = getFYYear(new Date().toISOString().slice(0, 10));
+  const bal = await req.prisma.leaveBalance.findUnique({
+    where: { userId_leaveTypeId_year: { userId, leaveTypeId, year: fyYear } },
+  });
+  if (!bal) return res.json({ earned: 0, used: 0, balance: 0 });
+  res.json({ earned: bal.total, used: bal.used, balance: bal.balance });
 }));
 
 // ── GET /api/comp-off/my ──
@@ -138,52 +143,39 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   res.json(requests);
 }));
 
-// ── POST /api/comp-off — employee submits earn/redeem request ──
+// ── POST /api/comp-off — employee submits earn request ──
 router.post('/', asyncHandler(async (req, res) => {
-  requireFields(req.body, 'type', 'workDate', 'days');
-  const { type, workDate, days, reason } = req.body;
-  if (!['earn', 'redeem'].includes(type)) throw badRequest('type must be earn or redeem');
+  requireFields(req.body, 'workDate', 'days');
+  const { workDate, days, reason } = req.body;
   const parsedDays = parseFloat(days);
   if (![0.5, 1].includes(parsedDays)) throw badRequest('days must be 0.5 or 1');
 
-  if (type === 'earn') {
-    // ── Server-side validation for earn requests ──
+  // 1. Date must be in the past
+  const today = new Date().toISOString().slice(0, 10);
+  if (workDate > today) throw badRequest('Cannot apply comp-off for future dates');
 
-    // 1. Date must be in the past
-    const today = new Date().toISOString().slice(0, 10);
-    if (workDate > today) throw badRequest('Cannot earn comp-off for future dates');
+  // 2. Must be a non-working day (holiday or weekend)
+  const dayInfo = await checkNonWorkingDay(req.prisma, workDate);
+  if (!dayInfo.isNonWorkingDay) throw badRequest('Comp-off can only be applied for holidays or weekends (Saturday/Sunday)');
 
-    // 2. Must be a non-working day (holiday or weekend)
-    const dayInfo = await checkNonWorkingDay(req.prisma, workDate);
-    if (!dayInfo.isNonWorkingDay) throw badRequest('Comp-off can only be earned on holidays or weekends (Saturday/Sunday)');
+  // 3. Must have attendance with sufficient hours
+  const attendance = await req.prisma.attendance.findUnique({
+    where: { userId_date: { userId: req.user.id, date: workDate } },
+  });
+  if (!attendance || !attendance.checkIn) throw badRequest('No attendance record found for this date. You must have punched in.');
 
-    // 3. Must have attendance with sufficient hours
-    const attendance = await req.prisma.attendance.findUnique({
-      where: { userId_date: { userId: req.user.id, date: workDate } },
-    });
-    if (!attendance || !attendance.checkIn) throw badRequest('No attendance record found for this date. You must have punched in.');
+  const hours = attendance.workHours || 0;
+  if (hours < 5) throw badRequest(`Insufficient work hours (${hours.toFixed(1)} hrs). Minimum 5 hours required for half-day comp-off.`);
+  if (parsedDays === 1 && hours < 9) throw badRequest(`Insufficient work hours (${hours.toFixed(1)} hrs). Minimum 9 hours required for full-day comp-off. You can apply for 0.5 day.`);
 
-    const hours = attendance.workHours || 0;
-    if (hours < 5) throw badRequest(`Insufficient work hours (${hours.toFixed(1)} hrs). Minimum 5 hours required for half-day comp-off.`);
-    if (parsedDays === 1 && hours < 9) throw badRequest(`Insufficient work hours (${hours.toFixed(1)} hrs). Minimum 9 hours required for full-day comp-off. You can apply for 0.5 day.`);
-
-    // 4. No duplicate
-    const existing = await req.prisma.compOffRequest.findFirst({
-      where: { userId: req.user.id, workDate, type: 'earn', status: { in: ['pending', 'approved'] } },
-    });
-    if (existing) throw badRequest(`You already have a ${existing.status} comp-off earn request for this date`);
-  }
-
-  if (type === 'redeem') {
-    const year = new Date().getFullYear();
-    const bal = await req.prisma.compOffBalance.findUnique({
-      where: { userId_year: { userId: req.user.id, year } },
-    });
-    if (!bal || bal.balance < parsedDays) throw badRequest('Insufficient comp-off balance');
-  }
+  // 4. No duplicate
+  const existing = await req.prisma.compOffRequest.findFirst({
+    where: { userId: req.user.id, workDate, type: 'earn', status: { in: ['pending', 'approved'] } },
+  });
+  if (existing) throw badRequest(`You already have a ${existing.status} comp-off request for this date`);
 
   const request = await req.prisma.compOffRequest.create({
-    data: { userId: req.user.id, type, workDate, days: parsedDays, reason: reason || null },
+    data: { userId: req.user.id, type: 'earn', workDate, days: parsedDays, reason: reason || null },
   });
   res.status(201).json(request);
 }));
@@ -203,23 +195,23 @@ router.put('/:id/review', requireAdmin, asyncHandler(async (req, res) => {
     data: { status, reviewedBy: req.user.id, reviewedAt: new Date(), reviewNote: reviewNote || null },
   });
 
+  // On approval, add to LeaveBalance (COF leave type) so employee can use via normal leave flow
   if (status === 'approved') {
-    const year = new Date(request.workDate).getFullYear();
-    const isEarn = request.type === 'earn';
-    await req.prisma.compOffBalance.upsert({
-      where: { userId_year: { userId: request.userId, year } },
-      create: {
-        userId: request.userId, year,
-        earned: isEarn ? request.days : 0,
-        used: isEarn ? 0 : request.days,
-        balance: isEarn ? request.days : -request.days,
-      },
-      update: {
-        earned: isEarn ? { increment: request.days } : undefined,
-        used: !isEarn ? { increment: request.days } : undefined,
-        balance: isEarn ? { increment: request.days } : { decrement: request.days },
-      },
-    });
+    const leaveTypeId = await getCompOffLeaveTypeId(req.prisma);
+    if (leaveTypeId) {
+      const fyYear = getFYYear(request.workDate);
+      await req.prisma.leaveBalance.upsert({
+        where: { userId_leaveTypeId_year: { userId: request.userId, leaveTypeId, year: fyYear } },
+        create: {
+          userId: request.userId, leaveTypeId, year: fyYear,
+          total: request.days, used: 0, balance: request.days,
+        },
+        update: {
+          total: { increment: request.days },
+          balance: { increment: request.days },
+        },
+      });
+    }
   }
 
   res.json(updated);
