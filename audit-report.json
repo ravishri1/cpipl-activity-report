@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-17T05:17:54.994Z",
+  "timestamp": "2026-03-20T07:25:33.183Z",
   "version": 2,
   "stats": {
-    "filesScanned": 111,
-    "apiCallsFound": 334,
-    "routesFound": 393,
+    "filesScanned": 115,
+    "apiCallsFound": 360,
+    "routesFound": 430,
     "issuesFound": 0
   },
   "missingRoutes": [
@@ -14,6 +14,13 @@
       "rawUrl": "${url}${sep}_t=${Date.now()}",
       "url": ":param:param_t=",
       "line": 18
+    },
+    {
+      "file": "hooks\\useFetch.js",
+      "method": "GET",
+      "rawUrl": "${url}${sep}_t=${Date.now()}",
+      "url": ":param:param_t=",
+      "line": 26
     }
   ],
   "queryParamCalls": 0,
@@ -133,5 +140,5 @@
       "severity": "MEDIUM"
     }
   ],
-  "matchedCount": 333
+  "matchedCount": 358
 }

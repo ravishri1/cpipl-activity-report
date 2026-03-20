@@ -312,7 +312,8 @@ router.get(
 
       // For each day of the month, find the applicable shift + OFF/leave status
       const days = {};
-      let offCount = 0;
+      let woCount = 0;
+      let hCount = 0;
       for (let d = 1; d <= lastDay; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dateObj = new Date(year, mon - 1, d);
@@ -341,8 +342,8 @@ router.get(
 
         // Determine display status
         let status = null; // null = normal shift day
-        if (isWeekend) { status = 'OFF'; offCount++; }
-        else if (isHoliday) { status = 'OFF'; offCount++; }
+        if (isWeekend) { status = 'WO'; woCount++; }
+        else if (isHoliday) { status = 'H'; hCount++; }
         else if (leaveCode) { status = leaveCode; } // "PL", "CL", "LOP", "COF", etc.
 
         days[dateStr] = {
@@ -365,7 +366,8 @@ router.get(
         designation: emp.designation,
         branch: empBranch,
         defaultShift: emp.shift,
-        offCount,
+        woCount,
+        hCount,
         days,
       };
     });
