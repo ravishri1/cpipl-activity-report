@@ -66,8 +66,6 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
     }
   };
 
-  const todayStr = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] overflow-y-auto">
