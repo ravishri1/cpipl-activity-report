@@ -423,26 +423,31 @@ async function applyLeave(userId, data, prisma) {
   const totalPool = (balance.opening || 0) + credited;
   const onProbation = isOnProbation(user);
 
-  let available;
-  if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
-    // During probation: only probationAllowance is usable
-    const usable = Math.min(balance.probationAllowance, totalPool);
-    available = Math.max(usable - actualUsed, 0);
+  // LOP (Loss of Pay) has unlimited balance — it's a salary deduction, not balance-based
+  const isLOP = leaveType.code === 'LOP';
 
-    if (available < days) {
-      const probEndStr = user.probationEndDate || 'confirmation';
-      throw new Error(
-        `You are on probation. Only ${balance.probationAllowance} ${leaveType.name} leave(s) can be used during probation. ` +
-        `Available: ${available.toFixed(1)}, Requested: ${days}. ` +
-        `Remaining leaves will be unlocked after ${probEndStr}.`
-      );
-    }
-  } else {
-    available = Math.max(totalPool - actualUsed, 0);
-    if (available < days) {
-      throw new Error(
-        `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
-      );
+  let available;
+  if (!isLOP) {
+    if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
+      // During probation: only probationAllowance is usable
+      const usable = Math.min(balance.probationAllowance, totalPool);
+      available = Math.max(usable - actualUsed, 0);
+
+      if (available < days) {
+        const probEndStr = user.probationEndDate || 'confirmation';
+        throw new Error(
+          `You are on probation. Only ${balance.probationAllowance} ${leaveType.name} leave(s) can be used during probation. ` +
+          `Available: ${available.toFixed(1)}, Requested: ${days}. ` +
+          `Remaining leaves will be unlocked after ${probEndStr}.`
+        );
+      }
+    } else {
+      available = Math.max(totalPool - actualUsed, 0);
+      if (available < days) {
+        throw new Error(
+          `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
+        );
+      }
     }
   }
 
