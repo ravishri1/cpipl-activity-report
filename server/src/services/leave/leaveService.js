@@ -311,6 +311,7 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     // For comp-off (accrualType 'none' with defaultBalance 0), credits come from
     // approved CompOffRequests which directly update LeaveBalance.total.
     // So use the stored total instead of recalculating from accrual formula.
+    const isLOP = lt.code === 'LOP';
     const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
     const credited = isCompOffType ? (bal.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
     const totalPool = (bal.opening || 0) + credited;
@@ -318,7 +319,10 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     // Calculate available based on probation status
     let available;
     let frozenBalance = 0;
-    if (onProbation && bal.probationAllowance !== null && bal.probationAllowance !== undefined) {
+    if (isLOP) {
+      // LOP is unlimited — salary deduction, not balance-based
+      available = -1; // -1 signals "unlimited" to frontend
+    } else if (onProbation && bal.probationAllowance !== null && bal.probationAllowance !== undefined) {
       const usable = Math.min(bal.probationAllowance, totalPool);
       available = Math.max(usable - used, 0);
       frozenBalance = Math.max(totalPool - bal.probationAllowance - used, 0);

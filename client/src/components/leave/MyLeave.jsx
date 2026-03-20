@@ -120,8 +120,9 @@ export default function MyLeave() {
       {/* Balance Cards — greytHR style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {balances.map((b) => {
+          const isUnlimited = b.available === -1; // LOP
           const totalPool = b.opening + b.credited;
-          const pct = totalPool > 0 ? Math.min((b.used / totalPool) * 100, 100) : 0;
+          const pct = isUnlimited ? 0 : totalPool > 0 ? Math.min((b.used / totalPool) * 100, 100) : 0;
           const hasFrozen = b.onProbation && b.frozenBalance > 0;
           return (
             <div key={b.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${hasFrozen ? 'border-amber-200' : 'border-slate-200'}`}>
@@ -152,8 +153,17 @@ export default function MyLeave() {
               {/* Balance display */}
               <div className="px-4 py-3">
                 <div className="flex items-baseline gap-1 mb-3">
-                  <span className="text-3xl font-bold text-blue-600">{b.available}</span>
-                  <span className="text-sm text-slate-400">days available</span>
+                  {isUnlimited ? (
+                    <>
+                      <span className="text-2xl font-bold text-slate-500">∞</span>
+                      <span className="text-sm text-slate-400">unlimited</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-3xl font-bold text-blue-600">{b.available}</span>
+                      <span className="text-sm text-slate-400">days available</span>
+                    </>
+                  )}
                 </div>
 
                 {/* Frozen balance notice */}
@@ -196,7 +206,7 @@ export default function MyLeave() {
                   )}
                   <div className="bg-blue-50 rounded-lg py-1.5 px-1">
                     <p className="text-[10px] text-blue-400 uppercase font-medium">Balance</p>
-                    <p className="text-sm font-bold text-blue-700">{b.available}</p>
+                    <p className="text-sm font-bold text-blue-700">{isUnlimited ? '∞' : b.available}</p>
                   </div>
                 </div>
               </div>

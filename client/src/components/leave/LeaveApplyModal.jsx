@@ -134,7 +134,7 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
               <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 flex items-center justify-between">
                 <span className="text-xs text-blue-600">Available Balance</span>
                 <span className="text-sm font-bold text-blue-700">
-                  {selectedBalance.available} day{selectedBalance.available !== 1 ? 's' : ''}
+                  {selectedBalance.available === -1 ? '∞ Unlimited' : `${selectedBalance.available} day${selectedBalance.available !== 1 ? 's' : ''}`}
                 </span>
               </div>
             )}
