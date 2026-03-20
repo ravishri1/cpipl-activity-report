@@ -380,8 +380,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                         </div>
                         {/* Status code */}
                         <div className="flex items-center justify-center mt-1">
-                          <span className={`text-sm font-semibold ${cfg.text}`}>
-                            {cfg.label}
+                          <span className={`${cell.statusLabel && cell.statusLabel.length > 2 ? 'text-[10px]' : 'text-sm'} font-semibold ${cfg.text}`}>
+                            {cell.statusLabel || cfg.label}
                           </span>
                         </div>
                         {/* Shift code — bottom right */}
@@ -401,7 +401,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                   <LegendItem color="bg-red-400" label="A — Absent" />
                   <LegendItem color="bg-orange-400" label="H — Holiday" />
                   <LegendItem color="bg-slate-300" label="O — Off Day" />
-                  <LegendItem color="bg-blue-400" label="L — Leave" />
+                  <LegendItem color="bg-blue-400" label="PL/COF — Leave Type" />
                   <LegendItem color="bg-amber-400" label="HD — Half Day" />
                   <span className="inline-flex items-center gap-1 text-slate-500">
                     <span className="w-3 h-3 rounded border-l-[3px] border-l-blue-400 bg-blue-50 border border-slate-200" /> Regularized
