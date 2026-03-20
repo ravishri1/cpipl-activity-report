@@ -18,10 +18,13 @@ function daysUntil(dateStr) {
   return Math.round((due - today) / (1000 * 60 * 60 * 24));
 }
 
-function DueBadge({ dateStr }) {
+function DueBadge({ dateStr, isConfirmed }) {
   if (!dateStr) return null;
   const days = daysUntil(dateStr);
   if (days === null) return null;
+  // Confirmed employees get a green "Confirmed" badge instead of overdue/due warnings
+  if (isConfirmed)
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Confirmed</span>;
   if (days < 0)
     return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
       {Math.abs(days)}d overdue
@@ -457,13 +460,15 @@ function HistoryDrawer({ employee, onClose }) {
 // ─── Employee Row ─────────────────────────────────────────────────────────────
 function EmployeeRow({ emp, selected, onToggle, onExtend, onConfirm, onHistory }) {
   const days = daysUntil(emp.confirmationDate);
-  const isOverdue = days !== null && days < 0;
-  const isDueToday = days === 0;
-  const isDueSoon = days !== null && days > 0 && days <= 7;
+  const isConfirmed = emp.confirmationStatus === 'confirmed';
+  const isOverdue = !isConfirmed && days !== null && days < 0;
+  const isDueToday = !isConfirmed && days === 0;
+  const isDueSoon = !isConfirmed && days !== null && days > 0 && days <= 7;
 
   return (
     <tr className={`border-b border-slate-100 transition-colors
-      ${isOverdue ? 'bg-red-50 hover:bg-red-100' :
+      ${isConfirmed ? 'bg-green-50 hover:bg-green-100' :
+        isOverdue ? 'bg-red-50 hover:bg-red-100' :
         isDueToday ? 'bg-amber-50 hover:bg-amber-100' :
         isDueSoon ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-slate-50'}`}>
       <td className="px-3 py-4">
@@ -491,7 +496,7 @@ function EmployeeRow({ emp, selected, onToggle, onExtend, onConfirm, onHistory }
       </td>
       <td className="px-5 py-4">
         <div className="text-sm text-slate-700">{emp.confirmationDate || '—'}</div>
-        <DueBadge dateStr={emp.confirmationDate} />
+        <DueBadge dateStr={emp.confirmationDate} isConfirmed={isConfirmed} />
       </td>
       <td className="px-5 py-4">
         {emp.confirmationStatus && (
@@ -511,18 +516,22 @@ function EmployeeRow({ emp, selected, onToggle, onExtend, onConfirm, onHistory }
             className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors">
             <History className="w-4 h-4" />
           </button>
-          <button onClick={() => onExtend(emp)}
-            title="Extend confirmation period"
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-100 text-amber-700
-                       hover:bg-amber-200 transition-colors">
-            Extend
-          </button>
-          <button onClick={() => onConfirm(emp)}
-            title="Confirm employee"
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700
-                       hover:bg-green-200 transition-colors flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Confirm
-          </button>
+          {!isConfirmed && (
+            <>
+              <button onClick={() => onExtend(emp)}
+                title="Extend confirmation period"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-100 text-amber-700
+                           hover:bg-amber-200 transition-colors">
+                Extend
+              </button>
+              <button onClick={() => onConfirm(emp)}
+                title="Confirm employee"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700
+                           hover:bg-green-200 transition-colors flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Confirm
+              </button>
+            </>
+          )}
         </div>
       </td>
     </tr>
