@@ -219,19 +219,18 @@ export default function ShiftRoster() {
   const handleExport = useCallback(() => {
     if (!filteredRoster.length || !daysArray.length) return;
     const rows = [];
-    const header = ['Employee No', 'Employee Name', 'Department', 'Designation', 'Location', 'OFF Count',
+    const header = ['Employee No', 'Employee Name', 'Department', 'Designation', 'Location', 'WO', 'H',
       ...daysArray.map(d => `${d.day} ${DAY_NAMES[d.dayOfWeek]}`)];
     rows.push(header);
 
     filteredRoster.forEach(emp => {
-      const row = [emp.employeeId || '', emp.name, emp.department || '', emp.designation || '', emp.branch || '', emp.offCount || 0];
+      const row = [emp.employeeId || '', emp.name, emp.department || '', emp.designation || '', emp.branch || '', emp.woCount || 0, emp.hCount || 0];
       daysArray.forEach(d => {
         const dayData = emp.days[d.date];
         if (!dayData) { row.push('-'); return; }
         const { status, shiftName, leaveCode } = dayData;
         if (status === 'WO') row.push('WO');
         else if (status === 'H') row.push('H');
-        else if (status === 'OFF') row.push('OFF');
         else if (leaveCode) { const sc = shiftName ? shiftCodeMap[shiftName]?.code : null; row.push(sc ? `${sc}:${leaveCode}` : leaveCode); }
         else if (shiftName) row.push(shiftCodeMap[shiftName]?.code || shiftCode(shiftName));
         else row.push('-');
@@ -246,7 +245,7 @@ export default function ShiftRoster() {
       filteredRoster.forEach(emp => {
         const dayData = emp.days[d.date];
         if (!dayData) return;
-        if (dayData.status === 'WO' || dayData.status === 'H' || dayData.status === 'OFF') off++;
+        if (dayData.status === 'OFF') off++;
         else if (dayData.leaveCode) leave++;
         else if (dayData.shiftName) present++;
       });
@@ -449,9 +448,13 @@ export default function ShiftRoster() {
                   <th className="sticky left-[126px] z-20 bg-gray-100 px-2 py-2 text-left font-semibold text-gray-700 min-w-[180px] border-r border-gray-300 text-[11px]">
                     Employee Name
                   </th>
-                  {/* OFF Count */}
-                  <th className="px-1 py-2 text-center font-semibold text-gray-700 min-w-[36px] border-r border-gray-200 text-[11px] bg-gray-100">
-                    OFF
+                  {/* WO Count */}
+                  <th className="px-1 py-2 text-center font-semibold text-orange-600 min-w-[32px] border-r border-gray-200 text-[10px] bg-orange-50">
+                    WO
+                  </th>
+                  {/* H Count */}
+                  <th className="px-1 py-2 text-center font-semibold text-green-700 min-w-[32px] border-r border-gray-200 text-[10px] bg-green-50">
+                    H
                   </th>
                   {/* Day columns */}
                   {daysArray.map(d => (
@@ -500,9 +503,13 @@ export default function ShiftRoster() {
                           {emp.designation || ''}{emp.department && emp.department !== 'General' ? ` · ${emp.department}` : ''}{emp.branch ? ` · ${emp.branch}` : ''}
                         </div>
                       </td>
-                      {/* OFF count */}
-                      <td className="px-1 py-1.5 text-center border-r border-gray-200 text-[11px] font-bold text-gray-700">
-                        {emp.offCount || 0}
+                      {/* WO count */}
+                      <td className="px-1 py-1.5 text-center border-r border-gray-200 text-[11px] font-bold text-orange-600 bg-orange-50/50">
+                        {emp.woCount || 0}
+                      </td>
+                      {/* H count */}
+                      <td className="px-1 py-1.5 text-center border-r border-gray-200 text-[11px] font-bold text-green-700 bg-green-50/50">
+                        {emp.hCount || 0}
                       </td>
                       {/* Day cells */}
                       {daysArray.map(d => {
@@ -513,6 +520,7 @@ export default function ShiftRoster() {
                             onClick={() => handleCellClick(emp.userId, emp.name, d.date)}
                             className={`px-0 py-1 text-center cursor-pointer transition-colors border-r border-gray-100 hover:bg-blue-100 ${
                               d.isToday ? 'bg-blue-50/60' :
+                              dayData?.status === 'H' ? 'bg-gray-100' :
                               d.isWeekend ? 'bg-red-50/40' : ''
                             }`}
                             title={`${emp.name} — ${d.date}${dayData?.holidayName ? `\nHoliday: ${dayData.holidayName}` : ''}${dayData?.leaveCode ? `\nLeave: ${dayData.leaveCode}` : ''}${dayData?.shiftName ? `\nShift: ${dayData.shiftName}` : ''}`}
@@ -534,8 +542,11 @@ export default function ShiftRoster() {
               Total Items: {filteredRoster.length}
             </span>
             <span className="text-xs text-gray-400">|</span>
-            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">
-              OFF : 0
+            <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
+              WO = Weekly Off
+            </span>
+            <span className="text-xs font-medium text-green-700 bg-gray-100 px-2 py-0.5 rounded">
+              H = Holiday
             </span>
             {data.shifts.map((s, i) => {
               const colors = SHIFT_COLORS[i % SHIFT_COLORS.length];

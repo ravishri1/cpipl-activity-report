@@ -31,7 +31,7 @@ if (fs.existsSync(envPath)) {
 const CONFIG = {
   mode:          process.env.MODE              || 'multi',
   hrApiUrl:      process.env.HR_API_URL        || 'https://eod.colorpapers.in',
-  hrAgentKey:    process.env.HR_AGENT_KEY      || 'biometric-sync-key',
+  hrAgentKey:    process.env.HR_AGENT_KEY      || 'cpipl-bio-sync-2026-xK9mP4qR7v2',
   pollMinutes:   parseInt(process.env.POLL_INTERVAL_MINUTES || '5'),
   lookbackDays:  parseInt(process.env.LOOKBACK_DAYS || '1'),
   // Single-device mode settings (legacy)
@@ -148,7 +148,7 @@ async function pushToHrApp(deviceSerial, punches) {
     punches,
   });
 
-  const hrUrl = new URL('/api/agent/sync-single', CONFIG.hrApiUrl);
+  const hrUrl = new URL('/api/biometric/sync', CONFIG.hrApiUrl);
   const res   = await httpRequest(hrUrl.toString(), {
     method: 'POST',
     headers: {
@@ -170,7 +170,7 @@ async function pushBatchToHrApp(allDeviceData) {
     devices: allDeviceData,
   });
 
-  const hrUrl = new URL('/api/agent/sync', CONFIG.hrApiUrl);
+  const hrUrl = new URL('/api/biometric/agent-sync', CONFIG.hrApiUrl);
   const res   = await httpRequest(hrUrl.toString(), {
     method: 'POST',
     headers: {
@@ -187,7 +187,7 @@ async function pushBatchToHrApp(allDeviceData) {
 
 // ─── Fetch device list from HR API ───────────────────────────────────────────
 async function fetchDeviceList() {
-  const url = new URL('/api/agent/devices', CONFIG.hrApiUrl);
+  const url = new URL('/api/biometric/devices', CONFIG.hrApiUrl);
   const res = await httpRequest(url.toString(), {
     method: 'GET',
     headers: { 'x-agent-key': CONFIG.hrAgentKey },
@@ -358,12 +358,14 @@ async function runSingleSync() {
 }
 
 // ─── Start agent ──────────────────────────────────────────────────────────────
+const RUN_ONCE = process.argv.includes('--once');
+
 async function main() {
   console.log('========================================');
-  console.log('  eSSL Biometric Sync Agent v2.1');
+  console.log(`  eSSL Biometric Sync Agent v2.1 ${RUN_ONCE ? '(one-shot)' : '(daemon)'}`);
   console.log('========================================');
   console.log(`Mode: ${CONFIG.mode === 'multi' ? 'Multi-device (auto-discover)' : 'Single-device (legacy)'}`);
-  console.log(`Poll interval: every ${CONFIG.pollMinutes} minutes`);
+  if (!RUN_ONCE) console.log(`Poll interval: every ${CONFIG.pollMinutes} minutes`);
   console.log(`Lookback: ${CONFIG.lookbackDays} day(s)`);
   console.log(`HR app: ${CONFIG.hrApiUrl}`);
 
@@ -373,11 +375,18 @@ async function main() {
 
   const syncFn = CONFIG.mode === 'multi' ? runMultiSync : runSingleSync;
 
-  // Run immediately on start, then on schedule
+  // Run sync
   await syncFn();
-  setInterval(syncFn, CONFIG.pollMinutes * 60 * 1000);
 
-  console.log(`\nNext sync in ${CONFIG.pollMinutes} minutes...`);
+  if (RUN_ONCE) {
+    // Task Scheduler mode: run once and exit cleanly
+    console.log('\nOne-shot sync complete. Exiting.');
+    process.exit(0);
+  } else {
+    // Daemon mode: keep running with setInterval (legacy, not recommended)
+    setInterval(syncFn, CONFIG.pollMinutes * 60 * 1000);
+    console.log(`\nNext sync in ${CONFIG.pollMinutes} minutes...`);
+  }
 }
 
 main().catch(err => {
