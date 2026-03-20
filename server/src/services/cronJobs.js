@@ -19,6 +19,7 @@ const { runRenewalAlerts }          = require('./notifications/renewalAlertServi
 const { scanAllMailForRenewals }    = require('./gmailRenewalScanner');
 
 const { syncAllDevices } = require('./biometric/biometricSyncService');
+const { executeFYRollover, getFinancialYear } = require('./leave/leaveService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -327,6 +328,21 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> Automation analysis scheduled: 0 23 * * 0 (Sunday 11:00 PM IST)');
+
+  // ─── FY Rollover: March 31, 11:55 PM IST — carry forward unused leaves ───
+  cron.schedule('55 23 31 3 *', async () => {
+    try {
+      const currentFY = getFinancialYear();
+      console.log(`[CRON] Starting FY rollover for FY ${currentFY}...`);
+      const summary = await executeFYRollover(currentFY, prisma);
+      const totalCarry = summary.reduce((s, r) => s + r.carryForward, 0);
+      const totalLapsed = summary.reduce((s, r) => s + r.lapsed, 0);
+      console.log(`[CRON] FY rollover complete: ${summary.length} entries, ${totalCarry} days carried, ${totalLapsed} days lapsed`);
+    } catch (err) {
+      console.error('[CRON] FY rollover failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> FY rollover scheduled: 55 23 31 3 * (March 31 at 11:55 PM IST)');
 }
 
 module.exports = { initCronJobs };

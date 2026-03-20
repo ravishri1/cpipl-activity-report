@@ -3,6 +3,7 @@ const { authenticate, requireAdmin, requireActiveEmployee } = require('../middle
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, conflict, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId, parseIntOr } = require('../utils/validate');
+const { DEFAULT_OFF_DAYS } = require('../services/attendance/weeklyOffHelper');
 
 const router = express.Router();
 router.use(authenticate);
@@ -124,6 +125,119 @@ router.post('/import', requireAdmin, asyncHandler(async (req, res) => {
 
   res.json(results);
 }));
+
+// ═══════════════════════════════════════════════
+// Weekly Off Patterns (MUST be before /:id routes)
+// ═══════════════════════════════════════════════
+
+// GET /api/holidays/weekly-off-patterns — List all patterns with user counts
+router.get('/weekly-off-patterns', requireAdmin, asyncHandler(async (req, res) => {
+  const patterns = await req.prisma.weeklyOffPattern.findMany({
+    include: {
+      users: {
+        where: { isActive: true },
+        select: { id: true, name: true, employeeId: true, department: true },
+        orderBy: { name: 'asc' },
+      },
+    },
+    orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+  });
+
+  res.json(patterns.map(p => ({
+    ...p,
+    days: JSON.parse(p.days || '[]'),
+    userCount: p.users.length,
+  })));
+}));
+
+// GET /api/holidays/weekly-off-unassigned — Employees not assigned to any pattern (use default)
+router.get('/weekly-off-unassigned', requireAdmin, asyncHandler(async (req, res) => {
+  const users = await req.prisma.user.findMany({
+    where: { isActive: true, weeklyOffPatternId: null },
+    select: { id: true, name: true, employeeId: true, department: true },
+    orderBy: { name: 'asc' },
+  });
+  res.json(users);
+}));
+
+// POST /api/holidays/weekly-off-patterns — Create pattern
+router.post('/weekly-off-patterns', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'name', 'days');
+  const { name, days } = req.body;
+
+  if (!Array.isArray(days) || days.length === 0) throw badRequest('Days must be a non-empty array');
+  if (days.some(d => d < 0 || d > 6)) throw badRequest('Day values must be 0-6 (Sun=0, Sat=6)');
+
+  const pattern = await req.prisma.weeklyOffPattern.create({
+    data: { name, days: JSON.stringify(days) },
+  });
+  res.status(201).json({ ...pattern, days });
+}));
+
+// PUT /api/holidays/weekly-off-patterns/:id — Update pattern
+router.put('/weekly-off-patterns/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { name, days } = req.body;
+
+  const data = {};
+  if (name) data.name = name;
+  if (days) {
+    if (!Array.isArray(days) || days.some(d => d < 0 || d > 6)) throw badRequest('Invalid days');
+    data.days = JSON.stringify(days);
+  }
+
+  const updated = await req.prisma.weeklyOffPattern.update({ where: { id }, data });
+  res.json({ ...updated, days: JSON.parse(updated.days) });
+}));
+
+// DELETE /api/holidays/weekly-off-patterns/:id — Delete pattern (only if no users assigned)
+router.delete('/weekly-off-patterns/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const pattern = await req.prisma.weeklyOffPattern.findUnique({
+    where: { id },
+    include: { _count: { select: { users: true } } },
+  });
+  if (!pattern) throw notFound('Pattern');
+  if (pattern.isDefault) throw badRequest('Cannot delete the default pattern');
+  if (pattern._count.users > 0) throw badRequest('Cannot delete pattern with assigned employees. Reassign them first.');
+
+  await req.prisma.weeklyOffPattern.delete({ where: { id } });
+  res.json({ message: 'Pattern deleted' });
+}));
+
+// POST /api/holidays/weekly-off-patterns/:id/assign — Assign users to pattern (bulk)
+router.post('/weekly-off-patterns/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { userIds } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) throw badRequest('userIds required');
+
+  const pattern = await req.prisma.weeklyOffPattern.findUnique({ where: { id } });
+  if (!pattern) throw notFound('Pattern');
+
+  await req.prisma.user.updateMany({
+    where: { id: { in: userIds } },
+    data: { weeklyOffPatternId: id },
+  });
+
+  res.json({ message: `${userIds.length} employee(s) assigned to ${pattern.name}` });
+}));
+
+// DELETE /api/holidays/weekly-off-patterns/:id/users/:userId — Remove user from pattern
+router.delete('/weekly-off-patterns/:id/users/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const userId = parseId(req.params.userId);
+
+  await req.prisma.user.update({
+    where: { id: userId },
+    data: { weeklyOffPatternId: null },
+  });
+
+  res.json({ message: 'Employee removed from pattern (will use default Sat+Sun)' });
+}));
+
+// ═══════════════════════════════════════════════
+// Holiday CRUD — Param-based routes (/:id) MUST be LAST
+// ═══════════════════════════════════════════════
 
 // PUT /api/holidays/:id — Update a holiday (admin only)
 router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {

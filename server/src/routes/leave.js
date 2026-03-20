@@ -21,6 +21,8 @@ const {
   getLeaveGrants,
   deleteLeaveGrant,
   calendarToFYMonth,
+  previewFYRollover,
+  executeFYRollover,
 } = require('../services/leave/leaveService');
 const { notifyUsers } = require('../utils/notify');
 
@@ -189,6 +191,38 @@ router.post('/admin/init-fy', requireAdmin, asyncHandler(async (req, res) => {
   const fyYear = parseInt(req.body.year) || getFinancialYear();
   const result = await initializeFYBalances(fyYear, req.prisma);
   res.json({ message: `Initialized FY ${getFYLabel(fyYear)} balances`, ...result });
+}));
+
+// GET /api/leave/admin/fy-rollover-preview — Preview FY rollover
+router.get('/admin/fy-rollover-preview', requireAdmin, asyncHandler(async (req, res) => {
+  const year = parseInt(req.query.year) || getFinancialYear();
+  const preview = await previewFYRollover(year, req.prisma);
+
+  const stats = {
+    totalEmployees: new Set(preview.map(p => p.userId)).size,
+    totalCarry: preview.reduce((s, p) => s + p.willCarry, 0),
+    totalLapse: preview.reduce((s, p) => s + p.willLapse, 0),
+    fyLabel: getFYLabel(year),
+    nextFYLabel: getFYLabel(year + 1),
+  };
+
+  res.json({ stats, preview });
+}));
+
+// POST /api/leave/admin/fy-rollover — Execute FY rollover
+router.post('/admin/fy-rollover', requireAdmin, asyncHandler(async (req, res) => {
+  const { year } = req.body;
+  if (!year) throw badRequest('Year is required');
+
+  const summary = await executeFYRollover(year, req.prisma);
+
+  const stats = {
+    totalEmployees: new Set(summary.map(s => s.userId)).size,
+    totalCarry: summary.reduce((s, r) => s + r.carryForward, 0),
+    totalLapsed: summary.reduce((s, r) => s + r.lapsed, 0),
+  };
+
+  res.json({ message: 'FY rollover completed successfully', stats, summary });
 }));
 
 // PUT /api/leave/admin/balance/:id — Admin adjust a balance (opening, total, used)

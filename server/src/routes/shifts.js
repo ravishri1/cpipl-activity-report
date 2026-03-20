@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('../services/attendance/weeklyOffHelper');
 
 const router = express.Router();
 router.use(authenticate); // All routes require authentication
@@ -299,11 +300,15 @@ router.get(
       assignmentsByUser[a.userId].push(a);
     }
 
+    // Batch-fetch weekly off patterns for all employees
+    const weeklyOffMap = await getWeeklyOffMap(employees.map(e => e.id), req.prisma);
+
     // Build roster data
     const roster = employees.map(emp => {
       const userAssignments = assignmentsByUser[emp.id] || [];
       const userLeaves = leavesByUser[emp.id] || {};
       const empBranch = emp.branch?.name || emp.branch?.city || emp.location || null;
+      const empOffDays = weeklyOffMap.get(emp.id) || DEFAULT_OFF_DAYS;
 
       // For each day of the month, find the applicable shift + OFF/leave status
       const days = {};
@@ -312,7 +317,7 @@ router.get(
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dateObj = new Date(year, mon - 1, d);
         const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isWeekend = empOffDays.includes(dayOfWeek);
 
         // Check holiday (match All or employee's branch/location)
         const dayHolidays = holidayMap[dateStr] || [];

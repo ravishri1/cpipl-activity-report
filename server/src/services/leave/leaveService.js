@@ -6,6 +6,8 @@
 //   After confirmation, all accrued past-month leaves become available instantly.
 // ═══════════════════════════════════════════════
 
+const { getUserWeeklyOffDays, DEFAULT_OFF_DAYS } = require('../attendance/weeklyOffHelper');
+
 /**
  * Get the financial year start year for a given date
  * FY runs April 1 to March 31
@@ -173,12 +175,20 @@ function calculateAvailableWithProbation(balance, leaveType, fyYear, user) {
 }
 
 /**
- * Calculate business days between two dates, excluding weekends and holidays
+ * Calculate business days between two dates, excluding weekly offs and holidays
+ * @param {string} startDate
+ * @param {string} endDate
+ * @param {string} session - 'full_day', 'first_half', 'second_half'
+ * @param {object} prisma
+ * @param {number} [userId] - optional, to look up per-user weekly off pattern
  */
-async function calculateLeaveDays(startDate, endDate, session, prisma) {
+async function calculateLeaveDays(startDate, endDate, session, prisma, userId) {
+  // Resolve user's weekly off days (or default Sat+Sun)
+  const offDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
+
   if (startDate === endDate && (session === 'first_half' || session === 'second_half')) {
     const d = new Date(startDate);
-    if (d.getDay() === 0 || d.getDay() === 6) return 0;
+    if (offDays.includes(d.getDay())) return 0;
     const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate } });
     if (isHoliday) return 0;
     return 0.5;
@@ -197,7 +207,7 @@ async function calculateLeaveDays(startDate, endDate, session, prisma) {
   while (current <= end) {
     const dayOfWeek = current.getDay();
     const dateStr = current.toISOString().split('T')[0];
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.has(dateStr)) {
+    if (!offDays.includes(dayOfWeek) && !holidayDates.has(dateStr)) {
       days++;
     }
     current.setDate(current.getDate() + 1);
@@ -360,7 +370,7 @@ async function applyLeave(userId, data, prisma) {
   }
 
   const effectiveSession = session || 'full_day';
-  const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma);
+  const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId);
   if (days <= 0) {
     throw new Error('Selected dates have no working days (all weekends/holidays).');
   }
@@ -836,6 +846,157 @@ async function deleteLeaveGrant(grantId, prisma) {
   return { message: 'Leave grant removed. Balance reset to default.' };
 }
 
+/**
+ * Execute FY rollover: carry forward unused leaves to next FY
+ * For each active user + each carry-forward-enabled leave type:
+ *   - Calculate current FY available = opening + credited(full year 12 months) - used
+ *   - Cap carry = min(available, maxCarryForward)
+ *   - Upsert next FY's LeaveBalance with opening = carry amount
+ * Returns summary array
+ */
+async function executeFYRollover(fyYear, prisma) {
+  const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, employeeId: true },
+  });
+
+  const nextFY = fyYear + 1;
+  const summary = [];
+
+  for (const user of users) {
+    for (const lt of leaveTypes) {
+      // Get current FY balance
+      const balance = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: fyYear } },
+      });
+
+      if (!balance) continue;
+
+      // Reconcile used from actual approved requests
+      const actualUsed = await calculateUsedFromRequests(user.id, lt.id, fyYear, prisma);
+
+      // Calculate full-year credited (12 months elapsed)
+      const joiningMonth = balance.joiningMonth || null;
+      const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
+      const credited = isCompOffType ? (balance.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
+      const available = Math.max((balance.opening || 0) + credited - actualUsed, 0);
+
+      let carryAmount = 0;
+      let lapsed = 0;
+
+      if (lt.carryForward && lt.maxCarryForward > 0) {
+        carryAmount = Math.min(available, lt.maxCarryForward);
+        lapsed = Math.max(available - lt.maxCarryForward, 0);
+      }
+      // For non-carry-forward types, carry = 0, lapsed = available
+
+      // Upsert next FY balance
+      const existing = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: nextFY } },
+      });
+
+      if (existing) {
+        // Only update opening if it hasn't been manually set
+        await prisma.leaveBalance.update({
+          where: { id: existing.id },
+          data: { opening: carryAmount },
+        });
+      } else {
+        // Check if there's a grant for next FY
+        const grant = await prisma.leaveGranter.findUnique({
+          where: { userId_leaveTypeId_fyYear: { userId: user.id, leaveTypeId: lt.id, fyYear: nextFY } },
+        });
+
+        await prisma.leaveBalance.create({
+          data: {
+            userId: user.id,
+            leaveTypeId: lt.id,
+            year: nextFY,
+            opening: carryAmount,
+            total: grant ? grant.totalGranted : lt.defaultBalance,
+            used: 0,
+            balance: carryAmount,
+            probationAllowance: grant ? grant.probationAllowance : null,
+            joiningMonth: grant ? grant.joiningMonth : null,
+          },
+        });
+      }
+
+      if (carryAmount > 0 || lapsed > 0) {
+        summary.push({
+          userId: user.id,
+          userName: user.name,
+          employeeId: user.employeeId,
+          leaveType: lt.name,
+          leaveTypeCode: lt.code,
+          prevBalance: available,
+          carryForward: carryAmount,
+          lapsed,
+        });
+      }
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Preview FY rollover without executing — shows what would happen
+ */
+async function previewFYRollover(fyYear, prisma) {
+  const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, employeeId: true },
+  });
+
+  const preview = [];
+
+  for (const user of users) {
+    for (const lt of leaveTypes) {
+      const balance = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: fyYear } },
+      });
+
+      if (!balance) continue;
+
+      const actualUsed = await calculateUsedFromRequests(user.id, lt.id, fyYear, prisma);
+      const joiningMonth = balance.joiningMonth || null;
+      const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
+      const credited = isCompOffType ? (balance.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
+      const available = Math.max((balance.opening || 0) + credited - actualUsed, 0);
+
+      let carryAmount = 0;
+      let lapsed = 0;
+
+      if (lt.carryForward && lt.maxCarryForward > 0) {
+        carryAmount = Math.min(available, lt.maxCarryForward);
+        lapsed = Math.max(available - lt.maxCarryForward, 0);
+      } else {
+        lapsed = available;
+      }
+
+      if (available > 0) {
+        preview.push({
+          userId: user.id,
+          userName: user.name,
+          employeeId: user.employeeId,
+          leaveType: lt.name,
+          leaveTypeCode: lt.code,
+          carryForwardEnabled: lt.carryForward,
+          maxCarryForward: lt.maxCarryForward || 0,
+          currentAvailable: available,
+          willCarry: carryAmount,
+          willLapse: lapsed,
+        });
+      }
+    }
+  }
+
+  return preview;
+}
+
 module.exports = {
   getFinancialYear,
   getFYRange,
@@ -861,4 +1022,6 @@ module.exports = {
   deleteLeaveGrant,
   isOnProbation,
   calendarToFYMonth,
+  executeFYRollover,
+  previewFYRollover,
 };
