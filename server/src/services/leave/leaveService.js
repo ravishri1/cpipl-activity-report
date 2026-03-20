@@ -184,10 +184,21 @@ function calculateAvailableWithProbation(balance, leaveType, fyYear, user) {
  */
 async function calculateLeaveDays(startDate, endDate, session, prisma, userId) {
   // Resolve user's weekly off days (or default Sat+Sun)
-  const offDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
+  const baseOffDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
+
+  // Policy: Before 2026-02-01, Saturday was a working day (only Sunday off)
+  // After 2026-02-01, Saturday is also off. Apply per-date logic.
+  const SAT_OFF_CUTOFF = '2026-02-01';
+  const getOffDaysForDate = (dateStr) => {
+    if (dateStr < SAT_OFF_CUTOFF) {
+      return baseOffDays.filter(d => d !== 6); // Remove Saturday before cutoff
+    }
+    return baseOffDays;
+  };
 
   if (startDate === endDate && (session === 'first_half' || session === 'second_half')) {
     const d = new Date(startDate);
+    const offDays = getOffDaysForDate(startDate);
     if (offDays.includes(d.getDay())) return 0;
     const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate } });
     if (isHoliday) return 0;
@@ -207,6 +218,7 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId) {
   while (current <= end) {
     const dayOfWeek = current.getDay();
     const dateStr = current.toISOString().split('T')[0];
+    const offDays = getOffDaysForDate(dateStr);
     if (!offDays.includes(dayOfWeek) && !holidayDates.has(dateStr)) {
       days++;
     }
