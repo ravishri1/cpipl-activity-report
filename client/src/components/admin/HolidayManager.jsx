@@ -580,7 +580,10 @@ function WeeklyOffTab() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function HolidayManager() {
-  const [mainTab, setMainTab] = useState('holidays'); // 'holidays' | 'weeklyoff'
+  const [mainTab, setMainTab] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    return hash === 'weeklyoff' ? 'weeklyoff' : 'holidays';
+  });
   const [fy, setFy] = useState(getCurrentFY());
   const [allHolidays, setAllHolidays] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -773,11 +776,11 @@ export default function HolidayManager() {
             </div>
             {/* Top-level tab switcher */}
             <div className="flex border border-slate-200 rounded-lg overflow-hidden ml-4">
-              <button onClick={() => setMainTab('holidays')}
+              <button onClick={() => { setMainTab('holidays'); window.location.hash = ''; }}
                 className={`px-4 py-1.5 text-sm font-medium transition-colors ${mainTab === 'holidays' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
                 Holiday List
               </button>
-              <button onClick={() => setMainTab('weeklyoff')}
+              <button onClick={() => { setMainTab('weeklyoff'); window.location.hash = 'weeklyoff'; }}
                 className={`px-4 py-1.5 text-sm font-medium border-l border-slate-200 transition-colors ${mainTab === 'weeklyoff' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
                 Weekly Off
               </button>
