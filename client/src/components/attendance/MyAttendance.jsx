@@ -36,7 +36,7 @@ export default function MyAttendance() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [elapsed, setElapsed] = useState(null);
-  const [view, setView] = useState('list'); // 'list' or 'calendar'
+  const [view, setView] = useState('calendar'); // 'list' or 'calendar'
   const timerRef = useRef(null);
 
   const fetchData = async () => {
