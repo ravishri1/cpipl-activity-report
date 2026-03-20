@@ -208,6 +208,10 @@ model User {
   // ── Email Work Tracker ──
   emailHandledThreads       EmailHandledThread[]
 
+  // ── Weekly Off Pattern ──
+  weeklyOffPatternId        Int?
+  weeklyOffPattern          WeeklyOffPattern?  @relation("UserWeeklyOff", fields: [weeklyOffPatternId], references: [id])
+
   @@index([department])
   @@index([isActive])
   @@index([employmentStatus])
@@ -504,6 +508,15 @@ model Holiday {
 
   @@unique([date, location])
   @@index([year])
+}
+
+model WeeklyOffPattern {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique                     // "Sat+Sun", "Thu+Sat", "Fri+Sat"
+  days      String                               // JSON array of day numbers: "[0,6]" for Sun+Sat
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  users     User[]   @relation("UserWeeklyOff")
 }
 
 model Education {

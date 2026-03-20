@@ -3,6 +3,8 @@
  * Builds greytHR-style monthly attendance grid with session-based tracking
  */
 
+const { getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('./weeklyOffHelper');
+
 const GRACE_MINUTES = 15;
 
 /** Parse "HH:MM" to total minutes */
@@ -110,17 +112,21 @@ async function getAttendanceMuster(month, department, location, prisma) {
     regMap[r.userId][r.date] = r.status;
   }
 
+  // Batch-fetch weekly off patterns for all employees
+  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma);
+
   // Build employee rows
   const employees = users.map(user => {
     const days = {};
     const summary = { P: 0, L: 0, H: 0, A: 0, OFF: 0, HD: 0, LOP: 0, OD: 0, COF: 0, late: 0, regularized: 0 };
     const shift = shiftMap[user.id] || null;
     const shiftStartMins = shift ? parseTimeToMinutes(shift.startTime) : null;
+    const userOffDays = weeklyOffMap.get(user.id) || DEFAULT_OFF_DAYS;
 
     for (const di of dayInfo) {
       const att = attMap[user.id]?.[di.date];
       const isHoliday = !!holidayMap[di.date];
-      const isWeekend = di.dow === 0 || di.dow === 6;
+      const isWeekend = userOffDays.includes(di.dow);
       const leaveCode = leaveMap[user.id]?.[di.date] || null;
       const isFuture = di.date > today;
       const regStatus = regMap[user.id]?.[di.date] || null;

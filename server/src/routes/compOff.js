@@ -3,17 +3,23 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { getUserWeeklyOffDays } = require('../services/attendance/weeklyOffHelper');
 
 const router = express.Router();
 router.use(authenticate);
 
 function isAdminRole(u) { return u.role === 'admin' || u.role === 'sub_admin' || u.role === 'team_lead'; }
 
-// ── Helper: check if a date is a non-working day (holiday or weekend) ──
-async function checkNonWorkingDay(prisma, dateStr) {
+const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// ── Helper: check if a date is a non-working day (holiday or weekly off) for a user ──
+async function checkNonWorkingDay(prisma, dateStr, userId) {
   const d = new Date(dateStr + 'T00:00:00');
   const dayOfWeek = d.getDay(); // 0=Sun, 6=Sat
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+  // Get user's weekly off pattern
+  const offDays = userId ? await getUserWeeklyOffDays(userId, prisma) : [0, 6];
+  const isWeekend = offDays.includes(dayOfWeek);
 
   const holiday = await prisma.holiday.findFirst({
     where: { date: dateStr, isOptional: false },
@@ -24,7 +30,7 @@ async function checkNonWorkingDay(prisma, dateStr) {
     isHoliday: !!holiday,
     holidayName: holiday?.name || null,
     isNonWorkingDay: isWeekend || !!holiday,
-    dayLabel: isWeekend ? (dayOfWeek === 0 ? 'Sunday' : 'Saturday') : (holiday ? `Holiday — ${holiday.name}` : 'Working Day'),
+    dayLabel: isWeekend ? DAY_LABELS[dayOfWeek] : (holiday ? `Holiday — ${holiday.name}` : 'Working Day'),
   };
 }
 
@@ -53,7 +59,7 @@ router.get('/validate-date', asyncHandler(async (req, res) => {
     return res.json({ isValid: false, error: 'Cannot apply comp-off for future dates', maxDays: 0 });
   }
 
-  const dayInfo = await checkNonWorkingDay(req.prisma, date);
+  const dayInfo = await checkNonWorkingDay(req.prisma, date, req.user.id);
   if (!dayInfo.isNonWorkingDay) {
     return res.json({ isValid: false, error: 'This is a regular working day — comp-off not applicable', ...dayInfo, maxDays: 0 });
   }
@@ -154,9 +160,9 @@ router.post('/', asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   if (workDate > today) throw badRequest('Cannot apply comp-off for future dates');
 
-  // 2. Must be a non-working day (holiday or weekend)
-  const dayInfo = await checkNonWorkingDay(req.prisma, workDate);
-  if (!dayInfo.isNonWorkingDay) throw badRequest('Comp-off can only be applied for holidays or weekends (Saturday/Sunday)');
+  // 2. Must be a non-working day (holiday or weekly off)
+  const dayInfo = await checkNonWorkingDay(req.prisma, workDate, req.user.id);
+  if (!dayInfo.isNonWorkingDay) throw badRequest('Comp-off can only be applied for holidays or weekly off days');
 
   // 3. Must have attendance with sufficient hours
   const attendance = await req.prisma.attendance.findUnique({

@@ -9,7 +9,7 @@ import { formatDate } from '../../utils/formatters';
 import {
   Gift, Plus, Trash2, ChevronLeft, ChevronRight, Users, Shield, Clock,
   CheckCircle2, AlertTriangle, Search, X, Info, Pencil, Lock, Unlock,
-  Download, Upload, UserCheck, UserX,
+  Download, Upload, UserCheck, UserX, RotateCcw,
 } from 'lucide-react';
 
 function getCurrentFY() {
@@ -29,6 +29,9 @@ export default function LeaveGranter() {
   const [editGrant, setEditGrant] = useState(null);
   const [showBulk, setShowBulk] = useState(false);
   const [search, setSearch] = useState('');
+  const [showRollover, setShowRollover] = useState(false);
+  const [rolloverPreview, setRolloverPreview] = useState(null);
+  const [rolloverLoading, setRolloverLoading] = useState(false);
 
   const { data: grants, loading, error: fetchErr, refetch } = useFetch(
     `/leave/admin/grants?year=${fyYear}`, [], [fyYear]
@@ -71,6 +74,30 @@ export default function LeaveGranter() {
     try {
       await execute(() => api.put(`/leave/admin/grants/${grantId}`, payload), 'Grant updated successfully');
       setEditGrant(null);
+      refetch();
+    } catch {}
+  };
+
+  // ─── FY Rollover ──────────────────────────────────
+  const handleRolloverPreview = async () => {
+    setRolloverLoading(true);
+    try {
+      const res = await api.get(`/leave/admin/fy-rollover-preview?year=${fyYear}`);
+      setRolloverPreview(res.data);
+      setShowRollover(true);
+    } catch (e) {
+      alert(e.response?.data?.error || 'Failed to load rollover preview');
+    } finally {
+      setRolloverLoading(false);
+    }
+  };
+
+  const handleRolloverExecute = async () => {
+    if (!window.confirm(`Execute FY rollover for ${getFYLabel(fyYear)}? This will carry forward balances to ${getFYLabel(fyYear + 1)}.`)) return;
+    try {
+      await execute(() => api.post('/leave/admin/fy-rollover', { year: fyYear }), 'FY rollover completed successfully!');
+      setShowRollover(false);
+      setRolloverPreview(null);
       refetch();
     } catch {}
   };
@@ -133,6 +160,15 @@ export default function LeaveGranter() {
               <ChevronRight className="w-4 h-4 text-slate-600" />
             </button>
           </div>
+          <button
+            onClick={handleRolloverPreview}
+            disabled={rolloverLoading}
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 disabled:opacity-40"
+            title="Carry forward unused leaves to next FY"
+          >
+            <RotateCcw className={`w-4 h-4 ${rolloverLoading ? 'animate-spin' : ''}`} />
+            FY Rollover
+          </button>
           <button
             onClick={handleExport}
             disabled={grants.length === 0}
@@ -316,6 +352,84 @@ export default function LeaveGranter() {
               </table>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* FY Rollover Modal */}
+      {showRollover && rolloverPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-amber-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-amber-600" />
+                  FY Rollover — {getFYLabel(fyYear)} → {getFYLabel(fyYear + 1)}
+                </h3>
+                <p className="text-sm text-slate-500 mt-0.5">Carry forward unused leaves to next financial year</p>
+              </div>
+              <button onClick={() => { setShowRollover(false); setRolloverPreview(null); }} className="p-1 hover:bg-slate-200 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-4 px-6 py-4 border-b bg-slate-50">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{rolloverPreview.stats.totalEmployees}</div>
+                <div className="text-xs text-slate-500">Employees</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{rolloverPreview.stats.totalCarry}</div>
+                <div className="text-xs text-slate-500">Days Carry Forward</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-500">{rolloverPreview.stats.totalLapse}</div>
+                <div className="text-xs text-slate-500">Days Will Lapse</div>
+              </div>
+            </div>
+
+            {/* Preview Table */}
+            <div className="overflow-auto max-h-[45vh] px-6 py-3">
+              {rolloverPreview.preview.length === 0 ? (
+                <p className="text-center text-slate-500 py-8">No employees with unused balances to roll over.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-500 uppercase border-b">
+                      <th className="py-2 pr-2">Employee</th>
+                      <th className="py-2 pr-2">Leave Type</th>
+                      <th className="py-2 pr-2 text-right">Available</th>
+                      <th className="py-2 pr-2 text-right">Carry</th>
+                      <th className="py-2 text-right">Lapse</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rolloverPreview.preview.map((p, i) => (
+                      <tr key={i} className="border-b border-slate-100">
+                        <td className="py-2 pr-2 font-medium">{p.userName} <span className="text-slate-400 text-xs">{p.employeeId}</span></td>
+                        <td className="py-2 pr-2">{p.leaveTypeCode}</td>
+                        <td className="py-2 pr-2 text-right">{p.currentAvailable}</td>
+                        <td className="py-2 pr-2 text-right text-green-600 font-semibold">{p.willCarry}</td>
+                        <td className="py-2 text-right text-red-500">{p.willLapse > 0 ? p.willLapse : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-slate-50">
+              <button onClick={() => { setShowRollover(false); setRolloverPreview(null); }}
+                className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-100">
+                Cancel
+              </button>
+              <button onClick={handleRolloverExecute} disabled={saving || rolloverPreview.preview.length === 0}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 disabled:opacity-40">
+                {saving ? 'Processing...' : 'Execute Rollover'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -2,6 +2,8 @@
 // Attendance Service — Check-in/out, monthly summary, team view
 // ═══════════════════════════════════════════════
 
+const { getUserWeeklyOffDays, getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('./weeklyOffHelper');
+
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
 }
@@ -235,16 +237,6 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
   const userWhere = { isActive: true };
   if (department) userWhere.department = department;
 
-  // Count working days in range (exclude weekends)
-  let workingDays = 0;
-  let d = new Date(startDate + 'T00:00:00');
-  const end = new Date(endDate + 'T00:00:00');
-  while (d <= end) {
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) workingDays++;
-    d.setDate(d.getDate() + 1);
-  }
-
   // Fetch holidays in range
   const holidays = await prisma.holiday.findMany({
     where: { date: { gte: startDate, lte: endDate } },
@@ -271,6 +263,9 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
     }),
   ]);
 
+  // Batch-fetch weekly off patterns for all users
+  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma);
+
   // Build attendance map: userId → array of records
   const attByUser = {};
   for (const a of attendances) {
@@ -278,34 +273,44 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
     attByUser[a.userId].push(a);
   }
 
-  // Build leave days per user
+  // Build leave days per user (using per-user weekly off)
   const leaveByUser = {};
   for (const lr of leaves) {
     if (!leaveByUser[lr.userId]) leaveByUser[lr.userId] = 0;
-    // Count leave days that fall within the range
+    const offDays = weeklyOffMap.get(lr.userId) || DEFAULT_OFF_DAYS;
     let ld = new Date(Math.max(new Date(lr.startDate + 'T00:00:00'), new Date(startDate + 'T00:00:00')));
     const le = new Date(Math.min(new Date(lr.endDate + 'T00:00:00'), new Date(endDate + 'T00:00:00')));
     while (ld <= le) {
       const dow = ld.getDay();
-      if (dow !== 0 && dow !== 6) leaveByUser[lr.userId]++;
+      if (!offDays.includes(dow)) leaveByUser[lr.userId]++;
       ld.setDate(ld.getDate() + 1);
     }
   }
 
   const employees = users.map(u => {
+    const offDays = weeklyOffMap.get(u.id) || DEFAULT_OFF_DAYS;
     const records = attByUser[u.id] || [];
     const presentDays = records.filter(r => r.status === 'present').length;
     const halfDays = records.filter(r => r.status === 'half_day').length;
-    const absentInRecords = records.filter(r => r.status === 'absent').length;
     const totalHours = records.reduce((s, r) => s + (r.workHours || 0), 0);
     const leaveDays = leaveByUser[u.id] || 0;
-    const holidayDays = holidays.length; // same for all employees
-    // Absent = working days - present - half - leave - holiday (that fall on weekdays)
+
+    // Count working days for this user (based on their weekly off pattern)
+    let userWorkingDays = 0;
+    let d = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    while (d <= end) {
+      const dow = d.getDay();
+      if (!offDays.includes(dow)) userWorkingDays++;
+      d.setDate(d.getDate() + 1);
+    }
+
+    // Holiday weekdays for this user
     const holidayWeekdays = holidays.filter(h => {
       const hd = new Date(h.date + 'T00:00:00').getDay();
-      return hd !== 0 && hd !== 6;
+      return !offDays.includes(hd);
     }).length;
-    const effectiveWorkDays = workingDays - holidayWeekdays;
+    const effectiveWorkDays = userWorkingDays - holidayWeekdays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays - leaveDays);
     const avgHours = presentDays + halfDays > 0 ? totalHours / (presentDays + halfDays) : 0;
 
@@ -324,9 +329,18 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
     };
   });
 
+  // Use default off days for summary (aggregate view)
+  let defaultWorkingDays = 0;
+  let d2 = new Date(startDate + 'T00:00:00');
+  const end2 = new Date(endDate + 'T00:00:00');
+  while (d2 <= end2) {
+    if (!DEFAULT_OFF_DAYS.includes(d2.getDay())) defaultWorkingDays++;
+    d2.setDate(d2.getDate() + 1);
+  }
+
   const summary = {
     total: employees.length,
-    workingDays: workingDays - holidays.filter(h => { const hd = new Date(h.date + 'T00:00:00').getDay(); return hd !== 0 && hd !== 6; }).length,
+    workingDays: defaultWorkingDays - holidays.filter(h => { const hd = new Date(h.date + 'T00:00:00').getDay(); return !DEFAULT_OFF_DAYS.includes(hd); }).length,
     holidays: holidays.length,
     startDate,
     endDate,
@@ -351,6 +365,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
   // Use IST date for "today" — Vercel runs in UTC, so toISOString() gives UTC date
   const nowIST = new Date(Date.now() + 330 * 60 * 1000); // UTC + 5:30
   const today = nowIST.toISOString().split('T')[0];
+
+  // Fetch user's weekly off pattern
+  const userOffDays = await getUserWeeklyOffDays(userId, prisma);
 
   const [user, attendances, holidays, leaves, punches, shiftAssignment, regularizations] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, employeeId: true, isAttendanceExempt: true } }),
@@ -446,7 +463,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
     const dateStr = `${month}-${String(day).padStart(2, '0')}`;
     const dateObj = new Date(dateStr + 'T00:00:00');
     const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isWeekend = userOffDays.includes(dayOfWeek);
     const att = attendanceMap[dateStr];
     const holiday = holidayMap[dateStr];
     const leave = leaveDates[dateStr];
@@ -667,6 +684,9 @@ async function getLateMarksSummary(userId, month, prisma) {
     return { lateMarks: [], totalLateMarks: 0, regularizedCount: 0, unregularizedCount: 0, halfDayDeductions: 0, month };
   }
 
+  // Fetch user's weekly off pattern
+  const lateUserOffDays = await getUserWeeklyOffDays(userId, prisma);
+
   const [attendances, holidays, shiftAssignment, regularizations, bioPunches] = await Promise.all([
     prisma.attendance.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
@@ -732,10 +752,10 @@ async function getLateMarksSummary(userId, month, prisma) {
     if (!att.checkIn) continue;
     if (att.date > today) continue; // skip future
 
-    // Skip weekends
+    // Skip weekly off days
     const dateObj = new Date(att.date + 'T00:00:00');
     const dow = dateObj.getDay();
-    if (dow === 0 || dow === 6) continue;
+    if (lateUserOffDays.includes(dow)) continue;
 
     // Skip holidays
     if (holidaySet.has(att.date)) continue;
