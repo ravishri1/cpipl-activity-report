@@ -271,7 +271,7 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                 : 'bg-amber-50 border-amber-200 text-amber-700'
             }`}>
               <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="font-medium">
                   {data.summary.lateMarks} late mark{data.summary.lateMarks !== 1 ? 's' : ''} this month
                   {data.summary.regularizedDays > 0 && ` (${data.summary.regularizedDays} regularized)`}
@@ -281,6 +281,13 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                   {data.summary.halfDayDeductions > 0 && ` Current penalty: ${data.summary.halfDayDeductions * 0.5} day(s) deducted from leave/LOP.`}
                 </p>
               </div>
+              <a
+                href="/attendance-regularization"
+                className="flex items-center gap-1 text-xs font-semibold whitespace-nowrap px-3 py-1.5 rounded-lg bg-white/60 hover:bg-white transition-colors border border-current/20"
+                title="Apply for regularization"
+              >
+                Regularize <ChevronRight className="w-4 h-4" />
+              </a>
             </div>
           )}
 
