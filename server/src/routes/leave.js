@@ -53,10 +53,14 @@ router.get('/financial-year', asyncHandler(async (req, res) => {
   });
 }));
 
-// GET /api/leave/balance?year=2025 — Own leave balances (year = FY start year)
+// GET /api/leave/balance?year=2025&userId=X — Leave balances (admin can pass userId for another employee)
 router.get('/balance', asyncHandler(async (req, res) => {
   const fyYear = parseInt(req.query.year) || getFinancialYear();
-  const balances = await getLeaveBalance(req.user.id, fyYear, req.prisma);
+  let targetUserId = req.user.id;
+  if (req.query.userId && (req.user.role === 'admin' || req.user.role === 'team_lead')) {
+    targetUserId = parseInt(req.query.userId);
+  }
+  const balances = await getLeaveBalance(targetUserId, fyYear, req.prisma);
   res.json(balances);
 }));
 
@@ -197,6 +201,43 @@ router.put('/:id/review', requireAdmin, asyncHandler(async (req, res) => {
   }
 
   res.json(updated);
+}));
+
+// POST /api/leave/admin/apply-on-behalf — Admin applies leave for an employee
+router.post('/admin/apply-on-behalf', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, leaveTypeId, startDate, endDate, session, reason, autoApprove } = req.body;
+  requireFields(req.body, 'userId', 'leaveTypeId', 'startDate', 'endDate', 'reason');
+
+  const targetUser = await req.prisma.user.findUnique({
+    where: { id: parseInt(userId) },
+    select: { id: true, name: true, isActive: true },
+  });
+  if (!targetUser || !targetUser.isActive) throw notFound('Employee');
+
+  // Use the same applyLeave service (creates as 'pending')
+  const request = await applyLeave(targetUser.id, {
+    leaveTypeId: parseInt(leaveTypeId),
+    startDate,
+    endDate,
+    session: session || 'full_day',
+    reason: `[Applied by ${req.user.name}] ${reason}`,
+  }, req.prisma);
+
+  // Auto-approve if requested
+  let result = request;
+  if (autoApprove) {
+    result = await reviewLeave(request.id, req.user.id, 'approved', `Auto-approved (applied on behalf by ${req.user.name})`, req.prisma);
+  }
+
+  // Notify the employee
+  notifyUsers(req.prisma, {
+    userIds: [targetUser.id], type: 'leave',
+    title: autoApprove ? 'Leave Applied & Approved' : 'Leave Applied on Your Behalf',
+    message: `${req.user.name} applied ${request.leaveType?.name || 'leave'} for you (${startDate} to ${endDate}, ${request.days} day${request.days !== 1 ? 's' : ''})${autoApprove ? ' — auto-approved' : ' — pending approval'}`,
+    link: '/leave',
+  });
+
+  res.status(201).json(result);
 }));
 
 // GET /api/leave/admin/balances?year=2025&department=X — All employee balances
