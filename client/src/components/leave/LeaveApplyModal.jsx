@@ -42,6 +42,8 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
   }, [form.session, form.startDate]);
 
   const isHalfDay = form.session === 'first_half' || form.session === 'second_half';
+  const isCompOff = selectedBalance?.leaveType?.code === 'COF';
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -153,8 +155,10 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
                   endDate: isHalfDay ? e.target.value : form.endDate,
                 })}
                 required
+                min={isCompOff ? todayStr : undefined}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              {isCompOff && <p className="text-xs text-amber-600 mt-1">Comp-Off can only be used for today or future dates</p>}
             </div>
             {!isHalfDay && (
               <div>
@@ -164,7 +168,7 @@ export default function LeaveApplyModal({ onClose, onSuccess, balances, fyYear }
                   value={form.endDate}
                   onChange={(e) => setForm({ ...form, endDate: e.target.value })}
                   required
-                  min={form.startDate || ''}
+                  min={isCompOff ? (form.startDate || todayStr) : (form.startDate || '')}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
