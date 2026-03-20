@@ -8,7 +8,7 @@ import EmptyState from '../shared/EmptyState';
 import { formatDate } from '../../utils/formatters';
 import {
   ClipboardCheck, CheckCircle2, XCircle, User, MessageSquare,
-  ChevronLeft, ChevronRight, UserCheck, UserPlus, X, Send, CalendarOff, AlertTriangle,
+  ChevronLeft, ChevronRight, UserCheck, UserPlus, X, Send, AlertTriangle,
 } from 'lucide-react';
 
 const statusStyles = {
@@ -41,7 +41,7 @@ function ApplyOnBehalfModal({ onClose, onSuccess }) {
   const [balances, setBalances] = useState([]);
 
   useEffect(() => {
-    api.get('/users/directory').then(r => setEmployees(r.data || [])).catch(() => {});
+    api.get('/users/directory').then(r => setEmployees(r.data?.users || r.data || [])).catch(() => {});
     api.get('/leave/types').then(r => setLeaveTypes(r.data || [])).catch(() => {});
   }, []);
 
