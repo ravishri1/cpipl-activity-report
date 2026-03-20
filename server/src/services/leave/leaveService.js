@@ -344,10 +344,6 @@ async function getLeaveBalance(userId, fyYear, prisma) {
 async function applyLeave(userId, data, prisma) {
   const { leaveTypeId, startDate, endDate, session, reason } = data;
 
-  const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
-  if (startDate < today) {
-    throw new Error('Cannot apply for leave on past dates.');
-  }
   if (endDate < startDate) {
     throw new Error('End date must be on or after start date.');
   }
@@ -355,6 +351,14 @@ async function applyLeave(userId, data, prisma) {
   const leaveType = await prisma.leaveType.findUnique({ where: { id: leaveTypeId } });
   if (!leaveType || !leaveType.isActive) {
     throw new Error('Invalid leave type.');
+  }
+
+  // Comp-Off can only be used for future dates
+  if (leaveType.code === 'COF') {
+    const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+    if (startDate < today) {
+      throw new Error('Comp-Off balance can only be used for today or future dates.');
+    }
   }
 
   // Check for overlapping requests
