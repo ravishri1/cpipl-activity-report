@@ -403,7 +403,11 @@ async function applyLeave(userId, data, prisma) {
   const actualUsed = await reconcileUsed(balance, prisma);
 
   const joiningMonth = balance.joiningMonth || null;
-  const credited = calculateCredited(leaveType, fyYear, joiningMonth);
+  // For comp-off (accrualType 'none' with defaultBalance 0), credits come from
+  // approved CompOffRequests which directly update LeaveBalance.total.
+  // Use stored total instead of recalculating from accrual formula.
+  const isCompOffType = leaveType.accrualType === 'none' && leaveType.defaultBalance === 0;
+  const credited = isCompOffType ? (balance.total || 0) : calculateCredited(leaveType, fyYear, joiningMonth);
   const totalPool = (balance.opening || 0) + credited;
   const onProbation = isOnProbation(user);
 
