@@ -357,13 +357,13 @@ async function applyLeave(userId, data, prisma) {
     throw new Error('Invalid leave type.');
   }
 
-  // Comp-Off can only be used for future dates
-  if (leaveType.code === 'COF') {
-    const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
-    if (startDate < today) {
-      throw new Error('Comp-Off balance can only be used for today or future dates.');
-    }
-  }
+  // Comp-Off future-date restriction — TEMPORARILY DISABLED for backdate leaves
+  // if (leaveType.code === 'COF') {
+  //   const today = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+  //   if (startDate < today) {
+  //     throw new Error('Comp-Off balance can only be used for today or future dates.');
+  //   }
+  // }
 
   // Check for overlapping requests
   const overlapping = await prisma.leaveRequest.findFirst({
