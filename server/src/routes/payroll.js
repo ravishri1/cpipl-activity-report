@@ -376,4 +376,131 @@ router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(
   res.json(pending);
 }));
 
+// ═══════════════════════════════════════════════
+// Salary Templates — Reusable salary structures
+// ═══════════════════════════════════════════════
+
+const TEMPLATE_FIELDS = [
+  'name', 'description', 'ctcAnnual', 'basic', 'hra', 'da',
+  'specialAllowance', 'medicalAllowance', 'conveyanceAllowance',
+  'otherAllowance', 'otherAllowanceLabel', 'employerPf', 'employerEsi',
+  'employeePf', 'employeeEsi', 'professionalTax', 'tds',
+];
+
+const SALARY_COMPONENT_FIELDS = [
+  'basic', 'hra', 'da', 'specialAllowance', 'medicalAllowance',
+  'conveyanceAllowance', 'otherAllowance', 'otherAllowanceLabel',
+  'employerPf', 'employerEsi', 'employeePf', 'employeeEsi',
+  'professionalTax', 'tds',
+];
+
+// GET /templates — List all salary templates
+router.get('/templates', requireAdmin, asyncHandler(async (req, res) => {
+  const templates = await req.prisma.salaryTemplate.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+  });
+  res.json(templates);
+}));
+
+// POST /templates — Create new template
+router.post('/templates', requireAdmin, asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) throw badRequest('Template name is required.');
+  const data = {};
+  for (const f of TEMPLATE_FIELDS) {
+    if (f === 'name') data.name = name.trim();
+    else if (f === 'description' || f === 'otherAllowanceLabel') data[f] = req.body[f] || null;
+    else data[f] = parseFloat(req.body[f]) || 0;
+  }
+  const template = await req.prisma.salaryTemplate.create({ data });
+  res.status(201).json(template);
+}));
+
+// PUT /templates/:id — Update template
+router.put('/templates/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const data = {};
+  for (const f of TEMPLATE_FIELDS) {
+    if (req.body[f] !== undefined) {
+      if (f === 'name') data.name = req.body[f]?.trim() || undefined;
+      else if (f === 'description' || f === 'otherAllowanceLabel') data[f] = req.body[f] || null;
+      else data[f] = parseFloat(req.body[f]) || 0;
+    }
+  }
+  const template = await req.prisma.salaryTemplate.update({ where: { id }, data });
+  res.json(template);
+}));
+
+// DELETE /templates/:id — Soft-delete template
+router.delete('/templates/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.salaryTemplate.update({ where: { id }, data: { isActive: false } });
+  res.json({ message: 'Template deleted.' });
+}));
+
+// POST /templates/:id/assign — Assign template to employees
+router.post('/templates/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { userIds, effectiveFrom } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) throw badRequest('Select at least one employee.');
+
+  const template = await req.prisma.salaryTemplate.findUnique({ where: { id } });
+  if (!template || !template.isActive) throw notFound('Template');
+
+  const today = new Date().toISOString().split('T')[0];
+  const effDate = effectiveFrom || today;
+  const results = [];
+
+  for (const uid of userIds) {
+    const userId = parseInt(uid);
+    if (isNaN(userId)) continue;
+
+    // Build salary data from template
+    const salaryData = { ctcMonthly: template.ctcAnnual / 12 };
+    for (const f of SALARY_COMPONENT_FIELDS) salaryData[f] = template[f] || 0;
+    if (template.otherAllowanceLabel) salaryData.otherAllowanceLabel = template.otherAllowanceLabel;
+    salaryData.ctcAnnual = template.ctcAnnual;
+    salaryData.effectiveFrom = effDate;
+    salaryData.notes = `Assigned from template: ${template.name}`;
+
+    // Calculate net pay
+    const gross = (salaryData.basic || 0) + (salaryData.hra || 0) + (salaryData.da || 0) +
+      (salaryData.specialAllowance || 0) + (salaryData.medicalAllowance || 0) +
+      (salaryData.conveyanceAllowance || 0) + (salaryData.otherAllowance || 0);
+    const deductions = (salaryData.employeePf || 0) + (salaryData.employeeEsi || 0) +
+      (salaryData.professionalTax || 0) + (salaryData.tds || 0);
+    salaryData.netPayMonthly = gross - deductions;
+
+    // Get existing salary for revision tracking
+    const existing = await req.prisma.salaryStructure.findUnique({ where: { userId } });
+    const oldCtc = existing?.ctcAnnual || 0;
+
+    // Upsert salary structure
+    await req.prisma.salaryStructure.upsert({
+      where: { userId },
+      create: { userId, ...salaryData },
+      update: salaryData,
+    });
+
+    // Create revision record
+    if (oldCtc !== template.ctcAnnual) {
+      await req.prisma.salaryRevision.create({
+        data: {
+          userId,
+          effectiveFrom: effDate,
+          oldCtc,
+          newCtc: template.ctcAnnual,
+          reason: `Assigned template: ${template.name}`,
+          revisedBy: req.user.id,
+        },
+      });
+    }
+
+    results.push(userId);
+  }
+
+  res.json({ message: `Template assigned to ${results.length} employee(s).`, assigned: results });
+}));
+
 module.exports = router;

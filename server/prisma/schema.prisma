@@ -810,6 +810,34 @@ model SalaryRevision {
 }
 
 // ═══════════════════════════════════════════════
+// Salary Templates (Reusable structures)
+// ═══════════════════════════════════════════════
+
+model SalaryTemplate {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique
+  description         String?
+  ctcAnnual           Float    @default(0)
+  basic               Float    @default(0)
+  hra                 Float    @default(0)
+  da                  Float    @default(0)
+  specialAllowance    Float    @default(0)
+  medicalAllowance    Float    @default(0)
+  conveyanceAllowance Float    @default(0)
+  otherAllowance      Float    @default(0)
+  otherAllowanceLabel String?
+  employerPf          Float    @default(0)
+  employerEsi         Float    @default(0)
+  employeePf          Float    @default(0)
+  employeeEsi         Float    @default(0)
+  professionalTax     Float    @default(0)
+  tds                 Float    @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════
 // Expense Claims
 // ═══════════════════════════════════════════════
 
