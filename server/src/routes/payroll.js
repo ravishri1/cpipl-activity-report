@@ -377,6 +377,78 @@ router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(
 }));
 
 // ═══════════════════════════════════════════════
+// Salary Components — Configuration master list
+// ═══════════════════════════════════════════════
+
+// GET /components — List all salary components
+router.get('/components', requireAdmin, asyncHandler(async (req, res) => {
+  const components = await req.prisma.salaryComponent.findMany({
+    orderBy: { sortOrder: 'asc' },
+  });
+  res.json(components);
+}));
+
+// POST /components — Create custom component
+router.post('/components', requireAdmin, asyncHandler(async (req, res) => {
+  const { name, code, type } = req.body;
+  if (!name?.trim() || !code?.trim() || !type?.trim()) throw badRequest('Name, code, and type are required.');
+  if (!['earning', 'deduction', 'employer'].includes(type)) throw badRequest('Type must be earning, deduction, or employer.');
+
+  const maxSort = await req.prisma.salaryComponent.aggregate({ _max: { sortOrder: true } });
+  const component = await req.prisma.salaryComponent.create({
+    data: {
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      type,
+      taxable: req.body.taxable ?? true,
+      mandatory: req.body.mandatory ?? false,
+      calculationType: req.body.calculationType || 'fixed',
+      percentageOf: req.body.percentageOf || null,
+      defaultPercentage: parseFloat(req.body.defaultPercentage) || null,
+      description: req.body.description || null,
+      complianceNote: req.body.complianceNote || null,
+      sortOrder: (maxSort._max.sortOrder || 0) + 1,
+      isActive: true,
+      isSystem: false,
+    },
+  });
+  res.status(201).json(component);
+}));
+
+// PUT /components/:id — Update component
+router.put('/components/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const data = {};
+  const allowed = ['name', 'description', 'complianceNote', 'taxable', 'mandatory', 'calculationType', 'percentageOf', 'defaultPercentage', 'isActive', 'sortOrder'];
+  for (const f of allowed) {
+    if (req.body[f] !== undefined) {
+      if (f === 'taxable' || f === 'mandatory' || f === 'isActive') data[f] = Boolean(req.body[f]);
+      else if (f === 'defaultPercentage' || f === 'sortOrder') data[f] = parseFloat(req.body[f]) || null;
+      else data[f] = req.body[f];
+    }
+  }
+  // Allow code/type update only for non-system components
+  const existing = await req.prisma.salaryComponent.findUnique({ where: { id } });
+  if (!existing) throw notFound('Component');
+  if (!existing.isSystem) {
+    if (req.body.code) data.code = req.body.code.trim().toUpperCase();
+    if (req.body.type) data.type = req.body.type;
+  }
+  const component = await req.prisma.salaryComponent.update({ where: { id }, data });
+  res.json(component);
+}));
+
+// DELETE /components/:id — Soft-delete (non-system only)
+router.delete('/components/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const existing = await req.prisma.salaryComponent.findUnique({ where: { id } });
+  if (!existing) throw notFound('Component');
+  if (existing.isSystem) throw badRequest('System components cannot be deleted. You can deactivate them instead.');
+  await req.prisma.salaryComponent.update({ where: { id }, data: { isActive: false } });
+  res.json({ message: 'Component deleted.' });
+}));
+
+// ═══════════════════════════════════════════════
 // Salary Templates — Reusable salary structures
 // ═══════════════════════════════════════════════
 

@@ -18,6 +18,10 @@ import {
   Trash2,
   UserPlus,
   FileText,
+  Settings2,
+  Lock,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -92,10 +96,24 @@ const emptyTemplate = {
 };
 
 const TABS = [
+  { key: 'components', label: 'Components', icon: Settings2 },
   { key: 'templates', label: 'Salary Templates', icon: FileText },
   { key: 'assign', label: 'Assign Structure', icon: UserPlus },
   { key: 'employees', label: 'Employee Salary', icon: IndianRupee },
 ];
+
+const emptyComponentForm = {
+  name: '',
+  code: '',
+  type: 'earning',
+  isTaxable: false,
+  isMandatory: false,
+  calculationType: 'fixed',
+  percentageOf: 'basic',
+  defaultPercentage: '',
+  description: '',
+  complianceNote: '',
+};
 
 export default function SalaryStructure() {
   const [activeTab, setActiveTab] = useState('employees');
@@ -125,6 +143,15 @@ export default function SalaryStructure() {
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateMsg, setTemplateMsg] = useState(null);
+
+  // ─── Components tab state ───
+  const [components, setComponents] = useState([]);
+  const [componentsLoading, setComponentsLoading] = useState(false);
+  const [showComponentModal, setShowComponentModal] = useState(false);
+  const [componentForm, setComponentForm] = useState({ ...emptyComponentForm });
+  const [editingComponentId, setEditingComponentId] = useState(null);
+  const [componentSaving, setComponentSaving] = useState(false);
+  const [componentMsg, setComponentMsg] = useState(null);
 
   // ─── Assign tab state ───
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -174,6 +201,23 @@ export default function SalaryStructure() {
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
+
+  // ─── Fetch components ───
+  const fetchComponents = useCallback(async () => {
+    setComponentsLoading(true);
+    try {
+      const res = await api.get('/payroll/components');
+      setComponents(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch components:', err);
+    } finally {
+      setComponentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchComponents();
+  }, [fetchComponents]);
 
   // ─── Filtered employees ───
   const filteredEmployees = useMemo(() => {
@@ -536,6 +580,112 @@ export default function SalaryStructure() {
       console.error('Failed to delete template:', err);
     }
   }, [fetchTemplates]);
+
+  // ──────────────────────────────────────────────
+  // Component tab functions
+  // ──────────────────────────────────────────────
+
+  const openCreateComponent = useCallback(() => {
+    setEditingComponentId(null);
+    setComponentForm({ ...emptyComponentForm });
+    setComponentMsg(null);
+    setShowComponentModal(true);
+  }, []);
+
+  const openEditComponent = useCallback((comp) => {
+    setEditingComponentId(comp.id);
+    setComponentForm({
+      name: comp.name || '',
+      code: comp.code || '',
+      type: comp.type || 'earning',
+      isTaxable: comp.isTaxable ?? false,
+      isMandatory: comp.isMandatory ?? false,
+      calculationType: comp.calculationType || 'fixed',
+      percentageOf: comp.percentageOf || 'basic',
+      defaultPercentage: comp.defaultPercentage ?? '',
+      description: comp.description || '',
+      complianceNote: comp.complianceNote || '',
+    });
+    setComponentMsg(null);
+    setShowComponentModal(true);
+  }, []);
+
+  const closeComponentModal = useCallback(() => {
+    setShowComponentModal(false);
+    setComponentForm({ ...emptyComponentForm });
+    setEditingComponentId(null);
+    setComponentMsg(null);
+  }, []);
+
+  const handleComponentChange = useCallback((e) => {
+    const { name, value, type, checked } = e.target;
+    setComponentForm((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  }, []);
+
+  const saveComponent = useCallback(async () => {
+    if (!componentForm.name.trim()) {
+      setComponentMsg({ type: 'error', text: 'Component name is required.' });
+      return;
+    }
+    if (!componentForm.code.trim()) {
+      setComponentMsg({ type: 'error', text: 'Component code is required.' });
+      return;
+    }
+    setComponentSaving(true);
+    setComponentMsg(null);
+
+    const payload = {
+      name: componentForm.name.trim(),
+      code: componentForm.code.trim().toUpperCase(),
+      type: componentForm.type,
+      isTaxable: componentForm.isTaxable,
+      isMandatory: componentForm.isMandatory,
+      calculationType: componentForm.calculationType,
+      percentageOf: componentForm.calculationType === 'percentage' ? componentForm.percentageOf : null,
+      defaultPercentage: componentForm.calculationType === 'percentage' ? parseFloat(componentForm.defaultPercentage) || 0 : null,
+      description: componentForm.description?.trim() || '',
+      complianceNote: componentForm.complianceNote?.trim() || '',
+    };
+
+    try {
+      if (editingComponentId) {
+        await api.put(`/payroll/components/${editingComponentId}`, payload);
+        setComponentMsg({ type: 'success', text: 'Component updated successfully.' });
+      } else {
+        await api.post('/payroll/components', payload);
+        setComponentMsg({ type: 'success', text: 'Component created successfully.' });
+      }
+      fetchComponents();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to save component.';
+      setComponentMsg({ type: 'error', text: msg });
+    } finally {
+      setComponentSaving(false);
+    }
+  }, [editingComponentId, componentForm, fetchComponents]);
+
+  const deleteComponent = useCallback(async (id) => {
+    if (!window.confirm('Delete this salary component? This cannot be undone.')) return;
+    try {
+      await api.delete(`/payroll/components/${id}`);
+      fetchComponents();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to delete component.';
+      setComponentMsg({ type: 'error', text: msg });
+    }
+  }, [fetchComponents]);
+
+  const toggleComponentActive = useCallback(async (id, isActive) => {
+    try {
+      await api.put(`/payroll/components/${id}`, { isActive: !isActive });
+      fetchComponents();
+    } catch (err) {
+      console.error('Failed to toggle component:', err);
+    }
+  }, [fetchComponents]);
 
   // ──────────────────────────────────────────────
   // Assign tab functions
@@ -1226,6 +1376,388 @@ export default function SalaryStructure() {
   };
 
   // ──────────────────────────────────────────────
+  // Render: Components Tab Content
+  // ──────────────────────────────────────────────
+
+  const renderComponentSection = (title, emoji, type) => {
+    const filtered = components.filter((c) => c.type === type);
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <span className="text-lg">{emoji}</span>
+          <h3 className="font-semibold text-slate-700 text-sm">{title}</h3>
+          <span className="text-xs text-slate-400 ml-auto">{filtered.length} component{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-slate-400 text-sm">No {type} components yet.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/60">
+                  <th className="text-left py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Code</th>
+                  <th className="text-left py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Name</th>
+                  <th className="text-center py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Taxable</th>
+                  <th className="text-center py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Mandatory</th>
+                  <th className="text-left py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Calculation</th>
+                  <th className="text-left py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Compliance</th>
+                  <th className="text-center py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Active</th>
+                  <th className="text-right py-2.5 px-4 font-semibold text-slate-600 text-xs uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((comp) => (
+                  <tr key={comp.id} className="hover:bg-blue-50/40 transition-colors duration-150">
+                    <td className="py-2.5 px-4">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-slate-100 text-slate-700">
+                        {comp.code}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 font-medium text-slate-800">{comp.name}</td>
+                    <td className="py-2.5 px-4 text-center">
+                      {comp.isTaxable ? (
+                        <span className="text-emerald-600 font-bold">✓</span>
+                      ) : (
+                        <span className="text-red-400 font-bold">✕</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-4 text-center">
+                      {comp.isMandatory ? (
+                        <span className="text-emerald-600 font-bold">✓</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-600 text-xs">
+                      {comp.calculationType === 'percentage' ? (
+                        <span>
+                          {comp.defaultPercentage ?? 0}% of{' '}
+                          <span className="capitalize">{comp.percentageOf || 'basic'}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Fixed</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-500 text-xs max-w-[150px] truncate" title={comp.complianceNote || ''}>
+                      {comp.complianceNote || '—'}
+                    </td>
+                    <td className="py-2.5 px-4 text-center">
+                      <button
+                        onClick={() => toggleComponentActive(comp.id, comp.isActive)}
+                        className="inline-flex items-center"
+                        title={comp.isActive ? 'Click to deactivate' : 'Click to activate'}
+                      >
+                        {comp.isActive ? (
+                          <ToggleRight className="w-6 h-6 text-emerald-500" />
+                        ) : (
+                          <ToggleLeft className="w-6 h-6 text-slate-300" />
+                        )}
+                      </button>
+                    </td>
+                    <td className="py-2.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openEditComponent(comp)}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="Edit component"
+                        >
+                          <Edit3 className="w-4 h-4 text-slate-500" />
+                        </button>
+                        {comp.isSystem ? (
+                          <span className="p-1.5" title="System component — cannot delete">
+                            <Lock className="w-4 h-4 text-slate-300" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => deleteComponent(comp.id)}
+                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete component"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderComponentsTab = () => (
+    <div className="space-y-4">
+      {/* Header with Create button */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          Define salary components (earnings, deductions, employer contributions) used in salary structures.
+        </p>
+        <button
+          onClick={openCreateComponent}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+        >
+          <PlusCircle className="w-4 h-4" />
+          Add Component
+        </button>
+      </div>
+
+      {/* Component message */}
+      {componentMsg && (
+        <div
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm ${
+            componentMsg.type === 'success'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-red-50 text-red-700 border border-red-200'
+          }`}
+        >
+          {componentMsg.type === 'success' ? (
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          )}
+          {componentMsg.text}
+        </div>
+      )}
+
+      {componentsLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+          <span className="text-slate-500">Loading components...</span>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {renderComponentSection('Earnings', '💰', 'earning')}
+          {renderComponentSection('Deductions', '📉', 'deduction')}
+          {renderComponentSection('Employer Contributions', '🏢', 'employer')}
+        </div>
+      )}
+    </div>
+  );
+
+  // ──────────────────────────────────────────────
+  // Render: Component Modal
+  // ──────────────────────────────────────────────
+
+  const renderComponentModal = () => {
+    if (!showComponentModal) return null;
+
+    const isSystemComponent = editingComponentId && components.find((c) => c.id === editingComponentId)?.isSystem;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 pb-8 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40" onClick={closeComponentModal} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 z-10">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <Settings2 className="w-5 h-5 text-blue-600" />
+                {editingComponentId ? 'Edit Component' : 'Add Salary Component'}
+              </h2>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {editingComponentId ? 'Update component details' : 'Define a new salary component'}
+              </p>
+            </div>
+            <button onClick={closeComponentModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            {/* Name & Code */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={componentForm.name}
+                  onChange={handleComponentChange}
+                  placeholder="e.g. Basic Salary"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Code *</label>
+                <input
+                  type="text"
+                  name="code"
+                  value={componentForm.code}
+                  onChange={handleComponentChange}
+                  placeholder="e.g. BASIC"
+                  disabled={isSystemComponent}
+                  className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm uppercase focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    isSystemComponent ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Type */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Type *</label>
+              <select
+                name="type"
+                value={componentForm.type}
+                onChange={handleComponentChange}
+                disabled={isSystemComponent}
+                className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  isSystemComponent ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''
+                }`}
+              >
+                <option value="earning">Earning</option>
+                <option value="deduction">Deduction</option>
+                <option value="employer">Employer Contribution</option>
+              </select>
+            </div>
+
+            {/* Checkboxes */}
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="isTaxable"
+                  checked={componentForm.isTaxable}
+                  onChange={handleComponentChange}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Taxable
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="isMandatory"
+                  checked={componentForm.isMandatory}
+                  onChange={handleComponentChange}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Mandatory
+              </label>
+            </div>
+
+            {/* Calculation Type */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Calculation Type</label>
+              <select
+                name="calculationType"
+                value={componentForm.calculationType}
+                onChange={handleComponentChange}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="fixed">Fixed Amount</option>
+                <option value="percentage">Percentage</option>
+              </select>
+            </div>
+
+            {/* Percentage fields (conditional) */}
+            {componentForm.calculationType === 'percentage' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Percentage Of</label>
+                  <select
+                    name="percentageOf"
+                    value={componentForm.percentageOf}
+                    onChange={handleComponentChange}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="gross">Gross</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Default Percentage (%)</label>
+                  <input
+                    type="number"
+                    name="defaultPercentage"
+                    value={componentForm.defaultPercentage}
+                    onChange={handleComponentChange}
+                    placeholder="e.g. 12"
+                    min="0"
+                    max="100"
+                    step="any"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+              <input
+                type="text"
+                name="description"
+                value={componentForm.description}
+                onChange={handleComponentChange}
+                placeholder="Short description of this component"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Compliance Note */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Compliance Note</label>
+              <textarea
+                name="complianceNote"
+                value={componentForm.complianceNote}
+                onChange={handleComponentChange}
+                placeholder="Statutory or compliance notes (e.g. Section 80C, EPF Act)"
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              />
+            </div>
+
+            {/* Component message */}
+            {componentMsg && (
+              <div
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm ${
+                  componentMsg.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {componentMsg.type === 'success' ? (
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                )}
+                {componentMsg.text}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50 rounded-b-xl">
+            <button
+              onClick={closeComponentModal}
+              className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveComponent}
+              disabled={componentSaving}
+              className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {componentSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {editingComponentId ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ──────────────────────────────────────────────
   // Render: Templates Tab Content
   // ──────────────────────────────────────────────
 
@@ -1638,6 +2170,7 @@ export default function SalaryStructure() {
 
       {/* Tab Content */}
       <div className="px-6">
+        {activeTab === 'components' && renderComponentsTab()}
         {activeTab === 'templates' && renderTemplatesTab()}
         {activeTab === 'assign' && renderAssignTab()}
         {activeTab === 'employees' && renderEmployeesTab()}
@@ -1646,6 +2179,7 @@ export default function SalaryStructure() {
       {/* Modals */}
       {renderModal()}
       {renderTemplateModal()}
+      {renderComponentModal()}
     </div>
   );
 }

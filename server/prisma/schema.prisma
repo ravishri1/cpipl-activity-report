@@ -838,6 +838,29 @@ model SalaryTemplate {
 }
 
 // ═══════════════════════════════════════════════
+// Salary Components (Configurable)
+// ═══════════════════════════════════════════════
+
+model SalaryComponent {
+  id                Int      @id @default(autoincrement())
+  name              String                         // "Basic Salary"
+  code              String   @unique               // "BASIC"
+  type              String                         // "earning" | "deduction" | "employer"
+  taxable           Boolean  @default(true)
+  mandatory         Boolean  @default(false)
+  calculationType   String   @default("fixed")     // "fixed" | "percentage"
+  percentageOf      String?                        // "basic" | "gross" | null
+  defaultPercentage Float?                         // e.g. 50.0 for HRA = 50% of basic
+  description       String?
+  complianceNote    String?                        // IT section reference, limits
+  sortOrder         Int      @default(0)
+  isActive          Boolean  @default(true)
+  isSystem          Boolean  @default(false)       // Pre-seeded defaults
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════
 // Expense Claims
 // ═══════════════════════════════════════════════
 
