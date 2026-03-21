@@ -231,21 +231,42 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/import',       label: 'Import Employees',   icon: Upload },
   ];
 
-  const timePayItems = [
-    { to: '/admin/attendance',               label: 'Team Attendance',        icon: CheckSquare },
-    { to: '/admin/muster',                    label: 'Attendance Muster',      icon: LayoutGrid },
-    { to: '/admin/biometric',                label: 'Biometric',              icon: Fingerprint },
-    { to: '/admin/shifts',                   label: 'Shift Management',       icon: Clock },
-    { to: '/admin/shift-roster',              label: 'Shift Roster',           icon: Calendar },
-    { to: '/admin/leave-requests',           label: 'Leave Requests',         icon: ClipboardCheck },
-    { to: '/admin/leave-granter',            label: 'Leave Granter',          icon: Gift },
-    { to: '/admin/leave-dashboard',          label: 'Leave Dashboard',        icon: BarChart3 },
-    { to: '/admin/holidays',                 label: 'Holidays',               icon: CalendarDays },
-    { to: '/admin/payroll',                  label: 'Payroll',                icon: CreditCard },
-    { to: '/admin/salary-setup',             label: 'Salary Setup',           icon: Banknote },
-    { to: '/admin/expense-claims',           label: 'Expense Claims',         icon: Receipt },
-    { to: '/admin/comp-off',                 label: 'Comp-Off Manager',       icon: AlarmClock },
-    { to: '/admin/regularization',           label: 'Regularization',         icon: ClipboardEdit },
+  const timePayGroups = [
+    {
+      key: 'adminAttendance',
+      label: 'Attendance',
+      icon: CheckSquare,
+      items: [
+        { to: '/admin/attendance',     label: 'Team Attendance',   icon: CheckSquare },
+        { to: '/admin/muster',         label: 'Attendance Muster', icon: LayoutGrid },
+        { to: '/admin/biometric',      label: 'Biometric',         icon: Fingerprint },
+        { to: '/admin/shifts',         label: 'Shift Management',  icon: Clock },
+        { to: '/admin/shift-roster',   label: 'Shift Roster',      icon: Calendar },
+        { to: '/admin/comp-off',       label: 'Comp-Off Manager',  icon: AlarmClock },
+        { to: '/admin/regularization', label: 'Regularization',    icon: ClipboardEdit },
+      ],
+    },
+    {
+      key: 'adminLeave',
+      label: 'Leave',
+      icon: CalendarOff,
+      items: [
+        { to: '/admin/leave-requests',   label: 'Leave Requests',  icon: ClipboardCheck },
+        { to: '/admin/leave-granter',    label: 'Leave Granter',   icon: Gift },
+        { to: '/admin/leave-dashboard',  label: 'Leave Dashboard', icon: BarChart3 },
+        { to: '/admin/holidays',         label: 'Holidays',        icon: CalendarDays },
+      ],
+    },
+    {
+      key: 'adminPayroll',
+      label: 'Payroll',
+      icon: CreditCard,
+      items: [
+        { to: '/admin/payroll',        label: 'Payroll',          icon: CreditCard },
+        { to: '/admin/salary-setup',   label: 'Salary Setup',     icon: Banknote },
+        { to: '/admin/expense-claims', label: 'Expense Claims',   icon: Receipt },
+      ],
+    },
   ];
 
   const organizationItems = [
@@ -379,14 +400,16 @@ export default function Sidebar({ isOpen, onClose }) {
                 onLinkClick={handleLinkClick}
                 labelClass="text-amber-500"
               />
-              <FlatSection
+              <GroupedSection
                 label="Time & Pay"
                 sectionKey="timePay"
-                items={filterItems(timePayItems)}
-                expanded={expanded.timePay}
-                onToggle={() => toggle('timePay')}
+                groups={timePayGroups}
+                expanded={expanded}
+                onToggleSection={() => toggle('timePay')}
+                onToggleGroup={(key) => toggle(key)}
                 isActive={isActive}
                 onLinkClick={handleLinkClick}
+                filterItems={filterItems}
                 labelClass="text-amber-500"
               />
               <FlatSection
@@ -452,7 +475,7 @@ function FlatSection({ label, sectionKey, items, expanded, onToggle, isActive, o
   );
 }
 
-function GroupedSection({ label, sectionKey, groups, expanded, onToggleSection, onToggleGroup, isActive, onLinkClick, filterItems }) {
+function GroupedSection({ label, sectionKey, groups, expanded, onToggleSection, onToggleGroup, isActive, onLinkClick, filterItems, labelClass = 'text-slate-400' }) {
   const sectionExpanded = expanded[sectionKey];
 
   // Check if any group has visible items
@@ -464,7 +487,7 @@ function GroupedSection({ label, sectionKey, groups, expanded, onToggleSection, 
       {/* Level-1 section header */}
       <button
         onClick={onToggleSection}
-        className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600"
+        className={`w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider ${labelClass} hover:text-slate-600`}
       >
         <span>{label}</span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${sectionExpanded ? '' : '-rotate-90'}`} />
