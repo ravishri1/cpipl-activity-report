@@ -84,6 +84,84 @@ router.get('/salary/:userId/revisions', requireActiveEmployee, asyncHandler(asyn
   res.json(revisions);
 }));
 
+// GET /overview?month=YYYY-MM — Payroll overview for a month (greytHR-style)
+router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  const [yearStr, monthStr] = month.split('-');
+  const year = parseInt(yearStr);
+  const monthNum = parseInt(monthStr);
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const monthStart = `${month}-01`;
+  const monthEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+
+  // Payslip aggregates
+  const payslips = await req.prisma.payslip.findMany({ where: { month } });
+  const totalGross = payslips.reduce((s, p) => s + (p.grossEarnings || 0), 0);
+  const totalDeductions = payslips.reduce((s, p) => s + (p.totalDeductions || 0), 0);
+  const totalNetPay = payslips.reduce((s, p) => s + (p.netPay || 0), 0);
+  const totalLop = payslips.reduce((s, p) => s + (p.lopDeduction || 0), 0);
+  const totalBasic = payslips.reduce((s, p) => s + (p.basic || 0), 0);
+  const totalHra = payslips.reduce((s, p) => s + (p.hra || 0), 0);
+  const totalPf = payslips.reduce((s, p) => s + (p.employeePf || 0), 0);
+  const totalEsi = payslips.reduce((s, p) => s + (p.employeeEsi || 0), 0);
+  const totalPt = payslips.reduce((s, p) => s + (p.professionalTax || 0), 0);
+  const totalTds = payslips.reduce((s, p) => s + (p.tds || 0), 0);
+  const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
+
+  // Employee counts
+  const totalActiveEmployees = await req.prisma.user.count({ where: { isActive: true } });
+  const additions = await req.prisma.user.count({
+    where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd } },
+  });
+  const separations = await req.prisma.separation.count({
+    where: { lastWorkingDay: { gte: monthStart, lte: monthEnd } },
+  });
+  const exclusions = await req.prisma.user.count({
+    where: { isActive: true, salaryStructure: null },
+  });
+
+  // Payslip status counts
+  const generated = payslips.filter(p => p.status === 'generated').length;
+  const published = payslips.filter(p => p.status === 'published').length;
+  const draft = payslips.filter(p => p.status === 'draft').length;
+
+  // Lock/release settings
+  const lockKeys = ['payroll_inputs_locked', 'employee_view_released', 'payroll_locked'];
+  const settings = await req.prisma.setting.findMany({ where: { key: { in: lockKeys } } });
+  const lockMap = {};
+  for (const s of settings) lockMap[s.key] = s.value === 'true';
+
+  res.json({
+    month, year, monthNum, daysInMonth, workingDays,
+    cutoffFrom: monthStart, cutoffTo: monthEnd,
+    totals: { totalGross, totalDeductions, totalNetPay, totalLop, totalBasic, totalHra, totalPf, totalEsi, totalPt, totalTds },
+    employees: { total: totalActiveEmployees, additions, separations, exclusions, settlements: 0 },
+    status: { payslipCount: payslips.length, generated, published, draft },
+    locks: {
+      payrollInputsLocked: lockMap.payroll_inputs_locked || false,
+      employeeViewReleased: lockMap.employee_view_released || false,
+      payrollLocked: lockMap.payroll_locked || false,
+    },
+  });
+}));
+
+// PUT /overview/locks — Update lock/release controls
+router.put('/overview/locks', requireAdmin, asyncHandler(async (req, res) => {
+  const allowed = ['payroll_inputs_locked', 'employee_view_released', 'payroll_locked'];
+  const updates = [];
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) {
+      await req.prisma.setting.upsert({
+        where: { key },
+        create: { key, value: String(req.body[key]) },
+        update: { value: String(req.body[key]) },
+      });
+      updates.push(key);
+    }
+  }
+  res.json({ message: `Updated: ${updates.join(', ')}` });
+}));
+
 // POST /generate — Generate payslips for a month (admin)
 router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.body;

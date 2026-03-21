@@ -23,6 +23,14 @@ import {
   TrendingDown,
   Filter,
   Search,
+  Lock,
+  Unlock,
+  LayoutDashboard,
+  UserPlus,
+  UserMinus,
+  Ban,
+  Handshake,
+  Play,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -521,7 +529,7 @@ const PayRegister = ({ month }) => {
 
 export default function PayrollDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
-  const [activeTab, setActiveTab] = useState('payslips');
+  const [activeTab, setActiveTab] = useState('overview');
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -531,6 +539,9 @@ export default function PayrollDashboard() {
   const [toast, setToast] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [overview, setOverview] = useState(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [lockSaving, setLockSaving] = useState(null);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -551,12 +562,39 @@ export default function PayrollDashboard() {
     }
   }, [selectedMonth]);
 
+  const fetchOverview = useCallback(async () => {
+    setOverviewLoading(true);
+    try {
+      const res = await api.get(`/payroll/overview?month=${selectedMonth}`);
+      setOverview(res.data);
+    } catch (err) {
+      console.error('Failed to fetch overview:', err);
+    } finally {
+      setOverviewLoading(false);
+    }
+  }, [selectedMonth]);
+
+  const toggleLock = async (key, currentValue) => {
+    setLockSaving(key);
+    try {
+      await api.put('/payroll/overview/locks', { [key]: !currentValue });
+      setOverview(prev => prev ? { ...prev, locks: { ...prev.locks, [key]: !currentValue } } : prev);
+      showToast(`${key.replace(/_/g, ' ')} updated`, 'success');
+    } catch (err) {
+      showToast('Failed to update', 'error');
+    } finally {
+      setLockSaving(null);
+    }
+  };
+
   useEffect(() => {
     fetchPayslips();
     setExpandedRow(null);
     setSearchQuery('');
     setStatusFilter('all');
   }, [fetchPayslips]);
+
+  useEffect(() => { if (activeTab === 'overview') fetchOverview(); }, [activeTab, fetchOverview]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -735,6 +773,19 @@ export default function PayrollDashboard() {
       <div className="border-b border-slate-200">
         <nav className="flex gap-6">
           <button
+            onClick={() => setActiveTab('overview')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'overview'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <LayoutDashboard className="w-4 h-4" />
+              Overview
+            </div>
+          </button>
+          <button
             onClick={() => setActiveTab('payslips')}
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'payslips'
@@ -762,6 +813,266 @@ export default function PayrollDashboard() {
           </button>
         </nav>
       </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {overviewLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+              <span className="text-slate-500">Loading payroll overview...</span>
+            </div>
+          ) : overview ? (
+            <>
+              {/* Month Timeline Strip */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  {(() => {
+                    const months = [];
+                    const [y] = selectedMonth.split('-').map(Number);
+                    // FY: Apr(y-1) to Mar(y) or Apr(y) to Mar(y+1)
+                    const fyStart = new Date(selectedMonth) >= new Date(`${y}-04-01`) ? y : y - 1;
+                    for (let m = 3; m < 15; m++) {
+                      const mo = ((m % 12) || 12);
+                      const yr = m < 12 ? fyStart : fyStart + 1;
+                      const val = `${yr}-${String(mo).padStart(2, '0')}`;
+                      const label = new Date(yr, mo - 1).toLocaleString('en-IN', { month: 'short' });
+                      const isSelected = val === selectedMonth;
+                      const isPast = val < new Date().toISOString().substring(0, 7);
+                      months.push(
+                        <button
+                          key={val}
+                          onClick={() => setSelectedMonth(val)}
+                          className={`flex-shrink-0 flex flex-col items-center px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-md'
+                              : isPast
+                              ? 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                              : 'bg-white text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          {isPast && !isSelected && <Lock className="w-3 h-3 mb-0.5 opacity-50" />}
+                          <span className="font-semibold">{label}</span>
+                          <span className="text-[10px] opacity-75">{yr}</span>
+                        </button>
+                      );
+                    }
+                    return months;
+                  })()}
+                </div>
+              </div>
+
+              {/* Month Header */}
+              <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  {overview.locks.payrollLocked ? (
+                    <Lock className="w-5 h-5 text-amber-500" />
+                  ) : (
+                    <Unlock className="w-5 h-5 text-green-500" />
+                  )}
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-800">
+                      {new Date(overview.year, overview.monthNum - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Cutoff from {new Date(overview.cutoffFrom).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} to {new Date(overview.cutoffTo).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('payslips')}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                  Process Payroll
+                </button>
+              </div>
+
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left: Payout Details */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Payout Details</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full bg-amber-400" />
+                      <span className="text-sm text-slate-600 flex-1">Net Pay</span>
+                      <span className="text-2xl font-bold text-slate-800">{formatCurrency(overview.totals.totalNetPay)}</span>
+                    </div>
+                    <hr className="border-slate-100" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
+                        <div>
+                          <p className="text-xs text-slate-400">Gross Pay</p>
+                          <p className="text-sm font-semibold text-slate-700">{formatCurrency(overview.totals.totalGross)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-teal-400" />
+                        <div>
+                          <p className="text-xs text-slate-400">Deductions</p>
+                          <p className="text-sm font-semibold text-red-600">{formatCurrency(overview.totals.totalDeductions)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-400" />
+                        <div>
+                          <p className="text-xs text-slate-400">Work Days</p>
+                          <p className="text-sm font-semibold text-slate-700">{overview.workingDays}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                        <div>
+                          <p className="text-xs text-slate-400">LOP Deduction</p>
+                          <p className="text-sm font-semibold text-red-600">{formatCurrency(overview.totals.totalLop)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Component breakdown */}
+                    <hr className="border-slate-100" />
+                    <div className="grid grid-cols-3 gap-3 text-xs">
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">Basic</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalBasic)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">HRA</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalHra)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">PF</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalPf)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">ESI</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalEsi)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">PT</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalPt)}</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className="text-slate-400">TDS</p>
+                        <p className="font-semibold text-slate-700 mt-0.5">{formatCurrency(overview.totals.totalTds)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Employee Details + Controls */}
+                <div className="space-y-6">
+                  {/* Employee Details */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-6">
+                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Employee Details</h3>
+                    <div className="flex items-start gap-6">
+                      <div className="text-center">
+                        <p className="text-4xl font-bold text-blue-600">{overview.employees.total}</p>
+                        <p className="text-xs text-slate-500 mt-1">Total Employees</p>
+                      </div>
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <div className="bg-green-50 rounded-lg p-3 flex items-center gap-2.5">
+                          <UserPlus className="w-4 h-4 text-green-600" />
+                          <div>
+                            <p className="text-lg font-bold text-green-700">{String(overview.employees.additions).padStart(2, '0')}</p>
+                            <p className="text-[10px] text-green-600">Addition</p>
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-2.5">
+                          <Handshake className="w-4 h-4 text-slate-500" />
+                          <div>
+                            <p className="text-lg font-bold text-slate-700">{String(overview.employees.settlements).padStart(2, '0')}</p>
+                            <p className="text-[10px] text-slate-500">Settlements</p>
+                          </div>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-3 flex items-center gap-2.5">
+                          <Ban className="w-4 h-4 text-amber-600" />
+                          <div>
+                            <p className="text-lg font-bold text-amber-700">{String(overview.employees.exclusions).padStart(2, '0')}</p>
+                            <p className="text-[10px] text-amber-600">Exclusion</p>
+                          </div>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-3 flex items-center gap-2.5">
+                          <UserMinus className="w-4 h-4 text-red-500" />
+                          <div>
+                            <p className="text-lg font-bold text-red-600">{String(overview.employees.separations).padStart(2, '0')}</p>
+                            <p className="text-[10px] text-red-500">Separation</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lock/Release Controls */}
+                  <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+                    {[
+                      { key: 'payroll_inputs_locked', label: 'Payroll Inputs', desc: 'Lock salary structure edits', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollInputsLocked },
+                      { key: 'employee_view_released', label: 'Employee View Release', desc: 'Let employees see payslips', lockLabel: 'Hold', unlockLabel: 'Release', value: overview.locks.employeeViewReleased, invert: true },
+                      { key: 'payroll_locked', label: 'Payroll', desc: 'Lock payroll generation', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollLocked },
+                    ].map((ctrl) => (
+                      <div key={ctrl.key} className="flex items-center justify-between px-6 py-4">
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">{ctrl.label}</p>
+                          <p className="text-xs text-slate-400">{ctrl.desc}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {[
+                            { label: ctrl.invert ? ctrl.unlockLabel : ctrl.unlockLabel, active: !ctrl.value },
+                            { label: ctrl.invert ? ctrl.lockLabel : ctrl.lockLabel, active: ctrl.value },
+                          ].map((btn, i) => (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                const newValue = i === 1 ? true : false;
+                                if (newValue !== ctrl.value) toggleLock(ctrl.key, ctrl.value);
+                              }}
+                              disabled={lockSaving === ctrl.key}
+                              className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                btn.active
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              } disabled:opacity-50`}
+                            >
+                              {lockSaving === ctrl.key ? '...' : btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Payslip Status */}
+                  <div className="bg-white rounded-xl border border-slate-200 p-6">
+                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Payslip Status</h3>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-2xl font-bold text-slate-700">{overview.status.payslipCount}</p>
+                        <p className="text-[10px] text-slate-500 mt-1">Total Generated</p>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-3">
+                        <p className="text-2xl font-bold text-amber-600">{overview.status.generated}</p>
+                        <p className="text-[10px] text-amber-500 mt-1">Pending Publish</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3">
+                        <p className="text-2xl font-bold text-green-600">{overview.status.published}</p>
+                        <p className="text-[10px] text-green-500 mt-1">Published</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-16 text-slate-400">
+              <LayoutDashboard className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>No payroll data available for this month.</p>
+              <p className="text-xs mt-1">Generate payslips first from the Payslips tab.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Payslips Tab */}
       {activeTab === 'payslips' && (
