@@ -125,8 +125,27 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const published = payslips.filter(p => p.status === 'published').length;
   const draft = payslips.filter(p => p.status === 'draft').length;
 
+  // Settled employees (separated in this month with last working day)
+  const settledEmployees = await req.prisma.separation.findMany({
+    where: { lastWorkingDay: { gte: monthStart, lte: monthEnd } },
+    include: { user: { select: { id: true, name: true, employeeId: true, driveProfilePhotoUrl: true } } },
+    orderBy: { lastWorkingDay: 'desc' },
+  });
+
+  // Negative salary payslips (netPay < 0)
+  const negativeSalary = payslips.filter(p => (p.netPay || 0) < 0).map(p => p.userId);
+  const negativeSalaryUsers = negativeSalary.length > 0
+    ? await req.prisma.user.findMany({
+        where: { id: { in: negativeSalary } },
+        select: { id: true, name: true, employeeId: true },
+      })
+    : [];
+
+  // Payout pending (generated but not published)
+  const payoutPending = payslips.filter(p => p.status === 'generated').length;
+
   // Lock/release settings
-  const lockKeys = ['payroll_inputs_locked', 'employee_view_released', 'payroll_locked'];
+  const lockKeys = ['payroll_inputs_locked', 'employee_view_released', 'it_statement_released', 'payroll_locked'];
   const settings = await req.prisma.setting.findMany({ where: { key: { in: lockKeys } } });
   const lockMap = {};
   for (const s of settings) lockMap[s.key] = s.value === 'true';
@@ -135,19 +154,28 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
     month, year, monthNum, daysInMonth, workingDays,
     cutoffFrom: monthStart, cutoffTo: monthEnd,
     totals: { totalGross, totalDeductions, totalNetPay, totalLop, totalBasic, totalHra, totalPf, totalEsi, totalPt, totalTds },
-    employees: { total: totalActiveEmployees, additions, separations, exclusions, settlements: 0 },
+    employees: { total: totalActiveEmployees, additions, separations, exclusions, settlements: settledEmployees.length },
     status: { payslipCount: payslips.length, generated, published, draft },
     locks: {
       payrollInputsLocked: lockMap.payroll_inputs_locked || false,
       employeeViewReleased: lockMap.employee_view_released || false,
+      itStatementReleased: lockMap.it_statement_released || false,
       payrollLocked: lockMap.payroll_locked || false,
+    },
+    cards: {
+      negativeSalary: negativeSalaryUsers,
+      settledEmployees: settledEmployees.map(s => ({
+        id: s.user?.id, name: s.user?.name, employeeId: s.user?.employeeId,
+        photo: s.user?.driveProfilePhotoUrl, lastWorkingDay: s.lastWorkingDay,
+      })),
+      payoutPending,
     },
   });
 }));
 
 // PUT /overview/locks — Update lock/release controls
 router.put('/overview/locks', requireAdmin, asyncHandler(async (req, res) => {
-  const allowed = ['payroll_inputs_locked', 'employee_view_released', 'payroll_locked'];
+  const allowed = ['payroll_inputs_locked', 'employee_view_released', 'it_statement_released', 'payroll_locked'];
   const updates = [];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {

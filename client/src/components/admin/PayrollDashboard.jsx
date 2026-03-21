@@ -822,7 +822,7 @@ export default function PayrollDashboard() {
               <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
               <span className="text-slate-500">Loading payroll overview...</span>
             </div>
-          ) : overview ? (
+          ) : overview && (
             <>
               {/* Month Timeline Strip */}
               <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -1010,6 +1010,7 @@ export default function PayrollDashboard() {
                     {[
                       { key: 'payroll_inputs_locked', label: 'Payroll Inputs', desc: 'Lock salary structure edits', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollInputsLocked },
                       { key: 'employee_view_released', label: 'Employee View Release', desc: 'Let employees see payslips', lockLabel: 'Hold', unlockLabel: 'Release', value: overview.locks.employeeViewReleased, invert: true },
+                      { key: 'it_statement_released', label: 'IT Statement Employee View', desc: 'Let employees see IT statements', lockLabel: 'Hold', unlockLabel: 'Release', value: overview.locks.itStatementReleased, invert: true },
                       { key: 'payroll_locked', label: 'Payroll', desc: 'Lock payroll generation', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollLocked },
                     ].map((ctrl) => (
                       <div key={ctrl.key} className="flex items-center justify-between px-6 py-4">
@@ -1063,8 +1064,90 @@ export default function PayrollDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Bottom Info Cards — greytHR style */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Negative Salary */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Negative Salary</h4>
+                  {overview.cards?.negativeSalary?.length > 0 ? (
+                    <div className="space-y-2">
+                      {overview.cards.negativeSalary.map(u => (
+                        <p key={u.id} className="text-xs text-slate-600">{u.name} ({u.employeeId})</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                  )}
+                </div>
+
+                {/* Stop Salary Processing */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Stop Salary Processing</h4>
+                  <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                </div>
+
+                {/* Settled Employees */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">
+                    Settled Employees{overview.cards?.settledEmployees?.length > 0 && ` (${overview.cards.settledEmployees.length})`}
+                  </h4>
+                  {overview.cards?.settledEmployees?.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {overview.cards.settledEmployees.slice(0, 3).map(emp => (
+                        <div key={emp.id} className="flex items-center gap-2.5">
+                          {emp.photo ? (
+                            <img src={emp.photo} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">
+                              {emp.name?.charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs font-medium text-slate-700">{emp.name} ({emp.employeeId})</p>
+                            <p className="text-[10px] text-slate-400">
+                              {emp.lastWorkingDay ? new Date(emp.lastWorkingDay + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' }) : ''}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {overview.cards.settledEmployees.length > 3 && (
+                        <p className="text-xs text-blue-500 font-medium">+{overview.cards.settledEmployees.length - 3} more</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                  )}
+                </div>
+
+                {/* Hold Salary Payout */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Hold Salary Payout</h4>
+                  <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                </div>
+
+                {/* Payout Pending */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Payout Pending</h4>
+                  {overview.cards?.payoutPending > 0 ? (
+                    <div>
+                      <p className="text-2xl font-bold text-blue-600">{overview.cards.payoutPending}</p>
+                      <p className="text-xs text-slate-500 mt-1">Bank Transfer (Net Pay)</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                  )}
+                </div>
+
+                {/* Locations Without PT State */}
+                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Locations Without PT State</h4>
+                  <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+                </div>
+              </div>
             </>
-          ) : (
+          )}
+          {!overview && !overviewLoading && (
             <div className="text-center py-16 text-slate-400">
               <LayoutDashboard className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No payroll data available for this month.</p>
