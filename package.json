@@ -6,5 +6,8 @@
     "build": "cd client && npm install --include=dev --legacy-peer-deps && npx vite build",
     "vercel-build": "cd server && npx prisma generate && cd ../client && npm install --include=dev --legacy-peer-deps && npx vite build",
     "postinstall": "cd server && npm install --legacy-peer-deps && npx prisma generate"
+  },
+  "dependencies": {
+    "docx": "^9.6.1"
   }
 }

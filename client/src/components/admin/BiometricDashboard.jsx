@@ -85,6 +85,39 @@ function StatCard({ icon: Icon, label, value, color = 'blue', sub }) {
   );
 }
 
+// ─── Tunnel Status Card ──────────────────────────────────────────────────────
+function TunnelStatusCard() {
+  const { data: tunnel, loading } = useFetch('/biometric/tunnel-status', null);
+
+  if (loading || !tunnel) return null;
+
+  return (
+    <div className={`rounded-xl border p-4 text-sm ${tunnel.connected ? 'bg-indigo-50 border-indigo-200' : 'bg-red-50 border-red-200'}`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium mb-1">
+            {tunnel.connected ? '📡 Tunnel Connected — cpserver SQL Live' : '🔴 Tunnel Disconnected'}
+          </p>
+          {tunnel.connected ? (
+            <div className="text-xs text-indigo-600 space-y-0.5">
+              <p><span className="font-medium">Tunnel URL:</span> {tunnel.tunnelUrl}</p>
+              <p><span className="font-medium">cpserver Time:</span> {new Date(tunnel.serverTime).toLocaleString()}</p>
+              <p className="text-indigo-400">All historical biometric data available via tunnel (unlimited, from cpserver SQL Server)</p>
+            </div>
+          ) : (
+            <p className="text-xs text-red-600">
+              {tunnel.error || 'cpserver may be offline. Check BiometricService on cpserver.'}
+            </p>
+          )}
+        </div>
+        <span className={`text-2xl ${tunnel.connected ? 'text-green-500' : 'text-red-400'}`}>
+          {tunnel.connected ? '●' : '○'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab: Status Overview ─────────────────────────────────────────────────────
 function StatusTab() {
   const { data: status, loading, error, refetch } = useFetch('/biometric/status', null);
@@ -160,6 +193,9 @@ function StatusTab() {
           All punches use greytHR-style alternating IN/OUT logic (1st punch = IN, 2nd = OUT, etc.).
         </p>
       </div>
+
+      {/* Tunnel Status */}
+      <TunnelStatusCard />
 
       {/* Re-match button only */}
       <div className="bg-white rounded-xl border border-slate-200 p-4">
