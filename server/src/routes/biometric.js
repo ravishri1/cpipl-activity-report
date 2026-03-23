@@ -437,11 +437,12 @@ router.get('/unmatched', authenticate, requireAdmin, asyncHandler(async (req, re
   res.json(Object.values(grouped));
 }));
 
-// GET /api/biometric/status — dashboard summary
+// GET /api/biometric/status — dashboard summary (hybrid: Neon + Tunnel)
 router.get('/status', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
+  const { getTunnelUrl, fetchFromTunnel } = require('../services/biometric/tunnelConfig');
 
-  const [devices, todayPunches, unmatchedToday, pendingProcess, totalPunches] = await Promise.all([
+  const [devices, todayPunches, unmatchedToday, pendingProcess, totalPunchesNeon] = await Promise.all([
     req.prisma.biometricDevice.findMany({
       select: { id: true, name: true, serialNumber: true, isActive: true, lastSyncAt: true, lastSyncStatus: true, lastSyncMessage: true },
     }),
@@ -451,7 +452,38 @@ router.get('/status', authenticate, requireAdmin, asyncHandler(async (req, res) 
     req.prisma.biometricPunch.count(),
   ]);
 
-  res.json({ devices, todayPunches, unmatchedToday, pendingProcess, totalPunches, date: today });
+  // Try to get total from tunnel (cpserver SQL — all historical data)
+  let tunnelStats = null;
+  try {
+    const tunnelUrl = await getTunnelUrl(req.prisma);
+    if (tunnelUrl) {
+      const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+      tunnelStats = await fetchFromTunnel(tunnelUrl, '/api/stats', agentKey);
+    }
+  } catch (e) { /* tunnel may be offline */ }
+
+  // Also get today's count from tunnel for accurate today's punches
+  let tunnelTodayCount = 0;
+  try {
+    const tunnelUrl = await getTunnelUrl(req.prisma);
+    if (tunnelUrl) {
+      const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+      const todayData = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${today}`, agentKey);
+      tunnelTodayCount = todayData?.count || 0;
+    }
+  } catch (e) { /* tunnel may be offline */ }
+
+  res.json({
+    devices,
+    todayPunches: tunnelTodayCount || todayPunches,
+    unmatchedToday,
+    pendingProcess,
+    totalPunches: tunnelStats?.totalRows || totalPunchesNeon,
+    totalPunchesSource: tunnelStats ? 'cpserver-sql' : 'neon',
+    todayPunchesSource: tunnelTodayCount ? 'cpserver-sql' : 'neon',
+    date: today,
+    tunnelStats,
+  });
 }));
 
 // POST /api/biometric/punches/:id/reprocess — manually retry processing a punch
