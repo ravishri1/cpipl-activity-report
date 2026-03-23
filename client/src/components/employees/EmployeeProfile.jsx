@@ -396,6 +396,17 @@ export default function EmployeeProfile() {
    PERSONAL TAB
    ═══════════════════════════════════════════════════════════ */
 function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
+  const [sameAddress, setSameAddress] = useState(
+    !!(profile.address && profile.permanentAddress && profile.address === profile.permanentAddress)
+  );
+
+  // Sync permanent address when current address changes and checkbox is checked
+  useEffect(() => {
+    if (sameAddress && editing) {
+      updateField('permanentAddress', form.address);
+    }
+  }, [form.address, sameAddress, editing]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Contact Information */}
@@ -436,16 +447,38 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
           editing={editing && canEdit} onChange={(v) => updateField('placeOfBirth', v)} editValue={form.placeOfBirth} />
       </Section>
 
-      {/* Current Address */}
-      <Section title="Current Address" icon={MapPin}>
-        <Field icon={MapPin} label="Address" value={profile.address}
-          editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('address', v)} editValue={form.address} type="textarea" />
-      </Section>
-
-      {/* Permanent Address */}
-      <Section title="Permanent Address" icon={MapPin}>
-        <Field icon={MapPin} label="Address" value={profile.permanentAddress}
-          editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('permanentAddress', v)} editValue={form.permanentAddress} type="textarea" />
+      {/* Address */}
+      <Section title="Address" icon={MapPin} className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Current Address</h4>
+            <Field icon={MapPin} label="Address" value={profile.address}
+              editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('address', v)} editValue={form.address} type="textarea" />
+          </div>
+          <div className={sameAddress && editing ? 'opacity-50 pointer-events-none' : ''}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-gray-700">Permanent Address</h4>
+              {editing && (canEdit || isSelf) && (
+                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sameAddress}
+                    onChange={(e) => {
+                      setSameAddress(e.target.checked);
+                      if (e.target.checked) {
+                        updateField('permanentAddress', form.address);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Same as Current Address
+                </label>
+              )}
+            </div>
+            <Field icon={MapPin} label="Address" value={sameAddress ? profile.address : profile.permanentAddress}
+              editing={editing && (canEdit || isSelf) && !sameAddress} onChange={(v) => updateField('permanentAddress', v)} editValue={sameAddress ? form.address : form.permanentAddress} type="textarea" />
+          </div>
+        </div>
       </Section>
 
       {/* Emergency Contact */}
