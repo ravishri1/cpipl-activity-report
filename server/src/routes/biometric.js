@@ -278,11 +278,41 @@ router.post('/agent-sync', asyncHandler(async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/biometric/punches — list punches with filters
-// ?date=2026-03-07&deviceId=1&matchStatus=unmatched&processStatus=pending&userId=5&page=1&limit=50
+// ?date=2026-03-07&source=tunnel|neon&deviceId=1&matchStatus=unmatched&processStatus=pending&userId=5&page=1&limit=50
+// source=tunnel → fetches from cpserver SQL via tunnel (all historical data)
+// source=neon (default) → fetches from Neon DB (recent data with match status)
 router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res) => {
-  const { date, deviceId, matchStatus, processStatus, enrollNumber, userId, page = 1, limit = 50 } = req.query;
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const { date, source, deviceId, matchStatus, processStatus, enrollNumber, userId, page = 1, limit = 50 } = req.query;
 
+  // If source=tunnel, fetch from cpserver via tunnel API
+  if (source === 'tunnel') {
+    const { getTunnelUrl, fetchFromTunnel } = require('../services/biometric/tunnelConfig');
+    const tunnelUrl = await getTunnelUrl(req.prisma);
+    if (!tunnelUrl) return res.status(503).json({ error: 'Tunnel not connected. cpserver may be offline.' });
+
+    const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+    try {
+      const data = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${date || new Date().toISOString().slice(0,10)}`, agentKey);
+      // Map tunnel data to match Neon format for frontend compatibility
+      const punches = (data.punches || []).map((p, i) => ({
+        id: i + 1,
+        deviceSerial: p.deviceSn,
+        enrollNumber: p.enrollNumber,
+        punchTime: p.punchTime,
+        punchDate: p.punchTime?.slice(0, 10),
+        direction: p.direction,
+        matchStatus: 'tunnel',
+        processStatus: 'tunnel',
+        source: 'cpserver-sql',
+      }));
+      return res.json({ punches, total: data.count, page: 1, limit: data.count, source: 'tunnel' });
+    } catch (err) {
+      return res.status(503).json({ error: err.message });
+    }
+  }
+
+  // Default: fetch from Neon (recent data with full match/process info)
+  const skip = (parseInt(page) - 1) * parseInt(limit);
   const where = {};
   if (date)          where.punchDate    = date;
   if (deviceId)      where.deviceId     = parseInt(deviceId);
@@ -305,7 +335,7 @@ router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res)
     req.prisma.biometricPunch.count({ where }),
   ]);
 
-  res.json({ punches, total, page: parseInt(page), limit: parseInt(limit) });
+  res.json({ punches, total, page: parseInt(page), limit: parseInt(limit), source: 'neon' });
 }));
 
 // GET /api/biometric/punches/export — export filtered punches as CSV

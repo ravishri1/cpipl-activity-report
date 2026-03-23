@@ -316,6 +316,23 @@ function initCronJobs(prisma) {
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> Biometric sync scheduled: */5 7-22 * * 1-6 (every 5 min, 7 AM-10 PM IST, Mon-Sat)');
 
+  // ─── BiometricPunch Cleanup: 2 AM daily — delete punches older than 7 days from Neon ───
+  // Data is safe forever in cpserver SQL Server. Only Neon copies are removed to save space.
+  cron.schedule('0 2 * * *', async () => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffDate = cutoff.toISOString().slice(0, 10);
+      const { count } = await prisma.biometricPunch.deleteMany({
+        where: { punchDate: { lt: cutoffDate } },
+      });
+      if (count > 0) console.log(`[CRON] BiometricPunch cleanup: deleted ${count} records older than ${cutoffDate} from Neon (data safe in cpserver SQL)`);
+    } catch (err) {
+      console.error('[CRON] BiometricPunch cleanup failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> BiometricPunch cleanup scheduled: 0 2 * * * (2 AM IST daily, keeps last 7 days)');
+
   // ─── Automation Analysis: Sunday 11:00 PM IST — weekly analysis of recurring tasks ───
   const { runAutomationAnalysis } = require('./automationAnalyzer');
   cron.schedule('0 23 * * 0', async () => {
