@@ -293,19 +293,49 @@ router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res)
     const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
     try {
       const data = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${date || new Date().toISOString().slice(0,10)}`, agentKey);
-      // Map tunnel data to match Neon format for frontend compatibility
-      const punches = (data.punches || []).map((p, i) => ({
-        id: i + 1,
-        deviceSerial: p.deviceSn,
-        enrollNumber: p.enrollNumber,
-        punchTime: p.punchTime,
-        punchDate: p.punchTime?.slice(0, 10),
-        direction: p.direction,
-        matchStatus: 'tunnel',
-        processStatus: 'tunnel',
-        source: 'cpserver-sql',
-      }));
-      return res.json({ punches, total: data.count, page: 1, limit: data.count, source: 'tunnel' });
+
+      // Get all employee mappings (bioDeviceId → employee name/id)
+      const employees = await req.prisma.user.findMany({
+        where: { bioDeviceId: { not: null } },
+        select: { id: true, name: true, employeeId: true, bioDeviceId: true },
+      });
+      const empMap = {};
+      employees.forEach(e => { empMap[e.bioDeviceId] = e; });
+
+      // Get device names
+      const devices = await req.prisma.biometricDevice.findMany({
+        select: { id: true, name: true, serialNumber: true },
+      });
+      const deviceMap = {};
+      devices.forEach(d => { deviceMap[d.serialNumber] = d; });
+
+      // Map tunnel data with employee names and device names
+      const punches = (data.punches || []).map((p, i) => {
+        const emp = empMap[p.enrollNumber];
+        const dev = deviceMap[p.deviceSn];
+        return {
+          id: i + 1,
+          deviceSerial: p.deviceSn,
+          enrollNumber: p.enrollNumber,
+          punchTime: p.punchTime,
+          punchDate: p.punchTime?.slice(0, 10),
+          direction: p.direction,
+          matchStatus: emp ? 'matched' : 'unmatched',
+          processStatus: 'tunnel',
+          source: 'cpserver-sql',
+          employee: emp ? { id: emp.id, name: emp.name, employeeId: emp.employeeId } : null,
+          device: dev ? { id: dev.id, name: dev.name } : null,
+        };
+      });
+
+      // Apply filters
+      let filtered = punches;
+      if (enrollNumber) filtered = filtered.filter(p => p.enrollNumber === enrollNumber);
+      if (userId) filtered = filtered.filter(p => p.employee?.id === parseInt(userId));
+      if (matchStatus === 'matched') filtered = filtered.filter(p => p.employee);
+      if (matchStatus === 'unmatched') filtered = filtered.filter(p => !p.employee);
+
+      return res.json({ punches: filtered, total: filtered.length, page: 1, limit: filtered.length, source: 'tunnel' });
     } catch (err) {
       return res.status(503).json({ error: err.message });
     }
