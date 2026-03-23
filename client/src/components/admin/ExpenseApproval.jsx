@@ -104,8 +104,8 @@ export default function ExpenseApproval() {
       const params = new URLSearchParams();
       if (statusFilter) params.append('status', statusFilter);
       if (monthFilter) params.append('month', monthFilter);
-      const query = params.toString() ? `?${params.toString()}` : '';
-      const res = await api.get(`/expenses/all${query}`);
+      params.append('_t', Date.now()); // cache-bust
+      const res = await api.get(`/expenses/all?${params.toString()}`);
       setExpenses(res.data.expenses || res.data || []);
     } catch (err) {
       setError('Failed to load expense claims');
@@ -167,11 +167,11 @@ export default function ExpenseApproval() {
       setSuccess(`Expense ${status} successfully`);
       setReviewModal(null);
       setReviewNote('');
-      fetchExpenses();
+      await fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || `Failed to ${status} expense`);
-      fetchExpenses();
+      await fetchExpenses();
       setReviewModal(null);
     } finally {
       setActionLoading(null);
@@ -185,7 +185,7 @@ export default function ExpenseApproval() {
         paidOn: new Date().toISOString().split('T')[0],
       });
       setSuccess('Expense marked as paid');
-      fetchExpenses();
+      await fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to mark as paid');
@@ -215,7 +215,7 @@ export default function ExpenseApproval() {
       setSuccess('Expense claim created successfully');
       setShowForm(false);
       setForm(EMPTY_FORM);
-      fetchExpenses();
+      await fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create expense claim');
