@@ -501,11 +501,13 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
   const [newEmp, setNewEmp] = useState({ company: '', designation: '', fromDate: '', toDate: '', ctc: '', reasonForLeaving: '' });
   const [branches, setBranches] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [shifts, setShifts] = useState([]);
 
   useEffect(() => {
     if (!canEdit) return;
     api.get('/branches').then(r => setBranches(r.data || [])).catch(() => {});
     api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+    api.get('/shifts').then(r => setShifts(r.data || [])).catch(() => {});
   }, [canEdit]);
 
   const handleAdd = async () => {
@@ -548,7 +550,8 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
           <Field icon={MapPin} label="Location" value={profile.location}
             editing={editing && canEdit} onChange={(v) => updateField('location', v)} editValue={form.location} />
           <Field icon={Clock} label="Shift" value={profile.shift}
-            editing={editing && canEdit} onChange={(v) => updateField('shift', v)} editValue={form.shift} />
+            editing={editing && canEdit} onChange={(v) => updateField('shift', v)} editValue={form.shift}
+            type="select" options={shifts.length > 0 ? shifts.map(s => s.name) : ['General Shift']} />
           <Field icon={Briefcase} label="Employment Type" value={profile.employmentType?.replace('_', ' ')}
             editing={editing && canEdit} onChange={(v) => updateField('employmentType', v)} editValue={form.employmentType}
             type="select" options={['full_time', 'part_time', 'contract', 'intern']} />
