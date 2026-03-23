@@ -52,6 +52,32 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(expense);
 }));
 
+// POST /admin-create — Admin submits expense on behalf of an employee
+router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'title', 'category', 'amount', 'date');
+  const { userId, title, category, amount, description, receiptUrl, date } = req.body;
+  requireEnum(category, VALID_CATEGORIES, 'category');
+  if (amount <= 0) throw badRequest('Amount must be positive');
+
+  const targetUser = await req.prisma.user.findUnique({ where: { id: parseInt(userId) }, select: { id: true, name: true, isActive: true } });
+  if (!targetUser) throw notFound('Employee');
+  if (!targetUser.isActive) throw badRequest('Cannot create expense for inactive employee');
+
+  const expense = await req.prisma.expenseClaim.create({
+    data: {
+      userId: targetUser.id, title, category, amount: parseFloat(amount),
+      description: description || null, receiptUrl: receiptUrl || null, date, status: 'pending',
+    },
+    include: { user: { select: { id: true, name: true, email: true, employeeId: true, department: true } } },
+  });
+  await logExpenseAction(req.prisma, {
+    expenseId: expense.id, action: 'submitted', actionBy: req.user.id,
+    notes: `Submitted on behalf of ${targetUser.name} by admin ${req.user.name}: ${title} - ₹${amount}`,
+  });
+
+  res.status(201).json(expense);
+}));
+
 // GET /my — Own expense claims
 router.get('/my', asyncHandler(async (req, res) => {
   const expenses = await req.prisma.expenseClaim.findMany({
