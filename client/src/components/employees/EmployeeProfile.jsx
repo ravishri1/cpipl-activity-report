@@ -455,7 +455,7 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
             <Field icon={MapPin} label="Address" value={profile.address}
               editing={editing && (canEdit || isSelf)} onChange={(v) => updateField('address', v)} editValue={form.address} type="textarea" />
           </div>
-          <div className={sameAddress && editing ? 'opacity-50 pointer-events-none' : ''}>
+          <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-semibold text-gray-700">Permanent Address</h4>
               {editing && (canEdit || isSelf) && (
@@ -475,8 +475,10 @@ function PersonalTab({ profile, form, editing, canEdit, isSelf, updateField }) {
                 </label>
               )}
             </div>
-            <Field icon={MapPin} label="Address" value={sameAddress ? profile.address : profile.permanentAddress}
-              editing={editing && (canEdit || isSelf) && !sameAddress} onChange={(v) => updateField('permanentAddress', v)} editValue={sameAddress ? form.address : form.permanentAddress} type="textarea" />
+            <div className={sameAddress && editing ? 'opacity-50 pointer-events-none' : ''}>
+              <Field icon={MapPin} label="Address" value={sameAddress ? profile.address : profile.permanentAddress}
+                editing={editing && (canEdit || isSelf) && !sameAddress} onChange={(v) => updateField('permanentAddress', v)} editValue={sameAddress ? form.address : form.permanentAddress} type="textarea" />
+            </div>
           </div>
         </div>
       </Section>
