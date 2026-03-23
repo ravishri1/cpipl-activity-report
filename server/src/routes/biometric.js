@@ -579,4 +579,61 @@ router.post('/recalculate-all', asyncHandler(async (req, res) => {
   res.json({ month, totalRecalculated, days: dailyResults.length, details: dailyResults });
 }));
 
+// ══════════════════════════════════════════════════════════════════════════════
+// TUNNEL MANAGEMENT (cpserver ↔ Vercel bridge)
+// ══════════════════════════════════════════════════════════════════════════════
+const { getTunnelUrl, setTunnelUrl, fetchFromTunnel } = require('../services/biometric/tunnelConfig');
+
+// POST /api/biometric/register-tunnel — cpserver registers its tunnel URL on startup
+router.post('/register-tunnel', asyncHandler(async (req, res) => {
+  const agentKey = req.headers['x-agent-key'] || req.body.agentKey;
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  if (agentKey !== expectedKey) return res.status(401).json({ error: 'Invalid agent key' });
+
+  const { tunnelUrl } = req.body;
+  if (!tunnelUrl) return res.status(400).json({ error: 'tunnelUrl required' });
+
+  await setTunnelUrl(req.prisma, tunnelUrl);
+  console.log(`[Biometric] Tunnel URL registered: ${tunnelUrl}`);
+  res.json({ message: 'Tunnel URL registered', tunnelUrl });
+}));
+
+// GET /api/biometric/tunnel-status — check if tunnel is reachable
+router.get('/tunnel-status', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const tunnelUrl = await getTunnelUrl(req.prisma);
+  if (!tunnelUrl) return res.json({ connected: false, message: 'No tunnel URL registered' });
+
+  try {
+    const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+    const health = await fetchFromTunnel(tunnelUrl, '/health', agentKey);
+    res.json({ connected: true, tunnelUrl, serverTime: health.time });
+  } catch (err) {
+    res.json({ connected: false, tunnelUrl, error: err.message });
+  }
+}));
+
+// GET /api/biometric/tunnel-punches — proxy punch queries to cpserver via tunnel
+router.get('/tunnel-punches', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const tunnelUrl = await getTunnelUrl(req.prisma);
+  if (!tunnelUrl) return res.status(503).json({ error: 'Tunnel not connected. cpserver may be offline.' });
+
+  const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const { date, start, end } = req.query;
+
+  try {
+    let data;
+    if (date) {
+      data = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${date}`, agentKey);
+    } else if (start && end) {
+      data = await fetchFromTunnel(tunnelUrl, `/api/punches/range?start=${start}&end=${end}`, agentKey);
+    } else {
+      const today = new Date().toISOString().slice(0, 10);
+      data = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${today}`, agentKey);
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: err.message });
+  }
+}));
+
 module.exports = router;
