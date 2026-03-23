@@ -639,6 +639,31 @@ router.post('/recalculate-all', asyncHandler(async (req, res) => {
   res.json({ month, totalRecalculated, days: dailyResults.length, details: dailyResults });
 }));
 
+// POST /api/biometric/purge-neon — delete all old BiometricPunch from Neon (admin only)
+// Data is safe in cpserver SQL. This just frees Neon space.
+router.post('/purge-neon', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const { keepDays = 0 } = req.body; // 0 = delete ALL, 7 = keep last 7 days
+  const total = await req.prisma.biometricPunch.count();
+
+  let deleted;
+  if (keepDays > 0) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - keepDays);
+    const cutoffDate = cutoff.toISOString().slice(0, 10);
+    deleted = await req.prisma.biometricPunch.deleteMany({ where: { punchDate: { lt: cutoffDate } } });
+  } else {
+    deleted = await req.prisma.biometricPunch.deleteMany();
+  }
+
+  const remaining = await req.prisma.biometricPunch.count();
+  res.json({
+    message: `Purged ${deleted.count} punches from Neon. Data safe in cpserver SQL.`,
+    before: total,
+    deleted: deleted.count,
+    remaining,
+  });
+}));
+
 // ══════════════════════════════════════════════════════════════════════════════
 // TUNNEL MANAGEMENT (cpserver ↔ Vercel bridge)
 // ══════════════════════════════════════════════════════════════════════════════
