@@ -226,11 +226,13 @@ function StatusTab() {
 // ─── Tab: Punch Log ───────────────────────────────────────────────────────────
 function PunchLogTab({ employees }) {
   const [filters, setFilters] = useState({ date: '', matchStatus: '', processStatus: '', userId: '', page: 1 });
+  const [dataSource, setDataSource] = useState('tunnel'); // 'tunnel' = cpserver SQL (all data), 'neon' = recent only
   const query = new URLSearchParams({
     ...(filters.date          && { date: filters.date }),
     ...(filters.matchStatus   && { matchStatus: filters.matchStatus }),
     ...(filters.processStatus && { processStatus: filters.processStatus }),
     ...(filters.userId        && { userId: filters.userId }),
+    source: dataSource,
     page: filters.page,
     limit: 50,
   }).toString();
@@ -314,6 +316,22 @@ function PunchLogTab({ employees }) {
           <option value="processed">Processed</option>
           <option value="skipped">Skipped</option>
         </select>
+
+        {/* Data Source Toggle */}
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+          <button
+            onClick={() => { setDataSource('tunnel'); setFilters(f => ({ ...f, page: 1 })); }}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors ${dataSource === 'tunnel' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+          >
+            📡 All Data (SQL)
+          </button>
+          <button
+            onClick={() => { setDataSource('neon'); setFilters(f => ({ ...f, page: 1 })); }}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors ${dataSource === 'neon' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+          >
+            ☁️ Recent (Neon)
+          </button>
+        </div>
 
         {/* Export CSV */}
         <button
