@@ -10,7 +10,7 @@ async function getTunnelUrl(prisma) {
 async function setTunnelUrl(prisma, url) {
   await prisma.setting.upsert({
     where: { key: 'biometric_tunnel_url' },
-    update: { value: url, updatedAt: new Date() },
+    update: { value: url },
     create: { key: 'biometric_tunnel_url', value: url },
   });
 }
