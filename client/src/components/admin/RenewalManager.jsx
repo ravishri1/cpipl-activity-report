@@ -6,6 +6,7 @@ import { formatDate, formatINR } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
+import DeleteErrorModal from '../shared/DeleteErrorModal';
 import StatusBadge from '../shared/StatusBadge';
 import {
   RENEWAL_STATUS_STYLES,
@@ -399,7 +400,7 @@ function HistoryDrawer({ renewal, onClose }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RenewalManager() {
-  const { execute } = useApi();
+  const { execute, deleteError, setDeleteError } = useApi();
 
   // ── Tab state ──────────────────────────────────────────────────────────────
   const [tab, setTab] = useState('dashboard');
@@ -519,6 +520,7 @@ export default function RenewalManager() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-6 space-y-6">
+      {deleteError && <DeleteErrorModal data={deleteError} onClose={() => setDeleteError(null)} />}
 
       {/* ── Page Header ── */}
       <div className="sticky top-0 z-10 bg-slate-50 pb-3 -mx-6 px-6 pt-0 border-b border-slate-200">

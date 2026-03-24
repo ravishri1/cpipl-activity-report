@@ -54,7 +54,13 @@ function errorHandler(err, req, res, _next) {
   // Custom HttpError (thrown via badRequest, notFound, etc.)
   if (err.name === 'HttpError' && err.status) {
     logError(req, err.status, err);
-    return res.status(err.status).json({ error: err.message });
+    const response = { error: err.message };
+    // Include dependency info for safe-delete errors
+    if (err.code === 'DEPENDENCY_EXISTS' && err.dependencies) {
+      response.dependencies = err.dependencies;
+      response.code = 'DEPENDENCY_EXISTS';
+    }
+    return res.status(err.status).json(response);
   }
 
   // Prisma unique constraint violation
@@ -70,10 +76,22 @@ function errorHandler(err, req, res, _next) {
     return res.status(404).json({ error: 'Record not found.' });
   }
 
-  // Prisma foreign key constraint
+  // Prisma foreign key constraint — either missing reference or linked child records
   if (err.code === 'P2003') {
-    logError(req, 400, err);
-    return res.status(400).json({ error: 'Referenced record does not exist.' });
+    const field = err.meta?.field_name || 'unknown';
+    logError(req, 409, err);
+
+    // If this was a DELETE operation, the error means child records exist
+    if (req.method === 'DELETE') {
+      return res.status(409).json({
+        error: `Cannot delete — this record is linked to other data (${field}). Please remove or reassign the linked records first.`,
+        code: 'DEPENDENCY_EXISTS',
+        field,
+      });
+    }
+
+    // For non-DELETE operations (e.g., CREATE with invalid FK), keep the original meaning
+    return res.status(400).json({ error: `Referenced record does not exist (${field}).` });
   }
 
   // Validation errors with message (e.g., throw new Error('Name required'))

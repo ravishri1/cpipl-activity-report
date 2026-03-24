@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { throwIfHasDependencies } = require('../utils/dependencyCheck');
 
 const router = express.Router();
 router.use(authenticate);
@@ -195,6 +196,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
 // ── DELETE /api/company-contracts/:id ─────────────────────────────────────────
 router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'CompanyContract', id);
   await req.prisma.companyContract.delete({ where: { id } });
   res.json({ message: 'Contract deleted' });
 }));

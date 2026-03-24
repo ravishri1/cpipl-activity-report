@@ -6,6 +6,7 @@ import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
+import DeleteErrorModal from '../shared/DeleteErrorModal';
 import {
   Fingerprint,
   Monitor,
@@ -625,7 +626,7 @@ function UnmatchedTab({ employees }) {
 // ─── Tab: Devices ─────────────────────────────────────────────────────────────
 function DevicesTab() {
   const { data: devices, loading, error, refetch } = useFetch('/biometric/devices', []);
-  const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
+  const { execute, loading: saving, error: saveErr, success, clearMessages, deleteError, setDeleteError } = useApi();
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', device? }
   const emptyForm = { name: '', serialNumber: '', location: '', ipAddress: '', esslUrl: '', apiUser: '', apiPassword: '', apiKey: '', companyCode: '', syncIntervalMin: 5, forceDirection: '' };
   const [form, setForm] = useState(emptyForm);
@@ -683,6 +684,7 @@ function DevicesTab() {
         </button>
       </div>
 
+      {deleteError && <DeleteErrorModal data={deleteError} onClose={() => setDeleteError(null)} />}
       {success  && <AlertMessage type="success" message={success} />}
       {saveErr  && <AlertMessage type="error"   message={saveErr} />}
 

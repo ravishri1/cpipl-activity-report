@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields } = require('../utils/validate');
+const { throwIfHasDependencies } = require('../utils/dependencyCheck');
 
 const router = express.Router();
 router.use(authenticate);
@@ -44,6 +45,9 @@ function enrichRenewal(r) {
     ...r,
     daysLeft,
     trafficLight: getTrafficLight(daysLeft),
+    // Map Prisma field names to frontend field names
+    referenceNo: r.referenceNumber || '',
+    documentUrl: r.documentPath || '',
   };
 }
 
@@ -75,6 +79,7 @@ router.put('/categories/:id', requireAdmin, asyncHandler(async (req, res) => {
 // DELETE /api/renewals/categories/:id
 router.delete('/categories/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'RenewalCategory', id);
   await req.prisma.renewalCategory.delete({ where: { id } });
   res.json({ success: true });
 }));
@@ -107,6 +112,7 @@ router.put('/accounts/:id', requireAdmin, asyncHandler(async (req, res) => {
 // DELETE /api/renewals/accounts/:id
 router.delete('/accounts/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'PaymentAccount', id);
   await req.prisma.paymentAccount.delete({ where: { id } });
   res.json({ success: true });
 }));
@@ -267,7 +273,12 @@ router.get('/:id(\\d+)', asyncHandler(async (req, res) => {
 // POST /api/renewals
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'itemName');
-  const { history, category, paymentAccount, ...data } = req.body;
+  const { history, category, paymentAccount, daysLeft, trafficLight, id, createdAt, updatedAt,
+    referenceNo, documentUrl, ...data } = req.body;
+
+  // Map frontend field names to Prisma schema field names
+  if (referenceNo !== undefined) data.referenceNumber = referenceNo;
+  if (documentUrl !== undefined) data.documentPath = documentUrl;
 
   const renewal = await req.prisma.renewal.create({
     data,
@@ -293,7 +304,12 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/renewals/:id
 router.put('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
-  const { history, category, paymentAccount, daysLeft, trafficLight, ...data } = req.body;
+  const { history, category, paymentAccount, daysLeft, trafficLight, id: _id, createdAt, updatedAt,
+    referenceNo, documentUrl, ...data } = req.body;
+
+  // Map frontend field names to Prisma schema field names
+  if (referenceNo !== undefined) data.referenceNumber = referenceNo;
+  if (documentUrl !== undefined) data.documentPath = documentUrl;
 
   const renewal = await req.prisma.renewal.update({
     where: { id },
@@ -318,6 +334,7 @@ router.put('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
 // DELETE /api/renewals/:id
 router.delete('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'Renewal', id);
   await req.prisma.renewal.delete({ where: { id } });
   res.json({ success: true });
 }));

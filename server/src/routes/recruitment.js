@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { throwIfHasDependencies } = require('../utils/dependencyCheck');
 
 const router = express.Router();
 router.use(authenticate);
@@ -57,6 +58,7 @@ router.put('/openings/:id', requireAdmin, asyncHandler(async (req, res) => {
 
 router.delete('/openings/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'JobOpening', id);
   await req.prisma.jobOpening.update({ where: { id }, data: { status: 'closed', closedAt: new Date() } });
   res.json({ message: 'Job opening closed' });
 }));

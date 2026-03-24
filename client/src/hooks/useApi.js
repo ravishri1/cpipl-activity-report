@@ -20,19 +20,28 @@ export function useApi(initialData = null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deleteError, setDeleteError] = useState(null);
 
   const execute = useCallback(async (apiFn, successMsg = '') => {
     setLoading(true);
     setError('');
     setSuccess('');
+    setDeleteError(null);
     try {
       const res = await apiFn();
       setData(res.data);
       if (successMsg) setSuccess(successMsg);
       return res.data;
     } catch (err) {
-      const msg = err.response?.data?.error || 'Something went wrong.';
-      setError(msg);
+      const responseData = err.response?.data;
+      // Auto-detect dependency errors from safe-delete system
+      if (responseData?.code === 'DEPENDENCY_EXISTS') {
+        setDeleteError(responseData);
+        setError('');
+      } else {
+        const msg = responseData?.error || 'Something went wrong.';
+        setError(msg);
+      }
       throw err;
     } finally {
       setLoading(false);
@@ -44,5 +53,5 @@ export function useApi(initialData = null) {
     setSuccess('');
   }, []);
 
-  return { data, setData, loading, setLoading, error, setError, success, setSuccess, execute, clearMessages };
+  return { data, setData, loading, setLoading, error, setError, success, setSuccess, execute, clearMessages, deleteError, setDeleteError };
 }
