@@ -82,15 +82,19 @@ function ApproveDisposalModal({ disposal, onClose, onDone }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.put(`/api/asset-lifecycle/disposals/${disposal.id}/approve`, {
-        recoveryValue: form.recoveryValue ? parseFloat(form.recoveryValue) : undefined,
-        recoveryVendor: form.recoveryVendor || undefined,
-        approvalNotes: form.approvalNotes || undefined,
-      }),
-      'Disposal approved'
-    );
-    onDone();
+    try {
+      await execute(
+        () => api.put(`/asset-lifecycle/disposals/${disposal.id}/approve`, {
+          recoveryValue: form.recoveryValue ? parseFloat(form.recoveryValue) : undefined,
+          recoveryVendor: form.recoveryVendor || undefined,
+          approvalNotes: form.approvalNotes || undefined,
+        }),
+        'Disposal approved'
+      );
+      onDone();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -170,11 +174,15 @@ function ApproveDetachmentModal({ request, onClose, onDone }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.put(`/api/asset-lifecycle/detachment-requests/${request.id}/approve`, form),
-      'Detachment approved'
-    );
-    onDone();
+    try {
+      await execute(
+        () => api.put(`/asset-lifecycle/detachment-requests/${request.id}/approve`, form),
+        'Detachment approved'
+      );
+      onDone();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -245,11 +253,15 @@ function RejectDetachmentModal({ request, onClose, onDone }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.put(`/api/asset-lifecycle/detachment-requests/${request.id}/reject`, { approvalNotes }),
-      'Detachment rejected'
-    );
-    onDone();
+    try {
+      await execute(
+        () => api.put(`/asset-lifecycle/detachment-requests/${request.id}/reject`, { approvalNotes }),
+        'Detachment rejected'
+      );
+      onDone();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -296,7 +308,7 @@ function RejectDetachmentModal({ request, onClose, onDone }) {
 // ─── Dashboard Tab ────────────────────────────────────────────────────────────
 
 function DashboardTab() {
-  const { data, loading, error } = useFetch('/api/asset-lifecycle/dashboard', null);
+  const { data, loading, error } = useFetch('/asset-lifecycle/dashboard', null);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <AlertMessage type="error" message={error} />;
@@ -395,7 +407,7 @@ function DisposalsTab() {
   const params = new URLSearchParams();
   if (statusFilter) params.set('status', statusFilter);
   const { data, loading, error, refetch } = useFetch(
-    `/api/asset-lifecycle/disposals?${params}`,
+    `/asset-lifecycle/disposals?${params}`,
     { disposals: [], total: 0 }
   );
 
@@ -498,7 +510,7 @@ function DetachmentsTab() {
   const params = new URLSearchParams();
   if (statusFilter) params.set('status', statusFilter);
   const { data, loading, error, refetch } = useFetch(
-    `/api/asset-lifecycle/detachment-requests?${params}`,
+    `/asset-lifecycle/detachment-requests?${params}`,
     { requests: [], total: 0 }
   );
 
