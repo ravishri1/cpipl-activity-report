@@ -53,8 +53,8 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-600', bg =
 
 // ── Tab: Overview ──────────────────────────────────────────────────────────────
 function OverviewTab() {
-  const { data: hc, loading: hcLoading, error: hcErr } = useFetch('/api/analytics/headcount', null);
-  const { data: gd, loading: gdLoading, error: gdErr } = useFetch('/api/analytics/gender-diversity', null);
+  const { data: hc, loading: hcLoading, error: hcErr } = useFetch('/analytics/headcount', null);
+  const { data: gd, loading: gdLoading, error: gdErr } = useFetch('/analytics/gender-diversity', null);
 
   if (hcLoading || gdLoading) return <LoadingSpinner />;
   if (hcErr || gdErr) return <AlertMessage type="error" message={hcErr || gdErr} />;
@@ -137,7 +137,7 @@ function OverviewTab() {
 function AttritionTab() {
   const [months, setMonths] = useState(6);
   const { data: attrition, loading, error } = useFetch(
-    `/api/analytics/attrition?months=${months}`,
+    `/analytics/attrition?months=${months}`,
     []
   );
 
@@ -262,7 +262,7 @@ const STATUS_CONFIG = {
 function AttendanceTab() {
   const [month, setMonth] = useState(THIS_MONTH);
   const { data, loading, error } = useFetch(
-    `/api/analytics/attendance-summary?month=${month}`,
+    `/analytics/attendance-summary?month=${month}`,
     null
   );
 
@@ -360,8 +360,8 @@ function LeaveTab() {
   const YEAR_OPTIONS = Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - i);
 
   const url = mode === 'month'
-    ? `/api/analytics/leave-summary?month=${month}`
-    : `/api/analytics/leave-summary?year=${year}`;
+    ? `/analytics/leave-summary?month=${month}`
+    : `/analytics/leave-summary?year=${year}`;
 
   const { data, loading, error } = useFetch(url, null);
 
@@ -510,9 +510,9 @@ const GENDER_COLORS = {
 };
 
 function DemographicsTab() {
-  const { data: gd,     loading: l1, error: e1 } = useFetch('/api/analytics/gender-diversity',    null);
-  const { data: age,    loading: l2, error: e2 } = useFetch('/api/analytics/age-distribution',    null);
-  const { data: tenure, loading: l3, error: e3 } = useFetch('/api/analytics/tenure-distribution', null);
+  const { data: gd,     loading: l1, error: e1 } = useFetch('/analytics/gender-diversity',    null);
+  const { data: age,    loading: l2, error: e2 } = useFetch('/analytics/age-distribution',    null);
+  const { data: tenure, loading: l3, error: e3 } = useFetch('/analytics/tenure-distribution', null);
 
   if (l1 || l2 || l3) return <LoadingSpinner />;
   const err = e1 || e2 || e3;
@@ -584,7 +584,7 @@ function DemographicsTab() {
 
 // ── Tab: Birthdays ─────────────────────────────────────────────────────────────
 function BirthdaysTab() {
-  const { data, loading, error } = useFetch('/api/analytics/birthday-calendar', null);
+  const { data, loading, error } = useFetch('/analytics/birthday-calendar', null);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <AlertMessage type="error" message={error} />;
