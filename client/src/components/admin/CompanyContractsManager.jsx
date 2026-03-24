@@ -5,6 +5,7 @@ import { useApi } from '../../hooks/useApi';
 import { formatDate, formatINR } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
+import DeleteErrorModal from '../shared/DeleteErrorModal';
 import EmptyState from '../shared/EmptyState';
 import {
   AlertTriangle, CheckCircle, Clock, RefreshCw, Plus, Edit2, Trash2,
@@ -556,7 +557,7 @@ export default function CompanyContractsManager() {
 
   const { data: renewals, loading, error, refetch: refetchRenewals } = useFetch(`/renewals${queryStr}`, []);
 
-  const { execute } = useApi();
+  const { execute, deleteError, setDeleteError } = useApi();
 
   const refetchAll = () => { refetchRenewals(); refetchSummary(); };
 
@@ -594,6 +595,7 @@ export default function CompanyContractsManager() {
 
   return (
     <div className="flex flex-col h-full">
+      {deleteError && <DeleteErrorModal data={deleteError} onClose={() => setDeleteError(null)} />}
       {/* Sticky page header */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
         <div>

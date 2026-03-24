@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { throwIfHasDependencies } = require('../utils/dependencyCheck');
 const { sendEmail } = require('../services/notifications/emailService');
 
 const router = express.Router();
@@ -295,6 +296,7 @@ router.delete('/:cardId', requireAdmin, asyncHandler(async (req, res) => {
     where: { id: card.userId }
   });
 
+  await throwIfHasDependencies(req.prisma, 'InsuranceCard', cardId);
   await req.prisma.insuranceCard.delete({
     where: { id: cardId }
   });

@@ -5,6 +5,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
+import DeleteErrorModal from '../shared/DeleteErrorModal';
 import EmptyState from '../shared/EmptyState';
 import StatusBadge from '../shared/StatusBadge';
 import { formatDate } from '../../utils/formatters';
@@ -306,7 +307,7 @@ export default function RecruitmentManager() {
   const { data: offers, loading: offersLoading, error: offersError, refetch: refetchOffers } =
     useFetch('/recruitment/offers', []);
   const { data: users } = useFetch('/users?status=active', []);
-  const { execute, loading: saving, error: saveErr, success } = useApi();
+  const { execute, loading: saving, error: saveErr, success, deleteError, setDeleteError } = useApi();
 
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJob, setEditJob] = useState(null);
@@ -429,6 +430,7 @@ export default function RecruitmentManager() {
         </div>
       </div>
 
+      {deleteError && <DeleteErrorModal data={deleteError} onClose={() => setDeleteError(null)} />}
       {success && <AlertMessage type="success" message={success} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {loading && <LoadingSpinner />}

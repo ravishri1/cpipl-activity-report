@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { throwIfHasDependencies } = require('../utils/dependencyCheck');
 const { matchEmployee, processPunch, processAndStorePunches, recalculateAttendanceFromPunches, syncAllDevices } = require('../services/biometric/biometricSyncService');
 
 const router = express.Router();
@@ -86,6 +87,7 @@ router.put('/devices/:id', authenticate, requireAdmin, asyncHandler(async (req, 
 // DELETE /api/biometric/devices/:id — remove device
 router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  await throwIfHasDependencies(req.prisma, 'BiometricDevice', id);
   await req.prisma.biometricDevice.delete({ where: { id } });
   res.json({ message: 'Device removed' });
 }));
