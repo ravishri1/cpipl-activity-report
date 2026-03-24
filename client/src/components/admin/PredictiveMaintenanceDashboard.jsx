@@ -83,16 +83,20 @@ function StatCard({ label, value, sub, colorClass = 'text-slate-800' }) {
 // ─── Tab 1: Dashboard ─────────────────────────────────────────────────────────
 
 function DashboardTab() {
-  const { data: summary, loading, error, refetch } = useFetch('/api/predictions/dashboard/summary', null);
+  const { data: summary, loading, error, refetch } = useFetch('/predictions/dashboard/summary', null);
   const { execute, loading: recalculating, error: recalcErr, success: recalcOk, clearMessages } = useApi();
 
   async function handleRecalculate() {
     clearMessages();
-    await execute(
-      () => api.post('/api/predictions/recalculate-all'),
-      'Health scores recalculated for all assets'
-    );
-    refetch();
+    try {
+      await execute(
+        () => api.post('/predictions/recalculate-all'),
+        'Health scores recalculated for all assets'
+      );
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   }
 
   if (loading) return <LoadingSpinner />;
@@ -210,7 +214,7 @@ function AtRiskTab() {
   const params = new URLSearchParams({ sort, limit: '100' });
   if (riskLevel) params.set('riskLevel', riskLevel);
 
-  const { data: assets, loading, error } = useFetch(`/api/predictions/at-risk?${params}`, []);
+  const { data: assets, loading, error } = useFetch(`/predictions/at-risk?${params}`, []);
 
   return (
     <div className="space-y-4">
@@ -317,12 +321,16 @@ function RecommendationsTab() {
   const params = new URLSearchParams({ status, limit: '100' });
   if (urgency) params.set('urgency', urgency);
 
-  const { data: recs, loading, error, refetch } = useFetch(`/api/predictions/recommendations?${params}`, []);
+  const { data: recs, loading, error, refetch } = useFetch(`/predictions/recommendations?${params}`, []);
   const { execute, loading: updating } = useApi();
 
   async function updateStatus(recId, newStatus) {
-    await execute(() => api.put(`/api/predictions/recommendations/${recId}/status`, { status: newStatus }), '');
-    refetch();
+    try {
+      await execute(() => api.put(`/predictions/recommendations/${recId}/status`, { status: newStatus }), '');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
   }
 
   const NEXT_STATUS = {
