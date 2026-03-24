@@ -31,6 +31,11 @@ import {
   Ban,
   Handshake,
   Play,
+  ArrowUpDown,
+  PauseCircle,
+  PlayCircle,
+  Calculator,
+  Banknote,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -527,6 +532,129 @@ const PayRegister = ({ month }) => {
   );
 };
 
+// ═══════════════════════════════════════════════
+// P5: Stop Salary Card Component
+// ═══════════════════════════════════════════════
+
+const StopSalaryCard = ({ stoppedCount, onRefresh }) => {
+  const [stopped, setStopped] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [showStopModal, setShowStopModal] = useState(false);
+  const [stopForm, setStopForm] = useState({ userId: '', reason: '' });
+  const [employees, setEmployees] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const fetchStopped = async () => {
+    try {
+      const res = await api.get('/payroll/stopped-employees');
+      setStopped(res.data);
+      setLoaded(true);
+    } catch {}
+  };
+
+  useEffect(() => { if (stoppedCount > 0 || !loaded) fetchStopped(); }, [stoppedCount]);
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get('/users/directory');
+      setEmployees((res.data?.users || res.data || []).filter(u => u.isActive));
+    } catch {}
+  };
+
+  const handleStop = async () => {
+    if (!stopForm.userId || !stopForm.reason.trim()) return;
+    setSaving(true);
+    try {
+      await api.put(`/payroll/stop-salary/${stopForm.userId}`, { reason: stopForm.reason });
+      setShowStopModal(false);
+      setStopForm({ userId: '', reason: '' });
+      fetchStopped();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to stop salary');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRelease = async (userId) => {
+    if (!window.confirm('Release salary processing for this employee?')) return;
+    try {
+      await api.put(`/payroll/release-salary/${userId}`);
+      fetchStopped();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to release');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <PauseCircle className="w-4 h-4 text-red-500" />
+          Stop Salary Processing
+          {stoppedCount > 0 && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">{stoppedCount}</span>}
+        </h4>
+        <button onClick={() => { setShowStopModal(true); fetchEmployees(); }}
+          className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ Stop</button>
+      </div>
+
+      {stopped.length > 0 ? (
+        <div className="space-y-2">
+          {stopped.slice(0, 3).map(s => (
+            <div key={s.userId} className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-700">{s.user?.name} ({s.user?.employeeId})</p>
+                <p className="text-[10px] text-slate-400">{s.stopSalaryReason}</p>
+              </div>
+              <button onClick={() => handleRelease(s.userId)}
+                className="text-[10px] text-green-600 hover:text-green-700 font-medium flex items-center gap-0.5">
+                <PlayCircle className="w-3 h-3" /> Release
+              </button>
+            </div>
+          ))}
+          {stopped.length > 3 && <p className="text-xs text-blue-500 font-medium">+{stopped.length - 3} more</p>}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
+      )}
+
+      {/* Stop Modal */}
+      {showStopModal && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowStopModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Stop Salary Processing</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-600 block mb-1">Employee</label>
+                <select value={stopForm.userId} onChange={e => setStopForm(p => ({ ...p, userId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <option value="">Select employee...</option>
+                  {employees.map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-600 block mb-1">Reason</label>
+                <input type="text" value={stopForm.reason} onChange={e => setStopForm(p => ({ ...p, reason: e.target.value }))}
+                  placeholder="e.g., Extended leave, Suspension..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setShowStopModal(false)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm hover:bg-slate-200">Cancel</button>
+              <button onClick={handleStop} disabled={saving || !stopForm.userId || !stopForm.reason.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                {saving ? 'Stopping...' : 'Stop Salary'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function PayrollDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [activeTab, setActiveTab] = useState('overview');
@@ -811,6 +939,45 @@ export default function PayrollDashboard() {
               Pay Register
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('differences')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'differences'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4" />
+              Differences
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('ctc')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'ctc'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Banknote className="w-4 h-4" />
+              CTC View
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('arrears')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'arrears'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Calculator className="w-4 h-4" />
+              Arrears
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -1082,10 +1249,10 @@ export default function PayrollDashboard() {
                 </div>
 
                 {/* Stop Salary Processing */}
-                <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3">Stop Salary Processing</h4>
-                  <p className="text-sm text-slate-400 text-center mt-6">No Records</p>
-                </div>
+                <StopSalaryCard
+                  stoppedCount={overview.employees?.stoppedSalary || 0}
+                  onRefresh={fetchOverview}
+                />
 
                 {/* Settled Employees */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5 min-h-[140px]">
@@ -1454,6 +1621,493 @@ export default function PayrollDashboard() {
 
       {/* Pay Register Tab */}
       {activeTab === 'register' && <PayRegister month={selectedMonth} />}
+
+      {/* Differences Tab */}
+      {activeTab === 'differences' && <PayrollDifferences month={selectedMonth} />}
+
+      {/* CTC View Tab */}
+      {activeTab === 'ctc' && <CtcRegister month={selectedMonth} />}
+
+      {/* Arrears Tab */}
+      {activeTab === 'arrears' && <ArrearsManager month={selectedMonth} />}
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════
+// P1: Payroll Differences Component
+// ═══════════════════════════════════════════════
+
+const PayrollDifferences = ({ month }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // all, flagged, increased, decreased
+
+  useEffect(() => {
+    const fetchDiffs = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/payroll/pay-differences?month=${month}`);
+        setData(res.data);
+      } catch (err) {
+        console.error('Failed to fetch differences:', err);
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDiffs();
+  }, [month]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+      <span className="text-slate-500">Comparing payroll data...</span>
+    </div>
+  );
+
+  if (!data || data.employees.length === 0) return (
+    <div className="text-center py-20 text-slate-400">
+      <ArrowUpDown className="w-10 h-10 mx-auto mb-3" />
+      <p className="text-sm">No payroll data to compare for {formatMonthDisplay(month)}</p>
+      <p className="text-xs mt-1">Generate payslips for at least 2 consecutive months</p>
+    </div>
+  );
+
+  const filtered = data.employees.filter(e => {
+    if (filter === 'flagged') return e.hasSignificantChange;
+    if (filter === 'increased') return e.diffs.net > 0;
+    if (filter === 'decreased') return e.diffs.net < 0;
+    return true;
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard icon={Users} label="Total Employees" value={data.summary.totalEmployees} color="blue" />
+        <StatCard icon={ArrowUpDown} label="Changed" value={data.summary.totalChanged} color="amber" />
+        <StatCard icon={IndianRupee} label="Avg Net Diff" value={formatCurrency(data.summary.avgNetDiff)} color="purple" />
+        <StatCard icon={AlertTriangle} label="Flagged (>20%)" value={data.summary.flaggedCount} color={data.summary.flaggedCount > 0 ? 'amber' : 'green'} />
+      </div>
+
+      {/* Filter */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-slate-500">Comparing:</span>
+        <span className="text-xs font-medium text-slate-700">{formatMonthDisplay(data.prevMonth)} → {formatMonthDisplay(data.month)}</span>
+        <div className="ml-auto flex gap-2">
+          {['all', 'flagged', 'increased', 'decreased'].map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              {f === 'all' ? 'All' : f === 'flagged' ? `Flagged (${data.summary.flaggedCount})` : f === 'increased' ? 'Increased' : 'Decreased'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Employee</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Prev Net</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Curr Net</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Difference</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Diff %</th>
+              <th className="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.map((emp, i) => (
+              <tr key={i} className={emp.hasSignificantChange ? 'bg-amber-50/50' : ''}>
+                <td className="px-4 py-3">
+                  <div className="font-medium text-slate-800">{emp.user?.name}</div>
+                  <div className="text-xs text-slate-400">{emp.user?.employeeId} • {emp.user?.department}</div>
+                </td>
+                <td className="text-right px-4 py-3 text-slate-600">
+                  {emp.previous ? formatCurrency(emp.previous.netPay) : '—'}
+                </td>
+                <td className="text-right px-4 py-3 font-medium text-slate-800">
+                  {formatCurrency(emp.current?.netPay || emp.current?.net)}
+                </td>
+                <td className="text-right px-4 py-3">
+                  <span className={`font-medium ${emp.diffs.net > 0 ? 'text-green-600' : emp.diffs.net < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                    {emp.diffs.net > 0 ? '+' : ''}{formatCurrency(emp.diffs.net)}
+                  </span>
+                </td>
+                <td className="text-right px-4 py-3">
+                  <span className={`text-xs font-medium ${Math.abs(emp.diffPercent) > 20 ? 'text-amber-600' : 'text-slate-500'}`}>
+                    {emp.isNew ? 'New' : `${emp.diffPercent > 0 ? '+' : ''}${emp.diffPercent}%`}
+                  </span>
+                </td>
+                <td className="text-center px-4 py-3">
+                  {emp.hasSignificantChange ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                      <AlertTriangle className="w-3 h-3" /> Flagged
+                    </span>
+                  ) : emp.isNew ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                      <UserPlus className="w-3 h-3" /> New
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                      <CheckCircle className="w-3 h-3" /> OK
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="text-center py-10 text-slate-400 text-sm">No employees match this filter</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════
+// P3: CTC Register Component
+// ═══════════════════════════════════════════════
+
+const CtcRegister = ({ month }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('department'); // department, employee
+
+  useEffect(() => {
+    const fetchCtc = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/payroll/ctc-register?month=${month}`);
+        setData(res.data);
+      } catch (err) {
+        console.error('Failed to fetch CTC data:', err);
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCtc();
+  }, [month]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+      <span className="text-slate-500">Loading CTC data...</span>
+    </div>
+  );
+
+  if (!data || data.employeeCount === 0) return (
+    <div className="text-center py-20 text-slate-400">
+      <Banknote className="w-10 h-10 mx-auto mb-3" />
+      <p className="text-sm">No CTC data for {formatMonthDisplay(month)}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard icon={IndianRupee} label="Total CTC (Monthly)" value={formatCurrency(data.totals.totalCtc)} color="purple" />
+        <StatCard icon={IndianRupee} label="Total CTC (Annual)" value={formatCurrency(data.totals.totalCtcAnnual)} subtitle="Projected" color="blue" />
+        <StatCard icon={TrendingUp} label="Employer PF" value={formatCurrency(data.totals.totalEmployerPf)} color="amber" />
+        <StatCard icon={TrendingUp} label="Employer ESI" value={formatCurrency(data.totals.totalEmployerEsi)} color="green" />
+      </div>
+
+      {/* View Toggle */}
+      <div className="flex gap-2">
+        <button onClick={() => setView('department')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${view === 'department' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          By Department
+        </button>
+        <button onClick={() => setView('employee')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${view === 'employee' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          By Employee
+        </button>
+      </div>
+
+      {/* Department View */}
+      {view === 'department' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">Department</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Employees</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Gross</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Employer PF</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Employer ESI</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600 bg-purple-50">Total CTC</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.departments.map((dept, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-3 font-medium text-slate-800">{dept.department}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{dept.count}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(dept.gross)}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(dept.employerPf)}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(dept.employerEsi)}</td>
+                  <td className="text-right px-4 py-3 font-bold text-purple-700 bg-purple-50/50">{formatCurrency(dept.ctc)}</td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-semibold">
+                <td className="px-4 py-3 text-slate-800">Total</td>
+                <td className="text-right px-4 py-3">{data.employeeCount}</td>
+                <td className="text-right px-4 py-3">{formatCurrency(data.totals.totalGross)}</td>
+                <td className="text-right px-4 py-3">{formatCurrency(data.totals.totalEmployerPf)}</td>
+                <td className="text-right px-4 py-3">{formatCurrency(data.totals.totalEmployerEsi)}</td>
+                <td className="text-right px-4 py-3 font-bold text-purple-700 bg-purple-50/50">{formatCurrency(data.totals.totalCtc)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Employee View */}
+      {view === 'employee' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-slate-600">Employee</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Gross</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Net Pay</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Employer PF</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Employer ESI</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600 bg-purple-50">CTC (Monthly)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.employees.map((emp, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-800">{emp.user?.name}</div>
+                    <div className="text-xs text-slate-400">{emp.user?.employeeId} • {emp.user?.department}</div>
+                  </td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(emp.grossEarnings)}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(emp.netPay)}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(emp.employerPf)}</td>
+                  <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(emp.employerEsi)}</td>
+                  <td className="text-right px-4 py-3 font-bold text-purple-700 bg-purple-50/50">{formatCurrency(emp.ctcMonthly)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════
+// P4: Arrears Manager Component
+// ═══════════════════════════════════════════════
+
+const ArrearsManager = ({ month }) => {
+  const [arrears, setArrears] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCalc, setShowCalc] = useState(false);
+  const [calcForm, setCalcForm] = useState({ userId: '', fromMonth: '', toMonth: month });
+  const [calculating, setCalculating] = useState(false);
+  const [applying, setApplying] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const fetchArrears = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/payroll/arrears');
+      setArrears(res.data);
+    } catch (err) {
+      console.error('Failed to fetch arrears:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get('/users/directory');
+      setEmployees((res.data?.users || res.data || []).filter(u => u.isActive));
+    } catch {}
+  };
+
+  useEffect(() => { fetchArrears(); fetchEmployees(); }, []);
+
+  const handleCalculate = async () => {
+    if (!calcForm.userId || !calcForm.fromMonth || !calcForm.toMonth) return;
+    setCalculating(true);
+    try {
+      const res = await api.post('/payroll/calculate-arrears', calcForm);
+      setToast({ message: `Arrears calculated: ${formatCurrency(res.data.totalArrears)}`, type: 'success' });
+      setShowCalc(false);
+      setCalcForm({ userId: '', fromMonth: '', toMonth: month });
+      fetchArrears();
+    } catch (err) {
+      setToast({ message: err.response?.data?.message || 'Calculation failed', type: 'error' });
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  const handleApply = async (arrearId) => {
+    if (!window.confirm('Apply these arrears to the current month payslip? This will modify the payslip.')) return;
+    setApplying(arrearId);
+    try {
+      await api.post('/payroll/apply-arrears', { arrearId, applyInMonth: month });
+      setToast({ message: 'Arrears applied successfully', type: 'success' });
+      fetchArrears();
+    } catch (err) {
+      setToast({ message: err.response?.data?.message || 'Failed to apply', type: 'error' });
+    } finally {
+      setApplying(null);
+    }
+  };
+
+  const handleCancel = async (id) => {
+    if (!window.confirm('Cancel this arrears calculation?')) return;
+    try {
+      await api.put(`/payroll/arrears/${id}/cancel`);
+      fetchArrears();
+    } catch (err) {
+      setToast({ message: 'Failed to cancel', type: 'error' });
+    }
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+      <span className="text-slate-500">Loading arrears...</span>
+    </div>
+  );
+
+  const statusColors = {
+    calculated: 'bg-amber-100 text-amber-700 border-amber-200',
+    applied: 'bg-green-100 text-green-700 border-green-200',
+    cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
+  };
+
+  return (
+    <div className="space-y-4">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">Salary Arrears</h3>
+          <p className="text-xs text-slate-500">Calculate and apply arrears for backdated salary revisions</p>
+        </div>
+        <button onClick={() => setShowCalc(!showCalc)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          <Calculator className="w-4 h-4" />
+          Calculate Arrears
+        </button>
+      </div>
+
+      {/* Calculation Form */}
+      {showCalc && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-blue-800">Calculate Arrears</h4>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600 block mb-1">Employee</label>
+              <select value={calcForm.userId} onChange={e => setCalcForm(p => ({ ...p, userId: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="">Select employee...</option>
+                {employees.map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-600 block mb-1">From Month</label>
+              <input type="month" value={calcForm.fromMonth} onChange={e => setCalcForm(p => ({ ...p, fromMonth: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600 block mb-1">To Month</label>
+              <input type="month" value={calcForm.toMonth} onChange={e => setCalcForm(p => ({ ...p, toMonth: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+            <div className="flex items-end gap-2">
+              <button onClick={handleCalculate} disabled={calculating}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                {calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+                {calculating ? 'Calculating...' : 'Calculate'}
+              </button>
+              <button onClick={() => setShowCalc(false)} className="px-3 py-2 bg-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-300">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Arrears List */}
+      {arrears.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <Calculator className="w-10 h-10 mx-auto mb-3" />
+          <p className="text-sm">No arrears records</p>
+          <p className="text-xs mt-1">Use "Calculate Arrears" when a salary revision is backdated</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {arrears.map(a => (
+            <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-slate-800">{a.user?.name} <span className="text-xs text-slate-400">({a.user?.employeeId})</span></div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Period: {formatMonthDisplay(a.fromMonth)} → {formatMonthDisplay(a.toMonth)}
+                    {a.appliedInMonth && <span className="ml-2">• Applied in {formatMonthDisplay(a.appliedInMonth)}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-lg font-bold ${a.totalArrears >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {a.totalArrears >= 0 ? '+' : ''}{formatCurrency(a.totalArrears)}
+                  </span>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusColors[a.status]}`}>
+                    {a.status}
+                  </span>
+                  {a.status === 'calculated' && (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleApply(a.id)} disabled={applying === a.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50">
+                        {applying === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                        Apply
+                      </button>
+                      <button onClick={() => handleCancel(a.id)}
+                        className="px-3 py-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-300">
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Breakdown */}
+              {a.breakdown && a.status !== 'cancelled' && (
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <div className="grid grid-cols-4 gap-2 text-xs text-slate-500 font-medium mb-1">
+                    <span>Month</span><span className="text-right">Old Net</span><span className="text-right">New Net</span><span className="text-right">Arrear</span>
+                  </div>
+                  {(Array.isArray(a.breakdown) ? a.breakdown : []).map((b, i) => (
+                    <div key={i} className="grid grid-cols-4 gap-2 text-xs py-1">
+                      <span className="text-slate-600">{formatMonthDisplay(b.month)}</span>
+                      <span className="text-right text-slate-500">{formatCurrency(b.oldNet)}</span>
+                      <span className="text-right text-slate-600">{formatCurrency(b.newNet)}</span>
+                      <span className={`text-right font-medium ${b.arrearAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {b.arrearAmount >= 0 ? '+' : ''}{formatCurrency(b.arrearAmount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};

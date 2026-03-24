@@ -119,6 +119,9 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const exclusions = await req.prisma.user.count({
     where: { isActive: true, salaryStructure: null },
   });
+  const stoppedSalaryCount = await req.prisma.salaryStructure.count({
+    where: { stopSalaryProcessing: true, user: { isActive: true } },
+  });
 
   // Payslip status counts
   const generated = payslips.filter(p => p.status === 'generated').length;
@@ -154,7 +157,7 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
     month, year, monthNum, daysInMonth, workingDays,
     cutoffFrom: monthStart, cutoffTo: monthEnd,
     totals: { totalGross, totalDeductions, totalNetPay, totalLop, totalBasic, totalHra, totalPf, totalEsi, totalPt, totalTds },
-    employees: { total: totalActiveEmployees, additions, separations, exclusions, settlements: settledEmployees.length },
+    employees: { total: totalActiveEmployees, additions, separations, exclusions, settlements: settledEmployees.length, stoppedSalary: stoppedSalaryCount },
     status: { payslipCount: payslips.length, generated, published, draft },
     locks: {
       payrollInputsLocked: lockMap.payroll_inputs_locked || false,
@@ -201,8 +204,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const salaries = await req.prisma.salaryStructure.findMany({
     include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, company: { select: { name: true } } } } },
   });
-  const activeSalaries = salaries.filter(s => s.user.isActive);
-  if (activeSalaries.length === 0) throw badRequest('No active employees with salary structures');
+  const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
+  const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
+  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
 
@@ -278,6 +282,12 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     results.push({ userId: sal.userId, status: 'generated', netPay });
   }
+
+  // Add stopped employees to results
+  for (const s of stoppedSalaries) {
+    results.push({ userId: s.userId, status: 'skipped', reason: `Salary processing stopped: ${s.stopSalaryReason || 'No reason'}` });
+  }
+
   res.json({ message: `Payslips generated for ${month}`, results });
 }));
 
@@ -679,6 +689,340 @@ router.post('/templates/:id/assign', requireAdmin, asyncHandler(async (req, res)
   }
 
   res.json({ message: `Template assigned to ${results.length} employee(s).`, assigned: results });
+}));
+
+// ═══════════════════════════════════════════════
+// P1: Payroll Differences — Month-over-month compare
+// ═══════════════════════════════════════════════
+
+router.get('/pay-differences', requireAdmin, asyncHandler(async (req, res) => {
+  const { month } = req.query;
+  if (!month) throw badRequest('Month is required (YYYY-MM)');
+
+  // Calculate previous month
+  const [y, m] = month.split('-').map(Number);
+  const prevDate = new Date(y, m - 2, 1);
+  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+  const [currentPayslips, prevPayslips] = await Promise.all([
+    req.prisma.payslip.findMany({
+      where: { month },
+      include: { user: { select: { id: true, name: true, employeeId: true, department: true } } },
+    }),
+    req.prisma.payslip.findMany({
+      where: { month: prevMonth },
+    }),
+  ]);
+
+  const prevMap = {};
+  for (const p of prevPayslips) prevMap[p.userId] = p;
+
+  let totalChanged = 0, totalFlagged = 0, netDiffSum = 0;
+  const employees = currentPayslips.map(curr => {
+    const prev = prevMap[curr.userId];
+    if (!prev) {
+      return {
+        user: curr.user, current: curr, previous: null,
+        diffs: { gross: curr.grossEarnings, deductions: curr.totalDeductions, net: curr.netPay, lop: curr.lopDeduction },
+        diffPercent: 100, hasSignificantChange: true, isNew: true,
+      };
+    }
+
+    const grossDiff = (curr.grossEarnings || 0) - (prev.grossEarnings || 0);
+    const deductionDiff = (curr.totalDeductions || 0) - (prev.totalDeductions || 0);
+    const netDiff = (curr.netPay || 0) - (prev.netPay || 0);
+    const lopDiff = (curr.lopDeduction || 0) - (prev.lopDeduction || 0);
+    const diffPercent = prev.netPay ? Math.round((netDiff / prev.netPay) * 100) : 0;
+    const hasSignificantChange = Math.abs(diffPercent) > 20 || Math.abs(netDiff) > 5000;
+
+    if (netDiff !== 0) totalChanged++;
+    if (hasSignificantChange) totalFlagged++;
+    netDiffSum += netDiff;
+
+    return {
+      user: curr.user,
+      current: { grossEarnings: curr.grossEarnings, totalDeductions: curr.totalDeductions, netPay: curr.netPay, lopDeduction: curr.lopDeduction, basic: curr.basic, hra: curr.hra },
+      previous: { grossEarnings: prev.grossEarnings, totalDeductions: prev.totalDeductions, netPay: prev.netPay, lopDeduction: prev.lopDeduction, basic: prev.basic, hra: prev.hra },
+      diffs: { gross: grossDiff, deductions: deductionDiff, net: netDiff, lop: lopDiff },
+      diffPercent, hasSignificantChange, isNew: false,
+    };
+  });
+
+  // Sort: flagged first, then by absolute net diff desc
+  employees.sort((a, b) => {
+    if (a.hasSignificantChange !== b.hasSignificantChange) return a.hasSignificantChange ? -1 : 1;
+    return Math.abs(b.diffs.net) - Math.abs(a.diffs.net);
+  });
+
+  res.json({
+    month, prevMonth,
+    employees,
+    summary: {
+      totalEmployees: currentPayslips.length,
+      totalChanged,
+      avgNetDiff: totalChanged > 0 ? Math.round(netDiffSum / totalChanged) : 0,
+      flaggedCount: totalFlagged,
+    },
+  });
+}));
+
+// ═══════════════════════════════════════════════
+// P2: YTD Summary — Year-to-date for employees
+// ═══════════════════════════════════════════════
+
+router.get('/ytd-summary', asyncHandler(async (req, res) => {
+  const userId = req.query.userId ? parseId(req.query.userId) : req.user.id;
+  if (!isAdminRole(req.user) && req.user.id !== userId) throw forbidden('Access denied');
+
+  // Determine financial year (Apr-Mar)
+  let fy = req.query.fy; // e.g., "2025-2026"
+  if (!fy) {
+    const now = new Date();
+    const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    fy = `${startYear}-${startYear + 1}`;
+  }
+
+  const [startYear, endYear] = fy.split('-').map(Number);
+  // FY months: Apr startYear to Mar endYear
+  const months = [];
+  for (let m = 4; m <= 12; m++) months.push(`${startYear}-${String(m).padStart(2, '0')}`);
+  for (let m = 1; m <= 3; m++) months.push(`${endYear}-${String(m).padStart(2, '0')}`);
+
+  const payslips = await req.prisma.payslip.findMany({
+    where: { userId, month: { in: months }, status: 'published' },
+    orderBy: { month: 'asc' },
+  });
+
+  const totals = {
+    grossEarnings: 0, totalDeductions: 0, netPay: 0, lopDeduction: 0,
+    basic: 0, hra: 0, employeePf: 0, employeeEsi: 0, professionalTax: 0, tds: 0,
+    employerPf: 0, employerEsi: 0,
+  };
+
+  const monthly = payslips.map(p => {
+    totals.grossEarnings += p.grossEarnings || 0;
+    totals.totalDeductions += p.totalDeductions || 0;
+    totals.netPay += p.netPay || 0;
+    totals.lopDeduction += p.lopDeduction || 0;
+    totals.basic += p.basic || 0;
+    totals.hra += p.hra || 0;
+    totals.employeePf += p.employeePf || 0;
+    totals.employeeEsi += p.employeeEsi || 0;
+    totals.professionalTax += p.professionalTax || 0;
+    totals.tds += p.tds || 0;
+    totals.employerPf += p.employerPf || 0;
+    totals.employerEsi += p.employerEsi || 0;
+
+    return {
+      month: p.month, grossEarnings: p.grossEarnings, totalDeductions: p.totalDeductions,
+      netPay: p.netPay, lopDeduction: p.lopDeduction, basic: p.basic, hra: p.hra,
+      employeePf: p.employeePf, employeeEsi: p.employeeEsi,
+      professionalTax: p.professionalTax, tds: p.tds,
+      employerPf: p.employerPf, employerEsi: p.employerEsi,
+    };
+  });
+
+  res.json({ fy, userId, monthly, totals, monthCount: payslips.length });
+}));
+
+// ═══════════════════════════════════════════════
+// P3: CTC Register — Employer cost breakdown
+// ═══════════════════════════════════════════════
+
+router.get('/ctc-register', requireAdmin, asyncHandler(async (req, res) => {
+  const { month } = req.query;
+  if (!month) throw badRequest('Month is required');
+
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+  });
+
+  let totalGross = 0, totalDeductions = 0, totalNet = 0, totalEmployerPf = 0, totalEmployerEsi = 0, totalCtc = 0;
+  const byDepartment = {};
+
+  const employees = payslips.map(p => {
+    const ctcMonthly = (p.grossEarnings || 0) + (p.employerPf || 0) + (p.employerEsi || 0);
+    totalGross += p.grossEarnings || 0;
+    totalDeductions += p.totalDeductions || 0;
+    totalNet += p.netPay || 0;
+    totalEmployerPf += p.employerPf || 0;
+    totalEmployerEsi += p.employerEsi || 0;
+    totalCtc += ctcMonthly;
+
+    const dept = p.user?.department || 'Unassigned';
+    if (!byDepartment[dept]) byDepartment[dept] = { department: dept, count: 0, gross: 0, employerPf: 0, employerEsi: 0, ctc: 0, net: 0 };
+    byDepartment[dept].count++;
+    byDepartment[dept].gross += p.grossEarnings || 0;
+    byDepartment[dept].employerPf += p.employerPf || 0;
+    byDepartment[dept].employerEsi += p.employerEsi || 0;
+    byDepartment[dept].ctc += ctcMonthly;
+    byDepartment[dept].net += p.netPay || 0;
+
+    return {
+      user: p.user, grossEarnings: p.grossEarnings, totalDeductions: p.totalDeductions,
+      netPay: p.netPay, employerPf: p.employerPf, employerEsi: p.employerEsi, ctcMonthly,
+    };
+  });
+
+  res.json({
+    month, employeeCount: payslips.length,
+    totals: { totalGross, totalDeductions, totalNet, totalEmployerPf, totalEmployerEsi, totalCtc, totalCtcAnnual: totalCtc * 12 },
+    departments: Object.values(byDepartment).sort((a, b) => b.ctc - a.ctc),
+    employees,
+  });
+}));
+
+// ═══════════════════════════════════════════════
+// P4: Arrears Auto-Calculation
+// ═══════════════════════════════════════════════
+
+// Calculate arrears for a backdated revision
+router.post('/calculate-arrears', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, fromMonth, toMonth } = req.body;
+  if (!userId || !fromMonth || !toMonth) throw badRequest('userId, fromMonth, and toMonth are required');
+
+  const uid = parseId(userId);
+  const salary = await req.prisma.salaryStructure.findUnique({ where: { userId: uid } });
+  if (!salary) throw notFound('Salary structure');
+
+  // Get payslips for the period
+  const payslips = await req.prisma.payslip.findMany({
+    where: { userId: uid, month: { gte: fromMonth, lte: toMonth } },
+    orderBy: { month: 'asc' },
+  });
+
+  if (payslips.length === 0) throw badRequest('No payslips found for the given period');
+
+  // Calculate what the new salary would produce vs what was paid
+  const newGross = salary.basic + salary.hra + salary.da + salary.specialAllowance +
+    salary.medicalAllowance + salary.conveyanceAllowance + salary.otherAllowance;
+  const newDeductions = salary.employeePf + salary.employeeEsi + salary.professionalTax + salary.tds;
+
+  const breakdown = payslips.map(p => {
+    const workingDays = p.workingDays || 30;
+    const perDayNew = workingDays > 0 ? salary.ctcMonthly / workingDays : 0;
+    const newLopDeduction = Math.round(perDayNew * (p.lopDays || 0));
+    const newNet = Math.round(newGross - newDeductions - newLopDeduction);
+    const arrearAmount = newNet - (p.netPay || 0);
+
+    return { month: p.month, oldNet: p.netPay, newNet, arrearAmount, lopDays: p.lopDays };
+  });
+
+  const totalArrears = breakdown.reduce((sum, b) => sum + b.arrearAmount, 0);
+
+  // Save calculation
+  const arrear = await req.prisma.payrollArrear.create({
+    data: {
+      userId: uid, fromMonth, toMonth, totalArrears,
+      breakdown, status: 'calculated',
+    },
+  });
+
+  res.json({ arrear, breakdown, totalArrears });
+}));
+
+// Apply calculated arrears to a payslip month
+router.post('/apply-arrears', requireAdmin, asyncHandler(async (req, res) => {
+  const { arrearId, applyInMonth } = req.body;
+  if (!arrearId || !applyInMonth) throw badRequest('arrearId and applyInMonth are required');
+
+  const id = parseId(arrearId);
+  const arrear = await req.prisma.payrollArrear.findUnique({ where: { id } });
+  if (!arrear) throw notFound('Arrear record');
+  if (arrear.status === 'applied') throw badRequest('Arrears already applied');
+
+  // Update the payslip for applyInMonth — add arrears to otherAllowance
+  const payslip = await req.prisma.payslip.findUnique({
+    where: { userId_month: { userId: arrear.userId, month: applyInMonth } },
+  });
+  if (!payslip) throw notFound('Payslip for the apply month');
+
+  const newOtherAllowance = (payslip.otherAllowance || 0) + arrear.totalArrears;
+  const newGross = (payslip.grossEarnings || 0) + arrear.totalArrears;
+  const newNet = (payslip.netPay || 0) + arrear.totalArrears;
+
+  await req.prisma.payslip.update({
+    where: { id: payslip.id },
+    data: {
+      otherAllowance: newOtherAllowance,
+      otherAllowanceLabel: payslip.otherAllowanceLabel
+        ? `${payslip.otherAllowanceLabel} + Arrears`
+        : 'Salary Arrears',
+      grossEarnings: newGross,
+      netPay: newNet,
+    },
+  });
+
+  await req.prisma.payrollArrear.update({
+    where: { id },
+    data: { status: 'applied', appliedInMonth: applyInMonth, appliedBy: req.user.id },
+  });
+
+  res.json({ message: 'Arrears applied successfully', totalArrears: arrear.totalArrears, appliedInMonth: applyInMonth });
+}));
+
+// List arrears for a user or all
+router.get('/arrears', requireAdmin, asyncHandler(async (req, res) => {
+  const where = {};
+  if (req.query.userId) where.userId = parseId(req.query.userId);
+  if (req.query.status) where.status = req.query.status;
+
+  const arrears = await req.prisma.payrollArrear.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, employeeId: true, department: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(arrears);
+}));
+
+// Cancel arrears
+router.put('/arrears/:id/cancel', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const arrear = await req.prisma.payrollArrear.findUnique({ where: { id } });
+  if (!arrear) throw notFound('Arrear');
+  if (arrear.status === 'applied') throw badRequest('Cannot cancel applied arrears');
+  await req.prisma.payrollArrear.update({ where: { id }, data: { status: 'cancelled' } });
+  res.json({ message: 'Arrears cancelled' });
+}));
+
+// ═══════════════════════════════════════════════
+// P5: Stop Salary Processing
+// ═══════════════════════════════════════════════
+
+// Stop salary processing for an employee
+router.put('/stop-salary/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const { reason } = req.body;
+  if (!reason?.trim()) throw badRequest('Reason is required');
+
+  const salary = await req.prisma.salaryStructure.findUnique({ where: { userId } });
+  if (!salary) throw notFound('Salary structure');
+
+  await req.prisma.salaryStructure.update({
+    where: { userId },
+    data: { stopSalaryProcessing: true, stopSalaryReason: reason.trim(), stopSalaryBy: req.user.id, stopSalaryAt: new Date() },
+  });
+  res.json({ message: 'Salary processing stopped', userId });
+}));
+
+// Release salary processing
+router.put('/release-salary/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  await req.prisma.salaryStructure.update({
+    where: { userId },
+    data: { stopSalaryProcessing: false, stopSalaryReason: null, stopSalaryBy: null, stopSalaryAt: null },
+  });
+  res.json({ message: 'Salary processing released', userId });
+}));
+
+// Get stopped employees
+router.get('/stopped-employees', requireAdmin, asyncHandler(async (req, res) => {
+  const stopped = await req.prisma.salaryStructure.findMany({
+    where: { stopSalaryProcessing: true },
+    include: { user: { select: { id: true, name: true, employeeId: true, department: true } } },
+  });
+  res.json(stopped);
 }));
 
 module.exports = router;
