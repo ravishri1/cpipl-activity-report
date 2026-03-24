@@ -314,7 +314,7 @@ app.use('/api/comp-off', compOffRoutes);
 app.use('/api/regularization', regularizationRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/muster', musterRoutes);
-app.use('/internal', internalRoutes);
+app.use('/api/internal', internalRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);
