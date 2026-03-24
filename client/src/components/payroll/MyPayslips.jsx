@@ -14,6 +14,7 @@ import {
   Building2,
   User,
   Hash,
+  BarChart3,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -41,6 +42,7 @@ export default function MyPayslips() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const [activeTab, setActiveTab] = useState('payslips');
 
   useEffect(() => {
     fetchPayslips();
@@ -98,31 +100,59 @@ export default function MyPayslips() {
         </div>
       </div>
 
-      {/* Salary Summary Card */}
-      {latestPayslip ? (
-        <SalarySummary payslip={latestPayslip} />
-      ) : (
-        <EmptyState />
+      {/* Tabs */}
+      <div className="border-b border-slate-200">
+        <nav className="flex gap-6">
+          <button onClick={() => setActiveTab('payslips')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'payslips' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Payslips
+            </div>
+          </button>
+          <button onClick={() => setActiveTab('ytd')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'ytd' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              YTD Summary
+            </div>
+          </button>
+        </nav>
+      </div>
+
+      {/* Payslips Tab */}
+      {activeTab === 'payslips' && (
+        <>
+          {/* Salary Summary Card */}
+          {latestPayslip ? (
+            <SalarySummary payslip={latestPayslip} />
+          ) : (
+            <EmptyState />
+          )}
+
+          {/* Payslip List */}
+          {payslips.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-slate-400" />
+                Payslip History
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {payslips.map((payslip) => (
+                  <PayslipCard
+                    key={payslip.id}
+                    payslip={payslip}
+                    onView={() => setSelectedPayslip(payslip)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Payslip List */}
-      {payslips.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-slate-400" />
-            Payslip History
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {payslips.map((payslip) => (
-              <PayslipCard
-                key={payslip.id}
-                payslip={payslip}
-                onView={() => setSelectedPayslip(payslip)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* YTD Summary Tab */}
+      {activeTab === 'ytd' && <YtdSummary />}
     </div>
   );
 }
@@ -595,6 +625,149 @@ function ErrorState({ message, onRetry }) {
       >
         Try Again
       </button>
+    </div>
+  );
+}
+
+/* ---------- YTD Summary ---------- */
+function YtdSummary() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [fy, setFy] = useState(() => {
+    const now = new Date();
+    const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${startYear}-${startYear + 1}`;
+  });
+
+  useEffect(() => {
+    const fetchYtd = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await api.get(`/payroll/ytd-summary?fy=${fy}`);
+        setData(res.data);
+      } catch (err) {
+        setError('Failed to load YTD summary');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchYtd();
+  }, [fy]);
+
+  // Generate FY options (last 3 years)
+  const fyOptions = [];
+  const now = new Date();
+  const currentStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  for (let i = 0; i < 3; i++) {
+    const y = currentStartYear - i;
+    fyOptions.push(`${y}-${y + 1}`);
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mr-2" />
+      <span className="text-slate-500">Loading YTD summary...</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{error}</div>
+  );
+
+  if (!data || data.monthCount === 0) return (
+    <div className="text-center py-16 text-slate-400">
+      <BarChart3 className="w-10 h-10 mx-auto mb-3" />
+      <p className="text-sm">No published payslips for FY {fy}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* FY Selector */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-emerald-500" />
+          Year-to-Date Summary
+        </h2>
+        <select value={fy} onChange={e => setFy(e.target.value)}
+          className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+          {fyOptions.map(f => <option key={f} value={f}>FY {f}</option>)}
+        </select>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Total Gross</p>
+          <p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(data.totals.grossEarnings)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{data.monthCount} months</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Total Deductions</p>
+          <p className="text-xl font-bold text-red-500 mt-1">{formatCurrency(data.totals.totalDeductions)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Total Net Pay</p>
+          <p className="text-xl font-bold text-slate-800 mt-1">{formatCurrency(data.totals.netPay)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Total Tax (TDS)</p>
+          <p className="text-xl font-bold text-amber-600 mt-1">{formatCurrency(data.totals.tds)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">PF: {formatCurrency(data.totals.employeePf)}</p>
+        </div>
+      </div>
+
+      {/* Monthly Breakdown Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Month</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Gross</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">PF</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Tax</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">LOP</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Deductions</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600 bg-emerald-50">Net Pay</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.monthly.map((m, i) => (
+              <tr key={i}>
+                <td className="px-4 py-3 font-medium text-slate-700">{formatMonth(m.month)}</td>
+                <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(m.grossEarnings)}</td>
+                <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(m.employeePf)}</td>
+                <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(m.tds)}</td>
+                <td className="text-right px-4 py-3 text-red-500">{formatCurrency(m.lopDeduction)}</td>
+                <td className="text-right px-4 py-3 text-slate-600">{formatCurrency(m.totalDeductions)}</td>
+                <td className="text-right px-4 py-3 font-bold text-emerald-700 bg-emerald-50/50">{formatCurrency(m.netPay)}</td>
+              </tr>
+            ))}
+            {/* Totals Row */}
+            <tr className="bg-slate-50 font-semibold">
+              <td className="px-4 py-3 text-slate-800">Total ({data.monthCount} months)</td>
+              <td className="text-right px-4 py-3">{formatCurrency(data.totals.grossEarnings)}</td>
+              <td className="text-right px-4 py-3">{formatCurrency(data.totals.employeePf)}</td>
+              <td className="text-right px-4 py-3">{formatCurrency(data.totals.tds)}</td>
+              <td className="text-right px-4 py-3 text-red-500">{formatCurrency(data.totals.lopDeduction)}</td>
+              <td className="text-right px-4 py-3">{formatCurrency(data.totals.totalDeductions)}</td>
+              <td className="text-right px-4 py-3 font-bold text-emerald-700 bg-emerald-50/50">{formatCurrency(data.totals.netPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Employer Contribution Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h4 className="text-sm font-semibold text-blue-800 mb-2">Employer Contributions (FY {fy})</h4>
+        <div className="flex gap-6 text-sm">
+          <span className="text-blue-700">Employer PF: <strong>{formatCurrency(data.totals.employerPf)}</strong></span>
+          <span className="text-blue-700">Employer ESI: <strong>{formatCurrency(data.totals.employerEsi)}</strong></span>
+          <span className="text-blue-700">Total CTC: <strong>{formatCurrency(data.totals.grossEarnings + data.totals.employerPf + data.totals.employerEsi)}</strong></span>
+        </div>
+      </div>
     </div>
   );
 }
