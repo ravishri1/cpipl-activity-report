@@ -288,8 +288,9 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/settings',                label: 'Settings',                icon: Settings },
   ];
 
-  // Helper: filter denied items
-  const filterItems = (items) => items.filter((item) => !deniedSections.includes(item.to));
+  // Helper: filter denied items (access-control + settings always visible for strict admins)
+  const alwaysVisible = isStrictAdmin ? ['/admin/access-control', '/admin/settings'] : [];
+  const filterItems = (items) => items.filter((item) => alwaysVisible.includes(item.to) || !deniedSections.includes(item.to));
 
   return (
     <>
