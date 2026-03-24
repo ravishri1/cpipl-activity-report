@@ -277,8 +277,16 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
     referenceNo, documentUrl, ...data } = req.body;
 
   // Map frontend field names to Prisma schema field names
-  if (referenceNo !== undefined) data.referenceNumber = referenceNo;
-  if (documentUrl !== undefined) data.documentPath = documentUrl;
+  if (referenceNo) data.referenceNumber = referenceNo;
+  if (documentUrl) data.documentPath = documentUrl;
+
+  // Clean empty strings for Int? fields (Prisma rejects '' for Int)
+  if (!data.paymentAccountId) delete data.paymentAccountId;
+  if (!data.categoryId) delete data.categoryId;
+  // Convert numeric strings
+  if (data.amount === '') delete data.amount;
+  else if (data.amount) data.amount = parseFloat(data.amount);
+  if (data.alertDaysBefore !== undefined) data.alertDaysBefore = parseInt(data.alertDaysBefore) || 15;
 
   const renewal = await req.prisma.renewal.create({
     data,
@@ -308,8 +316,15 @@ router.put('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
     referenceNo, documentUrl, ...data } = req.body;
 
   // Map frontend field names to Prisma schema field names
-  if (referenceNo !== undefined) data.referenceNumber = referenceNo;
-  if (documentUrl !== undefined) data.documentPath = documentUrl;
+  if (referenceNo) data.referenceNumber = referenceNo;
+  if (documentUrl) data.documentPath = documentUrl;
+
+  // Clean empty strings for Int? fields (Prisma rejects '' for Int)
+  if (data.paymentAccountId === '') data.paymentAccountId = null;
+  if (data.categoryId === '') data.categoryId = null;
+  if (data.amount === '') data.amount = null;
+  else if (data.amount) data.amount = parseFloat(data.amount);
+  if (data.alertDaysBefore !== undefined) data.alertDaysBefore = parseInt(data.alertDaysBefore) || 15;
 
   const renewal = await req.prisma.renewal.update({
     where: { id },
