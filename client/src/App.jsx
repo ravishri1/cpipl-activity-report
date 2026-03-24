@@ -74,6 +74,7 @@ const AttendanceMuster = lazy(() => import('./components/admin/AttendanceMuster'
 const AssetLifecycleDashboard = lazy(() => import('./components/admin/AssetLifecycleDashboard'));
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/admin/PredictiveMaintenanceDashboard'));
 const HRAnalyticsDashboard = lazy(() => import('./components/admin/HRAnalyticsDashboard'));
+const AccessControlManager = lazy(() => import('./components/admin/AccessControlManager'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -191,6 +192,7 @@ function AppRoutes() {
 
                   {/* Admin-only routes */}
                   <Route path="/admin/team" element={<SeparatedRoute><AdminRoute><TeamManagement /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/access-control" element={<SeparatedRoute><AdminRoute><AccessControlManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/payroll" element={<SeparatedRoute><AdminRoute><PayrollDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />

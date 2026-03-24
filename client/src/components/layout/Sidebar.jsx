@@ -221,6 +221,7 @@ export default function Sidebar({ isOpen, onClose }) {
   ];
 
   const peopleItems = [
+    { to: '/admin/access-control', label: 'Access Control',   icon: ShieldCheck },
     { to: '/admin/team',         label: 'Team Management',    icon: Users },
     { to: '/admin/recruitment',  label: 'Recruitment',        icon: Briefcase },
     { to: '/admin/confirmations',label: 'Confirmations',      icon: BadgeCheck },
