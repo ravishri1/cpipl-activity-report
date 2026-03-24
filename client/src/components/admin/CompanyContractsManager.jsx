@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+﻿import { useState } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -189,8 +189,12 @@ function RenewalModal({ initial, categories, accounts, onClose, onSaved }) {
     const fn = form.id
       ? () => api.put(`/renewals/${form.id}`, payload)
       : () => api.post('/renewals', payload);
-    await execute(fn, form.id ? 'Updated!' : 'Created!');
-    onSaved();
+    try {
+      await execute(fn, form.id ? 'Updated!' : 'Created!');
+      onSaved();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const TABS = [
@@ -385,8 +389,12 @@ function AccountModal({ initial, onClose, onSaved }) {
     const fn = form.id
       ? () => api.put(`/renewals/accounts/${form.id}`, form)
       : () => api.post('/renewals/accounts', form);
-    await execute(fn, form.id ? 'Updated!' : 'Created!');
-    onSaved();
+    try {
+      await execute(fn, form.id ? 'Updated!' : 'Created!');
+      onSaved();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -450,8 +458,12 @@ function CategoryModal({ initial, onClose, onSaved }) {
     const fn = form.id
       ? () => api.put(`/renewals/categories/${form.id}`, payload)
       : () => api.post('/renewals/categories', payload);
-    await execute(fn, form.id ? 'Updated!' : 'Created!');
-    onSaved();
+    try {
+      await execute(fn, form.id ? 'Updated!' : 'Created!');
+      onSaved();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   return (
@@ -495,11 +507,15 @@ function MarkPaidModal({ renewal, onClose, onSaved }) {
   const { execute, loading, error } = useApi();
 
   const handleConfirm = async () => {
-    await execute(
-      () => api.post(`/renewals/${renewal.id}/mark-paid`, { amount: parseFloat(amount) || renewal.amount }),
-      'Marked as paid! Next renewal date updated.'
-    );
-    onSaved();
+    try {
+      await execute(
+        () => api.post(`/renewals/${renewal.id}/mark-paid`, { amount: parseFloat(amount) || renewal.amount }),
+        'Marked as paid! Next renewal date updated.'
+      );
+      onSaved();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const billingLabel = BILLING_LABELS[renewal.billingCycle] || renewal.billingCycle;
@@ -565,26 +581,42 @@ export default function CompanyContractsManager() {
 
   const handleDelete = async (r) => {
     if (!window.confirm(`Delete "${r.itemName}"? This cannot be undone.`)) return;
-    await execute(() => api.delete(`/renewals/${r.id}`), 'Deleted');
-    refetchAll();
+    try {
+      await execute(() => api.delete(`/renewals/${r.id}`), 'Deleted');
+      refetchAll();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const handleDeleteAccount = async (a) => {
     if (!window.confirm(`Delete account "${a.name}"?`)) return;
-    await execute(() => api.delete(`/renewals/accounts/${a.id}`), 'Deleted');
-    refetchAccts();
+    try {
+      await execute(() => api.delete(`/renewals/accounts/${a.id}`), 'Deleted');
+      refetchAccts();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const handleDeleteCat = async (c) => {
     if (!window.confirm(`Delete category "${c.name}"?`)) return;
-    await execute(() => api.delete(`/renewals/categories/${c.id}`), 'Deleted');
-    refetchCats(); refetchSummary();
+    try {
+      await execute(() => api.delete(`/renewals/categories/${c.id}`), 'Deleted');
+      refetchCats(); refetchSummary();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   const handleReconcile = async (r) => {
     if (!window.confirm(`Mark "${r.itemName}" as reconciled?`)) return;
-    await execute(() => api.post(`/renewals/${r.id}/reconcile`), 'Reconciled!');
-    refetchAll();
+    try {
+      await execute(() => api.post(`/renewals/${r.id}/reconcile`), 'Reconciled!');
+      refetchAll();
+    } catch {
+      // Error displayed by useApi
+    }
   };
 
   // ── Sidebar category tabs ──
@@ -684,7 +716,7 @@ export default function CompanyContractsManager() {
             {loading && <LoadingSpinner />}
             {error && <AlertMessage type="error" message={typeof error === 'string' ? error : (error?.message || 'An error occurred')} />}
             {!loading && renewals.length === 0 && (
-              <EmptyState icon={<RefreshCw className="w-8 h-8" />} title="No renewals found" subtitle="Add your first renewal to get started" />
+              <EmptyState icon={RefreshCw} title="No renewals found" subtitle="Add your first renewal to get started" />
             )}
 
             <div className="space-y-2">
@@ -707,7 +739,7 @@ export default function CompanyContractsManager() {
           <div className="max-w-3xl mx-auto">
             <h2 className="text-base font-semibold text-slate-700 mb-4">Payment Accounts</h2>
             {accounts.length === 0 && (
-              <EmptyState icon={<CreditCard className="w-8 h-8" />} title="No accounts yet" subtitle="Add credit cards, net banking or cash accounts to link renewals to." />
+              <EmptyState icon={CreditCard} title="No accounts yet" subtitle="Add credit cards, net banking or cash accounts to link renewals to." />
             )}
             <div className="grid gap-3">
               {accounts.map(a => (
@@ -749,7 +781,7 @@ export default function CompanyContractsManager() {
           <div className="max-w-2xl mx-auto">
             <h2 className="text-base font-semibold text-slate-700 mb-4">Renewal Categories</h2>
             {categories.length === 0 && (
-              <EmptyState icon={<FileText className="w-8 h-8" />} title="No categories yet" subtitle="Add categories to organise your renewals." />
+              <EmptyState icon={FileText} title="No categories yet" subtitle="Add categories to organise your renewals." />
             )}
             <div className="grid gap-2">
               {categories.map(c => (
