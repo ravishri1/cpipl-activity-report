@@ -9,7 +9,7 @@ import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
 import {
   Check, X, ChevronDown, ChevronUp, CreditCard, Clock,
-  IndianRupee, AlertCircle, Users, CheckCircle2, FileText,
+  IndianRupee, AlertCircle, Users, CheckCircle2, FileText, Plus,
 } from 'lucide-react';
 
 const FUND_STATUS_STYLES = {
@@ -46,6 +46,9 @@ export default function AdminFundRequests() {
   const [settleModal, setSettleModal] = useState(null);
   const [settleNote, setSettleNote] = useState('');
   const [detail, setDetail] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({ userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0] });
+  const { data: employees } = useFetch('/users?active=true', []);
 
   // Client-side user name search
   const filteredRequests = userSearch
@@ -128,6 +131,24 @@ export default function AdminFundRequests() {
     }
   };
 
+  const handleCreate = async () => {
+    if (!createForm.title.trim() || !createForm.amount) return;
+    try {
+      const payload = { title: createForm.title.trim(), amount: parseFloat(createForm.amount), purpose: createForm.purpose.trim() || null, date: createForm.date };
+      if (createForm.userId) {
+        payload.userId = parseInt(createForm.userId);
+        await execute(() => api.post('/expenses/fund-requests/admin-create', payload), 'Fund request created!');
+      } else {
+        await execute(() => api.post('/expenses/fund-requests', payload), 'Fund request created!');
+      }
+      refetch();
+      setShowCreateModal(false);
+      setCreateForm({ userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0] });
+    } catch {
+      // Error displayed by useApi
+    }
+  };
+
   const loadDetail = async (id) => {
     if (expanded === id) {
       setExpanded(null);
@@ -158,6 +179,15 @@ export default function AdminFundRequests() {
         <StatCard icon={<Users className="w-5 h-5 text-blue-600" />} label="Active Advances" value={activeAdvances} />
         <StatCard icon={<AlertCircle className="w-5 h-5 text-red-600" />} label="Total Outstanding" value={formatINR(totalOutstanding)} />
         <StatCard icon={<IndianRupee className="w-5 h-5 text-green-600" />} label="Disbursed This Month" value={formatINR(disbursedThisMonth)} />
+      </div>
+
+      {/* Action bar */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-slate-800">Fund Requests</h2>
+        <button onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 shadow-sm">
+          <Plus className="w-4 h-4" /> Request Fund
+        </button>
       </div>
 
       {/* Filters */}
@@ -429,6 +459,53 @@ export default function AdminFundRequests() {
                 className="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 {saving ? 'Disbursing...' : 'Disburse'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Create Fund Request Modal */}
+      {showCreateModal && (
+        <Modal title="Request Fund" onClose={() => setShowCreateModal(false)}>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Request On Behalf Of (optional)</label>
+              <select value={createForm.userId} onChange={e => setCreateForm(prev => ({ ...prev, userId: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="">-- Self (My Request) --</option>
+                {(employees || []).filter(u => u.isActive).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.employeeId || u.id})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+              <input type="text" value={createForm.title} onChange={e => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Office supplies, Travel advance" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
+                <input type="number" value={createForm.amount} onChange={e => setCreateForm(prev => ({ ...prev, amount: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="0" min="1" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                <input type="date" value={createForm.date} onChange={e => setCreateForm(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Purpose</label>
+              <textarea value={createForm.purpose} onChange={e => setCreateForm(prev => ({ ...prev, purpose: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} placeholder="Describe the purpose of this fund request..." />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
+              <button onClick={handleCreate} disabled={saving || !createForm.title.trim() || !createForm.amount}
+                className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {saving ? 'Creating...' : 'Submit Request'}
               </button>
             </div>
           </div>
