@@ -160,23 +160,56 @@ router.get('/', requireAdmin, asyncHandler(async (req, res) => {
   res.json(assets);
 }));
 
+// Helper: calculate depreciated value
+function calculateDepreciatedValue(purchasePrice, purchaseDate, depreciationRate = 10, depreciationPeriod = 'yearly') {
+  if (!purchasePrice || !purchaseDate) return null;
+  const start = new Date(purchaseDate);
+  const now = new Date();
+  const diffMs = now - start;
+  if (diffMs <= 0) return purchasePrice;
+
+  let periods = 0;
+  if (depreciationPeriod === 'yearly') periods = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+  else if (depreciationPeriod === 'quarterly') periods = diffMs / (91.3125 * 24 * 60 * 60 * 1000);
+  else if (depreciationPeriod === 'monthly') periods = diffMs / (30.4375 * 24 * 60 * 60 * 1000);
+
+  const rate = depreciationRate / 100;
+  const currentValue = purchasePrice * Math.pow(1 - rate, Math.floor(periods));
+  return Math.max(0, Math.round(currentValue * 100) / 100);
+}
+
 // â”€â”€â”€ 8. POST / â”€â”€â”€ Create asset with enhanced fields (admin)
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'type');
-  const { name, type, serialNumber, assetTag, category, purchaseDate, purchasePrice, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, isMandatoryReturn, assignedTo, location } = req.body;
+  const { name, type, serialNumber, assetTag, assetNumber, category, purchaseDate, purchasePrice, value,
+    depreciationRate, depreciationPeriod, warrantyExpiry, warrantyVendor, condition, notes, companyId,
+    isMandatoryReturn, assignedTo, location, brand, assetGroup, description, modelNo, invoiceNo,
+    invoiceCopyUrl, invoiceCopyDriveId, assetImages, assetImageDriveIds, assetOwner, assetOldUser } = req.body;
 
   requireEnum(type, VALID_TYPES, 'type');
   if (category) requireEnum(category, VALID_CATEGORIES, 'category');
+  if (depreciationPeriod) requireEnum(depreciationPeriod, ['yearly', 'monthly', 'quarterly'], 'depreciationPeriod');
+
+  const depRate = depreciationRate ? parseFloat(depreciationRate) : 10;
+  const depPeriod = depreciationPeriod || 'yearly';
+  const pPrice = purchasePrice ? parseFloat(purchasePrice) : null;
+  const autoValue = calculateDepreciatedValue(pPrice, purchaseDate, depRate, depPeriod);
 
   const data = {
     name, type,
-    serialNumber: serialNumber || null, assetTag: assetTag || null,
+    serialNumber: serialNumber || null, assetTag: assetTag || null, assetNumber: assetNumber || null,
     category: category || 'personal', purchaseDate: purchaseDate || null,
-    purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
-    value: value ? parseFloat(value) : null, warrantyExpiry: warrantyExpiry || null,
-    warrantyVendor: warrantyVendor || null, condition: condition || 'good',
-    notes: notes || null, companyId: companyId ? parseInt(companyId) : null,
-    location: location || null, isMandatoryReturn: isMandatoryReturn !== undefined ? isMandatoryReturn : true,
+    purchasePrice: pPrice, value: autoValue,
+    depreciationRate: depRate, depreciationPeriod: depPeriod,
+    warrantyExpiry: warrantyExpiry || null, warrantyVendor: warrantyVendor || null,
+    condition: condition || 'good', notes: notes || null,
+    companyId: companyId ? parseInt(companyId) : null, location: location || null,
+    isMandatoryReturn: isMandatoryReturn !== undefined ? isMandatoryReturn : true,
+    brand: brand || null, assetGroup: assetGroup || null, description: description || null,
+    modelNo: modelNo || null, invoiceNo: invoiceNo || null,
+    invoiceCopyUrl: invoiceCopyUrl || null, invoiceCopyDriveId: invoiceCopyDriveId || null,
+    assetImages: assetImages || null, assetImageDriveIds: assetImageDriveIds || null,
+    assetOwner: assetOwner || null, assetOldUser: assetOldUser || null,
     status: 'available',
   };
 
@@ -301,22 +334,27 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const asset = await req.prisma.asset.findUnique({ where: { id } });
   if (!asset) throw notFound('Asset');
 
-  const { name, type, serialNumber, assetTag, category, purchaseDate, purchasePrice, value, warrantyExpiry, warrantyVendor, condition, notes, companyId, status, isMandatoryReturn, location } = req.body;
+  const { name, type, serialNumber, assetTag, assetNumber, category, purchaseDate, purchasePrice, value,
+    depreciationRate, depreciationPeriod, warrantyExpiry, warrantyVendor, condition, notes, companyId,
+    status, isMandatoryReturn, location, brand, assetGroup, description, modelNo, invoiceNo,
+    invoiceCopyUrl, invoiceCopyDriveId, assetImages, assetImageDriveIds, assetOwner, assetOldUser } = req.body;
 
   if (type) requireEnum(type, VALID_TYPES, 'type');
   if (status) requireEnum(status, VALID_STATUSES, 'status');
   if (category) requireEnum(category, VALID_CATEGORIES, 'category');
   if (condition) requireEnum(condition, VALID_CONDITIONS, 'condition');
+  if (depreciationPeriod) requireEnum(depreciationPeriod, ['yearly', 'monthly', 'quarterly'], 'depreciationPeriod');
 
   const data = {};
   if (name !== undefined) data.name = name;
   if (type !== undefined) data.type = type;
   if (serialNumber !== undefined) data.serialNumber = serialNumber || null;
   if (assetTag !== undefined) data.assetTag = assetTag || null;
+  if (assetNumber !== undefined) data.assetNumber = assetNumber || null;
   if (category !== undefined) data.category = category;
   if (purchaseDate !== undefined) data.purchaseDate = purchaseDate || null;
-  if (purchasePrice !== undefined) data.purchasePrice = purchasePrice ? parseFloat(purchasePrice) : null;
-  if (value !== undefined) data.value = value ? parseFloat(value) : null;
+  if (depreciationRate !== undefined) data.depreciationRate = depreciationRate ? parseFloat(depreciationRate) : 10;
+  if (depreciationPeriod !== undefined) data.depreciationPeriod = depreciationPeriod || 'yearly';
   if (warrantyExpiry !== undefined) data.warrantyExpiry = warrantyExpiry || null;
   if (warrantyVendor !== undefined) data.warrantyVendor = warrantyVendor || null;
   if (condition !== undefined) data.condition = condition;
@@ -325,6 +363,27 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   if (location !== undefined) data.location = location || null;
   if (status !== undefined) data.status = status;
   if (isMandatoryReturn !== undefined) data.isMandatoryReturn = isMandatoryReturn;
+  if (brand !== undefined) data.brand = brand || null;
+  if (assetGroup !== undefined) data.assetGroup = assetGroup || null;
+  if (description !== undefined) data.description = description || null;
+  if (modelNo !== undefined) data.modelNo = modelNo || null;
+  if (invoiceNo !== undefined) data.invoiceNo = invoiceNo || null;
+  if (invoiceCopyUrl !== undefined) data.invoiceCopyUrl = invoiceCopyUrl || null;
+  if (invoiceCopyDriveId !== undefined) data.invoiceCopyDriveId = invoiceCopyDriveId || null;
+  if (assetImages !== undefined) data.assetImages = assetImages || null;
+  if (assetImageDriveIds !== undefined) data.assetImageDriveIds = assetImageDriveIds || null;
+  if (assetOwner !== undefined) data.assetOwner = assetOwner || null;
+  if (assetOldUser !== undefined) data.assetOldUser = assetOldUser || null;
+
+  // Auto-calculate depreciated value
+  if (purchasePrice !== undefined || purchaseDate !== undefined || depreciationRate !== undefined || depreciationPeriod !== undefined) {
+    const pPrice = (purchasePrice !== undefined ? (purchasePrice ? parseFloat(purchasePrice) : null) : asset.purchasePrice);
+    const pDate = (purchaseDate !== undefined ? purchaseDate : asset.purchaseDate);
+    const dRate = (depreciationRate !== undefined ? parseFloat(depreciationRate) : (asset.depreciationRate || 10));
+    const dPeriod = (depreciationPeriod !== undefined ? depreciationPeriod : (asset.depreciationPeriod || 'yearly'));
+    data.value = calculateDepreciatedValue(pPrice, pDate, dRate, dPeriod);
+    data.purchasePrice = pPrice;
+  }
 
   const updated = await req.prisma.asset.update({
     where: { id }, data,

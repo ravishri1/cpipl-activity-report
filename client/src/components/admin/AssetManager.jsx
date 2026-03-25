@@ -353,17 +353,27 @@ export default function AssetManager() {
     name: '',
     type: 'laptop',
     serialNumber: '',
-    assetTag: '',
+    assetNumber: '',
     category: 'personal',
     condition: 'good',
     location: '',
     purchaseDate: '',
     purchasePrice: '',
+    depreciationRate: '10',
+    depreciationPeriod: 'yearly',
     warrantyExpiry: '',
     value: '',
     notes: '',
     companyId: '',
     status: 'available',
+    brand: '',
+    assetGroup: '',
+    description: '',
+    modelNo: '',
+    invoiceNo: '',
+    assetOwner: '',
+    assetOwnerOther: '',
+    assetOldUser: '',
   };
 
   const emptyRepairForm = {
@@ -581,21 +591,41 @@ export default function AssetManager() {
 
   const openEditModal = (asset) => {
     setEditingAsset(asset);
+    // Parse assetOwner field: "employee:5" or "other:Some Name"
+    let ownerVal = '', ownerOther = '';
+    if (asset.assetOwner) {
+      if (asset.assetOwner.startsWith('other:')) {
+        ownerVal = 'other';
+        ownerOther = asset.assetOwner.replace('other:', '');
+      } else if (asset.assetOwner.startsWith('employee:')) {
+        ownerVal = asset.assetOwner;
+      }
+    }
     setForm({
       name: asset.name || '',
       type: asset.type || 'laptop',
       serialNumber: asset.serialNumber || '',
-      assetTag: asset.assetTag || '',
+      assetNumber: asset.assetNumber || asset.assetTag || '',
       category: asset.category || 'personal',
       condition: asset.condition || 'good',
       location: asset.location || '',
       purchaseDate: asset.purchaseDate ? asset.purchaseDate.split('T')[0] : '',
       purchasePrice: asset.purchasePrice ?? '',
+      depreciationRate: asset.depreciationRate ?? '10',
+      depreciationPeriod: asset.depreciationPeriod || 'yearly',
       warrantyExpiry: asset.warrantyExpiry ? asset.warrantyExpiry.split('T')[0] : '',
       value: asset.value ?? '',
       notes: asset.notes || '',
       companyId: asset.companyId ? String(asset.companyId) : '',
       status: asset.status || 'available',
+      brand: asset.brand || '',
+      assetGroup: asset.assetGroup || '',
+      description: asset.description || '',
+      modelNo: asset.modelNo || '',
+      invoiceNo: asset.invoiceNo || '',
+      assetOwner: ownerVal,
+      assetOwnerOther: ownerOther,
+      assetOldUser: asset.assetOldUser || '',
     });
     setFormError('');
     setShowAssetModal(true);
@@ -614,21 +644,37 @@ export default function AssetManager() {
     }
     setFormLoading(true);
     try {
+      // Resolve assetOwner
+      let resolvedOwner = null;
+      if (form.assetOwner === 'other') {
+        resolvedOwner = form.assetOwnerOther ? `other:${form.assetOwnerOther.trim()}` : null;
+      } else if (form.assetOwner) {
+        resolvedOwner = form.assetOwner; // "employee:5"
+      }
+
       const payload = {
         name: form.name.trim(),
         type: form.type,
         serialNumber: form.serialNumber.trim() || null,
-        assetTag: form.assetTag.trim() || null,
+        assetNumber: form.assetNumber.trim() || null,
         category: form.category || 'personal',
         condition: form.condition || 'good',
         location: form.location || null,
         purchaseDate: form.purchaseDate || null,
         purchasePrice: form.purchasePrice ? parseFloat(form.purchasePrice) : null,
+        depreciationRate: form.depreciationRate ? parseFloat(form.depreciationRate) : 10,
+        depreciationPeriod: form.depreciationPeriod || 'yearly',
         warrantyExpiry: form.warrantyExpiry || null,
-        value: form.value ? parseFloat(form.value) : null,
         notes: form.notes.trim() || null,
         companyId: form.companyId ? parseInt(form.companyId, 10) : null,
         status: form.status || 'available',
+        brand: form.brand.trim() || null,
+        assetGroup: form.assetGroup.trim() || null,
+        description: form.description.trim() || null,
+        modelNo: form.modelNo.trim() || null,
+        invoiceNo: form.invoiceNo.trim() || null,
+        assetOwner: resolvedOwner,
+        assetOldUser: form.assetOldUser.trim() || null,
       };
       if (editingAsset) {
         await api.put(`/assets/${editingAsset.id}`, payload);
@@ -1129,7 +1175,7 @@ export default function AssetManager() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Asset Tag</th>
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Asset Number</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Name</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Type</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Serial #</th>
@@ -1149,10 +1195,10 @@ export default function AssetManager() {
                   const warrantyRemaining = daysUntil(asset.warrantyExpiry);
                   return (
                     <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
-                      {/* Asset Tag */}
+                      {/* Asset Number */}
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs text-slate-500">
-                          {asset.assetTag || '-'}
+                          {asset.assetNumber || asset.assetTag || '-'}
                         </span>
                       </td>
                       {/* Name */}
@@ -1336,7 +1382,7 @@ export default function AssetManager() {
               </div>
             )}
 
-            {/* Row 1: Name + Asset Tag */}
+            {/* Row 1: Name + Asset Number */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1352,11 +1398,11 @@ export default function AssetManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Asset Tag</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Asset Number</label>
                 <input
                   type="text"
-                  value={form.assetTag}
-                  onChange={(e) => updateForm('assetTag', e.target.value)}
+                  value={form.assetNumber}
+                  onChange={(e) => updateForm('assetNumber', e.target.value)}
                   placeholder="e.g. CPIPL-LT-001"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -1411,7 +1457,41 @@ export default function AssetManager() {
               </div>
             </div>
 
-            {/* Row 3: Condition + Location + Serial Number */}
+            {/* Row 3: Brand + Model No + Serial Number */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
+                <input
+                  type="text"
+                  value={form.brand}
+                  onChange={(e) => updateForm('brand', e.target.value)}
+                  placeholder="e.g. Apple, Dell, HP"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Model No</label>
+                <input
+                  type="text"
+                  value={form.modelNo}
+                  onChange={(e) => updateForm('modelNo', e.target.value)}
+                  placeholder="e.g. MacBook Air M2"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
+                <input
+                  type="text"
+                  value={form.serialNumber}
+                  onChange={(e) => updateForm('serialNumber', e.target.value)}
+                  placeholder="e.g. SN-2024-001"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Row 4: Condition + Location + Asset Group */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Condition</label>
@@ -1443,18 +1523,18 @@ export default function AssetManager() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Asset Group</label>
                 <input
                   type="text"
-                  value={form.serialNumber}
-                  onChange={(e) => updateForm('serialNumber', e.target.value)}
-                  placeholder="e.g. SN-2024-001"
+                  value={form.assetGroup}
+                  onChange={(e) => updateForm('assetGroup', e.target.value)}
+                  placeholder="e.g. IT Equipment, Furniture"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Row 4: Purchase Date + Purchase Price + Value */}
+            {/* Row 5: Purchase Date + Purchase Price + Invoice No */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Purchase Date</label>
@@ -1478,20 +1558,73 @@ export default function AssetManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Current Value (INR)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Invoice No</label>
                 <input
-                  type="number"
-                  value={form.value}
-                  onChange={(e) => updateForm('value', e.target.value)}
-                  placeholder="0"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  value={form.invoiceNo}
+                  onChange={(e) => updateForm('invoiceNo', e.target.value)}
+                  placeholder="e.g. INV-2024-001"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
-            {/* Row 5: Warranty Expiry + Company */}
+            {/* Row 6: Depreciation Period + Depreciation Rate + Current Value (auto) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Depreciation Period</label>
+                <select
+                  value={form.depreciationPeriod}
+                  onChange={(e) => updateForm('depreciationPeriod', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="yearly">Yearly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Depreciation Rate (%)</label>
+                <input
+                  type="number"
+                  value={form.depreciationRate}
+                  onChange={(e) => updateForm('depreciationRate', e.target.value)}
+                  placeholder="10"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Current Value (INR)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.purchasePrice && form.purchaseDate ? (() => {
+                      const pp = parseFloat(form.purchasePrice);
+                      const rate = parseFloat(form.depreciationRate || 10) / 100;
+                      const period = form.depreciationPeriod || 'yearly';
+                      const start = new Date(form.purchaseDate);
+                      const now = new Date();
+                      const diffMs = now - start;
+                      if (diffMs <= 0) return formatINR.format(pp);
+                      let periods = 0;
+                      if (period === 'yearly') periods = diffMs / (365.25 * 24 * 60 * 60 * 1000);
+                      else if (period === 'quarterly') periods = diffMs / (91.3125 * 24 * 60 * 60 * 1000);
+                      else if (period === 'monthly') periods = diffMs / (30.4375 * 24 * 60 * 60 * 1000);
+                      const val = Math.max(0, Math.round(pp * Math.pow(1 - rate, Math.floor(periods))));
+                      return formatINR.format(val);
+                    })() : '-'}
+                    readOnly
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Auto</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 7: Warranty Expiry + Company */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Warranty Expiry</label>
@@ -1519,13 +1652,73 @@ export default function AssetManager() {
               </div>
             </div>
 
+            {/* Row 8: Asset Owner/Assignee (only when status = assigned) */}
+            {form.status === 'assigned' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Asset Owner / Assignee</label>
+                  <select
+                    value={form.assetOwner}
+                    onChange={(e) => updateForm('assetOwner', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Select Owner --</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={`employee:${u.id}`}>
+                        {u.name} {u.employeeId ? `(${u.employeeId})` : ''} — {u.department || 'No Dept'}
+                      </option>
+                    ))}
+                    <option value="other">Other (External Person)</option>
+                  </select>
+                </div>
+                {form.assetOwner === 'other' && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Other Person Name</label>
+                    <input
+                      type="text"
+                      value={form.assetOwnerOther}
+                      onChange={(e) => updateForm('assetOwnerOther', e.target.value)}
+                      placeholder="Enter person name"
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Row 9: Asset Old User */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Asset Old User</label>
+                <input
+                  type="text"
+                  value={form.assetOldUser}
+                  onChange={(e) => updateForm('assetOldUser', e.target.value)}
+                  placeholder="Previous user of this asset"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => updateForm('description', e.target.value)}
+                rows={2}
+                placeholder="Detailed description of the asset..."
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => updateForm('notes', e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder="Optional notes about this asset..."
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
@@ -1586,7 +1779,7 @@ export default function AssetManager() {
                 <div className="text-xs text-slate-500">
                   {ASSET_TYPE_LABELS[assignTarget.type] || assignTarget.type}
                   {assignTarget.serialNumber ? ` | ${assignTarget.serialNumber}` : ''}
-                  {assignTarget.assetTag ? ` | ${assignTarget.assetTag}` : ''}
+                  {(assignTarget.assetNumber || assignTarget.assetTag) ? ` | ${assignTarget.assetNumber || assignTarget.assetTag}` : ''}
                 </div>
               </div>
             </div>
@@ -1676,7 +1869,7 @@ export default function AssetManager() {
                 <div className="text-sm font-medium text-slate-800">{historyAsset.name}</div>
                 <div className="text-xs text-slate-500">
                   {ASSET_TYPE_LABELS[historyAsset.type] || historyAsset.type}
-                  {historyAsset.assetTag ? ` | ${historyAsset.assetTag}` : ''}
+                  {(historyAsset.assetNumber || historyAsset.assetTag) ? ` | ${historyAsset.assetNumber || historyAsset.assetTag}` : ''}
                   {historyAsset.serialNumber ? ` | SN: ${historyAsset.serialNumber}` : ''}
                 </div>
               </div>

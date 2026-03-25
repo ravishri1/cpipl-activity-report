@@ -982,11 +982,14 @@ model Asset {
   name           String                                  // "Dell Laptop", "iPhone 15"
   type           String                                  // laptop, phone, simcard, mouse, charger, monitor, keyboard, headset, id_card, access_card, scanner, ac_remote, other
   serialNumber   String?
-  assetTag       String?   @unique                       // "AST-001" office tracking tag
+  assetNumber    String?   @unique                       // Asset Number (was assetTag — "AST-001" office tracking number)
+  assetTag       String?   @unique                       // Legacy — kept for backward compatibility
   category       String    @default("personal")          // personal (assigned to person), office (shared/office use), infrastructure
   purchaseDate   String?                                 // "YYYY-MM-DD"
   purchasePrice  Float?                                  // original purchase cost (manually entered)
-  value          Float?
+  value          Float?                                  // current value (auto-calculated from depreciation)
+  depreciationRate   Float?    @default(10)              // depreciation percentage (default 10%)
+  depreciationPeriod String?   @default("yearly")        // yearly, monthly, quarterly
   warrantyExpiry String?                                 // "YYYY-MM-DD" — warranty end date
   warrantyVendor String?                                 // vendor/brand for warranty claims
   condition      String    @default("good")              // new, good, fair, damaged, non_working
@@ -994,7 +997,20 @@ model Asset {
   assignedTo     Int?
   assignedDate   String?                                 // "YYYY-MM-DD"
   returnDate     String?                                 // "YYYY-MM-DD"
-  
+
+  // New fields
+  brand          String?                                 // Brand name (Apple, Dell, HP, etc.)
+  assetGroup     String?                                 // Grouping (IT Equipment, Furniture, Vehicle, etc.)
+  description    String?                                 // Detailed description
+  modelNo        String?                                 // Model number
+  invoiceNo      String?                                 // Invoice number
+  invoiceCopyUrl String?                                 // Google Drive URL for invoice PDF
+  invoiceCopyDriveId String?                             // Google Drive file ID for invoice
+  assetImages    String?                                 // JSON array of up to 6 image URLs from Google Drive
+  assetImageDriveIds String?                             // JSON array of Drive file IDs for images
+  assetOwner     String?                                 // "employee:userId" or "other:Name" — who owns/uses the asset
+  assetOldUser   String?                                 // Previous user (free text)
+
   notes          String?
   companyId      Int?
   companyRegistrationId Int?                              // Links to CompanyRegistration (GSTIN-level ownership)
