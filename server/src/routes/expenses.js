@@ -19,17 +19,35 @@ async function logExpenseAction(prisma, { expenseId, action, actionBy, notes }) 
   });
 }
 
+// Helper: validate fund request linking
+async function validateFundLink(prisma, fundRequestId, targetUserId, amount) {
+  if (!fundRequestId) return null;
+  const fr = await prisma.fundRequest.findUnique({ where: { id: parseInt(fundRequestId) } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.requestedBy !== targetUserId) throw forbidden('Fund request belongs to different user');
+  if (fr.status !== 'acknowledged') throw badRequest('Fund must be acknowledged before linking expenses');
+  const agg = await prisma.expenseClaim.aggregate({
+    where: { fundRequestId: fr.id, status: { not: 'rejected' } }, _sum: { amount: true },
+  });
+  const remaining = (fr.disbursedAmount || 0) - (agg._sum.amount || 0);
+  if (parseFloat(amount) > remaining) throw badRequest(`Expense ₹${amount} exceeds remaining balance ₹${remaining.toFixed(2)}`);
+  return fr.id;
+}
+
 // POST / — Submit new expense claim
 router.post('/', asyncHandler(async (req, res) => {
   requireFields(req.body, 'title', 'category', 'amount', 'date');
-  const { title, category, amount, description, receiptUrl, date } = req.body;
+  const { title, category, amount, description, receiptUrl, date, fundRequestId } = req.body;
   requireEnum(category, VALID_CATEGORIES, 'category');
   if (amount <= 0) throw badRequest('Amount must be positive');
+
+  const frId = await validateFundLink(req.prisma, fundRequestId, req.user.id, amount);
 
   const expense = await req.prisma.expenseClaim.create({
     data: {
       userId: req.user.id, title, category, amount: parseFloat(amount),
       description: description || null, receiptUrl: receiptUrl || null, date, status: 'pending',
+      fundRequestId: frId || null,
     },
   });
   await logExpenseAction(req.prisma, {
@@ -55,7 +73,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // POST /admin-create — Admin submits expense on behalf of an employee
 router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'title', 'category', 'amount', 'date');
-  const { userId, title, category, amount, description, receiptUrl, date } = req.body;
+  const { userId, title, category, amount, description, receiptUrl, date, fundRequestId } = req.body;
   requireEnum(category, VALID_CATEGORIES, 'category');
   if (amount <= 0) throw badRequest('Amount must be positive');
 
@@ -63,10 +81,13 @@ router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
   if (!targetUser) throw notFound('Employee');
   if (!targetUser.isActive) throw badRequest('Cannot create expense for inactive employee');
 
+  const frId = await validateFundLink(req.prisma, fundRequestId, targetUser.id, amount);
+
   const expense = await req.prisma.expenseClaim.create({
     data: {
       userId: targetUser.id, title, category, amount: parseFloat(amount),
       description: description || null, receiptUrl: receiptUrl || null, date, status: 'pending',
+      fundRequestId: frId || null,
     },
     include: { user: { select: { id: true, name: true, email: true, employeeId: true, department: true } } },
   });
@@ -271,6 +292,326 @@ router.get('/reports/summary', requireAdmin, asyncHandler(async (req, res) => {
   res.json({
     month, totalClaims: expenses.length, totalAmount: Math.round(totalAmount),
     byCategory, byStatus, byDepartment,
+  });
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUND REQUESTS / ADVANCES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const FUND_STATUSES = ['pending', 'approved', 'rejected', 'disbursed', 'acknowledged', 'settled', 'cancelled'];
+const PAYMENT_MODES = ['bank_transfer', 'cash'];
+
+async function logFundAction(prisma, { fundRequestId, action, actionBy, notes }) {
+  await prisma.fundRequestLog.create({ data: { fundRequestId, action, actionBy, notes: notes || null } });
+}
+
+// Compute remaining balance for a fund request
+async function getFundBalance(prisma, fundRequestId, disbursedAmount) {
+  const agg = await prisma.expenseClaim.aggregate({
+    where: { fundRequestId, status: { not: 'rejected' } }, _sum: { amount: true },
+  });
+  const spent = agg._sum.amount || 0;
+  return { spent: Math.round(spent * 100) / 100, remaining: Math.round(((disbursedAmount || 0) - spent) * 100) / 100 };
+}
+
+// POST /fund-requests — Submit fund request
+router.post('/fund-requests', asyncHandler(async (req, res) => {
+  requireFields(req.body, 'title', 'amount');
+  const { title, purpose, amount, date } = req.body;
+  if (parseFloat(amount) <= 0) throw badRequest('Amount must be positive');
+
+  const fr = await req.prisma.fundRequest.create({
+    data: {
+      requestedBy: req.user.id, title, purpose: purpose || null,
+      amount: parseFloat(amount), date: date || new Date().toISOString().slice(0, 10), status: 'pending',
+    },
+  });
+  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `Requested ₹${amount} for ${title}` });
+
+  // Notify admins
+  const admins = await req.prisma.user.findMany({ where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } }, select: { id: true } });
+  notifyUsers(req.prisma, { userIds: admins.map(a => a.id), type: 'fund_request', title: 'New Fund Request', message: `${req.user.name} requested ₹${amount} for ${title}`, link: '/expenses' });
+
+  res.status(201).json(fr);
+}));
+
+// POST /fund-requests/admin-create — Admin creates on behalf
+router.post('/fund-requests/admin-create', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'title', 'amount');
+  const { userId, title, purpose, amount, date } = req.body;
+  const targetUser = await req.prisma.user.findUnique({ where: { id: parseInt(userId) }, select: { id: true, name: true, isActive: true } });
+  if (!targetUser) throw notFound('Employee');
+
+  const fr = await req.prisma.fundRequest.create({
+    data: {
+      requestedBy: targetUser.id, title, purpose: purpose || null,
+      amount: parseFloat(amount), date: date || new Date().toISOString().slice(0, 10), status: 'pending',
+    },
+  });
+  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `Created by admin ${req.user.name} for ${targetUser.name}: ₹${amount}` });
+  res.status(201).json(fr);
+}));
+
+// GET /fund-requests/my — Own fund requests with balances
+router.get('/fund-requests/my', asyncHandler(async (req, res) => {
+  const requests = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: req.user.id },
+    include: { expenses: { where: { status: { not: 'rejected' } }, select: { id: true, title: true, amount: true, date: true, status: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  const result = requests.map(fr => {
+    const spent = fr.expenses.reduce((s, e) => s + e.amount, 0);
+    return { ...fr, spent: Math.round(spent * 100) / 100, remaining: Math.round(((fr.disbursedAmount || 0) - spent) * 100) / 100 };
+  });
+  res.json(result);
+}));
+
+// GET /fund-requests/pending — Pending for review (admin)
+router.get('/fund-requests/pending', requireAdmin, asyncHandler(async (req, res) => {
+  const requests = await req.prisma.fundRequest.findMany({
+    where: { status: 'pending' },
+    include: { requester: { select: { id: true, name: true, email: true, employeeId: true, department: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(requests);
+}));
+
+// GET /fund-requests/all — All with filters (admin)
+router.get('/fund-requests/all', requireAdmin, asyncHandler(async (req, res) => {
+  const { status, month, userId } = req.query;
+  const where = {};
+  if (status) where.status = status;
+  if (month) where.date = { startsWith: month };
+  if (userId) where.requestedBy = parseInt(userId);
+
+  const requests = await req.prisma.fundRequest.findMany({
+    where,
+    include: {
+      requester: { select: { id: true, name: true, email: true, employeeId: true, department: true } },
+      reviewer: { select: { id: true, name: true } },
+      disburser: { select: { id: true, name: true } },
+      expenses: { where: { status: { not: 'rejected' } }, select: { id: true, amount: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  const result = requests.map(fr => {
+    const spent = fr.expenses.reduce((s, e) => s + e.amount, 0);
+    return { ...fr, spent: Math.round(spent * 100) / 100, remaining: Math.round(((fr.disbursedAmount || 0) - spent) * 100) / 100 };
+  });
+  res.json(result);
+}));
+
+// GET /fund-requests/:id — Detail with linked expenses and logs
+router.get('/fund-requests/:id', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const fr = await req.prisma.fundRequest.findUnique({
+    where: { id },
+    include: {
+      requester: { select: { id: true, name: true, email: true, employeeId: true } },
+      reviewer: { select: { id: true, name: true } },
+      disburser: { select: { id: true, name: true } },
+      expenses: { orderBy: { date: 'desc' }, select: { id: true, title: true, category: true, amount: true, date: true, status: true } },
+      logs: { orderBy: { createdAt: 'desc' } },
+    },
+  });
+  if (!fr) throw notFound('Fund Request');
+  if (!isAdminRole(req.user) && fr.requestedBy !== req.user.id) throw forbidden();
+
+  const spent = fr.expenses.reduce((s, e) => e.status !== 'rejected' ? s + e.amount : s, 0);
+  res.json({ ...fr, spent: Math.round(spent * 100) / 100, remaining: Math.round(((fr.disbursedAmount || 0) - spent) * 100) / 100 });
+}));
+
+// GET /fund-requests/:id/history — Audit trail
+router.get('/fund-requests/:id/history', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id }, select: { requestedBy: true } });
+  if (!fr) throw notFound('Fund Request');
+  if (!isAdminRole(req.user) && fr.requestedBy !== req.user.id) throw forbidden();
+
+  const logs = await req.prisma.fundRequestLog.findMany({ where: { fundRequestId: id }, orderBy: { createdAt: 'desc' } });
+  // Resolve action by names
+  const userIds = [...new Set(logs.map(l => l.actionBy))];
+  const users = await req.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } });
+  const nameMap = Object.fromEntries(users.map(u => [u.id, u.name]));
+  res.json(logs.map(l => ({ ...l, actionByName: nameMap[l.actionBy] || 'Unknown' })));
+}));
+
+// PUT /fund-requests/:id/review — Approve or reject
+router.put('/fund-requests/:id/review', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  requireFields(req.body, 'status');
+  const { status, reviewNote } = req.body;
+  requireEnum(status, ['approved', 'rejected'], 'status');
+
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.status !== 'pending') throw badRequest('Only pending requests can be reviewed');
+
+  const updated = await req.prisma.fundRequest.update({
+    where: { id },
+    data: { status, reviewedBy: req.user.id, reviewedAt: new Date(), reviewNote: reviewNote || null },
+  });
+  await logFundAction(req.prisma, { fundRequestId: id, action: status, actionBy: req.user.id, notes: reviewNote || `${status} by ${req.user.name}` });
+
+  // Notify requester
+  notifyUsers(req.prisma, { userIds: [fr.requestedBy], type: 'fund_request', title: `Fund Request ${status === 'approved' ? 'Approved' : 'Rejected'}`, message: `Your fund request "${fr.title}" has been ${status}${reviewNote ? `: ${reviewNote}` : ''}`, link: '/expenses' });
+
+  res.json(updated);
+}));
+
+// PUT /fund-requests/:id/disburse — Disburse funds
+router.put('/fund-requests/:id/disburse', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  requireFields(req.body, 'paymentMode', 'disbursedAmount');
+  const { paymentMode, disbursedAmount, paymentRef, paymentReceiptUrl } = req.body;
+  requireEnum(paymentMode, PAYMENT_MODES, 'paymentMode');
+  if (parseFloat(disbursedAmount) <= 0) throw badRequest('Amount must be positive');
+  if (paymentMode === 'bank_transfer' && !paymentRef) throw badRequest('Payment reference required for bank transfers');
+
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.status !== 'approved') throw badRequest('Only approved requests can be disbursed');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const updated = await req.prisma.fundRequest.update({
+    where: { id },
+    data: {
+      status: 'disbursed', paymentMode, disbursedAmount: parseFloat(disbursedAmount),
+      disbursedOn: today, disbursedBy: req.user.id,
+      paymentRef: paymentRef || null, paymentReceiptUrl: paymentReceiptUrl || null,
+    },
+  });
+  await logFundAction(req.prisma, { fundRequestId: id, action: 'disbursed', actionBy: req.user.id, notes: `₹${disbursedAmount} via ${paymentMode}${paymentRef ? ` (Ref: ${paymentRef})` : ''}` });
+
+  notifyUsers(req.prisma, { userIds: [fr.requestedBy], type: 'fund_request', title: 'Funds Disbursed', message: `₹${disbursedAmount} has been ${paymentMode === 'bank_transfer' ? 'transferred to your account' : 'handed as cash'}. Please acknowledge receipt.`, link: '/expenses' });
+
+  res.json(updated);
+}));
+
+// PUT /fund-requests/:id/acknowledge — Receiver confirms receipt
+router.put('/fund-requests/:id/acknowledge', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { acknowledgeNote } = req.body;
+
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.requestedBy !== req.user.id && !isAdminRole(req.user)) throw forbidden();
+  if (fr.status !== 'disbursed') throw badRequest('Only disbursed requests can be acknowledged');
+
+  const updated = await req.prisma.fundRequest.update({
+    where: { id },
+    data: { status: 'acknowledged', acknowledgedAt: new Date(), acknowledgeNote: acknowledgeNote || null },
+  });
+  await logFundAction(req.prisma, { fundRequestId: id, action: 'acknowledged', actionBy: req.user.id, notes: acknowledgeNote || 'Funds received' });
+
+  res.json(updated);
+}));
+
+// PUT /fund-requests/:id/settle — Mark settled
+router.put('/fund-requests/:id/settle', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { settledNote } = req.body;
+
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.status !== 'acknowledged') throw badRequest('Only acknowledged requests can be settled');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const updated = await req.prisma.fundRequest.update({
+    where: { id },
+    data: { status: 'settled', settledOn: today, settledNote: settledNote || null },
+  });
+  await logFundAction(req.prisma, { fundRequestId: id, action: 'settled', actionBy: req.user.id, notes: settledNote || 'Settled' });
+
+  res.json(updated);
+}));
+
+// PUT /fund-requests/:id/cancel — Cancel
+router.put('/fund-requests/:id/cancel', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+
+  if (fr.requestedBy === req.user.id && fr.status === 'pending') {
+    // Self cancel if pending
+  } else if (isAdminRole(req.user) && ['pending', 'approved'].includes(fr.status)) {
+    // Admin cancel if not yet disbursed
+  } else {
+    throw badRequest('Cannot cancel — already disbursed or not authorized');
+  }
+
+  const updated = await req.prisma.fundRequest.update({ where: { id }, data: { status: 'cancelled' } });
+  await logFundAction(req.prisma, { fundRequestId: id, action: 'cancelled', actionBy: req.user.id });
+  res.json(updated);
+}));
+
+// GET /fund-requests/ledger — Date-wise ledger per user (admin)
+router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, fromDate, toDate } = req.query;
+  if (!userId) throw badRequest('userId required');
+  const uid = parseInt(userId);
+
+  const dateFilter = {};
+  if (fromDate) dateFilter.gte = fromDate;
+  if (toDate) dateFilter.lte = toDate;
+
+  // Get disbursements (credits)
+  const frWhere = { requestedBy: uid, status: { in: ['acknowledged', 'settled'] } };
+  if (fromDate || toDate) frWhere.disbursedOn = dateFilter;
+  const funds = await req.prisma.fundRequest.findMany({ where: frWhere, orderBy: { disbursedOn: 'asc' } });
+
+  // Get expenses linked to any fund request (debits)
+  const expWhere = { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } };
+  if (fromDate || toDate) expWhere.date = dateFilter;
+  const expenses = await req.prisma.expenseClaim.findMany({ where: expWhere, orderBy: { date: 'asc' } });
+
+  // Build ledger entries
+  const entries = [];
+  funds.forEach(fr => entries.push({ date: fr.disbursedOn, type: 'credit', description: `Fund: ${fr.title}`, amount: fr.disbursedAmount, ref: `FR-${fr.id}`, paymentMode: fr.paymentMode }));
+  expenses.forEach(e => entries.push({ date: e.date, type: 'debit', description: `Expense: ${e.title} (${e.category})`, amount: e.amount, ref: `EXP-${e.id}` }));
+  entries.sort((a, b) => a.date.localeCompare(b.date) || (a.type === 'credit' ? -1 : 1));
+
+  // Running balance
+  let balance = 0;
+  entries.forEach(e => { balance += e.type === 'credit' ? e.amount : -e.amount; e.balance = Math.round(balance * 100) / 100; });
+
+  const totalReceived = funds.reduce((s, f) => s + (f.disbursedAmount || 0), 0);
+  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+
+  res.json({ entries, summary: { totalReceived: Math.round(totalReceived * 100) / 100, totalSpent: Math.round(totalSpent * 100) / 100, outstanding: Math.round((totalReceived - totalSpent) * 100) / 100 } });
+}));
+
+// GET /fund-requests/summary — Aggregate stats (admin)
+router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res) => {
+  const all = await req.prisma.fundRequest.findMany({
+    include: { requester: { select: { id: true, name: true } }, expenses: { where: { status: { not: 'rejected' } }, select: { amount: true } } },
+  });
+
+  const totalRequested = all.reduce((s, f) => s + f.amount, 0);
+  const totalDisbursed = all.filter(f => f.disbursedAmount).reduce((s, f) => s + f.disbursedAmount, 0);
+  const totalSpent = all.reduce((s, f) => s + f.expenses.reduce((es, e) => es + e.amount, 0), 0);
+  const byStatus = {};
+  all.forEach(f => { byStatus[f.status] = (byStatus[f.status] || 0) + 1; });
+
+  // Outstanding per user
+  const activeRequests = all.filter(f => ['acknowledged'].includes(f.status));
+  const byUser = {};
+  activeRequests.forEach(f => {
+    const spent = f.expenses.reduce((s, e) => s + e.amount, 0);
+    const key = f.requester.name;
+    if (!byUser[key]) byUser[key] = { name: key, userId: f.requester.id, disbursed: 0, spent: 0, outstanding: 0, count: 0 };
+    byUser[key].disbursed += f.disbursedAmount || 0;
+    byUser[key].spent += spent;
+    byUser[key].outstanding += (f.disbursedAmount || 0) - spent;
+    byUser[key].count++;
+  });
+
+  res.json({
+    total: all.length, byStatus,
+    totalRequested: Math.round(totalRequested), totalDisbursed: Math.round(totalDisbursed),
+    totalSpent: Math.round(totalSpent), totalOutstanding: Math.round(totalDisbursed - totalSpent),
+    byUser: Object.values(byUser),
   });
 }));
 

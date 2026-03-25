@@ -79,7 +79,12 @@ const EMPTY_FORM = {
   description: '',
 };
 
+// Lazy imports for fund request tabs
+const AdminFundRequests = React.lazy(() => import('./AdminFundRequests'));
+const FundLedger = React.lazy(() => import('./FundLedger'));
+
 export default function ExpenseApproval() {
+  const [mainTab, setMainTab] = useState('claims'); // 'claims' | 'fund-requests' | 'ledger'
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -226,6 +231,26 @@ export default function ExpenseApproval() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Top-level tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-0">
+        {[{ key: 'claims', label: '💳 Expense Claims' }, { key: 'fund-requests', label: '💰 Fund Requests' }, { key: 'ledger', label: '📊 Ledger' }].map(t => (
+          <button key={t.key} onClick={() => setMainTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mainTab === 'fund-requests' ? (
+        <React.Suspense fallback={<div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" /></div>}>
+          <AdminFundRequests />
+        </React.Suspense>
+      ) : mainTab === 'ledger' ? (
+        <React.Suspense fallback={<div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" /></div>}>
+          <FundLedger />
+        </React.Suspense>
+      ) : (
+      <>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -693,6 +718,8 @@ export default function ExpenseApproval() {
             </form>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

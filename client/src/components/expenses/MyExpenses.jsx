@@ -65,7 +65,11 @@ const formatDate = (dateStr) => {
   });
 };
 
+// Lazy import for fund requests tab
+const MyFundRequests = React.lazy(() => import('./MyFundRequests'));
+
 export default function MyExpenses() {
+  const [mainTab, setMainTab] = useState('expenses'); // 'expenses' | 'fund-requests'
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -158,6 +162,22 @@ export default function MyExpenses() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      {/* Top-level tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 pb-0">
+        {[{ key: 'expenses', label: '💳 My Expenses' }, { key: 'fund-requests', label: '💰 Fund Requests' }].map(t => (
+          <button key={t.key} onClick={() => setMainTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${mainTab === t.key ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mainTab === 'fund-requests' ? (
+        <React.Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-violet-500" /></div>}>
+          <MyFundRequests />
+        </React.Suspense>
+      ) : (
+      <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -423,6 +443,8 @@ export default function MyExpenses() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

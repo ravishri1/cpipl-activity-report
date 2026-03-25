@@ -139,6 +139,9 @@ model User {
   salaryRevisionsBy  SalaryRevision[]   @relation("SalaryRevisionsBy")
   expenseClaims      ExpenseClaim[]
   expenseReviews     ExpenseClaim[]     @relation("ExpenseReviews")
+  fundRequests       FundRequest[]      @relation("FundRequests")
+  fundRequestReviews FundRequest[]      @relation("FundRequestReviews")
+  fundDisbursements  FundRequest[]      @relation("FundDisbursements")
   announcements      Announcement[]     @relation("AnnouncementAuthor")
   generatedLetters   GeneratedLetter[]
   lettersGeneratedBy GeneratedLetter[]  @relation("LetterGeneratedBy")
@@ -907,15 +910,71 @@ model ExpenseClaim {
   reviewedAt    DateTime?
   reviewNote    String?
   paidOn        String?                                // "YYYY-MM-DD"
+  fundRequestId Int?                                   // Optional link to fund advance
   createdAt     DateTime  @default(now())
 
   user          User      @relation(fields: [userId], references: [id])
   reviewer      User?     @relation("ExpenseReviews", fields: [reviewedBy], references: [id])
+  fundRequest   FundRequest? @relation("FundExpenses", fields: [fundRequestId], references: [id])
 
   @@index([userId])
   @@index([status])
   @@index([date])
   @@index([category])
+  @@index([fundRequestId])
+}
+
+// ═══════════════════════════════════════════════
+// Fund Requests / Advances
+// ═══════════════════════════════════════════════
+
+model FundRequest {
+  id                Int       @id @default(autoincrement())
+  requestedBy       Int
+  title             String
+  purpose           String?
+  amount            Float                                    // Requested amount
+  date              String                                   // "YYYY-MM-DD" request date
+  status            String    @default("pending")            // pending, approved, rejected, disbursed, acknowledged, settled, cancelled
+  paymentMode       String?                                  // bank_transfer, cash
+  disbursedAmount   Float?                                   // Actual amount disbursed (may differ from requested)
+  disbursedOn       String?                                  // "YYYY-MM-DD"
+  disbursedBy       Int?
+  paymentRef        String?                                  // UTR / transaction reference for bank transfers
+  paymentReceiptUrl String?                                  // Receipt URL for bank transfers
+  acknowledgedAt    DateTime?
+  acknowledgeNote   String?
+  reviewedBy        Int?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  settledOn         String?                                  // "YYYY-MM-DD"
+  settledNote       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  requester         User      @relation("FundRequests", fields: [requestedBy], references: [id])
+  reviewer          User?     @relation("FundRequestReviews", fields: [reviewedBy], references: [id])
+  disburser         User?     @relation("FundDisbursements", fields: [disbursedBy], references: [id])
+  expenses          ExpenseClaim[] @relation("FundExpenses")
+  logs              FundRequestLog[]
+
+  @@index([requestedBy])
+  @@index([status])
+  @@index([date])
+}
+
+model FundRequestLog {
+  id            Int       @id @default(autoincrement())
+  fundRequestId Int
+  action        String                                       // submitted, approved, rejected, disbursed, acknowledged, expense_linked, settled, cancelled
+  actionBy      Int
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  fundRequest   FundRequest @relation(fields: [fundRequestId], references: [id])
+
+  @@index([fundRequestId])
+  @@index([actionBy])
 }
 
 // ═══════════════════════════════════════════════
