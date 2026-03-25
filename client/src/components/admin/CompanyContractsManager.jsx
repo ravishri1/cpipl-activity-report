@@ -25,9 +25,9 @@ const STATUSES = ['active', 'expired', 'pending', 'cancelled', 'renewed'];
 
 export default function CompanyContractsManager() {
   const [tab, setTab] = useState('contracts');
-  const { data: contracts, loading, error: fetchErr, refetch } = useFetch('/api/company-contracts', []);
-  const { data: summary, error: summaryErr, refetch: refetchSummary } = useFetch('/api/company-contracts/summary', {});
-  const { data: templates, loading: templatesLoading, error: templatesErr, refetch: refetchTemplates } = useFetch('/api/company-contracts/templates', []);
+  const { data: contracts, loading, error: fetchErr, refetch } = useFetch('/company-contracts', []);
+  const { data: summary, error: summaryErr, refetch: refetchSummary } = useFetch('/company-contracts/summary', {});
+  const { data: templates, loading: templatesLoading, error: templatesErr, refetch: refetchTemplates } = useFetch('/company-contracts/templates', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
 
   const [showContractForm, setShowContractForm] = useState(false);
@@ -126,24 +126,24 @@ export default function CompanyContractsManager() {
                   onEdit={() => { setEditingContract(contract); clearMessages(); setShowContractForm(true); }}
                   onDelete={async () => {
                     if (!window.confirm('Delete this contract?')) return;
-                    try { await execute(() => api.delete(`/api/company-contracts/${contract.id}`), 'Contract deleted'); reload(); } catch {}
+                    try { await execute(() => api.delete(`/company-contracts/${contract.id}`), 'Contract deleted'); reload(); } catch {}
                   }}
                   onSendForSigning={() => { setSelectedContract(contract); clearMessages(); setShowSigningModal(true); }}
                   onResend={async () => {
-                    try { await execute(() => api.post(`/api/company-contracts/${contract.id}/resend`), 'Signing link resent'); reload(); } catch {}
+                    try { await execute(() => api.post(`/company-contracts/${contract.id}/resend`), 'Signing link resent'); reload(); } catch {}
                   }}
                   onCancelSigning={async () => {
                     if (!window.confirm('Cancel signing for this contract?')) return;
-                    try { await execute(() => api.put(`/api/company-contracts/${contract.id}/cancel-signing`, {}), 'Signing cancelled'); reload(); } catch {}
+                    try { await execute(() => api.put(`/company-contracts/${contract.id}/cancel-signing`, {}), 'Signing cancelled'); reload(); } catch {}
                   }}
                   onCounterSign={() => { setSelectedContract(contract); clearMessages(); setShowCounterSignModal(true); }}
                   onUploadContract={async (file) => {
                     const fd = new FormData(); fd.append('file', file);
-                    try { await execute(() => api.post(`/api/company-contracts/${contract.id}/upload-contract`, fd), 'Contract PDF uploaded'); reload(); } catch {}
+                    try { await execute(() => api.post(`/company-contracts/${contract.id}/upload-contract`, fd), 'Contract PDF uploaded'); reload(); } catch {}
                   }}
                   onUploadSigned={async (file) => {
                     const fd = new FormData(); fd.append('file', file);
-                    try { await execute(() => api.post(`/api/company-contracts/${contract.id}/upload-signed`, fd), 'Signed copy uploaded'); reload(); } catch {}
+                    try { await execute(() => api.post(`/company-contracts/${contract.id}/upload-signed`, fd), 'Signed copy uploaded'); reload(); } catch {}
                   }}
                   saving={saving}
                 />
@@ -181,7 +181,7 @@ export default function CompanyContractsManager() {
                       className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="w-4 h-4" /></button>
                     <button onClick={async () => {
                       if (!window.confirm('Archive this template?')) return;
-                      try { await execute(() => api.delete(`/api/company-contracts/templates/${t.id}`), 'Template archived'); refetchTemplates(); } catch {}
+                      try { await execute(() => api.delete(`/company-contracts/templates/${t.id}`), 'Template archived'); refetchTemplates(); } catch {}
                     }} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
@@ -195,13 +195,13 @@ export default function CompanyContractsManager() {
         <ContractFormModal contract={editingContract} onClose={() => setShowContractForm(false)}
           onSave={async (data) => {
             try {
-              if (editingContract) await execute(() => api.put(`/api/company-contracts/${editingContract.id}`, data), 'Contract updated');
-              else await execute(() => api.post('/api/company-contracts', data), 'Contract created');
+              if (editingContract) await execute(() => api.put(`/company-contracts/${editingContract.id}`, data), 'Contract updated');
+              else await execute(() => api.post('/company-contracts', data), 'Contract created');
               reload(); setShowContractForm(false);
             } catch {}
           }} saving={saving} templates={templates}
           onGenerateFromTemplate={async (contractId, templateId) => {
-            try { await execute(() => api.post(`/api/company-contracts/${contractId}/generate-from-template`, { templateId }), 'Template applied'); reload(); } catch {}
+            try { await execute(() => api.post(`/company-contracts/${contractId}/generate-from-template`, { templateId }), 'Template applied'); reload(); } catch {}
           }}
         />
       )}
@@ -210,8 +210,8 @@ export default function CompanyContractsManager() {
         <TemplateFormModal template={editingTemplate} onClose={() => setShowTemplateForm(false)}
           onSave={async (data) => {
             try {
-              if (editingTemplate) await execute(() => api.put(`/api/company-contracts/templates/${editingTemplate.id}`, data), 'Template updated');
-              else await execute(() => api.post('/api/company-contracts/templates', data), 'Template created');
+              if (editingTemplate) await execute(() => api.put(`/company-contracts/templates/${editingTemplate.id}`, data), 'Template updated');
+              else await execute(() => api.post('/company-contracts/templates', data), 'Template created');
               refetchTemplates(); setShowTemplateForm(false);
             } catch {}
           }} saving={saving}
@@ -221,7 +221,7 @@ export default function CompanyContractsManager() {
       {showSigningModal && selectedContract && (
         <SendForSigningModal contract={selectedContract} onClose={() => setShowSigningModal(false)}
           onSend={async (data) => {
-            try { await execute(() => api.post(`/api/company-contracts/${selectedContract.id}/send-for-signing`, data), 'Contract sent for signing'); reload(); setShowSigningModal(false); } catch {}
+            try { await execute(() => api.post(`/company-contracts/${selectedContract.id}/send-for-signing`, data), 'Contract sent for signing'); reload(); setShowSigningModal(false); } catch {}
           }} saving={saving}
         />
       )}
@@ -230,7 +230,7 @@ export default function CompanyContractsManager() {
         <CounterSignModal contract={selectedContract} onClose={() => setShowCounterSignModal(false)}
           onSign={async (file) => {
             const fd = new FormData(); if (file) fd.append('file', file);
-            try { await execute(() => api.post(`/api/company-contracts/${selectedContract.id}/counter-sign`, fd), 'Contract counter-signed!'); reload(); setShowCounterSignModal(false); } catch {}
+            try { await execute(() => api.post(`/company-contracts/${selectedContract.id}/counter-sign`, fd), 'Contract counter-signed!'); reload(); setShowCounterSignModal(false); } catch {}
           }} saving={saving}
         />
       )}
