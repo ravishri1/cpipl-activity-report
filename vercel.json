@@ -4,15 +4,23 @@
   "installCommand": "cd server && npm install && npx prisma generate && npx prisma db push --skip-generate --accept-data-loss",
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/assets/:path*",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/((?!assets/).*)",
+      "source": "/js/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/((?!assets/|js/).*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, s-maxage=0" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" },
         { "key": "CDN-Cache-Control", "value": "no-store" },
         { "key": "Vercel-CDN-Cache-Control", "value": "no-store" },
         { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet, noimageindex" },
