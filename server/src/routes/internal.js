@@ -39,4 +39,37 @@ router.get('/staff/active', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /internal/companies/active — CPDesk company master data
+router.get('/companies/active', asyncHandler(async (req, res) => {
+  if (req.headers['x-internal-key'] !== INTERNAL_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const companies = await req.prisma.company.findMany({
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      shortName: true,
+      gst: true,
+      state: true,
+      city: true,
+      address: true,
+    },
+  });
+
+  res.json({
+    companies: companies.map(c => ({
+      id: c.id,
+      name: c.name,
+      short_name: c.shortName,
+      gst: c.gst,
+      state: c.state,
+      city: c.city,
+      address: c.address,
+    })),
+  });
+}));
+
 module.exports = router;
