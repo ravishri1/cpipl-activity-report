@@ -409,6 +409,7 @@ export default function RenewalManager() {
   const [filterCat, setFilterCat]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterLight, setFilterLight]   = useState('');
+  const [sortBy, setSortBy]             = useState('');
   const [search, setSearch]             = useState('');
 
   // ── Renewal modal state ────────────────────────────────────────────────────
@@ -442,6 +443,7 @@ export default function RenewalManager() {
     if (filterCat)    p.set('categoryId', filterCat);
     if (filterStatus) p.set('status', filterStatus);
     if (filterLight)  p.set('trafficLight', filterLight);
+    if (sortBy)       p.set('sort', sortBy);
     if (search)       p.set('search', search);
     return `/renewals?${p.toString()}`;
   })();
@@ -635,6 +637,21 @@ export default function RenewalManager() {
               <option value="grey">⚪ Expired</option>
             </select>
 
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Sort: Due Soon</option>
+              <option value="newest_first">⬇️ Newest Added</option>
+              <option value="oldest_first">⬆️ Oldest Added</option>
+              <option value="due_later">📅 Due Later First</option>
+              <option value="name_asc">🔤 Name A→Z</option>
+              <option value="name_desc">🔤 Name Z→A</option>
+              <option value="amount_desc">💰 Amount High→Low</option>
+              <option value="amount_asc">💰 Amount Low→High</option>
+            </select>
+
             <div className="flex items-center gap-2 flex-1 min-w-48">
               <Search className="w-4 h-4 text-slate-400" />
               <input
@@ -645,9 +662,9 @@ export default function RenewalManager() {
               />
             </div>
 
-            {(filterCat || filterStatus || filterLight || search) && (
+            {(filterCat || filterStatus || filterLight || sortBy || search) && (
               <button
-                onClick={() => { setFilterCat(''); setFilterStatus(''); setFilterLight(''); setSearch(''); }}
+                onClick={() => { setFilterCat(''); setFilterStatus(''); setFilterLight(''); setSortBy(''); setSearch(''); }}
                 className="text-xs text-slate-500 hover:text-slate-700 underline"
               >
                 Clear filters

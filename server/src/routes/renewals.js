@@ -170,13 +170,26 @@ router.get('/', asyncHandler(async (req, res) => {
     ];
   }
 
+  // Sort: newest_first, oldest_first, name_asc, name_desc, amount_desc, amount_asc
+  const sortMap = {
+    newest_first: { createdAt: 'desc' },
+    oldest_first: { createdAt: 'asc' },
+    name_asc:     { itemName: 'asc' },
+    name_desc:    { itemName: 'desc' },
+    amount_desc:  { amount: 'desc' },
+    amount_asc:   { amount: 'asc' },
+    due_soon:     { renewalDate: 'asc' },
+    due_later:    { renewalDate: 'desc' },
+  };
+  const orderBy = sortMap[req.query.sort] || { renewalDate: 'asc' };
+
   const renewals = await req.prisma.renewal.findMany({
     where,
     include: {
       category:       { select: { id: true, name: true, icon: true } },
       paymentAccount: { select: { id: true, accountCode: true, name: true, type: true } },
     },
-    orderBy: { renewalDate: 'asc' },
+    orderBy,
   });
 
   let enriched = renewals.map(enrichRenewal);
