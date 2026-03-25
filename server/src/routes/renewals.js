@@ -273,20 +273,36 @@ router.get('/:id(\\d+)', asyncHandler(async (req, res) => {
 // POST /api/renewals
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'itemName');
-  const { history, category, paymentAccount, daysLeft, trafficLight, id, createdAt, updatedAt,
-    referenceNo, documentUrl, ...data } = req.body;
+  const b = req.body;
+
+  // Whitelist only valid Renewal schema fields
+  const data = {
+    itemName:        b.itemName,
+    vendorName:      b.vendorName || null,
+    assignedTo:      b.assignedTo || null,
+    loginUrl:        b.loginUrl || null,
+    loginUsername:    b.loginUsername || null,
+    loginPassword:   b.loginPassword || null,
+    accountNumber:   b.accountNumber || null,
+    startDate:       b.startDate || null,
+    renewalDate:     b.renewalDate || null,
+    billingCycle:    b.billingCycle || 'yearly',
+    currency:        b.currency || 'INR',
+    paymentMedium:   b.paymentMedium || null,
+    alertDaysBefore: b.alertDaysBefore !== undefined ? (parseInt(b.alertDaysBefore) || 15) : 15,
+    alertRecipients: b.alertRecipients || null,
+    notes:           b.notes || null,
+    status:          b.status || 'active',
+  };
 
   // Map frontend field names to Prisma schema field names
-  if (referenceNo) data.referenceNumber = referenceNo;
-  if (documentUrl) data.documentPath = documentUrl;
+  if (b.referenceNo) data.referenceNumber = b.referenceNo;
+  if (b.documentUrl) data.documentPath = b.documentUrl;
 
-  // Clean empty strings for Int? fields (Prisma rejects '' for Int)
-  if (!data.paymentAccountId) delete data.paymentAccountId;
-  if (!data.categoryId) delete data.categoryId;
-  // Convert numeric strings
-  if (data.amount === '') delete data.amount;
-  else if (data.amount) data.amount = parseFloat(data.amount);
-  if (data.alertDaysBefore !== undefined) data.alertDaysBefore = parseInt(data.alertDaysBefore) || 15;
+  // Handle optional Int/Float fields (empty string → skip)
+  if (b.categoryId && b.categoryId !== '') data.categoryId = parseInt(b.categoryId);
+  if (b.paymentAccountId && b.paymentAccountId !== '') data.paymentAccountId = parseInt(b.paymentAccountId);
+  if (b.amount && b.amount !== '') data.amount = parseFloat(b.amount);
 
   const renewal = await req.prisma.renewal.create({
     data,
@@ -312,19 +328,35 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/renewals/:id
 router.put('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
-  const { history, category, paymentAccount, daysLeft, trafficLight, id: _id, createdAt, updatedAt,
-    referenceNo, documentUrl, ...data } = req.body;
+  const b = req.body;
+
+  // Whitelist only valid Renewal schema fields
+  const data = {};
+  if (b.itemName !== undefined)      data.itemName = b.itemName;
+  if (b.vendorName !== undefined)    data.vendorName = b.vendorName || null;
+  if (b.assignedTo !== undefined)    data.assignedTo = b.assignedTo || null;
+  if (b.loginUrl !== undefined)      data.loginUrl = b.loginUrl || null;
+  if (b.loginUsername !== undefined)  data.loginUsername = b.loginUsername || null;
+  if (b.loginPassword !== undefined) data.loginPassword = b.loginPassword || null;
+  if (b.accountNumber !== undefined) data.accountNumber = b.accountNumber || null;
+  if (b.startDate !== undefined)     data.startDate = b.startDate || null;
+  if (b.renewalDate !== undefined)   data.renewalDate = b.renewalDate || null;
+  if (b.billingCycle !== undefined)  data.billingCycle = b.billingCycle;
+  if (b.currency !== undefined)      data.currency = b.currency;
+  if (b.paymentMedium !== undefined) data.paymentMedium = b.paymentMedium || null;
+  if (b.alertRecipients !== undefined) data.alertRecipients = b.alertRecipients || null;
+  if (b.notes !== undefined)         data.notes = b.notes || null;
+  if (b.status !== undefined)        data.status = b.status;
 
   // Map frontend field names to Prisma schema field names
-  if (referenceNo) data.referenceNumber = referenceNo;
-  if (documentUrl) data.documentPath = documentUrl;
+  if (b.referenceNo !== undefined) data.referenceNumber = b.referenceNo || null;
+  if (b.documentUrl !== undefined) data.documentPath = b.documentUrl || null;
 
-  // Clean empty strings for Int? fields (Prisma rejects '' for Int)
-  if (data.paymentAccountId === '') data.paymentAccountId = null;
-  if (data.categoryId === '') data.categoryId = null;
-  if (data.amount === '') data.amount = null;
-  else if (data.amount) data.amount = parseFloat(data.amount);
-  if (data.alertDaysBefore !== undefined) data.alertDaysBefore = parseInt(data.alertDaysBefore) || 15;
+  // Handle optional Int/Float fields
+  if (b.categoryId !== undefined) data.categoryId = b.categoryId && b.categoryId !== '' ? parseInt(b.categoryId) : null;
+  if (b.paymentAccountId !== undefined) data.paymentAccountId = b.paymentAccountId && b.paymentAccountId !== '' ? parseInt(b.paymentAccountId) : null;
+  if (b.amount !== undefined) data.amount = b.amount && b.amount !== '' ? parseFloat(b.amount) : null;
+  if (b.alertDaysBefore !== undefined) data.alertDaysBefore = parseInt(b.alertDaysBefore) || 15;
 
   const renewal = await req.prisma.renewal.update({
     where: { id },
