@@ -39,35 +39,64 @@ router.get('/staff/active', asyncHandler(async (req, res) => {
   });
 }));
 
-// GET /internal/companies/active — CPDesk company master data
+// GET /internal/companies/active — CPDesk company master data (LegalEntity + Registrations)
 router.get('/companies/active', asyncHandler(async (req, res) => {
   if (req.headers['x-internal-key'] !== INTERNAL_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const companies = await req.prisma.company.findMany({
-    where: { isActive: true },
-    orderBy: { name: 'asc' },
+  const entities = await req.prisma.legalEntity.findMany({
+    orderBy: { legalName: 'asc' },
     select: {
       id: true,
-      name: true,
+      legalName: true,
       shortName: true,
-      gst: true,
-      state: true,
-      city: true,
-      address: true,
+      pan: true,
+      tan: true,
+      lei: true,
+      registrations: {
+        where: { isActive: true },
+        orderBy: { officeCity: 'asc' },
+        select: {
+          id: true,
+          abbr: true,
+          gstin: true,
+          officeCity: true,
+          state: true,
+          district: true,
+          stateCode: true,
+          placeType: true,
+          address: true,
+          fssai: true,
+          udyam: true,
+          iec: true,
+        },
+      },
     },
   });
 
   res.json({
-    companies: companies.map(c => ({
-      id: c.id,
-      name: c.name,
-      short_name: c.shortName,
-      gst: c.gst,
-      state: c.state,
-      city: c.city,
-      address: c.address,
+    legal_entities: entities.map(e => ({
+      id: e.id,
+      legal_name: e.legalName,
+      short_name: e.shortName,
+      pan: e.pan,
+      tan: e.tan,
+      lei: e.lei,
+      registrations: e.registrations.map(r => ({
+        id: r.id,
+        abbr: r.abbr,
+        gstin: r.gstin,
+        office_city: r.officeCity,
+        state: r.state,
+        district: r.district,
+        state_code: r.stateCode,
+        place_type: r.placeType,
+        address: r.address,
+        fssai: r.fssai,
+        udyam: r.udyam,
+        iec: r.iec,
+      })),
     })),
   });
 }));
