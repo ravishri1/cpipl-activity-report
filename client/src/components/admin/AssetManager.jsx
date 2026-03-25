@@ -769,30 +769,77 @@ export default function AssetManager() {
 
   const openAssignModal = (asset) => {
     setAssignTarget(asset);
-    setAssignForm({ userId: '', assignedDate: new Date().toISOString().split('T')[0] });
+    setAssignForm({ userId: '', assignedDate: new Date().toISOString().split('T')[0], otherName: '' });
     setFormError('');
     setShowAssignModal(true);
+  };
+
+  // Bulk assign state
+  const [selectedAssets, setSelectedAssets] = useState([]);
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [bulkAssignForm, setBulkAssignForm] = useState({ userId: '', assignedDate: new Date().toISOString().split('T')[0], otherName: '' });
+
+  const toggleAssetSelection = (assetId) => {
+    setSelectedAssets(prev => prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId]);
+  };
+
+  const toggleSelectAll = () => {
+    const availableIds = assets.filter(a => a.status !== 'assigned').map(a => a.id);
+    setSelectedAssets(prev => prev.length === availableIds.length ? [] : availableIds);
+  };
+
+  const openBulkAssignModal = () => {
+    if (selectedAssets.length === 0) { addToast('Select at least one asset', 'error'); return; }
+    setBulkAssignForm({ userId: '', assignedDate: new Date().toISOString().split('T')[0], otherName: '' });
+    setFormError('');
+    setShowBulkAssignModal(true);
   };
 
   const handleAssign = async (e) => {
     e.preventDefault();
     setFormError('');
-    if (!assignForm.userId) {
-      setFormError('Please select an employee.');
-      return;
-    }
+    const isOther = assignForm.userId === 'other';
+    if (!isOther && !assignForm.userId) { setFormError('Please select an employee.'); return; }
+    if (isOther && !assignForm.otherName.trim()) { setFormError('Please enter the person name.'); return; }
+
     setFormLoading(true);
     try {
-      await api.put(`/assets/${assignTarget.id}/assign`, {
-        userId: parseInt(assignForm.userId, 10),
-        assignedDate: assignForm.assignedDate || null,
-      });
+      const payload = { assignedDate: assignForm.assignedDate || null };
+      if (isOther) { payload.otherName = assignForm.otherName.trim(); }
+      else { payload.userId = parseInt(assignForm.userId, 10); }
+
+      await api.put(`/assets/${assignTarget.id}/assign`, payload);
       addToast(`Asset assigned successfully`);
       setShowAssignModal(false);
       setAssignTarget(null);
       await refreshAll();
     } catch (err) {
       setFormError(err.response?.data?.error || 'Failed to assign asset.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleBulkAssign = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    const isOther = bulkAssignForm.userId === 'other';
+    if (!isOther && !bulkAssignForm.userId) { setFormError('Please select an employee.'); return; }
+    if (isOther && !bulkAssignForm.otherName.trim()) { setFormError('Please enter the person name.'); return; }
+
+    setFormLoading(true);
+    try {
+      const payload = { assetIds: selectedAssets, assignedDate: bulkAssignForm.assignedDate || null };
+      if (isOther) { payload.otherName = bulkAssignForm.otherName.trim(); }
+      else { payload.userId = parseInt(bulkAssignForm.userId, 10); }
+
+      const res = await api.put('/assets/bulk-assign', payload);
+      addToast(`${res.data.assigned} assets assigned successfully`);
+      setShowBulkAssignModal(false);
+      setSelectedAssets([]);
+      await refreshAll();
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Failed to bulk assign assets.');
     } finally {
       setFormLoading(false);
     }
@@ -891,6 +938,15 @@ export default function AssetManager() {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+          {selectedAssets.length > 0 && (
+            <button
+              onClick={openBulkAssignModal}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              Bulk Assign ({selectedAssets.length})
+            </button>
+          )}
           <button
             onClick={openAddModal}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
@@ -1175,6 +1231,10 @@ export default function AssetManager() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-3 w-8">
+                    <input type="checkbox" className="rounded border-slate-300" onChange={toggleSelectAll}
+                      checked={selectedAssets.length > 0 && selectedAssets.length === assets.filter(a => a.status !== 'assigned').length} />
+                  </th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Asset Number</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Name</th>
                   <th className="text-left px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">Type</th>
@@ -1194,7 +1254,12 @@ export default function AssetManager() {
                 {displayAssets.map((asset) => {
                   const warrantyRemaining = daysUntil(asset.warrantyExpiry);
                   return (
-                    <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={asset.id} className={`hover:bg-slate-50 transition-colors ${selectedAssets.includes(asset.id) ? 'bg-blue-50' : ''}`}>
+                      <td className="px-2 py-3 w-8">
+                        <input type="checkbox" className="rounded border-slate-300"
+                          checked={selectedAssets.includes(asset.id)}
+                          onChange={() => toggleAssetSelection(asset.id)} />
+                      </td>
                       {/* Asset Number */}
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs text-slate-500">
@@ -1787,13 +1852,12 @@ export default function AssetManager() {
             {/* Employee Select */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Assign to Employee <span className="text-red-500">*</span>
+                Assign to <span className="text-red-500">*</span>
               </label>
               <select
                 value={assignForm.userId}
-                onChange={(e) => setAssignForm((prev) => ({ ...prev, userId: e.target.value }))}
+                onChange={(e) => setAssignForm((prev) => ({ ...prev, userId: e.target.value, otherName: '' }))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
               >
                 <option value="">-- Select Employee --</option>
                 {users
@@ -1804,8 +1868,25 @@ export default function AssetManager() {
                       {u.name} ({u.email})
                     </option>
                   ))}
+                <option value="other">Other (External Person)</option>
               </select>
             </div>
+
+            {/* Other Person Name */}
+            {assignForm.userId === 'other' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Person Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={assignForm.otherName}
+                  onChange={(e) => setAssignForm((prev) => ({ ...prev, otherName: e.target.value }))}
+                  placeholder="Enter external person name"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
 
             {/* Assigned Date */}
             <div>
@@ -1844,6 +1925,81 @@ export default function AssetManager() {
                   <ArrowLeftRight className="w-4 h-4" />
                 )}
                 Assign Asset
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ─── Bulk Assign Modal ──────────────────────────────────────────── */}
+      {showBulkAssignModal && (
+        <Modal
+          title={`Bulk Assign (${selectedAssets.length} assets)`}
+          onClose={() => { setShowBulkAssignModal(false); setFormError(''); }}
+        >
+          <form onSubmit={handleBulkAssign} className="space-y-4">
+            {formError && (
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {formError}
+              </div>
+            )}
+            <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">
+              <span className="font-medium">{selectedAssets.length} assets</span> will be assigned.
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Assign to <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={bulkAssignForm.userId}
+                onChange={(e) => setBulkAssignForm(prev => ({ ...prev, userId: e.target.value, otherName: '' }))}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Select Employee --</option>
+                {users
+                  .filter((u) => u.isActive !== false)
+                  .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                  .map((u) => (
+                    <option key={u.id} value={String(u.id)}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                <option value="other">Other (External Person)</option>
+              </select>
+            </div>
+            {bulkAssignForm.userId === 'other' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Person Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={bulkAssignForm.otherName}
+                  onChange={(e) => setBulkAssignForm(prev => ({ ...prev, otherName: e.target.value }))}
+                  placeholder="Enter external person name"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Assigned Date</label>
+              <input
+                type="date"
+                value={bulkAssignForm.assignedDate}
+                onChange={(e) => setBulkAssignForm(prev => ({ ...prev, assignedDate: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => { setShowBulkAssignModal(false); setFormError(''); }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={formLoading}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                {formLoading ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <ArrowLeftRight className="w-4 h-4" />}
+                Assign {selectedAssets.length} Assets
               </button>
             </div>
           </form>

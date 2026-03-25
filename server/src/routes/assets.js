@@ -225,35 +225,81 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   res.status(201).json(asset);
 }));
 
-// â”€â”€â”€ 9. PUT /:id/assign â”€â”€â”€ Assign/transfer asset to employee (admin)
+// â”€â”€â”€ 9. PUT /:id/assign â”€â”€â”€ Assign/transfer asset to employee or other person (admin)
 router.put('/:id/assign', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { userId, assignedDate, notes } = req.body;
-  if (!userId) throw badRequest('userId is required');
+  const { userId, assignedDate, notes, otherName } = req.body;
+
+  // Support both employee assignment and “other” (external person)
+  if (!userId && !otherName) throw badRequest('userId or otherName is required');
 
   const asset = await req.prisma.asset.findUnique({ where: { id } });
   if (!asset) throw notFound('Asset');
 
-  const user = await req.prisma.user.findUnique({ where: { id: parseInt(userId) } });
-  if (!user) throw notFound('User');
+  const updateData = {
+    assignedDate: assignedDate || new Date().toISOString().slice(0, 10),
+    returnDate: null,
+    status: 'assigned',
+  };
 
-  if (asset.assignedTo && asset.assignedTo !== parseInt(userId)) {
-    await req.prisma.assetHandover.create({
-      data: {
-        assetId: id, fromUserId: asset.assignedTo, toUserId: parseInt(userId),
-        handoverType: 'transfer', condition: asset.condition || 'good',
-        notes: notes || `Transferred from user ${asset.assignedTo} to user ${userId}`,
-        handoverDate: new Date().toISOString().slice(0, 10), receivedBy: req.user.id,
-      },
-    });
+  if (otherName) {
+    // External person — no userId, just store in assetOwner
+    updateData.assetOwner = `other:${otherName}`;
+    updateData.assignedTo = null;
+  } else {
+    const user = await req.prisma.user.findUnique({ where: { id: parseInt(userId) } });
+    if (!user) throw notFound('User');
+
+    if (asset.assignedTo && asset.assignedTo !== parseInt(userId)) {
+      await req.prisma.assetHandover.create({
+        data: {
+          assetId: id, fromUserId: asset.assignedTo, toUserId: parseInt(userId),
+          handoverType: 'transfer', condition: asset.condition || 'good',
+          notes: notes || `Transferred from user ${asset.assignedTo} to user ${userId}`,
+          handoverDate: new Date().toISOString().slice(0, 10), receivedBy: req.user.id,
+        },
+      });
+    }
+    updateData.assignedTo = parseInt(userId);
+    updateData.assetOwner = `employee:${userId}`;
   }
 
   const updated = await req.prisma.asset.update({
-    where: { id },
-    data: { assignedTo: parseInt(userId), assignedDate: assignedDate || new Date().toISOString().slice(0, 10), returnDate: null, status: 'assigned' },
+    where: { id }, data: updateData,
     include: { assignee: { select: { id: true, name: true, email: true, employeeId: true, department: true } } },
   });
   res.json(updated);
+}));
+
+// â”€â”€â”€ 9b. PUT /bulk-assign â”€â”€â”€ Bulk assign multiple assets to one employee (admin)
+router.put('/bulk-assign', requireAdmin, asyncHandler(async (req, res) => {
+  const { assetIds, userId, otherName, assignedDate } = req.body;
+  if (!assetIds || !Array.isArray(assetIds) || assetIds.length === 0) throw badRequest('assetIds array is required');
+  if (!userId && !otherName) throw badRequest('userId or otherName is required');
+
+  const date = assignedDate || new Date().toISOString().slice(0, 10);
+  const results = [];
+
+  for (const assetId of assetIds) {
+    const id = parseInt(assetId);
+    const asset = await req.prisma.asset.findUnique({ where: { id } });
+    if (!asset) continue;
+
+    const updateData = { assignedDate: date, returnDate: null, status: 'assigned' };
+
+    if (otherName) {
+      updateData.assetOwner = `other:${otherName}`;
+      updateData.assignedTo = null;
+    } else {
+      updateData.assignedTo = parseInt(userId);
+      updateData.assetOwner = `employee:${userId}`;
+    }
+
+    const updated = await req.prisma.asset.update({ where: { id }, data: updateData });
+    results.push(updated);
+  }
+
+  res.json({ assigned: results.length, assets: results });
 }));
 
 // â”€â”€â”€ 10. PUT /:id/return â”€â”€â”€ Return asset (with handover record) (admin)
@@ -276,7 +322,7 @@ router.put('/:id/return', requireAdmin, asyncHandler(async (req, res) => {
 
   const updated = await req.prisma.asset.update({
     where: { id },
-    data: { returnDate: new Date().toISOString().slice(0, 10), assignedTo: null, status: 'available', condition: condition || asset.condition },
+    data: { returnDate: new Date().toISOString().slice(0, 10), assignedTo: null, status: 'available', condition: condition || asset.condition, assetOwner: null },
   });
 
   if (handoverType === 'exit_return' && asset.assignedTo) {
@@ -313,7 +359,7 @@ router.put('/:id/detach', requireAdmin, asyncHandler(async (req, res) => {
   }
 
   const updated = await req.prisma.asset.update({
-    where: { id }, data: { assignedTo: null, assignedDate: null, returnDate: new Date().toISOString().slice(0, 10), status: 'available' },
+    where: { id }, data: { assignedTo: null, assignedDate: null, returnDate: new Date().toISOString().slice(0, 10), status: 'available', assetOwner: null },
   });
   res.json(updated);
 }));
