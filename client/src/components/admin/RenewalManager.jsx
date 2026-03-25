@@ -715,6 +715,7 @@ export default function RenewalManager() {
           ) : renewals.length === 0 ? (
             <EmptyState icon="🔄" title="No renewals found" subtitle="Add your first renewal or adjust the filters" />
           ) : (
+            <>
             {/* Bulk action bar */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl mb-3">
@@ -876,6 +877,7 @@ export default function RenewalManager() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </>
       )}

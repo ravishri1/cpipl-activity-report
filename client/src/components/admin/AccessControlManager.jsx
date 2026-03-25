@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import api from '../../services/api';
+import api from '../../utils/api';
 import {
   Shield, Search, X, ChevronDown, ChevronRight, Save, Loader2, Users,
   CheckCircle, AlertTriangle, Info, Zap, Eye, EyeOff, ShieldCheck, ShieldAlert,
