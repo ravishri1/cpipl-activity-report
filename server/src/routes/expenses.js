@@ -168,7 +168,8 @@ router.get('/history/:expenseId', asyncHandler(async (req, res) => {
 }));
 
 // GET /:id — Single expense detail (admin, self, or reporting manager)
-router.get('/:id', asyncHandler(async (req, res) => {
+// Skip if id is not numeric (let fund-request routes handle it)
+router.get('/:id(\\d+)', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const expense = await req.prisma.expenseClaim.findUnique({
     where: { id },
