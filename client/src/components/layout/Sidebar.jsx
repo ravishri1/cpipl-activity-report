@@ -205,17 +205,9 @@ export default function Sidebar({ isOpen, onClose }) {
     },
   ];
 
-  // My Workspace → Level-2 groups
-  const myWorkspaceGroups = [
-    {
-      key: 'personal',
-      label: 'Personal',
-      icon: Boxes,
-      items: [
-        { to: '/my-workspace',       label: 'My Assets', icon: Package },
-        { to: '/my-files',           label: 'My Files',  icon: FolderOpen },
-      ],
-    },
+  const myWorkspaceItems = [
+    { to: '/my-workspace',       label: 'My Assets', icon: Package },
+    { to: '/my-files',           label: 'My Files',  icon: FolderOpen },
   ];
 
   const teamItems = [
@@ -416,16 +408,14 @@ export default function Sidebar({ isOpen, onClose }) {
           />
 
           {/* ── My Workspace (nested groups) ───────────────── */}
-          <GroupedSection
+          <FlatSection
             label="My Workspace"
             sectionKey="myWorkspace"
-            groups={myWorkspaceGroups}
-            expanded={expanded}
-            onToggleSection={() => toggle('myWorkspace')}
-            onToggleGroup={(key) => toggle(key)}
+            items={filterItems(myWorkspaceItems)}
+            expanded={expanded.myWorkspace}
+            onToggle={() => toggle('myWorkspace')}
             isActive={isActive}
             onLinkClick={handleLinkClick}
-            filterItems={filterItems}
           />
 
           {/* ── My Team (team lead, flat) ───────────────────── */}
