@@ -732,9 +732,9 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
   res.send(csv);
 }));
 
-// ─── BULK IMPORT/UPDATE: POST /bulk-import ─── Import or update assets from CSV (admin)
+// ─── SMART IMPORT: POST /bulk-import ─── Auto-detect create vs update by Asset Number (admin)
 router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
-  const { rows, mode } = req.body; // mode: 'import' (new) or 'update' (existing)
+  const { rows } = req.body;
   if (!rows || !Array.isArray(rows) || rows.length === 0) throw badRequest('No rows provided');
   if (rows.length > 500) throw badRequest('Maximum 500 rows per import');
 
@@ -742,15 +742,37 @@ router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
   const userNameMap = {};
   users.forEach(u => { userNameMap[u.name.toLowerCase().trim()] = u.id; userNameMap[String(u.id)] = u.id; });
 
-  const results = { created: 0, updated: 0, errors: [] };
+  // Pre-load all existing asset numbers for fast lookup
+  const existingAssets = await req.prisma.asset.findMany({ select: { id: true, assetNumber: true, assetTag: true } });
+  const assetNumMap = {}; // assetNumber → asset.id
+  existingAssets.forEach(a => {
+    if (a.assetNumber) assetNumMap[a.assetNumber.toLowerCase().trim()] = a.id;
+    if (a.assetTag) assetNumMap[a.assetTag.toLowerCase().trim()] = a.id;
+  });
+
+  const results = { created: 0, updated: 0, skipped: 0, errors: [], details: [] };
+  const seenInCsv = new Set(); // track duplicates within CSV
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
+      const assetNum = (row.assetNumber || row['Asset Number'] || '').trim();
+
+      // Check for duplicate Asset Number within the CSV itself
+      if (assetNum) {
+        const key = assetNum.toLowerCase();
+        if (seenInCsv.has(key)) {
+          results.skipped++;
+          results.details.push({ row: i + 1, assetNumber: assetNum, action: 'skipped', reason: 'Duplicate Asset Number in CSV' });
+          continue;
+        }
+        seenInCsv.add(key);
+      }
+
       const data = {};
       if (row.name) data.name = row.name.trim();
       if (row.type) data.type = row.type.toLowerCase().trim();
-      if (row.assetNumber) data.assetNumber = row.assetNumber.trim();
+      if (assetNum) data.assetNumber = assetNum;
       if (row.brand) data.brand = row.brand.trim();
       if (row.modelNo) data.modelNo = row.modelNo.trim();
       if (row.serialNumber) data.serialNumber = row.serialNumber.trim();
@@ -790,25 +812,24 @@ router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
         if (companyId) data.companyId = companyId;
       }
 
-      if (mode === 'update') {
-        // Find by ID or assetNumber
-        const id = parseInt(row.id || row.ID);
-        const assetNum = (row.assetNumber || row['Asset Number'] || '').trim();
-        let where = null;
-        if (id) where = { id };
-        else if (assetNum) {
-          const existing = await req.prisma.asset.findFirst({ where: { OR: [{ assetNumber: assetNum }, { assetTag: assetNum }] } });
-          if (existing) where = { id: existing.id };
-        }
-        if (!where) { results.errors.push({ row: i + 1, error: 'Asset not found (need valid ID or Asset Number)' }); continue; }
-        await req.prisma.asset.update({ where, data });
+      // Smart detect: Asset Number exists → update, else → create
+      const existingId = assetNum ? assetNumMap[assetNum.toLowerCase()] : null;
+
+      if (existingId) {
+        // UPDATE existing asset
+        delete data.assetNumber; // don't update the key itself
+        await req.prisma.asset.update({ where: { id: existingId }, data });
         results.updated++;
+        results.details.push({ row: i + 1, assetNumber: assetNum, action: 'updated' });
       } else {
-        // Import new
-        if (!data.name) { results.errors.push({ row: i + 1, error: 'Asset Name is required' }); continue; }
-        if (!data.type) { results.errors.push({ row: i + 1, error: 'Type is required' }); continue; }
-        await req.prisma.asset.create({ data });
+        // CREATE new asset
+        if (!data.name) { results.errors.push({ row: i + 1, error: 'Asset Name is required for new assets' }); continue; }
+        if (!data.type) { results.errors.push({ row: i + 1, error: 'Type is required for new assets' }); continue; }
+        const created = await req.prisma.asset.create({ data });
         results.created++;
+        results.details.push({ row: i + 1, assetNumber: assetNum || `(ID: ${created.id})`, action: 'created' });
+        // Add to map so subsequent rows can detect it
+        if (assetNum) assetNumMap[assetNum.toLowerCase()] = created.id;
       }
     } catch (err) {
       results.errors.push({ row: i + 1, error: err.message?.slice(0, 100) || 'Unknown error' });
