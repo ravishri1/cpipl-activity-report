@@ -476,6 +476,16 @@ export default function RenewalManager() {
     refetchAccts();
   }
 
+  async function handleDeleteRenewal(id) {
+    if (!window.confirm('Are you sure you want to delete this renewal? This cannot be undone.')) return;
+    try {
+      await execute(() => api.delete(`/renewals/${id}`), 'Renewal deleted!');
+      refetchAll();
+    } catch {
+      // Error (including dependency errors) displayed by useApi hook
+    }
+  }
+
   async function handleSaveAcct() {
     if (editAcct) {
       await execute(() => api.put(`/renewals/accounts/${editAcct.id}`, acctForm), 'Account updated');
@@ -757,6 +767,14 @@ export default function RenewalManager() {
                             className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded"
                           >
                             <History className="w-4 h-4" />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            title="Delete"
+                            onClick={() => handleDeleteRenewal(r.id)}
+                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
