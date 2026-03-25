@@ -1892,12 +1892,20 @@ export default function AssetManager() {
                   return (
                     <div key={idx} className="bg-white border border-amber-200 rounded-lg p-3 space-y-2 relative">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-amber-700">#{idx + 1}</span>
-                        <button type="button" onClick={() => {
-                          updateForm('maintenanceLogs', form.maintenanceLogs.filter((_, i) => i !== idx));
-                        }} className="text-red-400 hover:text-red-600">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-amber-700">#{idx + 1}</span>
+                          {log.source === 'repair' && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-orange-100 text-orange-700 rounded">🔧 Vendor Repair</span>
+                          )}
+                          {log.vendor && <span className="text-[10px] text-slate-500">Vendor: {log.vendor}{log.vendorLocation ? ` (${log.vendorLocation})` : ''}</span>}
+                        </div>
+                        {!log.repairId && (
+                          <button type="button" onClick={() => {
+                            updateForm('maintenanceLogs', form.maintenanceLogs.filter((_, i) => i !== idx));
+                          }} className="text-red-400 hover:text-red-600">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         <div>
@@ -1960,13 +1968,36 @@ export default function AssetManager() {
               </div>
             )}
 
-            {/* Show maintenance history when not in maintenance mode but has logs */}
+            {/* Show service history when not in maintenance mode but has logs */}
             {form.status !== 'maintenance' && form.maintenanceLogs.length > 0 && (
-              <div className="border border-slate-200 bg-slate-50 rounded-lg p-3">
-                <h4 className="text-xs font-semibold text-slate-600 mb-1">Maintenance History ({form.maintenanceLogs.length} records)</h4>
-                <div className="text-xs text-slate-500">
-                  Total cost: {formatINR.format(form.maintenanceLogs.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0))}
-                  {' | '}Last: {form.maintenanceLogs[form.maintenanceLogs.length - 1]?.issue || 'N/A'}
+              <div className="border border-slate-200 bg-slate-50 rounded-lg p-3 space-y-2">
+                <h4 className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5" /> Service History ({form.maintenanceLogs.length} records)
+                  <span className="ml-auto text-[10px] font-normal text-slate-400">
+                    Total cost: {formatINR.format(form.maintenanceLogs.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0))}
+                  </span>
+                </h4>
+                <div className="space-y-1.5 max-h-36 overflow-auto">
+                  {form.maintenanceLogs.map((log, idx) => {
+                    const days = log.startDate && log.endDate ? Math.max(0, Math.ceil((new Date(log.endDate) - new Date(log.startDate)) / (1000*60*60*24))) : null;
+                    return (
+                      <div key={idx} className="flex items-start gap-2 text-xs bg-white rounded border border-slate-100 px-2 py-1.5">
+                        <span className="text-slate-400 font-mono w-4 shrink-0">{idx + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {log.source === 'repair' && <span className="px-1 py-0.5 text-[9px] font-medium bg-orange-100 text-orange-600 rounded">🔧 Repair</span>}
+                            <span className="text-slate-700 font-medium truncate">{log.issue || 'N/A'}</span>
+                          </div>
+                          <div className="text-slate-400 mt-0.5">
+                            {log.startDate || '?'} → {log.endDate || 'ongoing'}{days !== null ? ` (${days}d)` : ''}
+                            {log.vendor ? ` | ${log.vendor}` : ''}
+                            {log.amount ? ` | ₹${parseFloat(log.amount).toLocaleString('en-IN')}` : ''}
+                          </div>
+                          {log.solution && <div className="text-green-600 mt-0.5">✓ {log.solution}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

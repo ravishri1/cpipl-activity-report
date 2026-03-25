@@ -489,10 +489,24 @@ router.post('/repairs/:assetId/initiate', requireAdmin, asyncHandler(async (req,
     include: { initiator: { select: { id: true, name: true, email: true } } },
   });
 
-  // Update asset status to maintenance
+  // Update asset status to maintenance + add to maintenanceLogs
+  const existingLogs = asset.maintenanceLogs ? (typeof asset.maintenanceLogs === 'string' ? JSON.parse(asset.maintenanceLogs) : asset.maintenanceLogs) : [];
+  const newLog = {
+    startDate: today,
+    endDate: '',
+    amount: estimatedCost ? String(estimatedCost) : '',
+    issue: `[${repairType.toUpperCase()}] ${issueDescription}`,
+    solution: '',
+    vendor: vendor || '',
+    vendorLocation: vendorLocation || '',
+    repairId: repair.id,
+    source: 'repair',
+  };
+  existingLogs.push(newLog);
+
   await req.prisma.asset.update({
     where: { id: assetId },
-    data: { status: 'maintenance' },
+    data: { status: 'maintenance', maintenanceLogs: JSON.stringify(existingLogs) },
   });
 
   res.status(201).json(repair);
@@ -646,10 +660,20 @@ router.post('/repairs/:repairId/complete', requireAdmin, asyncHandler(async (req
     });
   }
 
-  // Update asset status back to available
+  // Update asset status back + update maintenance log entry
+  const assetForLogs = await req.prisma.asset.findUnique({ where: { id: repair.assetId }, select: { maintenanceLogs: true } });
+  let logs = assetForLogs?.maintenanceLogs ? (typeof assetForLogs.maintenanceLogs === 'string' ? JSON.parse(assetForLogs.maintenanceLogs) : assetForLogs.maintenanceLogs) : [];
+  // Find the matching repair log entry and update it
+  const logIdx = logs.findIndex(l => l.repairId === repairId);
+  if (logIdx >= 0) {
+    logs[logIdx].endDate = actualReturnDate;
+    logs[logIdx].amount = actualCost ? String(actualCost) : logs[logIdx].amount;
+    logs[logIdx].solution = condition ? `Returned in ${condition} condition` : 'Repair completed';
+  }
+
   await req.prisma.asset.update({
     where: { id: repair.assetId },
-    data: { status: 'available' },
+    data: { status: asset?.assignedTo ? 'assigned' : 'available', maintenanceLogs: JSON.stringify(logs) },
   });
 
   res.json({ message: 'Repair completed and asset returned.', repair: completed });
