@@ -66,6 +66,12 @@ const DEFAULT_EXPANDED = {
   people: false,
   timePay: false,
   organization: false,
+  // Level-2 groups inside Organization
+  orgAssets: false,
+  orgCompliance: false,
+  orgDocuments: false,
+  orgReports: false,
+  orgSetup: false,
   // Level-2 groups inside My Work
   timeAttendance: true,
   moneyBenefits: false,
@@ -270,22 +276,57 @@ export default function Sidebar({ isOpen, onClose }) {
     },
   ];
 
-  const organizationItems = [
-    { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
-    { to: '/admin/compliance',              label: 'Compliance Tracker',      icon: BadgeCheck },
-    { to: '/admin/renewals',                label: 'Renewal Manager',         icon: RefreshCw },
-    { to: '/admin/assets',                  label: 'Asset Manager',           icon: Package },
-    { to: '/admin/asset-lifecycle',         label: 'Asset Lifecycle',         icon: Activity },
-    { to: '/admin/predictive-maintenance',  label: 'Predictive Maintenance',  icon: HeartPulse },
-    { to: '/admin/hr-analytics',            label: 'HR Analytics',            icon: LineChart },
-    { to: '/admin/insurance',               label: 'Insurance Management',    icon: Heart },
-    { to: '/admin/contracts',               label: 'Company Contracts',       icon: ScrollText },
-    { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
-    { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
-    { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
-    { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
-    { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },
-    { to: '/admin/settings',                label: 'Settings',                icon: Settings },
+  const organizationGroups = [
+    {
+      key: 'orgAssets',
+      label: 'Assets & Maintenance',
+      icon: Package,
+      items: [
+        { to: '/admin/assets',                  label: 'Asset Manager',           icon: Package },
+        { to: '/admin/asset-lifecycle',         label: 'Asset Lifecycle',         icon: Activity },
+        { to: '/admin/predictive-maintenance',  label: 'Predictive Maintenance',  icon: HeartPulse },
+      ],
+    },
+    {
+      key: 'orgCompliance',
+      label: 'Compliance & Risk',
+      icon: BadgeCheck,
+      items: [
+        { to: '/admin/compliance',              label: 'Compliance Tracker',      icon: BadgeCheck },
+        { to: '/admin/renewals',                label: 'Renewal Manager',         icon: RefreshCw },
+        { to: '/admin/insurance',               label: 'Insurance Management',    icon: Heart },
+      ],
+    },
+    {
+      key: 'orgDocuments',
+      label: 'Documents & Policies',
+      icon: ScrollText,
+      items: [
+        { to: '/admin/letters',                 label: 'Letters',                 icon: Mail },
+        { to: '/admin/policies',                label: 'Policy Manager',          icon: ShieldCheck },
+        { to: '/admin/contracts',               label: 'Company Contracts',       icon: ScrollText },
+      ],
+    },
+    {
+      key: 'orgReports',
+      label: 'Reports & Support',
+      icon: PieChart,
+      items: [
+        { to: '/admin/hr-analytics',            label: 'HR Analytics',            icon: LineChart },
+        { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
+        { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
+        { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },
+      ],
+    },
+    {
+      key: 'orgSetup',
+      label: 'Setup',
+      icon: Settings,
+      items: [
+        { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
+        { to: '/admin/settings',                label: 'Settings',                icon: Settings },
+      ],
+    },
   ];
 
   // Helper: filter denied items (access-control + settings always visible for strict admins)
@@ -414,14 +455,16 @@ export default function Sidebar({ isOpen, onClose }) {
                 filterItems={filterItems}
                 labelClass="text-amber-500"
               />
-              <FlatSection
+              <GroupedSection
                 label="Organization"
                 sectionKey="organization"
-                items={filterItems(organizationItems)}
-                expanded={expanded.organization}
-                onToggle={() => toggle('organization')}
+                groups={organizationGroups}
+                expanded={expanded}
+                onToggleSection={() => toggle('organization')}
+                onToggleGroup={(key) => toggle(key)}
                 isActive={isActive}
                 onLinkClick={handleLinkClick}
+                filterItems={filterItems}
                 labelClass="text-amber-500"
               />
             </>
