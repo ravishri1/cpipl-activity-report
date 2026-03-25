@@ -360,6 +360,74 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> FY rollover scheduled: 55 23 31 3 * (March 31 at 11:55 PM IST)');
+
+  // ── Contract signing token expiry — daily midnight IST ─────────────────────
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const expired = await prisma.companyContract.updateMany({
+        where: { signingStatus: 'sent', signingTokenExpiresAt: { lt: today } },
+        data: { signingStatus: 'expired' },
+      });
+      if (expired.count > 0) {
+        console.log(`[CRON] Expired ${expired.count} contract signing token(s)`);
+      }
+    } catch (err) {
+      console.error('[CRON] Contract token expiry check failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Contract signing token expiry: 0 0 * * * (daily midnight IST)');
+
+  // ── Contract signing reminder — daily 10 AM IST ────────────────────────────
+  cron.schedule('0 10 * * 1-6', async () => {
+    try {
+      const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 16).replace('T', ' ');
+      const pendingContracts = await prisma.companyContract.findMany({
+        where: { signingStatus: 'sent', sentAt: { lt: threeDaysAgo } },
+      });
+
+      for (const contract of pendingContracts) {
+        // Check if reminder already sent
+        const existing = await prisma.contractSigningEvent.findFirst({
+          where: { contractId: contract.id, eventType: 'reminder_sent' },
+        });
+        if (existing) continue;
+
+        if (contract.externalSignerEmail && contract.signingToken) {
+          const signingUrl = `https://eod.colorpapers.in/sign/${contract.signingToken}`;
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: #d97706; color: white; padding: 20px; text-align: center;">
+                <h2 style="margin: 0;">Reminder: Contract Pending Signature</h2>
+              </div>
+              <div style="padding: 24px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                <p>Dear <strong>${contract.externalSignerName}</strong>,</p>
+                <p>This is a friendly reminder that the contract <strong>"${contract.name}"</strong> is still awaiting your signature.</p>
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${signingUrl}" style="background: #1e40af; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                    Review & Sign Contract
+                  </a>
+                </div>
+                <p style="color: #64748b; font-size: 13px;">This link expires on ${contract.signingTokenExpiresAt}.</p>
+              </div>
+            </div>
+          `;
+          try {
+            const { sendEmail } = require('./notifications/emailService');
+            await sendEmail(contract.externalSignerEmail, `Reminder: Pending Contract — ${contract.name}`, html);
+            await prisma.contractSigningEvent.create({
+              data: { contractId: contract.id, eventType: 'reminder_sent', performedBy: 'System (cron)' },
+            });
+          } catch (e) {
+            console.error(`[CRON] Failed to send contract reminder for ${contract.name}:`, e.message);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[CRON] Contract signing reminder failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Contract signing reminder: 0 10 * * 1-6 (Mon-Sat 10 AM IST)');
 }
 
 module.exports = { initCronJobs };

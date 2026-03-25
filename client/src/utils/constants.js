@@ -254,3 +254,23 @@ export const EMAIL_SCAN_STATUS_STYLES = {
   linked:    'bg-green-100 text-green-700 border-green-200',
   dismissed: 'bg-slate-100 text-slate-500 border-slate-200',
 };
+
+export const CONTRACT_SIGNING_STATUS_STYLES = {
+  none:              'bg-gray-100 text-gray-600 border-gray-200',
+  draft:             'bg-blue-100 text-blue-700 border-blue-200',
+  sent:              'bg-amber-100 text-amber-700 border-amber-200',
+  partially_signed:  'bg-orange-100 text-orange-700 border-orange-200',
+  fully_signed:      'bg-green-100 text-green-700 border-green-200',
+  expired:           'bg-red-100 text-red-700 border-red-200',
+  cancelled:         'bg-gray-100 text-gray-500 border-gray-200',
+};
+
+export const CONTRACT_SIGNING_LABELS = {
+  none:              'No Signing',
+  draft:             'Draft',
+  sent:              'Awaiting Signature',
+  partially_signed:  'Externally Signed',
+  fully_signed:      'Fully Executed',
+  expired:           'Signing Expired',
+  cancelled:         'Signing Cancelled',
+};

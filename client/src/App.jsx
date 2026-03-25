@@ -57,6 +57,7 @@ const ErrorReportsPanel = lazy(() => import('./components/admin/ErrorReportsPane
 const ConfirmationManager = lazy(() => import('./components/admin/ConfirmationManager'));
 const BiometricDashboard = lazy(() => import('./components/admin/BiometricDashboard'));
 const CompanyContractsManager = lazy(() => import('./components/admin/CompanyContractsManager'));
+const ContractSigningPage = lazy(() => import('./components/public/ContractSigningPage'));
 const CompanyMaster = lazy(() => import('./components/admin/CompanyMaster'));
 const ComplianceTracker = lazy(() => import('./components/admin/ComplianceTracker'));
 const ActivityReports = lazy(() => import('./components/reports/ActivityReports'));
@@ -132,6 +133,7 @@ function AppRoutes() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={<Login />} />
+      <Route path="/sign/:token" element={<ContractSigningPage />} />
 
       {/* All authenticated routes wrapped in AppLayout */}
       <Route

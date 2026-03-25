@@ -187,6 +187,8 @@ model User {
   confirmationExtensions    ConfirmationExtension[]       @relation("ConfirmationExtensions")
   extensionsGranted         ConfirmationExtension[]       @relation("ConfirmationExtensionsBy")
   contractsCreated          CompanyContract[]             @relation("ContractCreator")
+  contractsCounterSigned    CompanyContract[]             @relation("ContractInternalSigner")
+  contractTemplatesCreated  ContractTemplate[]            @relation("ContractTemplateCreator")
   statementUploads          MonthlyStatement[]            @relation("StatementUploader")
   renewalHistory            RenewalHistory[]              @relation("RenewalHistoryPerformer")
   emailScansReviewed        EmailRenewalScan[]            @relation("EmailScanReviewer")
@@ -1926,13 +1928,46 @@ model CompanyContract {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // ── Signing Workflow ──
+  signingStatus           String?  @default("none")    // none, draft, sent, partially_signed, fully_signed, expired, cancelled
+  signingToken            String?  @unique             // crypto.randomUUID()
+  signingTokenExpiresAt   String?                      // "YYYY-MM-DD"
+
+  externalSignerName      String?
+  externalSignerEmail     String?
+  externalSignerPhone     String?
+
+  internalSignerId        Int?
+
+  contractFileUrl         String?
+  contractDriveFileId     String?
+  signedFileUrl           String?
+  signedDriveFileId       String?
+  counterSignedFileUrl    String?
+  counterSignedDriveFileId String?
+
+  sentAt                  String?                      // "YYYY-MM-DD HH:mm"
+  externalSignedAt        String?
+  counterSignedAt         String?
+  completedAt             String?
+  cancelledAt             String?
+  cancellationReason      String?
+
+  templateId              Int?
+  templateContent         String?                      // rendered HTML snapshot at generation time
+
   company          Company? @relation(fields: [companyId], references: [id])
   creator          User?    @relation("ContractCreator", fields: [createdBy], references: [id])
+  template         ContractTemplate? @relation("ContractFromTemplate", fields: [templateId], references: [id])
+  internalSigner   User?    @relation("ContractInternalSigner", fields: [internalSignerId], references: [id])
+  signingEvents    ContractSigningEvent[]
 
   @@index([category])
   @@index([companyId])
   @@index([status])
   @@index([expiryDate])
+  @@index([signingStatus])
+  @@index([signingToken])
 }
 
 // ─── Biometric Integration ────────────────────────────────────────────────────
@@ -2385,4 +2420,36 @@ model JobOffer {
 
   @@index([candidateId])
   @@index([status])
+}
+
+// ─── Contract Templates & Signing ─────────────────────────────────────────────
+
+model ContractTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String                                     // "Standard NDA", "Vendor Service Agreement"
+  type        String                                     // nda, service_agreement, vendor_contract, custom
+  content     String                                     // HTML template with {{placeholders}}
+  isActive    Boolean  @default(true)
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     User?             @relation("ContractTemplateCreator", fields: [createdBy], references: [id])
+  contracts   CompanyContract[] @relation("ContractFromTemplate")
+}
+
+model ContractSigningEvent {
+  id            Int      @id @default(autoincrement())
+  contractId    Int
+  eventType     String   // created, sent, viewed, downloaded, external_signed, counter_signed, completed, cancelled, resent, expired, reminder_sent
+  performedBy   String?  // user name or "External: vendor@email.com"
+  performedById Int?     // User.id if internal action
+  ipAddress     String?
+  userAgent     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  contract      CompanyContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
 }

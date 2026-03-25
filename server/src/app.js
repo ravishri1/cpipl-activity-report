@@ -40,6 +40,7 @@ const errorReportRoutes = require('./routes/errorReports');
 const branchRoutes = require('./routes/branches');
 const confirmationRoutes = require('./routes/confirmation');
 const companyContractsRoutes = require('./routes/companyContracts');
+const contractSigningRoutes = require('./routes/contractSigning');
 const renewalsRoutes = require('./routes/renewals');
 const biometricRoutes = require('./routes/biometric');
 const companyMasterRoutes = require('./routes/companyMaster');
@@ -269,6 +270,10 @@ app.post('/api/agent/sync-single', asyncHandler(async (req, res) => {
   });
   res.json({ received: punches.length, ...result });
 }));
+
+// Public contract signing routes (no auth — token-based access)
+const signingLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Too many requests.' } });
+app.use('/api/contract-signing', signingLimiter, contractSigningRoutes);
 
 // Routes
 app.use('/api/auth', authRoutes);
