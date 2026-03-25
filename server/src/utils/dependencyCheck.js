@@ -70,11 +70,8 @@ const DEPENDENCY_MAP = {
     { model: 'assetDetachmentRequest', field: 'assetId', label: 'Detachment Requests' },
   ],
 
-  // Renewals
-  Renewal: [
-    { model: 'renewalHistory', field: 'renewalId', label: 'Renewal History' },
-    { model: 'emailRenewalScan', field: 'renewalId', label: 'Email Scans' },
-  ],
+  // Renewals (renewalHistory + emailRenewalScan cascade-delete automatically)
+  Renewal: [],
   RenewalCategory: [
     { model: 'renewal', field: 'categoryId', label: 'Renewals' },
   ],
