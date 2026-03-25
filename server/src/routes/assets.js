@@ -383,7 +383,8 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const { name, type, serialNumber, assetTag, assetNumber, category, purchaseDate, purchasePrice, value,
     depreciationRate, depreciationPeriod, warrantyExpiry, warrantyVendor, condition, notes, companyId,
     status, isMandatoryReturn, location, brand, assetGroup, description, modelNo, invoiceNo,
-    invoiceCopyUrl, invoiceCopyDriveId, assetImages, assetImageDriveIds, assetOwner, assetOldUser } = req.body;
+    invoiceCopyUrl, invoiceCopyDriveId, assetImages, assetImageDriveIds, assetOwner, assetOldUser,
+    maintenanceLogs } = req.body;
 
   if (type) requireEnum(type, VALID_TYPES, 'type');
   if (status) requireEnum(status, VALID_STATUSES, 'status');
@@ -420,6 +421,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   if (assetImageDriveIds !== undefined) data.assetImageDriveIds = assetImageDriveIds || null;
   if (assetOwner !== undefined) data.assetOwner = assetOwner || null;
   if (assetOldUser !== undefined) data.assetOldUser = assetOldUser || null;
+  if (maintenanceLogs !== undefined) data.maintenanceLogs = maintenanceLogs ? (typeof maintenanceLogs === 'string' ? maintenanceLogs : JSON.stringify(maintenanceLogs)) : null;
 
   // Auto-calculate depreciated value
   if (purchasePrice !== undefined || purchaseDate !== undefined || depreciationRate !== undefined || depreciationPeriod !== undefined) {

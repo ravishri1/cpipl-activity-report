@@ -1010,6 +1010,7 @@ model Asset {
   assetImageDriveIds String?                             // JSON array of Drive file IDs for images
   assetOwner     String?                                 // "employee:userId" or "other:Name" — who owns/uses the asset
   assetOldUser   String?                                 // Previous user (free text)
+  maintenanceLogs String?                                // JSON array: [{startDate, endDate, days, amount, issue, solution}]
 
   notes          String?
   companyId      Int?

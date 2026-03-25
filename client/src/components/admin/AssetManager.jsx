@@ -374,6 +374,7 @@ export default function AssetManager() {
     assetOwner: '',
     assetOwnerOther: '',
     assetOldUser: '',
+    maintenanceLogs: [],
   };
 
   const emptyRepairForm = {
@@ -626,6 +627,7 @@ export default function AssetManager() {
       assetOwner: ownerVal,
       assetOwnerOther: ownerOther,
       assetOldUser: asset.assetOldUser || '',
+      maintenanceLogs: asset.maintenanceLogs ? (typeof asset.maintenanceLogs === 'string' ? JSON.parse(asset.maintenanceLogs) : asset.maintenanceLogs) : [],
     });
     setFormError('');
     setShowAssetModal(true);
@@ -675,6 +677,7 @@ export default function AssetManager() {
         invoiceNo: form.invoiceNo.trim() || null,
         assetOwner: resolvedOwner,
         assetOldUser: form.assetOldUser.trim() || null,
+        maintenanceLogs: form.maintenanceLogs.length > 0 ? form.maintenanceLogs : null,
       };
       if (editingAsset) {
         await api.put(`/assets/${editingAsset.id}`, payload);
@@ -1764,6 +1767,111 @@ export default function AssetManager() {
                 />
               </div>
             </div>
+
+            {/* Maintenance Logs (only when status = maintenance) */}
+            {form.status === 'maintenance' && (
+              <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+                    <Wrench className="w-4 h-4" /> Maintenance Log
+                  </h4>
+                  <button type="button" onClick={() => {
+                    const newLog = { startDate: new Date().toISOString().split('T')[0], endDate: '', amount: '', issue: '', solution: '' };
+                    updateForm('maintenanceLogs', [...form.maintenanceLogs, newLog]);
+                  }} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-100 border border-amber-300 rounded-lg hover:bg-amber-200">
+                    <Plus className="w-3.5 h-3.5" /> Add Entry
+                  </button>
+                </div>
+
+                {form.maintenanceLogs.length === 0 && (
+                  <p className="text-xs text-amber-600 italic">No maintenance records yet. Click "Add Entry" to log maintenance.</p>
+                )}
+
+                {form.maintenanceLogs.map((log, idx) => {
+                  const days = log.startDate && log.endDate
+                    ? Math.max(0, Math.ceil((new Date(log.endDate) - new Date(log.startDate)) / (1000 * 60 * 60 * 24)))
+                    : null;
+                  return (
+                    <div key={idx} className="bg-white border border-amber-200 rounded-lg p-3 space-y-2 relative">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-amber-700">#{idx + 1}</span>
+                        <button type="button" onClick={() => {
+                          updateForm('maintenanceLogs', form.maintenanceLogs.filter((_, i) => i !== idx));
+                        }} className="text-red-400 hover:text-red-600">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-0.5">Start Date</label>
+                          <input type="date" value={log.startDate || ''} onChange={(e) => {
+                            const updated = [...form.maintenanceLogs];
+                            updated[idx] = { ...updated[idx], startDate: e.target.value };
+                            updateForm('maintenanceLogs', updated);
+                          }} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-0.5">End Date</label>
+                          <input type="date" value={log.endDate || ''} onChange={(e) => {
+                            const updated = [...form.maintenanceLogs];
+                            updated[idx] = { ...updated[idx], endDate: e.target.value };
+                            updateForm('maintenanceLogs', updated);
+                          }} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-0.5">Period</label>
+                          <div className="px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-600">
+                            {days !== null ? `${days} day${days !== 1 ? 's' : ''}` : '-'}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Amount (₹)</label>
+                        <input type="number" value={log.amount || ''} placeholder="0" min="0" onChange={(e) => {
+                          const updated = [...form.maintenanceLogs];
+                          updated[idx] = { ...updated[idx], amount: e.target.value };
+                          updateForm('maintenanceLogs', updated);
+                        }} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Issue</label>
+                        <textarea value={log.issue || ''} rows={1} placeholder="Describe the issue..." onChange={(e) => {
+                          const updated = [...form.maintenanceLogs];
+                          updated[idx] = { ...updated[idx], issue: e.target.value };
+                          updateForm('maintenanceLogs', updated);
+                        }} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-0.5">Solution</label>
+                        <textarea value={log.solution || ''} rows={1} placeholder="Describe the solution..." onChange={(e) => {
+                          const updated = [...form.maintenanceLogs];
+                          updated[idx] = { ...updated[idx], solution: e.target.value };
+                          updateForm('maintenanceLogs', updated);
+                        }} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none" />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {form.maintenanceLogs.length > 0 && (
+                  <div className="text-xs text-amber-600 font-medium pt-1">
+                    Total: {form.maintenanceLogs.length} maintenance record{form.maintenanceLogs.length > 1 ? 's' : ''} |
+                    Total cost: {formatINR.format(form.maintenanceLogs.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Show maintenance history when not in maintenance mode but has logs */}
+            {form.status !== 'maintenance' && form.maintenanceLogs.length > 0 && (
+              <div className="border border-slate-200 bg-slate-50 rounded-lg p-3">
+                <h4 className="text-xs font-semibold text-slate-600 mb-1">Maintenance History ({form.maintenanceLogs.length} records)</h4>
+                <div className="text-xs text-slate-500">
+                  Total cost: {formatINR.format(form.maintenanceLogs.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0))}
+                  {' | '}Last: {form.maintenanceLogs[form.maintenanceLogs.length - 1]?.issue || 'N/A'}
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             <div>
