@@ -66,6 +66,10 @@ const DEFAULT_EXPANDED = {
   people: false,
   timePay: false,
   organization: false,
+  // Level-2 groups inside People
+  peopleManagement: false,
+  peopleHiring: false,
+  peopleEngagement: false,
   // Level-2 groups inside Organization
   orgAssets: false,
   orgCompliance: false,
@@ -226,16 +230,37 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/expense-claims',   label: 'Expense Claims',   icon: Receipt },
   ];
 
-  const peopleItems = [
-    { to: '/admin/access-control', label: 'Access Control',   icon: ShieldCheck },
-    { to: '/admin/team',         label: 'Team Management',    icon: Users },
-    { to: '/admin/recruitment',  label: 'Recruitment',        icon: Briefcase },
-    { to: '/admin/confirmations',label: 'Confirmations',      icon: BadgeCheck },
-    { to: '/admin/onboarding',   label: 'Onboarding',         icon: UserPlus },
-    { to: '/admin/separations',  label: 'Separations',        icon: UserMinus },
-    { to: '/admin/surveys',      label: 'Survey Manager',     icon: ClipboardList },
-    { to: '/admin/suggestions',  label: 'Suggestions',        icon: MessageSquare },
-    { to: '/admin/import',       label: 'Import Employees',   icon: Upload },
+  const peopleGroups = [
+    {
+      key: 'peopleManagement',
+      label: 'Employee Management',
+      icon: Users,
+      items: [
+        { to: '/admin/access-control', label: 'Access Control',   icon: ShieldCheck },
+        { to: '/admin/team',           label: 'Team Management',  icon: Users },
+        { to: '/admin/import',         label: 'Import Employees', icon: Upload },
+      ],
+    },
+    {
+      key: 'peopleHiring',
+      label: 'Hiring & Lifecycle',
+      icon: Briefcase,
+      items: [
+        { to: '/admin/recruitment',    label: 'Recruitment',      icon: Briefcase },
+        { to: '/admin/confirmations',  label: 'Confirmations',    icon: BadgeCheck },
+        { to: '/admin/onboarding',     label: 'Onboarding',       icon: UserPlus },
+        { to: '/admin/separations',    label: 'Separations',      icon: UserMinus },
+      ],
+    },
+    {
+      key: 'peopleEngagement',
+      label: 'Engagement',
+      icon: MessageSquare,
+      items: [
+        { to: '/admin/surveys',        label: 'Survey Manager',   icon: ClipboardList },
+        { to: '/admin/suggestions',    label: 'Suggestions',      icon: MessageSquare },
+      ],
+    },
   ];
 
   const timePayGroups = [
@@ -433,14 +458,16 @@ export default function Sidebar({ isOpen, onClose }) {
           {/* ── Admin sections (flat) ───────────────────────── */}
           {isStrictAdmin && (
             <>
-              <FlatSection
+              <GroupedSection
                 label="People"
                 sectionKey="people"
-                items={filterItems(peopleItems)}
-                expanded={expanded.people}
-                onToggle={() => toggle('people')}
+                groups={peopleGroups}
+                expanded={expanded}
+                onToggleSection={() => toggle('people')}
+                onToggleGroup={(key) => toggle(key)}
                 isActive={isActive}
                 onLinkClick={handleLinkClick}
+                filterItems={filterItems}
                 labelClass="text-amber-500"
               />
               <GroupedSection
