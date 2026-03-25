@@ -411,6 +411,7 @@ export default function RenewalManager() {
   const [filterLight, setFilterLight]   = useState('');
   const [sortBy, setSortBy]             = useState('');
   const [search, setSearch]             = useState('');
+  const [selectedIds, setSelectedIds]   = useState(new Set());
 
   // ── Renewal modal state ────────────────────────────────────────────────────
   const [openModal, setOpenModal]       = useState(false);
@@ -486,6 +487,42 @@ export default function RenewalManager() {
     } catch {
       // Error (including dependency errors) displayed by useApi hook
     }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === renewals.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(renewals.map(r => r.id)));
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!window.confirm(`Delete ${selectedIds.size} selected renewal(s)? This cannot be undone.`)) return;
+    try {
+      await execute(() => api.post('/renewals/bulk-delete', { ids: [...selectedIds] }), `${selectedIds.size} renewal(s) deleted!`);
+      setSelectedIds(new Set());
+      refetchAll();
+    } catch {
+      // Errors displayed by useApi hook
+    }
+  }
+
+  async function handleBulkStatusChange(status) {
+    if (!window.confirm(`Change status to "${status}" for ${selectedIds.size} renewal(s)?`)) return;
+    try {
+      await execute(() => api.post('/renewals/bulk-update', { ids: [...selectedIds], status }), `${selectedIds.size} renewal(s) updated!`);
+      setSelectedIds(new Set());
+      refetchAll();
+    } catch {}
   }
 
   async function handleSaveAcct() {
@@ -678,10 +715,40 @@ export default function RenewalManager() {
           ) : renewals.length === 0 ? (
             <EmptyState icon="🔄" title="No renewals found" subtitle="Add your first renewal or adjust the filters" />
           ) : (
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl mb-3">
+                <span className="text-sm font-medium text-blue-800">{selectedIds.size} selected</span>
+                <button onClick={handleBulkDelete} className="px-3 py-1 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                  Delete Selected
+                </button>
+                <button onClick={() => handleBulkStatusChange('active')} className="px-3 py-1 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">
+                  Set Active
+                </button>
+                <button onClick={() => handleBulkStatusChange('cancelled')} className="px-3 py-1 text-xs font-medium bg-slate-600 text-white rounded-lg hover:bg-slate-700">
+                  Set Cancelled
+                </button>
+                <button onClick={() => handleBulkStatusChange('on_hold')} className="px-3 py-1 text-xs font-medium bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
+                  Set On Hold
+                </button>
+                <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline">
+                  Clear
+                </button>
+              </div>
+            )}
+
             <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs text-slate-500 uppercase tracking-wide">
+                    <th className="px-3 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={renewals.length > 0 && selectedIds.size === renewals.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th className="px-4 py-3 w-6" />
                     <th className="px-4 py-3">Item / Vendor</th>
                     <th className="px-4 py-3">Category</th>
@@ -695,7 +762,16 @@ export default function RenewalManager() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {renewals.map(r => (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={r.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50' : ''}`}>
+                      {/* Checkbox */}
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleSelect(r.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       {/* Traffic dot */}
                       <td className="px-4 py-3">
                         <TrafficDot light={r.trafficLight} />

@@ -399,6 +399,28 @@ router.delete('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+// POST /api/renewals/bulk-delete
+router.post('/bulk-delete', requireAdmin, asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) throw badRequest('No IDs provided');
+  // Delete history first (cascade may handle, but be safe)
+  await req.prisma.renewalHistory.deleteMany({ where: { renewalId: { in: ids } } });
+  const result = await req.prisma.renewal.deleteMany({ where: { id: { in: ids } } });
+  res.json({ deleted: result.count });
+}));
+
+// POST /api/renewals/bulk-update
+router.post('/bulk-update', requireAdmin, asyncHandler(async (req, res) => {
+  const { ids, status } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) throw badRequest('No IDs provided');
+  if (!status) throw badRequest('Status is required');
+  const result = await req.prisma.renewal.updateMany({
+    where: { id: { in: ids } },
+    data: { status },
+  });
+  res.json({ updated: result.count });
+}));
+
 // POST /api/renewals/:id/mark-paid  — advance renewalDate by billing cycle
 router.post('/:id(\\d+)/mark-paid', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
