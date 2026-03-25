@@ -697,5 +697,126 @@ router.put('/repairs/:repairId/edit', requireAdmin, asyncHandler(async (req, res
   res.json(updated);
 }));
 
+// ─── EXPORT: GET /export ─── Download all assets as CSV (admin)
+router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
+  const assets = await req.prisma.asset.findMany({
+    include: { assignee: { select: { id: true, name: true, email: true } }, company: { select: { name: true } } },
+    orderBy: { id: 'asc' },
+  });
+
+  const users = await req.prisma.user.findMany({ select: { id: true, name: true } });
+  const userMap = Object.fromEntries(users.map(u => [u.id, u.name]));
+
+  const headers = ['ID','Asset Name','Asset Number','Type','Brand','Model No','Serial Number','Category','Asset Group',
+    'Status','Condition','Location','Purchase Date','Purchase Price','Depreciation Rate (%)','Depreciation Period',
+    'Current Value','Warranty Expiry','Invoice No','Company','Assigned To (Employee Name)','Assigned To (Employee ID)',
+    'Assigned Date','Asset Old User','Description','Notes'];
+
+  const escCsv = (v) => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
+
+  const rows = assets.map(a => {
+    const ownerName = a.assetOwner
+      ? a.assetOwner.startsWith('employee:') ? (userMap[parseInt(a.assetOwner.split(':')[1])] || '') : a.assetOwner.replace('other:', '')
+      : (a.assignee?.name || '');
+    const ownerId = a.assetOwner?.startsWith('employee:') ? a.assetOwner.split(':')[1] : (a.assignedTo || '');
+    return [a.id, a.name, a.assetNumber || a.assetTag || '', a.type, a.brand || '', a.modelNo || '', a.serialNumber || '',
+      a.category, a.assetGroup || '', a.status, a.condition, a.location || '', a.purchaseDate || '', a.purchasePrice || '',
+      a.depreciationRate || 10, a.depreciationPeriod || 'yearly', a.value || '', a.warrantyExpiry || '', a.invoiceNo || '',
+      a.company?.name || '', ownerName, ownerId, a.assignedDate || '', a.assetOldUser || '', a.description || '', a.notes || ''
+    ].map(escCsv).join(',');
+  });
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=assets_export_${new Date().toISOString().slice(0,10)}.csv`);
+  res.send(csv);
+}));
+
+// ─── BULK IMPORT/UPDATE: POST /bulk-import ─── Import or update assets from CSV (admin)
+router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
+  const { rows, mode } = req.body; // mode: 'import' (new) or 'update' (existing)
+  if (!rows || !Array.isArray(rows) || rows.length === 0) throw badRequest('No rows provided');
+  if (rows.length > 500) throw badRequest('Maximum 500 rows per import');
+
+  const users = await req.prisma.user.findMany({ select: { id: true, name: true, email: true } });
+  const userNameMap = {};
+  users.forEach(u => { userNameMap[u.name.toLowerCase().trim()] = u.id; userNameMap[String(u.id)] = u.id; });
+
+  const results = { created: 0, updated: 0, errors: [] };
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    try {
+      const data = {};
+      if (row.name) data.name = row.name.trim();
+      if (row.type) data.type = row.type.toLowerCase().trim();
+      if (row.assetNumber) data.assetNumber = row.assetNumber.trim();
+      if (row.brand) data.brand = row.brand.trim();
+      if (row.modelNo) data.modelNo = row.modelNo.trim();
+      if (row.serialNumber) data.serialNumber = row.serialNumber.trim();
+      if (row.category) data.category = row.category.toLowerCase().trim();
+      if (row.assetGroup) data.assetGroup = row.assetGroup.trim();
+      if (row.status) data.status = row.status.toLowerCase().trim();
+      if (row.condition) data.condition = row.condition.toLowerCase().trim();
+      if (row.location) data.location = row.location.trim();
+      if (row.purchaseDate) data.purchaseDate = row.purchaseDate.trim();
+      if (row.purchasePrice !== undefined && row.purchasePrice !== '') data.purchasePrice = parseFloat(row.purchasePrice) || 0;
+      if (row.depreciationRate !== undefined && row.depreciationRate !== '') data.depreciationRate = parseFloat(row.depreciationRate) || 10;
+      if (row.depreciationPeriod) data.depreciationPeriod = row.depreciationPeriod.toLowerCase().trim();
+      if (row.warrantyExpiry) data.warrantyExpiry = row.warrantyExpiry.trim();
+      if (row.invoiceNo) data.invoiceNo = row.invoiceNo.trim();
+      if (row.description) data.description = row.description.trim();
+      if (row.notes) data.notes = row.notes.trim();
+      if (row.assetOldUser) data.assetOldUser = row.assetOldUser.trim();
+
+      // Resolve assignee
+      const assigneeName = (row['Assigned To (Employee Name)'] || row.assignedTo || '').trim();
+      const assigneeId = (row['Assigned To (Employee ID)'] || '').toString().trim();
+      if (assigneeId && userNameMap[assigneeId]) {
+        data.assignedTo = userNameMap[assigneeId];
+        data.assetOwner = `employee:${data.assignedTo}`;
+        if (!data.status) data.status = 'assigned';
+      } else if (assigneeName && userNameMap[assigneeName.toLowerCase()]) {
+        data.assignedTo = userNameMap[assigneeName.toLowerCase()];
+        data.assetOwner = `employee:${data.assignedTo}`;
+        if (!data.status) data.status = 'assigned';
+      } else if (assigneeName) {
+        data.assetOwner = `other:${assigneeName}`;
+      }
+
+      // Resolve company
+      if (row.company || row.companyId) {
+        const companyId = parseInt(row.companyId);
+        if (companyId) data.companyId = companyId;
+      }
+
+      if (mode === 'update') {
+        // Find by ID or assetNumber
+        const id = parseInt(row.id || row.ID);
+        const assetNum = (row.assetNumber || row['Asset Number'] || '').trim();
+        let where = null;
+        if (id) where = { id };
+        else if (assetNum) {
+          const existing = await req.prisma.asset.findFirst({ where: { OR: [{ assetNumber: assetNum }, { assetTag: assetNum }] } });
+          if (existing) where = { id: existing.id };
+        }
+        if (!where) { results.errors.push({ row: i + 1, error: 'Asset not found (need valid ID or Asset Number)' }); continue; }
+        await req.prisma.asset.update({ where, data });
+        results.updated++;
+      } else {
+        // Import new
+        if (!data.name) { results.errors.push({ row: i + 1, error: 'Asset Name is required' }); continue; }
+        if (!data.type) { results.errors.push({ row: i + 1, error: 'Type is required' }); continue; }
+        await req.prisma.asset.create({ data });
+        results.created++;
+      }
+    } catch (err) {
+      results.errors.push({ row: i + 1, error: err.message?.slice(0, 100) || 'Unknown error' });
+    }
+  }
+
+  res.json(results);
+}));
+
 module.exports = router;
 

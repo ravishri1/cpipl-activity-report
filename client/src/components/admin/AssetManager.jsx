@@ -35,8 +35,10 @@ import {
   Eye,
   Filter,
   Download,
+  Upload,
   RefreshCw,
   Wrench,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -781,6 +783,12 @@ export default function AssetManager() {
   const [selectedAssets, setSelectedAssets] = useState([]);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [bulkAssignForm, setBulkAssignForm] = useState({ userId: '', assignedDate: new Date().toISOString().split('T')[0], otherName: '' });
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importMode, setImportMode] = useState('import'); // 'import' or 'update'
+  const [importData, setImportData] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const fileInputRef = useRef(null);
 
   const toggleAssetSelection = (assetId) => {
     setSelectedAssets(prev => prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId]);
@@ -846,6 +854,80 @@ export default function AssetManager() {
     } finally {
       setFormLoading(false);
     }
+  };
+
+  // ─── Export CSV ──────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    try {
+      const res = await api.get('/assets/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `assets_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      addToast('Assets exported successfully');
+    } catch (err) {
+      addToast('Failed to export assets', 'error');
+    }
+  };
+
+  // ─── Import CSV ─────────────────────────────────────────────────────────
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) { setImportResult({ errors: [{ row: 0, error: 'CSV must have header + at least 1 data row' }] }); return; }
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+      const fieldMap = {
+        'ID': 'id', 'Asset Name': 'name', 'Asset Number': 'assetNumber', 'Type': 'type', 'Brand': 'brand',
+        'Model No': 'modelNo', 'Serial Number': 'serialNumber', 'Category': 'category', 'Asset Group': 'assetGroup',
+        'Status': 'status', 'Condition': 'condition', 'Location': 'location', 'Purchase Date': 'purchaseDate',
+        'Purchase Price': 'purchasePrice', 'Depreciation Rate (%)': 'depreciationRate', 'Depreciation Period': 'depreciationPeriod',
+        'Current Value': 'value', 'Warranty Expiry': 'warrantyExpiry', 'Invoice No': 'invoiceNo', 'Company': 'company',
+        'Assigned To (Employee Name)': 'assignedTo', 'Assigned To (Employee ID)': 'Assigned To (Employee ID)',
+        'Assigned Date': 'assignedDate', 'Asset Old User': 'assetOldUser', 'Description': 'description', 'Notes': 'notes',
+      };
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].match(/("([^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()) || [];
+        const obj = {};
+        headers.forEach((h, idx) => { const key = fieldMap[h] || h; if (vals[idx]) obj[key] = vals[idx]; });
+        rows.push(obj);
+      }
+      setImportData(rows);
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImportSubmit = async () => {
+    if (importData.length === 0) return;
+    setImportLoading(true);
+    try {
+      const res = await api.post('/assets/bulk-import', { rows: importData, mode: importMode });
+      setImportResult(res.data);
+      if (res.data.created > 0 || res.data.updated > 0) await refreshAll();
+    } catch (err) {
+      setImportResult({ errors: [{ row: 0, error: err.response?.data?.error || 'Import failed' }] });
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const headers = 'Asset Name,Asset Number,Type,Brand,Model No,Serial Number,Category,Asset Group,Status,Condition,Location,Purchase Date,Purchase Price,Depreciation Rate (%),Depreciation Period,Warranty Expiry,Invoice No,Assigned To (Employee Name),Assigned To (Employee ID),Asset Old User,Description,Notes';
+    const sample = 'Dell Latitude 5540,AST-100,laptop,Dell,Latitude 5540,SN12345,personal,IT Equipment,available,new,Miraroad,2024-01-15,65000,10,yearly,2027-01-15,INV-2024-001,,,Previous User,14 inch laptop,Good condition';
+    const csv = headers + '\n' + sample;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'asset_import_template.csv'; a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   // ─── Return ──────────────────────────────────────────────────────────────
@@ -950,6 +1032,30 @@ export default function AssetManager() {
               Bulk Assign ({selectedAssets.length})
             </button>
           )}
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm"
+            title="Export all assets as CSV"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          <button
+            onClick={() => { setImportMode('import'); setImportData([]); setImportResult(null); setShowImportModal(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 shadow-sm"
+            title="Import assets from CSV"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </button>
+          <button
+            onClick={() => { setImportMode('update'); setImportData([]); setImportResult(null); setShowImportModal(true); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 shadow-sm"
+            title="Bulk update existing assets from CSV"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Bulk Update
+          </button>
           <button
             onClick={openAddModal}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
@@ -2111,6 +2217,95 @@ export default function AssetManager() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* ─── Import/Update Modal ──────────────────────────────────────── */}
+      {showImportModal && (
+        <Modal title={importMode === 'import' ? '📥 Import Assets from CSV' : '📝 Bulk Update Assets from CSV'} onClose={() => setShowImportModal(false)} wide>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100">
+                <Download className="w-3.5 h-3.5" /> Download Template
+              </button>
+              {importMode === 'update' && (
+                <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100">
+                  <Download className="w-3.5 h-3.5" /> Export Current Data
+                </button>
+              )}
+            </div>
+
+            <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 text-center">
+              <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 mx-auto px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm hover:bg-slate-50 shadow-sm">
+                <Upload className="w-4 h-4 text-slate-500" />
+                Choose CSV File
+              </button>
+              <p className="text-xs text-slate-400 mt-2">Max 500 rows. Headers must match template.</p>
+            </div>
+
+            {importData.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">{importData.length} rows parsed</span>
+                  <span className="text-xs text-slate-500">Mode: <span className="font-semibold">{importMode === 'import' ? 'Create New' : 'Update Existing'}</span></span>
+                </div>
+
+                <div className="max-h-48 overflow-auto border border-slate-200 rounded-lg">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="px-2 py-1 text-left">#</th>
+                        <th className="px-2 py-1 text-left">Name</th>
+                        <th className="px-2 py-1 text-left">Type</th>
+                        <th className="px-2 py-1 text-left">Asset Number</th>
+                        <th className="px-2 py-1 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importData.slice(0, 20).map((row, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-2 py-1 text-slate-400">{i + 1}</td>
+                          <td className="px-2 py-1">{row.name || '-'}</td>
+                          <td className="px-2 py-1">{row.type || '-'}</td>
+                          <td className="px-2 py-1">{row.assetNumber || '-'}</td>
+                          <td className="px-2 py-1">{row.status || '-'}</td>
+                        </tr>
+                      ))}
+                      {importData.length > 20 && <tr><td colSpan={5} className="px-2 py-1 text-center text-slate-400">...and {importData.length - 20} more</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => { setImportData([]); setImportResult(null); }} className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Clear</button>
+                  <button onClick={handleImportSubmit} disabled={importLoading}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    {importLoading ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {importMode === 'import' ? `Import ${importData.length} Assets` : `Update ${importData.length} Assets`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {importResult && (
+              <div className={`p-3 rounded-lg border ${importResult.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                {(importResult.created > 0 || importResult.updated > 0) && (
+                  <p className="text-sm font-medium text-green-700">
+                    ✅ {importResult.created > 0 ? `${importResult.created} created` : ''}{importResult.updated > 0 ? `${importResult.updated} updated` : ''}
+                  </p>
+                )}
+                {importResult.errors?.length > 0 && (
+                  <div className="mt-1">
+                    <p className="text-sm font-medium text-amber-700">⚠️ {importResult.errors.length} errors:</p>
+                    <ul className="mt-1 text-xs text-amber-600 max-h-24 overflow-auto">
+                      {importResult.errors.map((e, i) => <li key={i}>Row {e.row}: {e.error}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </Modal>
       )}
 
