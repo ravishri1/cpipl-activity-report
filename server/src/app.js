@@ -139,15 +139,11 @@ app.use((req, res, next) => {
     res.setHeader('Cache-Control', 'no-cache, public, must-revalidate, max-age=0');
     next();
   }
-  // API endpoints: 5-minute cache for GET requests (safe/idempotent)
-  else if (req.method === 'GET' && req.path.startsWith('/api/')) {
-    // Exclude sensitive endpoints from caching
-    const noCacheEndpoints = ['/api/auth', '/api/users/me', '/api/dashboard', '/api/regularization', '/api/confirmation'];
-    if (noCacheEndpoints.some(ep => req.path.startsWith(ep))) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    } else {
-      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
-    }
+  // API endpoints: Never cache — always return fresh data
+  else if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     next();
   }
   // Other requests: No cache by default
