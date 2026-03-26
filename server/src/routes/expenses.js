@@ -841,8 +841,8 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
   if (fromDate || toDate) incomeWhere.date = dateFilter;
   const incomeEntries = await req.prisma.fundRequest.findMany({ where: incomeWhere, orderBy: { date: 'asc' } });
 
-  // Get expenses linked to any fund request (debits)
-  const expWhere = { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } };
+  // Get ALL expenses for this user (debits — approved, paid, or pending)
+  const expWhere = { userId: uid, status: { in: ['approved', 'paid', 'pending'] } };
   if (fromDate || toDate) expWhere.date = dateFilter;
   const expenses = await req.prisma.expenseClaim.findMany({ where: expWhere, orderBy: { date: 'asc' } });
 
