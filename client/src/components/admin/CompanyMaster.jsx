@@ -238,7 +238,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">-- Select Principal --</option>
                 {allRegistrations
-                  .filter(r => (r.placeType || '').includes('Principal') && r.id !== registration?.id)
+                  .filter(r => (r.placeType || '').includes('Principal') && r.id !== registration?.id && r.legalEntityId === parseInt(form.legalEntityId))
                   .map(r => (
                     <option key={r.id} value={r.id}>{r.abbr} — {r.officeCity} ({r.gstin})</option>
                   ))}
