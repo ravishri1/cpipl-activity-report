@@ -127,6 +127,9 @@ export default function ExpenseApproval() {
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkAction, setBulkAction] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState([]);
   const [importLoading, setImportLoading] = useState(false);
@@ -310,6 +313,36 @@ export default function ExpenseApproval() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ─── Bulk Actions ──────────────────────────────
+  const toggleSelect = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = () => {
+    const visibleIds = expenses.map(e => e.id);
+    setSelectedIds(prev => prev.length === visibleIds.length ? [] : visibleIds);
+  };
+  const handleBulkAction = async () => {
+    if (!bulkAction || selectedIds.length === 0) return;
+    if (!window.confirm(`${bulkAction.charAt(0).toUpperCase() + bulkAction.slice(1)} ${selectedIds.length} expense(s)?`)) return;
+    setBulkLoading(true);
+    try {
+      let done = 0, fail = 0;
+      for (const id of selectedIds) {
+        try {
+          if (bulkAction === 'approve') await api.put(`/expenses/${id}/review`, { status: 'approved' });
+          else if (bulkAction === 'reject') await api.put(`/expenses/${id}/review`, { status: 'rejected' });
+          else if (bulkAction === 'paid') await api.put(`/expenses/${id}/paid`);
+          else if (bulkAction === 'delete') await api.delete(`/expenses/${id}`);
+          done++;
+        } catch { fail++; }
+      }
+      setSuccess(`${done} expense(s) ${bulkAction}ed${fail > 0 ? `, ${fail} failed` : ''}`);
+      setSelectedIds([]);
+      setBulkAction('');
+      await fetchExpenses();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch { setError('Bulk action failed'); }
+    finally { setBulkLoading(false); }
   };
 
   // ─── Export CSV ─────────────────────────────────
@@ -525,10 +558,35 @@ export default function ExpenseApproval() {
             </p>
           </div>
         ) : (
+          <>
+          {/* Bulk Action Bar */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-violet-50 border border-violet-200 rounded-lg mb-3">
+              <span className="text-sm font-medium text-violet-700">{selectedIds.length} selected</span>
+              <select value={bulkAction} onChange={e => setBulkAction(e.target.value)}
+                className="border border-violet-300 rounded-lg px-3 py-1.5 text-sm bg-white">
+                <option value="">-- Select Action --</option>
+                <option value="approve">✅ Approve All</option>
+                <option value="reject">❌ Reject All</option>
+                <option value="paid">💰 Mark Paid</option>
+                <option value="delete">🗑️ Delete All</option>
+              </select>
+              <button onClick={handleBulkAction} disabled={!bulkAction || bulkLoading}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {bulkLoading ? 'Processing...' : 'Apply'}
+              </button>
+              <button onClick={() => setSelectedIds([])} className="text-sm text-slate-500 hover:text-slate-700 ml-auto">Clear</button>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-3 py-3 w-10">
+                    <input type="checkbox" checked={selectedIds.length === expenses.length && expenses.length > 0}
+                      onChange={toggleSelectAll} className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                  </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Employee</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
@@ -542,9 +600,14 @@ export default function ExpenseApproval() {
                 {filteredExpenses.map((expense) => (
                   <React.Fragment key={expense.id}>
                     <tr
-                      className="hover:bg-slate-50 transition-colors cursor-pointer"
+                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${selectedIds.includes(expense.id) ? 'bg-violet-50' : ''}`}
                       onClick={() => setExpandedId(expandedId === expense.id ? null : expense.id)}
                     >
+                      <td className="px-3 py-3 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedIds.includes(expense.id)}
+                          onChange={() => toggleSelect(expense.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      </td>
                       <td className="px-4 py-3">
                         <div>
                           <p className="font-medium text-slate-800 text-sm">
@@ -713,6 +776,7 @@ export default function ExpenseApproval() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {!loading && filteredExpenses.length > 0 && (

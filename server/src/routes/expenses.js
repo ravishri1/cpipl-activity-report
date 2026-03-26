@@ -289,6 +289,14 @@ router.put('/:id/paid', requireAdmin, asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
+// DELETE /:id — Delete expense (admin)
+router.delete('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.expenseApprovalLog.deleteMany({ where: { expenseId: id } });
+  await req.prisma.expenseClaim.delete({ where: { id } });
+  res.json({ message: 'Expense deleted' });
+}));
+
 // GET /reports/summary — Expense summary for a month (admin)
 router.get('/reports/summary', requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.query;
