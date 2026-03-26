@@ -41,7 +41,12 @@ const STATUS_STYLES = {
 };
 
 const CATEGORIES = [
-  { value: 'travel', label: 'Travel' },
+  { value: 'office_expenses', label: 'Office Expenses' },
+  { value: 'tea_coffee', label: 'Tea & Coffee Expenses' },
+  { value: 'repair_maintenance', label: 'Repair & Maintenance' },
+  { value: 'diesel_petrol', label: 'Diesel & Petrol Expenses' },
+  { value: 'travel', label: 'Travel Expenses' },
+  { value: 'staff_welfare', label: 'Staff Welfare Expenses' },
   { value: 'food', label: 'Food & Meals' },
   { value: 'medical', label: 'Medical' },
   { value: 'office', label: 'Office Supplies' },
@@ -49,7 +54,12 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_STYLES = {
+  office_expenses: 'bg-blue-100 text-blue-700',
+  tea_coffee: 'bg-amber-100 text-amber-700',
+  repair_maintenance: 'bg-red-100 text-red-700',
+  diesel_petrol: 'bg-emerald-100 text-emerald-700',
   travel: 'bg-purple-100 text-purple-700',
+  staff_welfare: 'bg-teal-100 text-teal-700',
   food: 'bg-orange-100 text-orange-700',
   medical: 'bg-pink-100 text-pink-700',
   office: 'bg-cyan-100 text-cyan-700',
@@ -821,14 +831,7 @@ export default function ExpenseApproval() {
                           </div>
                         </div>
 
-                        {/* Description */}
-                        <textarea
-                          value={item.description}
-                          onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, description: e.target.value } : it))}
-                          placeholder="Optional description..."
-                          rows={2}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
-                        />
+                        {/* Description removed — combined description at end */}
                       </div>
                     ))}
                   </div>
@@ -849,6 +852,18 @@ export default function ExpenseApproval() {
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Combined Description */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                  <textarea
+                    value={newClaimForm.description}
+                    onChange={(e) => setNewClaimForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Optional notes about these expenses..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
+                  />
                 </div>
 
                 {/* File Upload */}

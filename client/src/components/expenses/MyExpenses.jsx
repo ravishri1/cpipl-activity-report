@@ -24,7 +24,12 @@ import {
 import api from '../../utils/api';
 
 const CATEGORIES = [
-  { value: 'travel', label: 'Travel' },
+  { value: 'office_expenses', label: 'Office Expenses' },
+  { value: 'tea_coffee', label: 'Tea & Coffee Expenses' },
+  { value: 'repair_maintenance', label: 'Repair & Maintenance' },
+  { value: 'diesel_petrol', label: 'Diesel & Petrol Expenses' },
+  { value: 'travel', label: 'Travel Expenses' },
+  { value: 'staff_welfare', label: 'Staff Welfare Expenses' },
   { value: 'food', label: 'Food & Meals' },
   { value: 'medical', label: 'Medical' },
   { value: 'office', label: 'Office Supplies' },
@@ -41,7 +46,12 @@ const STATUS_STYLES = {
 };
 
 const CATEGORY_STYLES = {
+  office_expenses: 'bg-blue-100 text-blue-700',
+  tea_coffee: 'bg-amber-100 text-amber-700',
+  repair_maintenance: 'bg-red-100 text-red-700',
+  diesel_petrol: 'bg-emerald-100 text-emerald-700',
   travel: 'bg-purple-100 text-purple-700',
+  staff_welfare: 'bg-teal-100 text-teal-700',
   food: 'bg-orange-100 text-orange-700',
   medical: 'bg-pink-100 text-pink-700',
   office: 'bg-cyan-100 text-cyan-700',
