@@ -52,6 +52,7 @@ import {
   LineChart,
   LayoutGrid,
   Calendar,
+  KeyRound,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -206,8 +207,9 @@ export default function Sidebar({ isOpen, onClose }) {
   ];
 
   const myWorkspaceItems = [
-    { to: '/my-workspace',       label: 'My Assets', icon: Package },
-    { to: '/my-files',           label: 'My Files',  icon: FolderOpen },
+    { to: '/my-workspace',       label: 'My Assets',      icon: Package },
+    { to: '/my-files',           label: 'My Files',       icon: FolderOpen },
+    { to: '/my-credentials',     label: 'My Credentials', icon: KeyRound },
   ];
 
   const teamItems = [
@@ -341,6 +343,7 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: Settings,
       items: [
         { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
+        { to: '/admin/credentials',             label: 'Credential Manager',      icon: KeyRound },
         { to: '/admin/settings',                label: 'Settings',                icon: Settings },
       ],
     },

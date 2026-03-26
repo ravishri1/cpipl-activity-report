@@ -76,6 +76,8 @@ const AssetLifecycleDashboard = lazy(() => import('./components/admin/AssetLifec
 const PredictiveMaintenanceDashboard = lazy(() => import('./components/admin/PredictiveMaintenanceDashboard'));
 const HRAnalyticsDashboard = lazy(() => import('./components/admin/HRAnalyticsDashboard'));
 const AccessControlManager = lazy(() => import('./components/admin/AccessControlManager'));
+const CredentialManager = lazy(() => import('./components/admin/CredentialManager'));
+const MyCredentials = lazy(() => import('./components/credentials/MyCredentials'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -164,6 +166,7 @@ function AppRoutes() {
                   {/* Combined pages (new navigation) */}
                   <Route path="/activity-reports" element={<SeparatedRoute><ActivityReports /></SeparatedRoute>} />
                   <Route path="/my-workspace" element={<SeparatedRoute><MyWorkspace /></SeparatedRoute>} />
+                  <Route path="/my-credentials" element={<SeparatedRoute><MyCredentials /></SeparatedRoute>} />
                   <Route path="/my-compliance" element={<SeparatedRoute><MyCompliance /></SeparatedRoute>} />
                   <Route path="/my-comp-off" element={<SeparatedRoute><MyCompOff /></SeparatedRoute>} />
                   <Route path="/attendance-regularization" element={<SeparatedRoute><AttendanceRegularization /></SeparatedRoute>} />
@@ -228,6 +231,7 @@ function AppRoutes() {
                   <Route path="/admin/suggestions" element={<SeparatedRoute><AdminRoute><SuggestionManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/error-reports" element={<SeparatedRoute><AdminRoute><ErrorReportsPanel /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/settings" element={<SeparatedRoute><AdminRoute><Settings /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/credentials" element={<SeparatedRoute><AdminRoute><CredentialManager /></AdminRoute></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />

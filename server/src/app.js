@@ -50,6 +50,7 @@ const regularizationRoutes = require('./routes/regularization');
 const recruitmentRoutes = require('./routes/recruitment');
 const musterRoutes = require('./routes/muster');
 const internalRoutes = require('./routes/internal');
+const credentialRoutes = require('./routes/credentials');
 const { errorHandler } = require('./middleware/errorHandler');
 const { asyncHandler } = require('./utils/asyncHandler');
 
@@ -316,6 +317,7 @@ app.use('/api/regularization', regularizationRoutes);
 app.use('/api/recruitment', recruitmentRoutes);
 app.use('/api/muster', musterRoutes);
 app.use('/api/internal', internalRoutes);
+app.use('/api/credentials', credentialRoutes);
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

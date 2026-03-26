@@ -227,6 +227,9 @@ model User {
   weeklyOffPatternId        Int?
   weeklyOffPattern          WeeklyOffPattern?  @relation("UserWeeklyOff", fields: [weeklyOffPatternId], references: [id])
 
+  // ── Portal Credentials ──
+  portalCredentials         PortalCredential[] @relation("CredentialAssignee")
+
   @@index([department])
   @@index([isActive])
   @@index([employmentStatus])
@@ -2184,11 +2187,52 @@ model CompanyRegistration {
   users          User[]      @relation("UserCompanyRegistration")
   assets         Asset[]     @relation("AssetCompanyRegistration")
   certificates   ComplianceCertificate[]
+  portals        CompanyPortal[]
 
   @@index([legalEntityId])
   @@index([principalRegistrationId])
   @@index([stateCode])
   @@index([isActive])
+}
+
+model CompanyPortal {
+  id                     Int      @id @default(autoincrement())
+  companyRegistrationId  Int?
+  name                   String   // "Gmail Workspace", "GST Portal", "Banking", "ERP", etc.
+  url                    String?  // Portal login URL
+  description            String?
+  category               String   @default("other") // email, tax, banking, erp, cloud, social, government, other
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  companyRegistration    CompanyRegistration? @relation(fields: [companyRegistrationId], references: [id])
+  credentials            PortalCredential[]
+
+  @@index([companyRegistrationId])
+}
+
+model PortalCredential {
+  id           Int      @id @default(autoincrement())
+  portalId     Int
+  type         String   @default("individual") // "individual" or "shared"
+  username     String   // email or login ID
+  password     String?  // stored as-is (admin-only access)
+  label        String?  // friendly name: "Main Admin", "Accounts Login"
+  assignedTo   Int?     // userId for individual, null for shared
+  sharedWith   String?  // JSON array of userIds for shared credentials
+  notes        String?
+  status       String   @default("active") // active, revoked, expired
+  lastRotated  String?  // date password was last changed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  portal       CompanyPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
+  assignee     User?    @relation("CredentialAssignee", fields: [assignedTo], references: [id])
+
+  @@index([portalId])
+  @@index([assignedTo])
+  @@index([status])
 }
 
 model ComplianceCertificate {
