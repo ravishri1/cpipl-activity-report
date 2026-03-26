@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveEmployee);
 
-const VALID_CATEGORIES = ['travel', 'food', 'medical', 'office', 'other'];
+const VALID_CATEGORIES = ['office_expenses', 'tea_coffee', 'repair_maintenance', 'diesel_petrol', 'travel', 'staff_welfare', 'food', 'medical', 'office', 'other'];
 const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid'];
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
