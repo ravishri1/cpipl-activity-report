@@ -428,12 +428,21 @@ export default function CredentialManager() {
   const [addCredPortal, setAddCredPortal] = useState(null);
 
   const params = new URLSearchParams();
-  if (filterReg) params.set('companyRegistrationId', filterReg);
+  if (filterReg) {
+    if (filterReg.startsWith('entity_')) {
+      const entityId = filterReg.replace('entity_', '');
+      const entityRegIds = registrations.filter(r => String(r.legalEntityId || r.legalEntity?.id) === entityId).map(r => r.id);
+      if (entityRegIds.length > 0) params.set('companyRegistrationIds', entityRegIds.join(','));
+    } else {
+      params.set('companyRegistrationId', filterReg);
+    }
+  }
   if (filterCat) params.set('category', filterCat);
   const queryStr = params.toString() ? `?${params.toString()}` : '';
 
   const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
-  const { data: registrations, error: regErr } = useFetch('/api/company-master/registrations', []);
+  const { data: registrations, error: regErr } = useFetch('/company-master/registrations', []);
+  const { data: entities } = useFetch('/company-master/entities', []);
   const { data: usersData, error: usersErr } = useFetch('/api/users?isActive=true&limit=200', { users: [] });
   const users = Array.isArray(usersData) ? usersData : (usersData?.users || []);
 
@@ -447,7 +456,7 @@ export default function CredentialManager() {
           <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Key className="w-5 h-5 text-blue-600" /> Credential Manager
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage portal logins and access credentials across all company registrations</p>
+          <p className="text-sm text-slate-500 mt-0.5">Manage portal logins and access credentials across all companies</p>
         </div>
         <button onClick={() => setShowAddPortal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
@@ -459,9 +468,9 @@ export default function CredentialManager() {
       <div className="flex flex-wrap gap-3">
         <select value={filterReg} onChange={e => setFilterReg(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]">
-          <option value="">All Registrations</option>
-          {registrations.map(r => (
-            <option key={r.id} value={r.id}>{r.abbr} — {r.officeCity}</option>
+          <option value="">All Companies</option>
+          {entities.map(e => (
+            <option key={e.id} value={`entity_${e.id}`}>{e.legalName}</option>
           ))}
         </select>
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)}

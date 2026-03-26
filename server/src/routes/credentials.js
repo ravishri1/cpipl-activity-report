@@ -15,9 +15,13 @@ const VALID_TYPES      = ['individual', 'shared'];
 
 // GET /api/credentials/portals
 router.get('/portals', requireAdmin, asyncHandler(async (req, res) => {
-  const { companyRegistrationId, category } = req.query;
+  const { companyRegistrationId, companyRegistrationIds, category } = req.query;
   const where = { isActive: true };
-  if (companyRegistrationId) where.companyRegistrationId = parseId(companyRegistrationId);
+  if (companyRegistrationIds) {
+    where.companyRegistrationId = { in: companyRegistrationIds.split(',').map(id => parseInt(id)).filter(Boolean) };
+  } else if (companyRegistrationId) {
+    where.companyRegistrationId = parseId(companyRegistrationId);
+  }
   if (category) where.category = category;
 
   const portals = await req.prisma.companyPortal.findMany({
