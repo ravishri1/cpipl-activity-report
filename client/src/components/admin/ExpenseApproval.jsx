@@ -119,6 +119,7 @@ export default function ExpenseApproval() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [lineItems, setLineItems] = useState([makeEmptyItem()]);
   const [attachments, setAttachments] = useState([]); // [{name, url, driveFileId}]
+  const [claimDescription, setClaimDescription] = useState('');
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -128,6 +129,7 @@ export default function ExpenseApproval() {
     setForm(EMPTY_FORM);
     setLineItems([makeEmptyItem()]);
     setAttachments([]);
+    setClaimDescription('');
   };
 
   const fetchExpenses = useCallback(async () => {
@@ -286,7 +288,7 @@ export default function ExpenseApproval() {
         category: firstItem.category,
         amount: totalAmount,
         date: firstItem.date,
-        description: firstItem.description || null,
+        description: claimDescription.trim() || null,
         items: JSON.stringify(lineItems.map(({ id, ...rest }) => ({ ...rest, amount: parseFloat(rest.amount) || 0 }))),
         attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
       });
@@ -858,8 +860,8 @@ export default function ExpenseApproval() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea
-                    value={newClaimForm.description}
-                    onChange={(e) => setNewClaimForm(prev => ({ ...prev, description: e.target.value }))}
+                    value={claimDescription}
+                    onChange={(e) => setClaimDescription(e.target.value)}
                     placeholder="Optional notes about these expenses..."
                     rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
