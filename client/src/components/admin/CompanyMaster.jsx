@@ -250,23 +250,49 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
             <textarea value={form.address} onChange={e => set('address', e.target.value)}
               rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">FSSAI</label>
-              <input value={form.fssai} onChange={e => set('fssai', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Udyam</label>
-              <input value={form.udyam} onChange={e => set('udyam', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">IEC</label>
-              <input value={form.iec} onChange={e => set('iec', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
+          {(() => {
+            const isPrincipal = (form.placeType || '').includes('Principal');
+            const linkedPrincipal = !isPrincipal && form.principalRegistrationId
+              ? allRegistrations.find(r => r.id === parseInt(form.principalRegistrationId))
+              : null;
+            return isPrincipal ? (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">FSSAI</label>
+                  <input value={form.fssai} onChange={e => set('fssai', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Udyam</label>
+                  <input value={form.udyam} onChange={e => set('udyam', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">IEC</label>
+                  <input value={form.iec} onChange={e => set('iec', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-2">Inherited from Principal {linkedPrincipal ? `(${linkedPrincipal.abbr})` : '— select a Principal above'}</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <span className="text-xs text-gray-500">FSSAI</span>
+                    <p className="text-sm font-medium text-gray-800">{linkedPrincipal?.fssai || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500">Udyam</span>
+                    <p className="text-sm font-medium text-gray-800">{linkedPrincipal?.udyam || '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500">IEC</span>
+                    <p className="text-sm font-medium text-gray-800">{linkedPrincipal?.iec || '—'}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
