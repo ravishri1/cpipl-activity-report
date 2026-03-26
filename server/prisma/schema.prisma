@@ -913,6 +913,8 @@ model ExpenseClaim {
   reviewNote    String?
   paidOn        String?                                // "YYYY-MM-DD"
   fundRequestId Int?                                   // Optional link to fund advance
+  items         String?                                // JSON array: [{title,category,amount,date,description}]
+  attachments   String?                                // JSON array: [{name,url,driveFileId}]
   createdAt     DateTime  @default(now())
 
   user          User      @relation(fields: [userId], references: [id])

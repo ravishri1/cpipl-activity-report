@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Receipt,
   Users,
@@ -19,6 +19,9 @@ import {
   X,
   Plus,
   UserPlus,
+  Paperclip,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -72,12 +75,16 @@ const formatDate = (dateStr) => {
 
 const EMPTY_FORM = {
   userId: '',
+};
+
+const makeEmptyItem = () => ({
+  id: Date.now() + Math.random(),
   title: '',
   category: 'travel',
   amount: '',
   date: new Date().toISOString().split('T')[0],
   description: '',
-};
+});
 
 // Lazy imports for fund request tabs
 const AdminFundRequests = React.lazy(() => import('./AdminFundRequests'));
@@ -100,8 +107,18 @@ export default function ExpenseApproval() {
   // New expense form state
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [lineItems, setLineItems] = useState([makeEmptyItem()]);
+  const [attachments, setAttachments] = useState([]); // [{name, url, driveFileId}]
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setLineItems([makeEmptyItem()]);
+    setAttachments([]);
+  };
 
   const fetchExpenses = useCallback(async () => {
     try {
@@ -204,22 +221,68 @@ export default function ExpenseApproval() {
     setReviewNote('');
   };
 
-  const handleCreateExpense = async (e) => {
-    e.preventDefault();
-    if (!form.userId || !form.title || !form.amount || !form.date) {
-      setError('Please fill all required fields');
+  const handleFileUpload = async (files) => {
+    const newFiles = Array.from(files);
+    if (attachments.length + newFiles.length > 10) {
+      setError('Maximum 10 files allowed per claim');
       return;
     }
+    setUploadingFiles(true);
+    const uploaded = [];
+    for (const file of newFiles) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', 'expense');
+        const res = await api.post('/files/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploaded.push({
+          name: file.name,
+          url: res.data.driveUrl,
+          driveFileId: res.data.driveFileId,
+        });
+      } catch (err) {
+        setError(`Failed to upload ${file.name}: ${err.response?.data?.message || err.message}`);
+      }
+    }
+    setAttachments((prev) => [...prev, ...uploaded]);
+    setUploadingFiles(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCreateExpense = async (e) => {
+    e.preventDefault();
+    if (!form.userId) {
+      setError('Please select an employee');
+      return;
+    }
+    // Validate all line items
+    for (let i = 0; i < lineItems.length; i++) {
+      const item = lineItems[i];
+      if (!item.title.trim()) { setError(`Item ${i + 1}: Title is required`); return; }
+      if (!item.amount || parseFloat(item.amount) <= 0) { setError(`Item ${i + 1}: Amount must be positive`); return; }
+      if (!item.date) { setError(`Item ${i + 1}: Date is required`); return; }
+    }
+
+    const totalAmount = lineItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const firstItem = lineItems[0];
+
     try {
       setSubmitting(true);
       await api.post('/expenses/admin-create', {
-        ...form,
         userId: parseInt(form.userId),
-        amount: parseFloat(form.amount),
+        title: lineItems.length === 1 ? firstItem.title : `${firstItem.title} (+${lineItems.length - 1} more)`,
+        category: firstItem.category,
+        amount: totalAmount,
+        date: firstItem.date,
+        description: firstItem.description || null,
+        items: JSON.stringify(lineItems.map(({ id, ...rest }) => ({ ...rest, amount: parseFloat(rest.amount) || 0 }))),
+        attachments: attachments.length > 0 ? JSON.stringify(attachments) : undefined,
       });
       setSuccess('Expense claim created successfully');
       setShowForm(false);
-      setForm(EMPTY_FORM);
+      resetForm();
       await fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -484,27 +547,81 @@ export default function ExpenseApproval() {
                     {expandedId === expense.id && (
                       <tr>
                         <td colSpan={7} className="px-4 py-4 bg-slate-50">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Description</p>
-                              <p className="text-slate-700">{expense.description || 'No description provided'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Receipt</p>
-                              {expense.receiptUrl ? (
-                                <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline text-sm">
-                                  View Receipt
-                                </a>
-                              ) : (
-                                <p className="text-slate-400">No receipt attached</p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 font-medium mb-1">Review Note</p>
-                              <p className="text-slate-700">{expense.reviewNote || 'No review note'}</p>
-                              {expense.paidOn && (
-                                <p className="text-xs text-green-600 font-medium mt-1">Paid on {formatDate(expense.paidOn)}</p>
-                              )}
+                          <div className="space-y-4 text-sm">
+                            {/* Line items breakdown */}
+                            {expense.items && (() => {
+                              try {
+                                const items = JSON.parse(expense.items);
+                                if (Array.isArray(items) && items.length > 0) {
+                                  return (
+                                    <div>
+                                      <p className="text-xs text-slate-500 font-medium mb-2">Expense Items ({items.length})</p>
+                                      <div className="space-y-1.5">
+                                        {items.map((it, i) => (
+                                          <div key={i} className="flex items-start gap-3 bg-white border border-slate-200 rounded-lg px-3 py-2">
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium capitalize flex-shrink-0 ${CATEGORY_STYLES[it.category] || CATEGORY_STYLES.other}`}>
+                                              {it.category}
+                                            </span>
+                                            <div className="flex-1 min-w-0">
+                                              <p className="font-medium text-slate-800 truncate">{it.title}</p>
+                                              {it.description && <p className="text-xs text-slate-500 mt-0.5">{it.description}</p>}
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                              <p className="font-semibold text-slate-800">{formatCurrency(it.amount)}</p>
+                                              <p className="text-xs text-slate-400">{formatDate(it.date)}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              } catch { /* ignore parse errors */ }
+                              return null;
+                            })()}
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium mb-1">Description</p>
+                                <p className="text-slate-700">{expense.description || 'No description provided'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium mb-1">Attachments</p>
+                                {expense.attachments && (() => {
+                                  try {
+                                    const files = JSON.parse(expense.attachments);
+                                    if (Array.isArray(files) && files.length > 0) {
+                                      return (
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {files.map((f, i) => (
+                                            <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors max-w-[160px]">
+                                              <FileText className="w-3 h-3 flex-shrink-0" />
+                                              <span className="truncate">{f.name}</span>
+                                            </a>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                  } catch { /* ignore */ }
+                                  return null;
+                                })()}
+                                {expense.receiptUrl && !expense.attachments && (
+                                  <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:underline text-sm">
+                                    View Receipt
+                                  </a>
+                                )}
+                                {!expense.attachments && !expense.receiptUrl && (
+                                  <p className="text-slate-400">No attachments</p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium mb-1">Review Note</p>
+                                <p className="text-slate-700">{expense.reviewNote || 'No review note'}</p>
+                                {expense.paidOn && (
+                                  <p className="text-xs text-green-600 font-medium mt-1">Paid on {formatDate(expense.paidOn)}</p>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -588,134 +705,251 @@ export default function ExpenseApproval() {
       {/* New Expense Claim Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-violet-500" />
-                New Expense Claim
-              </h3>
-              <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowForm(false); resetForm(); }} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-violet-500" />
+                  New Expense Claim
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Submit an expense claim on behalf of an employee</p>
+              </div>
+              <button onClick={() => { setShowForm(false); resetForm(); }} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-500 -mt-2">Submit an expense claim on behalf of an employee</p>
+            {/* Scrollable Body */}
+            <div className="overflow-y-auto flex-1 px-6 py-5">
+              <form id="new-expense-form" onSubmit={handleCreateExpense} className="space-y-5">
 
-            <form onSubmit={handleCreateExpense} className="space-y-4">
-              {/* Employee Select */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Employee <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={form.userId}
-                  onChange={(e) => setForm({ ...form, userId: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
-                >
-                  <option value="">Select employee...</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} {emp.employeeId ? `(${emp.employeeId})` : ''} {emp.department ? `- ${emp.department}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Title <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="e.g., Client visit taxi fare"
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Category + Amount row */}
-              <div className="grid grid-cols-2 gap-3">
+                {/* Employee Select */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Category <span className="text-red-400">*</span>
+                    Employee <span className="text-red-400">*</span>
                   </label>
                   <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    value={form.userId}
+                    onChange={(e) => setForm({ ...form, userId: e.target.value })}
+                    required
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
                   >
-                    {CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    <option value="">Select employee...</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} {emp.employeeId ? `(${emp.employeeId})` : ''} {emp.department ? `- ${emp.department}` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
+
+                {/* Expense Items */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Amount (₹) <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={form.amount}
-                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    placeholder="0"
-                    min="1"
-                    step="0.01"
-                    required
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Expense Items <span className="text-red-400">*</span>
+                    </label>
+                    <span className="text-xs text-slate-400">{lineItems.length} item{lineItems.length !== 1 ? 's' : ''}</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {lineItems.map((item, idx) => (
+                      <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3 relative">
+                        {/* Item number badge */}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
+                            Item {idx + 1}
+                          </span>
+                          {lineItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setLineItems((prev) => prev.filter((_, i) => i !== idx))}
+                              className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remove item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Title */}
+                        <input
+                          type="text"
+                          value={item.title}
+                          onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, title: e.target.value } : it))}
+                          placeholder="Item title (e.g., Taxi fare to client)"
+                          required
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                        />
+
+                        {/* Category + Amount + Date */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <select
+                              value={item.category}
+                              onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, category: e.target.value } : it))}
+                              className="w-full px-2 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            >
+                              {CATEGORIES.map((cat) => (
+                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
+                            <input
+                              type="number"
+                              value={item.amount}
+                              onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, amount: e.target.value } : it))}
+                              placeholder="Amount"
+                              min="0.01"
+                              step="0.01"
+                              required
+                              className="w-full pl-6 pr-2 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="date"
+                              value={item.date}
+                              onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, date: e.target.value } : it))}
+                              required
+                              className="w-full px-2 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <textarea
+                          value={item.description}
+                          onChange={(e) => setLineItems((prev) => prev.map((it, i) => i === idx ? { ...it, description: e.target.value } : it))}
+                          placeholder="Optional description..."
+                          rows={2}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add item + Total row */}
+                  <div className="flex items-center justify-between mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setLineItems((prev) => [...prev, makeEmptyItem()])}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-600 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Item
+                    </button>
+                    <div className="text-sm font-semibold text-slate-800">
+                      Total: <span className="text-violet-700">
+                        {formatCurrency(lineItems.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0))}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Date */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Expense Date <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                />
-              </div>
+                {/* File Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Paperclip className="w-4 h-4 text-slate-400" />
+                      Upload Invoices / Receipts
+                      <span className="text-slate-400 font-normal">(optional, max 10 files)</span>
+                    </span>
+                  </label>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Optional details about the expense..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
-                />
-              </div>
+                  {/* Upload area */}
+                  <div
+                    className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-violet-400 hover:bg-violet-50/30 transition-colors cursor-pointer"
+                    onClick={() => !uploadingFiles && attachments.length < 10 && fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (!uploadingFiles && attachments.length < 10) handleFileUpload(e.dataTransfer.files);
+                    }}
+                  >
+                    {uploadingFiles ? (
+                      <div className="flex items-center justify-center gap-2 text-violet-600 text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Uploading...
+                      </div>
+                    ) : attachments.length >= 10 ? (
+                      <p className="text-xs text-slate-400">Maximum 10 files reached</p>
+                    ) : (
+                      <div className="text-sm text-slate-500">
+                        <Paperclip className="w-5 h-5 mx-auto mb-1 text-slate-400" />
+                        <span>Click or drag files here</span>
+                        <span className="block text-xs text-slate-400 mt-0.5">PDF, JPG, PNG, WebP up to 3 MB each</span>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                    />
+                  </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-2">
+                  {/* Uploaded file chips */}
+                  {attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {attachments.map((file, idx) => (
+                        <div key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 border border-slate-200 rounded-lg max-w-[200px]">
+                          <FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate hover:text-violet-600 hover:underline" title={file.name}>
+                            {file.name}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                            className="flex-shrink-0 text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 flex-shrink-0 bg-slate-50 rounded-b-xl">
+              <div className="text-sm text-slate-500">
+                {lineItems.length} item{lineItems.length !== 1 ? 's' : ''} · Total:{' '}
+                <span className="font-semibold text-slate-700">
+                  {formatCurrency(lineItems.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0))}
+                </span>
+                {attachments.length > 0 && (
+                  <span className="ml-2 text-slate-400">· {attachments.length} file{attachments.length !== 1 ? 's' : ''} attached</span>
+                )}
+              </div>
+              <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  onClick={() => { setShowForm(false); resetForm(); }}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  form="new-expense-form"
+                  disabled={submitting || uploadingFiles}
                   className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Submit Expense
+                  Submit Claim
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

@@ -37,17 +37,30 @@ async function validateFundLink(prisma, fundRequestId, targetUserId, amount) {
 // POST / — Submit new expense claim
 router.post('/', asyncHandler(async (req, res) => {
   requireFields(req.body, 'title', 'category', 'amount', 'date');
-  const { title, category, amount, description, receiptUrl, date, fundRequestId } = req.body;
+  const { title, category, amount, description, receiptUrl, date, fundRequestId, items, attachments } = req.body;
   requireEnum(category, VALID_CATEGORIES, 'category');
   if (amount <= 0) throw badRequest('Amount must be positive');
 
   const frId = await validateFundLink(req.prisma, fundRequestId, req.user.id, amount);
 
+  // Validate items JSON if provided
+  let itemsJson = null;
+  if (items) {
+    const parsedItems = typeof items === 'string' ? JSON.parse(items) : items;
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw badRequest('items must be a non-empty array');
+    itemsJson = JSON.stringify(parsedItems);
+  }
+  let attachmentsJson = null;
+  if (attachments) {
+    const parsedAttachments = typeof attachments === 'string' ? JSON.parse(attachments) : attachments;
+    if (Array.isArray(parsedAttachments)) attachmentsJson = JSON.stringify(parsedAttachments);
+  }
+
   const expense = await req.prisma.expenseClaim.create({
     data: {
       userId: req.user.id, title, category, amount: parseFloat(amount),
       description: description || null, receiptUrl: receiptUrl || null, date, status: 'pending',
-      fundRequestId: frId || null,
+      fundRequestId: frId || null, items: itemsJson, attachments: attachmentsJson,
     },
   });
   await logExpenseAction(req.prisma, {
@@ -73,7 +86,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // POST /admin-create — Admin submits expense on behalf of an employee
 router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'title', 'category', 'amount', 'date');
-  const { userId, title, category, amount, description, receiptUrl, date, fundRequestId } = req.body;
+  const { userId, title, category, amount, description, receiptUrl, date, fundRequestId, items, attachments } = req.body;
   requireEnum(category, VALID_CATEGORIES, 'category');
   if (amount <= 0) throw badRequest('Amount must be positive');
 
@@ -83,11 +96,24 @@ router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
 
   const frId = await validateFundLink(req.prisma, fundRequestId, targetUser.id, amount);
 
+  // Validate items JSON if provided
+  let itemsJson = null;
+  if (items) {
+    const parsedItems = typeof items === 'string' ? JSON.parse(items) : items;
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw badRequest('items must be a non-empty array');
+    itemsJson = JSON.stringify(parsedItems);
+  }
+  let attachmentsJson = null;
+  if (attachments) {
+    const parsedAttachments = typeof attachments === 'string' ? JSON.parse(attachments) : attachments;
+    if (Array.isArray(parsedAttachments)) attachmentsJson = JSON.stringify(parsedAttachments);
+  }
+
   const expense = await req.prisma.expenseClaim.create({
     data: {
       userId: targetUser.id, title, category, amount: parseFloat(amount),
       description: description || null, receiptUrl: receiptUrl || null, date, status: 'pending',
-      fundRequestId: frId || null,
+      fundRequestId: frId || null, items: itemsJson, attachments: attachmentsJson,
     },
     include: { user: { select: { id: true, name: true, email: true, employeeId: true, department: true } } },
   });
