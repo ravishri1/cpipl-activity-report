@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -9,7 +9,7 @@ import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
 import {
   Check, X, ChevronDown, ChevronUp, CreditCard, Clock,
-  IndianRupee, AlertCircle, Users, CheckCircle2, FileText, Plus,
+  IndianRupee, AlertCircle, Users, CheckCircle2, FileText, Plus, Upload, Loader2,
 } from 'lucide-react';
 
 const FUND_STATUS_STYLES = {
@@ -43,6 +43,9 @@ export default function AdminFundRequests() {
   const [rejectNote, setRejectNote] = useState('');
   const [disburseModal, setDisburseModal] = useState(null);
   const [disburseForm, setDisburseForm] = useState({ paymentMode: 'bank_transfer', disbursedAmount: '', paymentRef: '', paymentReceiptUrl: '' });
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const [receiptFileName, setReceiptFileName] = useState('');
+  const receiptInputRef = useRef(null);
   const [settleModal, setSettleModal] = useState(null);
   const [settleNote, setSettleNote] = useState('');
   const [detail, setDetail] = useState(null);
@@ -101,6 +104,7 @@ export default function AdminFundRequests() {
       refetch();
       setDisburseModal(null);
       setDisburseForm({ paymentMode: 'bank_transfer', disbursedAmount: '', paymentRef: '', paymentReceiptUrl: '' });
+      setReceiptFileName('');
     } catch {
       // Error displayed by useApi
     }
@@ -146,6 +150,27 @@ export default function AdminFundRequests() {
       setCreateForm({ userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0] });
     } catch {
       // Error displayed by useApi
+    }
+  };
+
+  const handleReceiptUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReceiptUploading(true);
+    setReceiptFileName(file.name);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/files/upload', fd);
+      const driveUrl = res.data?.file?.driveUrl || res.data?.driveUrl || '';
+      if (!driveUrl) throw new Error('No URL returned');
+      setDisburseForm(prev => ({ ...prev, paymentReceiptUrl: driveUrl }));
+    } catch (err) {
+      alert('Upload failed: ' + (err.response?.data?.error || err.message));
+      setReceiptFileName('');
+    } finally {
+      setReceiptUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -442,14 +467,21 @@ export default function AdminFundRequests() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Receipt URL</label>
-              <input
-                type="text"
-                value={disburseForm.paymentReceiptUrl}
-                onChange={e => setDisburseForm(f => ({ ...f, paymentReceiptUrl: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                placeholder="https://..."
-              />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Payment Receipt</label>
+              <input ref={receiptInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleReceiptUpload} className="hidden" />
+              {disburseForm.paymentReceiptUrl ? (
+                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                  <span className="text-sm text-green-700 truncate flex-1">{receiptFileName || 'Receipt uploaded'}</span>
+                  <button type="button" onClick={() => { setDisburseForm(f => ({ ...f, paymentReceiptUrl: '' })); setReceiptFileName(''); }}
+                    className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => receiptInputRef.current?.click()} disabled={receiptUploading}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-violet-400 hover:text-violet-600 transition-colors">
+                  {receiptUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Receipt (PDF/Image)</>}
+                </button>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDisburseModal(null)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
