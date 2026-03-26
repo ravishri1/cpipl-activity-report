@@ -547,6 +547,14 @@ router.put('/fund-requests/:id(\\d+)/cancel', asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
+// DELETE /fund-requests/:id — Hard delete (admin only)
+router.delete('/fund-requests/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.fundRequestLog.deleteMany({ where: { fundRequestId: id } });
+  await req.prisma.fundRequest.delete({ where: { id } });
+  res.json({ message: 'Fund request deleted' });
+}));
+
 // GET /fund-requests/ledger — Date-wise ledger per user (admin)
 router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) => {
   const { userId, fromDate, toDate } = req.query;
