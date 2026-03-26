@@ -361,6 +361,97 @@ function initCronJobs(prisma) {
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> FY rollover scheduled: 55 23 31 3 * (March 31 at 11:55 PM IST)');
 
+  // ── Monthly Ledger Auto-Generation: 12:01 AM on 1st of every month IST ─────
+  // Calculates previous month string and generates MonthlyLedger for all active users with activity
+  cron.schedule('1 0 1 * *', async () => {
+    try {
+      const now = new Date();
+      // Previous month: subtract 1 from current month
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const month = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+      const fromDate = `${month}-01`;
+      const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate();
+      const toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const expenseUserIds = await prisma.expenseClaim.findMany({
+        where: { date: { gte: fromDate, lte: toDate } }, select: { userId: true }, distinct: ['userId'],
+      });
+      const fundUserIds = await prisma.fundRequest.findMany({
+        where: { OR: [{ disbursedOn: { gte: fromDate, lte: toDate } }, { date: { gte: fromDate, lte: toDate } }] },
+        select: { requestedBy: true }, distinct: ['requestedBy'],
+      });
+      const allUserIds = [...new Set([...expenseUserIds.map(e => e.userId), ...fundUserIds.map(f => f.requestedBy)])];
+
+      let generated = 0;
+      for (const uid of allUserIds) {
+        const [yearNum, monNum] = month.split('-').map(Number);
+        const prevMonthDate = new Date(yearNum, monNum - 1, 0);
+        const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+        const prevLedger = await prisma.monthlyLedger.findUnique({ where: { userId_month: { userId: uid, month: prevMonthStr } } });
+        let openingBalance = 0;
+        if (prevLedger) {
+          openingBalance = prevLedger.closingBalance;
+        } else {
+          const fundBalance = await prisma.employeeFundBalance.findUnique({ where: { userId: uid } });
+          openingBalance = fundBalance?.openingBalance || 0;
+        }
+
+        const advances = await prisma.fundRequest.findMany({
+          where: { requestedBy: uid, type: 'advance', status: { in: ['disbursed', 'acknowledged', 'settled'] }, disbursedOn: { gte: fromDate, lte: toDate } },
+          orderBy: { disbursedOn: 'asc' },
+        });
+        const expenses = await prisma.expenseClaim.findMany({
+          where: { userId: uid, status: { in: ['approved', 'paid', 'pending'] }, date: { gte: fromDate, lte: toDate } },
+          orderBy: { date: 'asc' },
+        });
+        const reimbursements = await prisma.fundRequest.findMany({
+          where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'disbursed', 'settled'] }, date: { gte: fromDate, lte: toDate } },
+          orderBy: { date: 'asc' },
+        });
+        const incomeEntries = await prisma.fundRequest.findMany({
+          where: { requestedBy: uid, type: 'income', status: 'acknowledged', date: { gte: fromDate, lte: toDate } },
+          orderBy: { date: 'asc' },
+        });
+        const adjustments = await prisma.ledgerAdjustment.findMany({ where: { userId: uid, month }, orderBy: { date: 'asc' } });
+
+        const entries = [];
+        entries.push({ date: fromDate, entryType: 'opening', description: 'Opening Balance', moneyIn: openingBalance > 0 ? openingBalance : 0, moneyOut: openingBalance < 0 ? Math.abs(openingBalance) : 0, amount: openingBalance, ref: 'OPENING' });
+        advances.forEach(fr => entries.push({ date: fr.disbursedOn || fr.date, entryType: 'advance', description: `Advance: ${fr.title}`, moneyIn: fr.disbursedAmount || 0, moneyOut: 0, amount: fr.disbursedAmount || 0, ref: `FR-${fr.id}` }));
+        reimbursements.forEach(fr => entries.push({ date: fr.disbursedOn || fr.date, entryType: 'reimbursement', description: `Reimbursement: ${fr.title}`, moneyIn: fr.disbursedAmount || fr.amount || 0, moneyOut: 0, amount: fr.disbursedAmount || fr.amount || 0, ref: `FR-${fr.id}` }));
+        incomeEntries.forEach(fr => entries.push({ date: fr.date, entryType: 'income', description: `Income: ${fr.title}`, moneyIn: fr.amount, moneyOut: 0, amount: fr.amount, ref: `FR-${fr.id}` }));
+        expenses.forEach(e => entries.push({ date: e.date, entryType: 'expense', description: `Expense: ${e.title} (${e.category})`, moneyIn: 0, moneyOut: e.amount, amount: -e.amount, ref: `EXP-${e.id}` }));
+        adjustments.forEach(adj => entries.push({ date: adj.date, entryType: adj.amount >= 0 ? 'adjustment_in' : 'adjustment_out', description: `Adjustment: ${adj.description}`, moneyIn: adj.amount > 0 ? adj.amount : 0, moneyOut: adj.amount < 0 ? Math.abs(adj.amount) : 0, amount: adj.amount, ref: `ADJ-${adj.id}` }));
+
+        entries.sort((a, b) => {
+          if (a.entryType === 'opening') return -1;
+          if (b.entryType === 'opening') return 1;
+          const cmp = a.date.localeCompare(b.date);
+          if (cmp !== 0) return cmp;
+          if (a.moneyIn > 0 && b.moneyOut > 0) return -1;
+          if (a.moneyOut > 0 && b.moneyIn > 0) return 1;
+          return 0;
+        });
+
+        let bal = 0;
+        entries.forEach(e => { bal += e.amount; e.balance = Math.round(bal * 100) / 100; });
+        const totalIn = Math.round(entries.reduce((s, e) => s + e.moneyIn, 0) * 100) / 100;
+        const totalOut = Math.round(entries.reduce((s, e) => s + e.moneyOut, 0) * 100) / 100;
+        const closingBalance = Math.round(bal * 100) / 100;
+
+        await prisma.monthlyLedger.upsert({
+          where: { userId_month: { userId: uid, month } },
+          create: { userId: uid, month, openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries) },
+          update: { openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedAt: new Date() },
+        });
+        generated++;
+      }
+      console.log(`[CRON] Monthly ledger auto-generation complete: ${generated} ledger(s) generated for ${month}`);
+    } catch (err) {
+      console.error('[CRON] Monthly ledger auto-generation failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Monthly ledger auto-generation scheduled: 1 0 1 * * (1st of every month 12:01 AM IST)');
+
   // ── Contract signing token expiry — daily midnight IST ─────────────────────
   cron.schedule('0 0 * * *', async () => {
     try {

@@ -216,6 +216,13 @@ model User {
   // ── Email Work Tracker ──
   emailHandledThreads       EmailHandledThread[]
 
+  // ── Monthly Ledger ──
+  monthlyLedgers            MonthlyLedger[]      @relation("MonthlyLedgers")
+  ledgersLocked             MonthlyLedger[]      @relation("LedgerLockedBy")
+  ledgersGenerated          MonthlyLedger[]      @relation("LedgerGeneratedBy")
+  ledgerAdjustments         LedgerAdjustment[]   @relation("LedgerAdjustments")
+  ledgerAdjustmentsCreated  LedgerAdjustment[]   @relation("LedgerAdjustmentCreator")
+
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
   weeklyOffPattern          WeeklyOffPattern?  @relation("UserWeeklyOff", fields: [weeklyOffPatternId], references: [id])
@@ -2553,4 +2560,40 @@ model ContractSigningEvent {
   contract      CompanyContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@index([contractId])
-}
+}
+model MonthlyLedger {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  month           String                    // "YYYY-MM"
+  openingBalance  Float     @default(0)
+  closingBalance  Float     @default(0)
+  totalIn         Float     @default(0)
+  totalOut        Float     @default(0)
+  entries         String?                   // JSON snapshot of all entries
+  isLocked        Boolean   @default(false)
+  lockedBy        Int?
+  lockedAt        DateTime?
+  generatedAt     DateTime  @default(now())
+  generatedBy     Int?
+  notes           String?
+
+  user            User      @relation("MonthlyLedgers", fields: [userId], references: [id])
+  lockedByUser    User?     @relation("LedgerLockedBy", fields: [lockedBy], references: [id])
+  generatedByUser User?     @relation("LedgerGeneratedBy", fields: [generatedBy], references: [id])
+
+  @@unique([userId, month])
+}
+
+model LedgerAdjustment {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  month       String                    // "YYYY-MM"
+  description String
+  amount      Float                     // positive = money in, negative = money out
+  date        String                    // "YYYY-MM-DD"
+  createdBy   Int
+  createdAt   DateTime @default(now())
+
+  user        User     @relation("LedgerAdjustments", fields: [userId], references: [id])
+  creator     User     @relation("LedgerAdjustmentCreator", fields: [createdBy], references: [id])
+}

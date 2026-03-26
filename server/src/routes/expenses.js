@@ -952,6 +952,303 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
   });
 }));
 
+// ─── Monthly Ledger System ────────────────────────────────────────────────────
+
+// Helper: compute ledger entries for a given user + month
+async function computeLedgerEntries(prisma, userId, month) {
+  // Parse month bounds
+  const [year, mon] = month.split('-').map(Number);
+  const fromDate = `${month}-01`;
+  const lastDay = new Date(year, mon, 0).getDate(); // day 0 of next month = last day of this month
+  const toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+  // Opening balance: previous month's closing, or EmployeeFundBalance
+  const prevDate = new Date(year, mon - 1, 0); // last day of previous month
+  const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  const prevLedger = await prisma.monthlyLedger.findUnique({ where: { userId_month: { userId, month: prevMonth } } });
+  let openingBalance = 0;
+  if (prevLedger) {
+    openingBalance = prevLedger.closingBalance;
+  } else {
+    const fundBalance = await prisma.employeeFundBalance.findUnique({ where: { userId } });
+    openingBalance = fundBalance?.openingBalance || 0;
+  }
+
+  // Fetch advances
+  const advances = await prisma.fundRequest.findMany({
+    where: { requestedBy: userId, type: 'advance', status: { in: ['disbursed', 'acknowledged', 'settled'] }, disbursedOn: { gte: fromDate, lte: toDate } },
+    orderBy: { disbursedOn: 'asc' },
+  });
+
+  // Fetch expenses
+  const expenses = await prisma.expenseClaim.findMany({
+    where: { userId, status: { in: ['approved', 'paid', 'pending'] }, date: { gte: fromDate, lte: toDate } },
+    orderBy: { date: 'asc' },
+  });
+
+  // Fetch reimbursements
+  const reimbursements = await prisma.fundRequest.findMany({
+    where: { requestedBy: userId, type: 'reimbursement', status: { in: ['approved', 'disbursed', 'settled'] }, date: { gte: fromDate, lte: toDate } },
+    orderBy: { date: 'asc' },
+  });
+
+  // Fetch income entries
+  const incomeEntries = await prisma.fundRequest.findMany({
+    where: { requestedBy: userId, type: 'income', status: 'acknowledged', date: { gte: fromDate, lte: toDate } },
+    orderBy: { date: 'asc' },
+  });
+
+  // Fetch manual adjustments
+  const adjustments = await prisma.ledgerAdjustment.findMany({
+    where: { userId, month },
+    orderBy: { date: 'asc' },
+  });
+
+  // Build entries array
+  const entries = [];
+
+  // Opening balance entry
+  entries.push({
+    date: fromDate,
+    entryType: 'opening',
+    description: 'Opening Balance',
+    moneyIn: openingBalance > 0 ? openingBalance : 0,
+    moneyOut: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+    amount: openingBalance,
+    ref: 'OPENING',
+  });
+
+  advances.forEach(fr => entries.push({
+    date: fr.disbursedOn || fr.date,
+    entryType: 'advance',
+    description: `Advance: ${fr.title}`,
+    moneyIn: fr.disbursedAmount || 0,
+    moneyOut: 0,
+    amount: fr.disbursedAmount || 0,
+    ref: `FR-${fr.id}`,
+    paymentMode: fr.paymentMode,
+  }));
+
+  reimbursements.forEach(fr => entries.push({
+    date: fr.disbursedOn || fr.date,
+    entryType: 'reimbursement',
+    description: `Reimbursement: ${fr.title}${fr.category ? ` (${fr.category})` : ''}`,
+    moneyIn: fr.disbursedAmount || fr.amount || 0,
+    moneyOut: 0,
+    amount: fr.disbursedAmount || fr.amount || 0,
+    ref: `FR-${fr.id}`,
+  }));
+
+  incomeEntries.forEach(fr => entries.push({
+    date: fr.date,
+    entryType: 'income',
+    description: `Income: ${fr.title}`,
+    moneyIn: fr.amount,
+    moneyOut: 0,
+    amount: fr.amount,
+    ref: `FR-${fr.id}`,
+  }));
+
+  expenses.forEach(e => entries.push({
+    date: e.date,
+    entryType: 'expense',
+    description: `Expense: ${e.title} (${e.category})`,
+    moneyIn: 0,
+    moneyOut: e.amount,
+    amount: -e.amount,
+    ref: `EXP-${e.id}`,
+  }));
+
+  adjustments.forEach(adj => entries.push({
+    date: adj.date,
+    entryType: adj.amount >= 0 ? 'adjustment_in' : 'adjustment_out',
+    description: `Adjustment: ${adj.description}`,
+    moneyIn: adj.amount > 0 ? adj.amount : 0,
+    moneyOut: adj.amount < 0 ? Math.abs(adj.amount) : 0,
+    amount: adj.amount,
+    ref: `ADJ-${adj.id}`,
+  }));
+
+  // Sort: opening first, then by date, credits before debits on same day
+  entries.sort((a, b) => {
+    if (a.entryType === 'opening') return -1;
+    if (b.entryType === 'opening') return 1;
+    const cmp = a.date.localeCompare(b.date);
+    if (cmp !== 0) return cmp;
+    if (a.moneyIn > 0 && b.moneyOut > 0) return -1;
+    if (a.moneyOut > 0 && b.moneyIn > 0) return 1;
+    return 0;
+  });
+
+  // Compute running balance
+  let balance = 0;
+  entries.forEach(e => { balance += e.amount; e.balance = Math.round(balance * 100) / 100; });
+
+  const totalIn = Math.round(entries.reduce((s, e) => s + e.moneyIn, 0) * 100) / 100;
+  const totalOut = Math.round(entries.reduce((s, e) => s + e.moneyOut, 0) * 100) / 100;
+  const closingBalance = Math.round(balance * 100) / 100;
+
+  return { openingBalance, entries, totalIn, totalOut, closingBalance };
+}
+
+// POST /ledger/generate — Generate/update ledger for one user+month (admin)
+router.post('/ledger/generate', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'month');
+  const { userId, month, notes } = req.body;
+  const uid = parseId(String(userId));
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('month must be YYYY-MM format');
+
+  const user = await req.prisma.user.findUnique({ where: { id: uid }, select: { id: true } });
+  if (!user) throw notFound('Employee');
+
+  const { openingBalance, entries, totalIn, totalOut, closingBalance } = await computeLedgerEntries(req.prisma, uid, month);
+
+  const ledger = await req.prisma.monthlyLedger.upsert({
+    where: { userId_month: { userId: uid, month } },
+    create: { userId: uid, month, openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedBy: req.user.id, notes: notes || null },
+    update: { openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedAt: new Date(), generatedBy: req.user.id, notes: notes !== undefined ? (notes || null) : undefined },
+  });
+
+  res.status(201).json({ ...ledger, entries });
+}));
+
+// POST /ledger/auto-generate — Generate ledgers for all active users in a month (admin)
+router.post('/ledger/auto-generate', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'month');
+  const { month } = req.body;
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('month must be YYYY-MM format');
+
+  const [year, mon] = month.split('-').map(Number);
+  const fromDate = `${month}-01`;
+  const lastDay = new Date(year, mon, 0).getDate();
+  const toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+  // Find all users with activity in that month
+  const expenseUserIds = await req.prisma.expenseClaim.findMany({
+    where: { date: { gte: fromDate, lte: toDate } }, select: { userId: true }, distinct: ['userId'],
+  });
+  const fundUserIds = await req.prisma.fundRequest.findMany({
+    where: { OR: [{ disbursedOn: { gte: fromDate, lte: toDate } }, { date: { gte: fromDate, lte: toDate } }] },
+    select: { requestedBy: true }, distinct: ['requestedBy'],
+  });
+  const allUserIds = [...new Set([...expenseUserIds.map(e => e.userId), ...fundUserIds.map(f => f.requestedBy)])];
+
+  let generated = 0;
+  for (const uid of allUserIds) {
+    const { openingBalance, entries, totalIn, totalOut, closingBalance } = await computeLedgerEntries(req.prisma, uid, month);
+    await req.prisma.monthlyLedger.upsert({
+      where: { userId_month: { userId: uid, month } },
+      create: { userId: uid, month, openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedBy: req.user.id },
+      update: { openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedAt: new Date(), generatedBy: req.user.id },
+    });
+    generated++;
+  }
+
+  res.json({ generated, month });
+}));
+
+// GET /ledger/monthly — List monthly ledgers (admin)
+router.get('/ledger/monthly', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, year } = req.query;
+  const where = {};
+  if (userId) where.userId = parseId(userId);
+  if (year) where.month = { startsWith: year };
+
+  const ledgers = await req.prisma.monthlyLedger.findMany({
+    where,
+    include: { user: { select: { id: true, name: true, employeeId: true } } },
+    orderBy: [{ month: 'desc' }, { userId: 'asc' }],
+  });
+
+  res.json(ledgers.map(l => ({ ...l, entries: undefined })));
+}));
+
+// GET /ledger/monthly/:id — Single monthly ledger with entries (admin)
+router.get('/ledger/monthly/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const ledger = await req.prisma.monthlyLedger.findUnique({
+    where: { id },
+    include: { user: { select: { id: true, name: true, employeeId: true } } },
+  });
+  if (!ledger) throw notFound('Monthly Ledger');
+  const entries = ledger.entries ? JSON.parse(ledger.entries) : [];
+  res.json({ ...ledger, entries });
+}));
+
+// PUT /ledger/monthly/:id/lock — Lock a monthly ledger (admin)
+router.put('/ledger/monthly/:id(\\d+)/lock', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const ledger = await req.prisma.monthlyLedger.findUnique({ where: { id } });
+  if (!ledger) throw notFound('Monthly Ledger');
+  const updated = await req.prisma.monthlyLedger.update({
+    where: { id },
+    data: { isLocked: true, lockedBy: req.user.id, lockedAt: new Date() },
+  });
+  res.json(updated);
+}));
+
+// PUT /ledger/monthly/:id/unlock — Unlock a monthly ledger (admin)
+router.put('/ledger/monthly/:id(\\d+)/unlock', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const ledger = await req.prisma.monthlyLedger.findUnique({ where: { id } });
+  if (!ledger) throw notFound('Monthly Ledger');
+  const updated = await req.prisma.monthlyLedger.update({
+    where: { id },
+    data: { isLocked: false, lockedBy: null, lockedAt: null },
+  });
+  res.json(updated);
+}));
+
+// POST /ledger/adjustment — Add manual adjustment (admin)
+router.post('/ledger/adjustment', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'month', 'description', 'amount', 'date');
+  const { userId, month, description, amount, date } = req.body;
+  const uid = parseId(String(userId));
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('month must be YYYY-MM format');
+
+  // Check if month is locked
+  const existing = await req.prisma.monthlyLedger.findUnique({ where: { userId_month: { userId: uid, month } } });
+  if (existing?.isLocked) throw badRequest('Cannot add adjustment to a locked ledger');
+
+  const adjustment = await req.prisma.ledgerAdjustment.create({
+    data: { userId: uid, month, description, amount: parseFloat(amount), date, createdBy: req.user.id },
+  });
+
+  // Re-generate the ledger for that month to update totals
+  const { openingBalance, entries, totalIn, totalOut, closingBalance } = await computeLedgerEntries(req.prisma, uid, month);
+  await req.prisma.monthlyLedger.upsert({
+    where: { userId_month: { userId: uid, month } },
+    create: { userId: uid, month, openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedBy: req.user.id },
+    update: { openingBalance, closingBalance, totalIn, totalOut, entries: JSON.stringify(entries), generatedAt: new Date(), generatedBy: req.user.id },
+  });
+
+  res.status(201).json(adjustment);
+}));
+
+// GET /ledger/monthly/:id/export — Export ledger as CSV (admin)
+router.get('/ledger/monthly/:id(\\d+)/export', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const ledger = await req.prisma.monthlyLedger.findUnique({
+    where: { id },
+    include: { user: { select: { name: true, employeeId: true } } },
+  });
+  if (!ledger) throw notFound('Monthly Ledger');
+
+  const entries = ledger.entries ? JSON.parse(ledger.entries) : [];
+  const rows = [
+    ['Date', 'Type', 'Description', 'Money In (INR)', 'Money Out (INR)', 'Running Balance (INR)'],
+    ...entries.map(e => [e.date, e.entryType, `"${(e.description || '').replace(/"/g, '""')}"`, e.moneyIn || 0, e.moneyOut || 0, e.balance ?? '']),
+    [],
+    ['', '', 'TOTAL', ledger.totalIn, ledger.totalOut, ledger.closingBalance],
+  ];
+
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const filename = `ledger_${(ledger.user?.name || 'user').replace(/\s+/g, '_')}_${ledger.month}.csv`;
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+}));
+
 // GET /fund-requests/summary — Aggregate stats (admin)
 router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res) => {
   const all = await req.prisma.fundRequest.findMany({
