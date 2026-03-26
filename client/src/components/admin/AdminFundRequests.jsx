@@ -9,7 +9,8 @@ import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
 import {
   Check, X, ChevronDown, ChevronUp, CreditCard, Clock,
-  IndianRupee, AlertCircle, Users, CheckCircle2, FileText, Plus, Upload, Loader2,
+  IndianRupee, AlertCircle, Users, CheckCircle2, Plus, Upload, Loader2,
+  RotateCcw,
 } from 'lucide-react';
 
 const FUND_STATUS_STYLES = {
@@ -22,16 +23,29 @@ const FUND_STATUS_STYLES = {
   cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 
+const TYPE_STYLES = {
+  advance: 'bg-green-100 text-green-700 border-green-200',
+  reimbursement: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+const FUND_CATEGORIES = ['travel', 'food', 'office', 'medical', 'other'];
 const STATUS_OPTIONS = ['', 'pending', 'approved', 'rejected', 'disbursed', 'acknowledged', 'settled', 'cancelled'];
+
+const EMPTY_CREATE = {
+  userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0],
+  type: 'advance', category: '', billUrl: '', billDriveId: '',
+};
 
 export default function AdminFundRequests() {
   const [statusFilter, setStatusFilter] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   const queryParts = [];
   if (statusFilter) queryParts.push(`status=${statusFilter}`);
   if (monthFilter) queryParts.push(`month=${monthFilter}`);
+  if (typeFilter) queryParts.push(`type=${typeFilter}`);
   const queryStr = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
 
   const { data: requests, loading, error: fetchErr, refetch } = useFetch(`/expenses/fund-requests/all${queryStr}`, []);
@@ -50,7 +64,10 @@ export default function AdminFundRequests() {
   const [settleNote, setSettleNote] = useState('');
   const [detail, setDetail] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState({ userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0] });
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE);
+  const [billUploading, setBillUploading] = useState(false);
+  const [billFileName, setBillFileName] = useState('');
+  const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
 
   // Client-side user name search
@@ -110,6 +127,11 @@ export default function AdminFundRequests() {
     }
   };
 
+  // For reimbursements: approved → settle (pay out)
+  const handlePayReimbursement = async (id) => {
+    setSettleModal(id);
+  };
+
   const handleSettle = async () => {
     if (!settleModal) return;
     try {
@@ -135,10 +157,41 @@ export default function AdminFundRequests() {
     }
   };
 
+  const handleBillUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBillUploading(true);
+    setBillFileName(file.name);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/files/upload', fd);
+      const driveUrl = res.data?.file?.driveUrl || res.data?.driveUrl || '';
+      const driveId = res.data?.file?.driveFileId || res.data?.driveFileId || '';
+      if (!driveUrl) throw new Error('No URL returned');
+      setCreateForm(prev => ({ ...prev, billUrl: driveUrl, billDriveId: driveId }));
+    } catch (err) {
+      alert('Upload failed: ' + (err.response?.data?.error || err.message));
+      setBillFileName('');
+    } finally {
+      setBillUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const handleCreate = async () => {
     if (!createForm.title.trim() || !createForm.amount) return;
     try {
-      const payload = { title: createForm.title.trim(), amount: parseFloat(createForm.amount), purpose: createForm.purpose.trim() || null, date: createForm.date };
+      const payload = {
+        title: createForm.title.trim(),
+        amount: parseFloat(createForm.amount),
+        purpose: createForm.purpose.trim() || null,
+        date: createForm.date,
+        type: createForm.type,
+        category: createForm.type === 'reimbursement' ? (createForm.category || null) : null,
+        billUrl: createForm.type === 'reimbursement' ? (createForm.billUrl || null) : null,
+        billDriveId: createForm.type === 'reimbursement' ? (createForm.billDriveId || null) : null,
+      };
       if (createForm.userId) {
         payload.userId = parseInt(createForm.userId);
         await execute(() => api.post('/expenses/fund-requests/admin-create', payload), 'Fund request created!');
@@ -147,7 +200,8 @@ export default function AdminFundRequests() {
       }
       refetch();
       setShowCreateModal(false);
-      setCreateForm({ userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0] });
+      setCreateForm(EMPTY_CREATE);
+      setBillFileName('');
     } catch {
       // Error displayed by useApi
     }
@@ -203,7 +257,7 @@ export default function AdminFundRequests() {
         <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} label="Pending Requests" value={pendingCount} />
         <StatCard icon={<Users className="w-5 h-5 text-blue-600" />} label="Active Advances" value={activeAdvances} />
         <StatCard icon={<AlertCircle className="w-5 h-5 text-red-600" />} label="Total Outstanding" value={formatINR(totalOutstanding)} />
-        <StatCard icon={<IndianRupee className="w-5 h-5 text-green-600" />} label="Disbursed This Month" value={formatINR(disbursedThisMonth)} />
+        <StatCard icon={<IndianRupee className="w-5 h-5 text-green-600" />} label="Total Disbursed" value={formatINR(disbursedThisMonth)} />
       </div>
 
       {/* Action bar */}
@@ -226,6 +280,15 @@ export default function AdminFundRequests() {
           {STATUS_OPTIONS.filter(Boolean).map(s => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
           ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">All Types</option>
+          <option value="advance">Advance</option>
+          <option value="reimbursement">Reimbursement</option>
         </select>
         <input
           type="month"
@@ -253,6 +316,7 @@ export default function AdminFundRequests() {
               <tr className="bg-slate-50 text-left text-xs text-slate-500 uppercase">
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3 text-right">Requested</th>
                 <th className="px-4 py-3 text-right">Disbursed</th>
                 <th className="px-4 py-3 text-right">Spent</th>
@@ -264,16 +328,24 @@ export default function AdminFundRequests() {
             </thead>
             <tbody className="divide-y">
               {filteredRequests.map(req => {
+                const isReimb = req.type === 'reimbursement';
                 const balance = (req.disbursedAmount || 0) - (req.spent || 0);
                 return (
                   <TableRowGroup key={req.id}>
                     <tr className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-800">{req.requester?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-700">{req.title}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${TYPE_STYLES[req.type] || TYPE_STYLES.advance}`}>
+                          {isReimb ? 'Reimbursement' : 'Advance'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-right">{formatINR(req.amount)}</td>
                       <td className="px-4 py-3 text-right">{req.disbursedAmount ? formatINR(req.disbursedAmount) : '-'}</td>
                       <td className="px-4 py-3 text-right">{req.spent ? formatINR(req.spent) : '-'}</td>
-                      <td className="px-4 py-3 text-right font-medium">{req.disbursedAmount ? formatINR(balance) : '-'}</td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {isReimb ? '-' : (req.disbursedAmount ? formatINR(balance) : '-')}
+                      </td>
                       <td className="px-4 py-3"><StatusBadge status={req.status} styleMap={FUND_STATUS_STYLES} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
@@ -296,7 +368,8 @@ export default function AdminFundRequests() {
                               </button>
                             </>
                           )}
-                          {req.status === 'approved' && (
+                          {/* Advance: approved → disburse */}
+                          {!isReimb && req.status === 'approved' && (
                             <button
                               onClick={() => { setDisburseModal(req); setDisburseForm(f => ({ ...f, disbursedAmount: req.amount })); }}
                               className="text-xs px-2 py-1 text-purple-600 border border-purple-200 rounded hover:bg-purple-50"
@@ -304,10 +377,19 @@ export default function AdminFundRequests() {
                               <CreditCard className="w-3.5 h-3.5 inline mr-1" />Disburse
                             </button>
                           )}
+                          {/* Reimbursement: approved → pay */}
+                          {isReimb && req.status === 'approved' && (
+                            <button
+                              onClick={() => handlePayReimbursement(req.id)}
+                              className="text-xs px-2 py-1 text-green-600 border border-green-200 rounded hover:bg-green-50"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />Pay
+                            </button>
+                          )}
                           {req.status === 'disbursed' && (
                             <span className="text-xs text-slate-400 italic">Awaiting Ack</span>
                           )}
-                          {req.status === 'acknowledged' && (
+                          {!isReimb && req.status === 'acknowledged' && (
                             <button
                               onClick={() => setSettleModal(req.id)}
                               className="text-xs px-2 py-1 text-green-600 border border-green-200 rounded hover:bg-green-50"
@@ -336,10 +418,19 @@ export default function AdminFundRequests() {
                     {/* Expanded Detail */}
                     {expanded === req.id && detail && (
                       <tr>
-                        <td colSpan={9} className="bg-slate-50 px-6 py-4">
+                        <td colSpan={10} className="bg-slate-50 px-6 py-4">
                           <div className="space-y-3 text-sm">
                             {detail.purpose && (
                               <p><span className="text-slate-500">Purpose:</span> {detail.purpose}</p>
+                            )}
+                            {detail.category && (
+                              <p><span className="text-slate-500">Category:</span> <span className="capitalize">{detail.category}</span></p>
+                            )}
+                            {detail.billUrl && (
+                              <p>
+                                <span className="text-slate-500">Bill/Receipt:</span>{' '}
+                                <a href={detail.billUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">View Bill</a>
+                              </p>
                             )}
                             {detail.reviewNote && (
                               <p><span className="text-slate-500">Review Note:</span> {detail.reviewNote}</p>
@@ -348,7 +439,7 @@ export default function AdminFundRequests() {
                               <div className="flex gap-4 text-xs">
                                 <span>Mode: <strong className="capitalize">{detail.paymentMode?.replace(/_/g, ' ')}</strong></span>
                                 {detail.paymentRef && <span>Ref: <strong>{detail.paymentRef}</strong></span>}
-                                <span>Disbursed: <strong>{formatDate(detail.disbursedAt)}</strong></span>
+                                <span>Disbursed: <strong>{formatDate(detail.disbursedOn)}</strong></span>
                               </div>
                             )}
 
@@ -499,8 +590,30 @@ export default function AdminFundRequests() {
 
       {/* Create Fund Request Modal */}
       {showCreateModal && (
-        <Modal title="Request Fund" onClose={() => setShowCreateModal(false)}>
-          <div className="space-y-3">
+        <Modal title="Request Fund" onClose={() => { setShowCreateModal(false); setCreateForm(EMPTY_CREATE); setBillFileName(''); }}>
+          <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+            {saveErr && <AlertMessage type="error" message={saveErr} />}
+            {/* Type Toggle */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Request Type *</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, type: 'advance' }))}
+                  className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${createForm.type === 'advance' ? 'bg-green-600 text-white border-green-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Advance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, type: 'reimbursement' }))}
+                  className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${createForm.type === 'reimbursement' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Reimbursement
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Request On Behalf Of (optional)</label>
               <select value={createForm.userId} onChange={e => setCreateForm(prev => ({ ...prev, userId: e.target.value }))}
@@ -511,11 +624,13 @@ export default function AdminFundRequests() {
                 ))}
               </select>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
               <input type="text" value={createForm.title} onChange={e => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Office supplies, Travel advance" />
+                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder={createForm.type === 'reimbursement' ? 'e.g. Client travel expenses' : 'e.g. Office supplies advance'} />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
@@ -528,13 +643,49 @@ export default function AdminFundRequests() {
                   className="w-full border rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
+
+            {/* Reimbursement-specific fields */}
+            {createForm.type === 'reimbursement' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                  <select value={createForm.category} onChange={e => setCreateForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm">
+                    <option value="">Select category</option>
+                    {FUND_CATEGORIES.map(c => (
+                      <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Bill / Receipt</label>
+                  <input ref={billInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleBillUpload} className="hidden" />
+                  {createForm.billUrl ? (
+                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                      <span className="text-sm text-green-700 truncate flex-1">{billFileName || 'Bill uploaded'}</span>
+                      <button type="button" onClick={() => { setCreateForm(prev => ({ ...prev, billUrl: '', billDriveId: '' })); setBillFileName(''); }}
+                        className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => billInputRef.current?.click()} disabled={billUploading}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                      {billUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Bill/Receipt (PDF/Image)</>}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Purpose</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{createForm.type === 'reimbursement' ? 'Description' : 'Purpose'}</label>
               <textarea value={createForm.purpose} onChange={e => setCreateForm(prev => ({ ...prev, purpose: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} placeholder="Describe the purpose of this fund request..." />
+                className="w-full border rounded-lg px-3 py-2 text-sm" rows={2}
+                placeholder={createForm.type === 'reimbursement' ? 'Describe what was spent...' : 'Describe the purpose of this fund request...'} />
             </div>
+
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
+              <button onClick={() => { setShowCreateModal(false); setCreateForm(EMPTY_CREATE); setBillFileName(''); }} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleCreate} disabled={saving || !createForm.title.trim() || !createForm.amount}
                 className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50">
                 {saving ? 'Creating...' : 'Submit Request'}
@@ -544,9 +695,9 @@ export default function AdminFundRequests() {
         </Modal>
       )}
 
-      {/* Settle Modal */}
+      {/* Settle / Pay Modal */}
       {settleModal && (
-        <Modal title="Settle Request" onClose={() => { setSettleModal(null); setSettleNote(''); }}>
+        <Modal title="Settle / Pay Request" onClose={() => { setSettleModal(null); setSettleNote(''); }}>
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Settlement Note</label>
@@ -555,13 +706,13 @@ export default function AdminFundRequests() {
                 onChange={e => setSettleNote(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2 text-sm"
                 rows={3}
-                placeholder="Optional settlement note..."
+                placeholder="Optional settlement / payment note..."
               />
             </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => { setSettleModal(null); setSettleNote(''); }} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleSettle} disabled={saving} className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
-                {saving ? 'Settling...' : 'Settle'}
+                {saving ? 'Processing...' : 'Confirm Payment'}
               </button>
             </div>
           </div>

@@ -301,6 +301,8 @@ router.get('/reports/summary', requireAdmin, asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const FUND_STATUSES = ['pending', 'approved', 'rejected', 'disbursed', 'acknowledged', 'settled', 'cancelled'];
+const FUND_TYPES = ['advance', 'reimbursement'];
+const FUND_CATEGORIES = ['travel', 'food', 'office', 'medical', 'other'];
 const PAYMENT_MODES = ['bank_transfer', 'cash'];
 
 async function logFundAction(prisma, { fundRequestId, action, actionBy, notes }) {
@@ -319,20 +321,24 @@ async function getFundBalance(prisma, fundRequestId, disbursedAmount) {
 // POST /fund-requests — Submit fund request
 router.post('/fund-requests', asyncHandler(async (req, res) => {
   requireFields(req.body, 'title', 'amount');
-  const { title, purpose, amount, date } = req.body;
+  const { title, purpose, amount, date, type, category, billUrl, billDriveId } = req.body;
   if (parseFloat(amount) <= 0) throw badRequest('Amount must be positive');
+  const frType = type || 'advance';
+  requireEnum(frType, FUND_TYPES, 'type');
+  if (frType === 'reimbursement' && category) requireEnum(category, FUND_CATEGORIES, 'category');
 
   const fr = await req.prisma.fundRequest.create({
     data: {
       requestedBy: req.user.id, title, purpose: purpose || null,
       amount: parseFloat(amount), date: date || new Date().toISOString().slice(0, 10), status: 'pending',
+      type: frType, category: category || null, billUrl: billUrl || null, billDriveId: billDriveId || null,
     },
   });
-  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `Requested ₹${amount} for ${title}` });
+  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `${frType === 'reimbursement' ? 'Reimbursement' : 'Advance'} requested ₹${amount} for ${title}` });
 
   // Notify admins
   const admins = await req.prisma.user.findMany({ where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } }, select: { id: true } });
-  notifyUsers(req.prisma, { userIds: admins.map(a => a.id), type: 'fund_request', title: 'New Fund Request', message: `${req.user.name} requested ₹${amount} for ${title}`, link: '/expenses' });
+  notifyUsers(req.prisma, { userIds: admins.map(a => a.id), type: 'fund_request', title: 'New Fund Request', message: `${req.user.name} requested ₹${amount} ${frType === 'reimbursement' ? '(Reimbursement)' : '(Advance)'} for ${title}`, link: '/expenses' });
 
   res.status(201).json(fr);
 }));
@@ -340,17 +346,21 @@ router.post('/fund-requests', asyncHandler(async (req, res) => {
 // POST /fund-requests/admin-create — Admin creates on behalf
 router.post('/fund-requests/admin-create', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'title', 'amount');
-  const { userId, title, purpose, amount, date } = req.body;
+  const { userId, title, purpose, amount, date, type, category, billUrl, billDriveId } = req.body;
   const targetUser = await req.prisma.user.findUnique({ where: { id: parseInt(userId) }, select: { id: true, name: true, isActive: true } });
   if (!targetUser) throw notFound('Employee');
+  const frType = type || 'advance';
+  requireEnum(frType, FUND_TYPES, 'type');
+  if (frType === 'reimbursement' && category) requireEnum(category, FUND_CATEGORIES, 'category');
 
   const fr = await req.prisma.fundRequest.create({
     data: {
       requestedBy: targetUser.id, title, purpose: purpose || null,
       amount: parseFloat(amount), date: date || new Date().toISOString().slice(0, 10), status: 'pending',
+      type: frType, category: category || null, billUrl: billUrl || null, billDriveId: billDriveId || null,
     },
   });
-  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `Created by admin ${req.user.name} for ${targetUser.name}: ₹${amount}` });
+  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `Created by admin ${req.user.name} for ${targetUser.name}: ₹${amount} (${frType})` });
   res.status(201).json(fr);
 }));
 
@@ -380,11 +390,12 @@ router.get('/fund-requests/pending', requireAdmin, asyncHandler(async (req, res)
 
 // GET /fund-requests/all — All with filters (admin)
 router.get('/fund-requests/all', requireAdmin, asyncHandler(async (req, res) => {
-  const { status, month, userId } = req.query;
+  const { status, month, userId, type } = req.query;
   const where = {};
   if (status) where.status = status;
   if (month) where.date = { startsWith: month };
   if (userId) where.requestedBy = parseInt(userId);
+  if (type && FUND_TYPES.includes(type)) where.type = type;
 
   const requests = await req.prisma.fundRequest.findMany({
     where,
@@ -555,7 +566,100 @@ router.delete('/fund-requests/:id(\\d+)', requireAdmin, asyncHandler(async (req,
   res.json({ message: 'Fund request deleted' });
 }));
 
-// GET /fund-requests/ledger — Date-wise ledger per user (admin)
+// GET /fund-balances/my — Get own opening + running balance
+router.get('/fund-balances/my', asyncHandler(async (req, res) => {
+  req.params.userId = String(req.user.id);
+  // falls through to next handler via shared logic below
+  const uid = req.user.id;
+
+  const balance = await req.prisma.employeeFundBalance.findUnique({ where: { userId: uid } });
+  const advances = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] } },
+    select: { disbursedAmount: true },
+  });
+  const reimbursements = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'paid'] } },
+    select: { amount: true },
+  });
+  const expenses = await req.prisma.expenseClaim.findMany({
+    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    select: { amount: true },
+  });
+
+  const openingBalance = balance?.openingBalance || 0;
+  const totalDisbursed = advances.reduce((s, f) => s + (f.disbursedAmount || 0), 0);
+  const totalReimbursed = reimbursements.reduce((s, f) => s + f.amount, 0);
+  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+  const currentBalance = openingBalance + totalDisbursed + totalReimbursed - totalSpent;
+
+  res.json({
+    openingBalance,
+    notes: balance?.notes || null,
+    setDate: balance?.setDate || null,
+    totalDisbursed: Math.round(totalDisbursed * 100) / 100,
+    totalReimbursed: Math.round(totalReimbursed * 100) / 100,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    currentBalance: Math.round(currentBalance * 100) / 100,
+  });
+}));
+
+// GET /fund-balances/:userId — Get employee's opening balance (admin or self)
+router.get('/fund-balances/:userId(\\d+)', asyncHandler(async (req, res) => {
+  const uid = parseId(req.params.userId);
+  if (!isAdminRole(req.user) && req.user.id !== uid) throw forbidden();
+
+  const balance = await req.prisma.employeeFundBalance.findUnique({ where: { userId: uid } });
+
+  // Compute running balance from all advances/reimbursements
+  const advances = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] } },
+    select: { disbursedAmount: true },
+  });
+  const reimbursements = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'paid'] } },
+    select: { amount: true },
+  });
+  const expenses = await req.prisma.expenseClaim.findMany({
+    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    select: { amount: true },
+  });
+
+  const openingBalance = balance?.openingBalance || 0;
+  const totalDisbursed = advances.reduce((s, f) => s + (f.disbursedAmount || 0), 0);
+  const totalReimbursed = reimbursements.reduce((s, f) => s + f.amount, 0);
+  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+  const currentBalance = openingBalance + totalDisbursed + totalReimbursed - totalSpent;
+
+  res.json({
+    openingBalance,
+    notes: balance?.notes || null,
+    setDate: balance?.setDate || null,
+    totalDisbursed: Math.round(totalDisbursed * 100) / 100,
+    totalReimbursed: Math.round(totalReimbursed * 100) / 100,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    currentBalance: Math.round(currentBalance * 100) / 100,
+  });
+}));
+
+// PUT /fund-balances/:userId — Set/update opening balance (admin)
+router.put('/fund-balances/:userId(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
+  const uid = parseId(req.params.userId);
+  const { openingBalance, notes } = req.body;
+  if (openingBalance === undefined || openingBalance === null) throw badRequest('openingBalance is required');
+
+  const user = await req.prisma.user.findUnique({ where: { id: uid }, select: { id: true } });
+  if (!user) throw notFound('Employee');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const balance = await req.prisma.employeeFundBalance.upsert({
+    where: { userId: uid },
+    create: { userId: uid, openingBalance: parseFloat(openingBalance), notes: notes || null, setBy: req.user.id, setDate: today },
+    update: { openingBalance: parseFloat(openingBalance), notes: notes || null, setBy: req.user.id, setDate: today },
+  });
+  res.json(balance);
+}));
+
+// GET /fund-requests/ledger — Enhanced date-wise ledger per user (admin)
 router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) => {
   const { userId, fromDate, toDate } = req.query;
   if (!userId) throw badRequest('userId required');
@@ -565,10 +669,19 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
   if (fromDate) dateFilter.gte = fromDate;
   if (toDate) dateFilter.lte = toDate;
 
-  // Get disbursements (credits)
-  const frWhere = { requestedBy: uid, status: { in: ['acknowledged', 'settled'] } };
-  if (fromDate || toDate) frWhere.disbursedOn = dateFilter;
-  const funds = await req.prisma.fundRequest.findMany({ where: frWhere, orderBy: { disbursedOn: 'asc' } });
+  // Get opening balance
+  const balanceRecord = await req.prisma.employeeFundBalance.findUnique({ where: { userId: uid } });
+  const openingBalance = balanceRecord?.openingBalance || 0;
+
+  // Get advance disbursements (credits)
+  const advWhere = { requestedBy: uid, type: 'advance', status: { in: ['disbursed', 'acknowledged', 'settled'] } };
+  if (fromDate || toDate) advWhere.disbursedOn = dateFilter;
+  const advances = await req.prisma.fundRequest.findMany({ where: advWhere, orderBy: { disbursedOn: 'asc' } });
+
+  // Get reimbursements approved (credits)
+  const reimWhere = { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'disbursed', 'settled'] } };
+  if (fromDate || toDate) reimWhere.date = dateFilter;
+  const reimbursements = await req.prisma.fundRequest.findMany({ where: reimWhere, orderBy: { date: 'asc' } });
 
   // Get expenses linked to any fund request (debits)
   const expWhere = { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } };
@@ -577,18 +690,82 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
 
   // Build ledger entries
   const entries = [];
-  funds.forEach(fr => entries.push({ date: fr.disbursedOn, type: 'credit', description: `Fund: ${fr.title}`, amount: fr.disbursedAmount, ref: `FR-${fr.id}`, paymentMode: fr.paymentMode }));
-  expenses.forEach(e => entries.push({ date: e.date, type: 'debit', description: `Expense: ${e.title} (${e.category})`, amount: e.amount, ref: `EXP-${e.id}` }));
-  entries.sort((a, b) => a.date.localeCompare(b.date) || (a.type === 'credit' ? -1 : 1));
 
-  // Running balance
-  let balance = 0;
-  entries.forEach(e => { balance += e.type === 'credit' ? e.amount : -e.amount; e.balance = Math.round(balance * 100) / 100; });
+  // Opening balance entry (only if no date filter, or if no fromDate)
+  if (!fromDate && openingBalance !== 0) {
+    entries.push({
+      date: balanceRecord?.setDate || '2000-01-01',
+      entryType: 'opening',
+      description: `Opening Balance${balanceRecord?.notes ? ` — ${balanceRecord.notes}` : ''}`,
+      moneyIn: openingBalance > 0 ? openingBalance : 0,
+      moneyOut: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+      amount: openingBalance,
+      ref: 'OPENING',
+    });
+  }
 
-  const totalReceived = funds.reduce((s, f) => s + (f.disbursedAmount || 0), 0);
-  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
+  advances.forEach(fr => entries.push({
+    date: fr.disbursedOn || fr.date,
+    entryType: 'advance',
+    description: `Advance: ${fr.title}`,
+    moneyIn: fr.disbursedAmount || 0,
+    moneyOut: 0,
+    amount: fr.disbursedAmount || 0,
+    ref: `FR-${fr.id}`,
+    paymentMode: fr.paymentMode,
+  }));
 
-  res.json({ entries, summary: { totalReceived: Math.round(totalReceived * 100) / 100, totalSpent: Math.round(totalSpent * 100) / 100, outstanding: Math.round((totalReceived - totalSpent) * 100) / 100 } });
+  reimbursements.forEach(fr => entries.push({
+    date: fr.disbursedOn || fr.date,
+    entryType: 'reimbursement',
+    description: `Reimbursement: ${fr.title}${fr.category ? ` (${fr.category})` : ''}`,
+    moneyIn: fr.disbursedAmount || fr.amount || 0,
+    moneyOut: 0,
+    amount: fr.disbursedAmount || fr.amount || 0,
+    ref: `FR-${fr.id}`,
+  }));
+
+  expenses.forEach(e => entries.push({
+    date: e.date,
+    entryType: 'expense',
+    description: `Expense: ${e.title} (${e.category})`,
+    moneyIn: 0,
+    moneyOut: e.amount,
+    amount: -e.amount,
+    ref: `EXP-${e.id}`,
+  }));
+
+  entries.sort((a, b) => {
+    const cmp = a.date.localeCompare(b.date);
+    if (cmp !== 0) return cmp;
+    // Credits before debits on same day
+    if (a.entryType === 'opening') return -1;
+    if (b.entryType === 'opening') return 1;
+    if (a.moneyIn > 0 && b.moneyOut > 0) return -1;
+    if (a.moneyOut > 0 && b.moneyIn > 0) return 1;
+    return 0;
+  });
+
+  // Running balance (start from opening if no fromDate)
+  let balance = fromDate ? 0 : 0; // Balance computed fresh from entries
+  entries.forEach(e => { balance += e.amount; e.balance = Math.round(balance * 100) / 100; });
+
+  const totalIn = entries.reduce((s, e) => s + e.moneyIn, 0);
+  const totalOut = entries.reduce((s, e) => s + e.moneyOut, 0);
+
+  res.json({
+    openingBalance,
+    entries,
+    summary: {
+      totalIn: Math.round(totalIn * 100) / 100,
+      totalOut: Math.round(totalOut * 100) / 100,
+      currentBalance: Math.round((totalIn - totalOut) * 100) / 100,
+      // legacy compat
+      totalReceived: Math.round(totalIn * 100) / 100,
+      totalSpent: Math.round(totalOut * 100) / 100,
+      outstanding: Math.round((totalIn - totalOut) * 100) / 100,
+    },
+  });
 }));
 
 // GET /fund-requests/summary — Aggregate stats (admin)
@@ -597,14 +774,18 @@ router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res)
     include: { requester: { select: { id: true, name: true } }, expenses: { where: { status: { not: 'rejected' } }, select: { amount: true } } },
   });
 
+  const advances = all.filter(f => f.type === 'advance');
+  const reimbs = all.filter(f => f.type === 'reimbursement');
+
   const totalRequested = all.reduce((s, f) => s + f.amount, 0);
   const totalDisbursed = all.filter(f => f.disbursedAmount).reduce((s, f) => s + f.disbursedAmount, 0);
   const totalSpent = all.reduce((s, f) => s + f.expenses.reduce((es, e) => es + e.amount, 0), 0);
   const byStatus = {};
   all.forEach(f => { byStatus[f.status] = (byStatus[f.status] || 0) + 1; });
+  const byType = { advance: advances.length, reimbursement: reimbs.length };
 
-  // Outstanding per user
-  const activeRequests = all.filter(f => ['acknowledged'].includes(f.status));
+  // Outstanding per user (advances only)
+  const activeRequests = advances.filter(f => ['acknowledged'].includes(f.status));
   const byUser = {};
   activeRequests.forEach(f => {
     const spent = f.expenses.reduce((s, e) => s + e.amount, 0);
@@ -617,9 +798,11 @@ router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res)
   });
 
   res.json({
-    total: all.length, byStatus,
+    total: all.length, byStatus, byType,
     totalRequested: Math.round(totalRequested), totalDisbursed: Math.round(totalDisbursed),
     totalSpent: Math.round(totalSpent), totalOutstanding: Math.round(totalDisbursed - totalSpent),
+    totalReimbursementsPending: reimbs.filter(f => f.status === 'pending').length,
+    totalReimbursementsAmount: Math.round(reimbs.reduce((s, f) => s + f.amount, 0)),
     byUser: Object.values(byUser),
   });
 }));

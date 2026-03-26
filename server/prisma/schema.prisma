@@ -142,6 +142,8 @@ model User {
   fundRequests       FundRequest[]      @relation("FundRequests")
   fundRequestReviews FundRequest[]      @relation("FundRequestReviews")
   fundDisbursements  FundRequest[]      @relation("FundDisbursements")
+  fundBalance        EmployeeFundBalance? @relation("EmployeeFundBalance")
+  fundBalancesSet    EmployeeFundBalance[] @relation("FundBalanceSetBy")
   announcements      Announcement[]     @relation("AnnouncementAuthor")
   generatedLetters   GeneratedLetter[]
   lettersGeneratedBy GeneratedLetter[]  @relation("LetterGeneratedBy")
@@ -936,6 +938,10 @@ model FundRequest {
   amount            Float                                    // Requested amount
   date              String                                   // "YYYY-MM-DD" request date
   status            String    @default("pending")            // pending, approved, rejected, disbursed, acknowledged, settled, cancelled
+  type              String    @default("advance")            // advance, reimbursement
+  category          String?                                  // For reimbursement: travel, food, office, medical, other
+  billUrl           String?                                  // Receipt/bill URL for reimbursement
+  billDriveId       String?                                  // Drive file ID for bill
   paymentMode       String?                                  // bank_transfer, cash
   disbursedAmount   Float?                                   // Actual amount disbursed (may differ from requested)
   disbursedOn       String?                                  // "YYYY-MM-DD"
@@ -961,6 +967,23 @@ model FundRequest {
   @@index([requestedBy])
   @@index([status])
   @@index([date])
+  @@index([type])
+}
+
+model EmployeeFundBalance {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  openingBalance Float    @default(0)
+  notes          String?
+  setBy          Int?
+  setDate        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation("EmployeeFundBalance", fields: [userId], references: [id])
+  setByUser      User?    @relation("FundBalanceSetBy", fields: [setBy], references: [id])
+
+  @@index([userId])
 }
 
 model FundRequestLog {
