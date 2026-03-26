@@ -2168,7 +2168,8 @@ model CompanyRegistration {
   district       String?
   stateCode      String  // gstin[0:1] as "09" (preserve leading zero)
   regNo          Int     // gstin[12] as integer
-  placeType      String  @default("Principal") // Comma-separated: "Principal", "E-APOB", "I-APOB"
+  placeType      String  @default("Principal") // Comma-separated: "Principal", "E-APOB", "I-APOB", "Additional"
+  principalRegistrationId Int?  // Links Additional to its Principal registration
   address        String? // full registered address
   fssai          String? // FSSAI licence number
   udyam          String? // Udyam registration number
@@ -2178,11 +2179,14 @@ model CompanyRegistration {
   updatedAt      DateTime @updatedAt
 
   legalEntity    LegalEntity @relation(fields: [legalEntityId], references: [id])
+  principalRegistration CompanyRegistration? @relation("PrincipalToAdditional", fields: [principalRegistrationId], references: [id])
+  additionalRegistrations CompanyRegistration[] @relation("PrincipalToAdditional")
   users          User[]      @relation("UserCompanyRegistration")
   assets         Asset[]     @relation("AssetCompanyRegistration")
   certificates   ComplianceCertificate[]
 
   @@index([legalEntityId])
+  @@index([principalRegistrationId])
   @@index([stateCode])
   @@index([isActive])
 }

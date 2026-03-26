@@ -9,7 +9,7 @@ import EmptyState from '../shared/EmptyState';
 import BranchManager from './BranchManager';
 import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle, GitBranch } from 'lucide-react';
 
-const PLACE_TYPE_OPTIONS = ['Principal', 'E-APOB', 'I-APOB'];
+const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -123,7 +123,7 @@ function EntityModal({ entity, onClose, onSaved }) {
 
 // ─── Registration Modal ───────────────────────────────────────────────────────
 
-function RegistrationModal({ registration, entityId, onClose, onSaved }) {
+function RegistrationModal({ registration, entityId, onClose, onSaved, allRegistrations = [] }) {
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     gstin: registration?.gstin || '',
@@ -131,6 +131,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
     state: registration?.state || '',
     district: registration?.district || '',
     placeType: registration?.placeType || 'Principal',  // comma-separated
+    principalRegistrationId: registration?.principalRegistrationId || '',
     address: registration?.address || '',
     fssai: registration?.fssai || '',
     udyam: registration?.udyam || '',
@@ -146,6 +147,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
     const payload = {
       ...form,
       legalEntityId: parseInt(form.legalEntityId),
+      principalRegistrationId: form.principalRegistrationId ? parseInt(form.principalRegistrationId) : null,
       district: form.district || null,
       address: form.address || null,
       fssai: form.fssai || null,
@@ -228,6 +230,21 @@ function RegistrationModal({ registration, entityId, onClose, onSaved }) {
               </div>
             </div>
           </div>
+          {/* Principal Registration dropdown — show when NOT Principal */}
+          {!(form.placeType || '').includes('Principal') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Linked Principal Registration *</label>
+              <select value={form.principalRegistrationId} onChange={e => set('principalRegistrationId', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">-- Select Principal --</option>
+                {allRegistrations
+                  .filter(r => (r.placeType || '').includes('Principal') && r.id !== registration?.id)
+                  .map(r => (
+                    <option key={r.id} value={r.id}>{r.abbr} — {r.officeCity} ({r.gstin})</option>
+                  ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Full Registered Address</label>
             <textarea value={form.address} onChange={e => set('address', e.target.value)}
@@ -299,6 +316,16 @@ function RegistrationDetail({ reg, onEdit, onDeactivate, onReactivate }) {
             ))}
           </div>
           <p className="text-xs text-gray-500 mt-0.5">{reg.officeCity} · {reg.state}</p>
+          {reg.principalRegistration && (
+            <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
+              ↳ Principal: <span className="font-mono font-semibold">{reg.principalRegistration.abbr}</span> ({reg.principalRegistration.officeCity})
+            </p>
+          )}
+          {reg.additionalRegistrations?.length > 0 && (
+            <p className="text-xs text-amber-600 mt-0.5">
+              📎 {reg.additionalRegistrations.length} linked: {reg.additionalRegistrations.map(r => r.abbr).join(', ')}
+            </p>
+          )}
         </div>
         {reg.isActive ? (
           <div className="flex items-center gap-2">
@@ -655,6 +682,7 @@ export default function CompanyMaster() {
         <RegistrationModal
           registration={regModal === 'add' ? null : regModal}
           entityId={effectiveId}
+          allRegistrations={registrations || []}
           onClose={() => setRegModal(null)}
           onSaved={handleSaved} />
       )}
