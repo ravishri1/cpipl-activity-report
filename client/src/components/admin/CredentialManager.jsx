@@ -72,9 +72,9 @@ function PortalFormModal({ portal, registrations, onClose, onSaved }) {
     e.preventDefault();
     try {
       if (isEdit) {
-        await execute(() => api.put(`/api/credentials/portals/${portal.id}`, form), 'Portal updated!');
+        await execute(() => api.put(`/credentials/portals/${portal.id}`, form), 'Portal updated!');
       } else {
-        await execute(() => api.post('/api/credentials/portals', form), 'Portal created!');
+        await execute(() => api.post('/credentials/portals', form), 'Portal created!');
       }
       onSaved();
       onClose();
@@ -171,9 +171,9 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     };
     try {
       if (isEdit) {
-        await execute(() => api.put(`/api/credentials/credentials/${credential.id}`, payload), 'Credential updated!');
+        await execute(() => api.put(`/credentials/credentials/${credential.id}`, payload), 'Credential updated!');
       } else {
-        await execute(() => api.post('/api/credentials/credentials', payload), 'Credential created!');
+        await execute(() => api.post('/credentials/credentials', payload), 'Credential created!');
       }
       onSaved();
       onClose();
@@ -298,14 +298,14 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
   const { execute } = useApi();
 
   const { data: credentials, loading: credsLoading, error: credsErr, refetch: refetchCreds } = useFetch(
-    expanded ? `/api/credentials/portals/${portal.id}/credentials` : null,
+    expanded ? `/credentials/portals/${portal.id}/credentials` : null,
     []
   );
 
   const handleRevoke = async (credId) => {
     if (!window.confirm('Revoke this credential?')) return;
     try {
-      await execute(() => api.delete(`/api/credentials/credentials/${credId}`), 'Credential revoked');
+      await execute(() => api.delete(`/credentials/credentials/${credId}`), 'Credential revoked');
       refetchCreds();
     } catch {
       // Error shown by useApi
@@ -432,7 +432,7 @@ export default function CredentialManager() {
   if (filterCat) params.set('category', filterCat);
   const queryStr = params.toString() ? `?${params.toString()}` : '';
 
-  const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/api/credentials/portals${queryStr}`, []);
+  const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
   const { data: registrations, error: regErr } = useFetch('/api/company-master/registrations', []);
   const { data: usersData, error: usersErr } = useFetch('/api/users?isActive=true&limit=200', { users: [] });
   const users = Array.isArray(usersData) ? usersData : (usersData?.users || []);

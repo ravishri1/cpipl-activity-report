@@ -88,7 +88,7 @@ function CredentialCard({ cred, badge }) {
 }
 
 export default function MyCredentials() {
-  const { data, loading, error: fetchErr } = useFetch('/api/credentials/my-credentials', { individual: [], shared: [] });
+  const { data, loading, error: fetchErr } = useFetch('/credentials/my-credentials', { individual: [], shared: [] });
 
   const individual = data?.individual || [];
   const shared = data?.shared || [];
