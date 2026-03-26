@@ -55,7 +55,7 @@ export default function AdminFundRequests() {
 
   // Client-side user name search
   const filteredRequests = userSearch
-    ? requests.filter(r => (r.user?.name || '').toLowerCase().includes(userSearch.toLowerCase()))
+    ? requests.filter(r => (r.requester?.name || '').toLowerCase().includes(userSearch.toLowerCase()))
     : requests;
 
   // Stats from summary endpoint
@@ -268,7 +268,7 @@ export default function AdminFundRequests() {
                 return (
                   <TableRowGroup key={req.id}>
                     <tr className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-800">{req.user?.name || '-'}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800">{req.requester?.name || '-'}</td>
                       <td className="px-4 py-3 text-slate-700">{req.title}</td>
                       <td className="px-4 py-3 text-right">{formatINR(req.amount)}</td>
                       <td className="px-4 py-3 text-right">{req.disbursedAmount ? formatINR(req.disbursedAmount) : '-'}</td>
