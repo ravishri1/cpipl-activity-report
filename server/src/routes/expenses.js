@@ -903,12 +903,13 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
     ref: `EXP-${e.id}`,
   }));
 
+  // Opening always first, then date-wise, credits before debits on same day
   entries.sort((a, b) => {
-    const cmp = a.date.localeCompare(b.date);
-    if (cmp !== 0) return cmp;
-    // Credits before debits on same day
     if (a.entryType === 'opening') return -1;
     if (b.entryType === 'opening') return 1;
+    const cmp = a.date.localeCompare(b.date);
+    if (cmp !== 0) return cmp;
+    // Credits (money in) before debits (money out) on same day
     if (a.moneyIn > 0 && b.moneyOut > 0) return -1;
     if (a.moneyOut > 0 && b.moneyIn > 0) return 1;
     return 0;
