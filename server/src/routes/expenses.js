@@ -439,7 +439,7 @@ router.get('/fund-requests/:id(\\d+)/history', asyncHandler(async (req, res) => 
 }));
 
 // PUT /fund-requests/:id/review — Approve or reject
-router.put('/fund-requests/:id(\d+)/review', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/fund-requests/:id(\\d+)/review', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   requireFields(req.body, 'status');
   const { status, reviewNote } = req.body;
@@ -462,7 +462,7 @@ router.put('/fund-requests/:id(\d+)/review', requireAdmin, asyncHandler(async (r
 }));
 
 // PUT /fund-requests/:id/disburse — Disburse funds
-router.put('/fund-requests/:id(\d+)/disburse', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/fund-requests/:id(\\d+)/disburse', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   requireFields(req.body, 'paymentMode', 'disbursedAmount');
   const { paymentMode, disbursedAmount, paymentRef, paymentReceiptUrl } = req.body;
@@ -491,7 +491,7 @@ router.put('/fund-requests/:id(\d+)/disburse', requireAdmin, asyncHandler(async 
 }));
 
 // PUT /fund-requests/:id/acknowledge — Receiver confirms receipt
-router.put('/fund-requests/:id(\d+)/acknowledge', asyncHandler(async (req, res) => {
+router.put('/fund-requests/:id(\\d+)/acknowledge', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { acknowledgeNote } = req.body;
 
@@ -510,7 +510,7 @@ router.put('/fund-requests/:id(\d+)/acknowledge', asyncHandler(async (req, res) 
 }));
 
 // PUT /fund-requests/:id/settle — Mark settled
-router.put('/fund-requests/:id(\d+)/settle', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/fund-requests/:id(\\d+)/settle', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { settledNote } = req.body;
 
@@ -529,7 +529,7 @@ router.put('/fund-requests/:id(\d+)/settle', requireAdmin, asyncHandler(async (r
 }));
 
 // PUT /fund-requests/:id/cancel — Cancel
-router.put('/fund-requests/:id(\d+)/cancel', asyncHandler(async (req, res) => {
+router.put('/fund-requests/:id(\\d+)/cancel', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
   if (!fr) throw notFound('Fund Request');
