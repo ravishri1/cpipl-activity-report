@@ -22,6 +22,9 @@ import {
   Paperclip,
   Trash2,
   FileText,
+  Download,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -124,6 +127,11 @@ export default function ExpenseApproval() {
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const csvInputRef = useRef(null);
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -304,6 +312,61 @@ export default function ExpenseApproval() {
     }
   };
 
+  // ─── Export CSV ─────────────────────────────────
+  const handleExport = async () => {
+    try {
+      const res = await api.get('/expenses/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url;
+      a.download = `expenses_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click(); window.URL.revokeObjectURL(url);
+    } catch { setError('Failed to export'); }
+  };
+
+  // ─── Import CSV ─────────────────────────────────
+  const handleCsvSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const lines = ev.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) { setImportResult({ errors: [{ row: 0, error: 'Need header + data rows' }] }); return; }
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+      const fieldMap = { 'ID': 'id', 'Date': 'date', 'Employee Name': 'Employee Name', 'Employee ID': 'Employee ID',
+        'Title': 'title', 'Category': 'category', 'Amount': 'amount', 'Status': 'status', 'Description': 'description' };
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].match(/("([^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()) || [];
+        const obj = {};
+        headers.forEach((h, idx) => { const key = fieldMap[h] || h; if (vals[idx]) obj[key] = vals[idx]; });
+        rows.push(obj);
+      }
+      setImportData(rows);
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImportSubmit = async () => {
+    if (!importData.length) return;
+    setImportLoading(true);
+    try {
+      const res = await api.post('/expenses/bulk-import', { rows: importData });
+      setImportResult(res.data);
+      if (res.data.created > 0 || res.data.updated > 0) fetchExpenses();
+    } catch (err) {
+      setImportResult({ errors: [{ row: 0, error: err.response?.data?.error || 'Import failed' }] });
+    } finally { setImportLoading(false); }
+  };
+
+  const downloadTemplate = () => {
+    const csv = 'Employee Name,Employee ID,Title,Category,Amount,Date,Status,Description\nAshishkumar Ashok Tavasalkar,,Milk,tea_coffee,128,2025-11-01,approved,';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = window.URL.createObjectURL(blob);
+    a.download = 'expense_import_template.csv'; a.click();
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Top-level tabs */}
@@ -337,13 +400,19 @@ export default function ExpenseApproval() {
             <p className="text-sm text-slate-500">Review and manage employee expense submissions</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          New Expense Claim
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExport} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm">
+            <Download className="w-4 h-4" /> Export
+          </button>
+          <button onClick={() => { setImportData([]); setImportResult(null); setShowImportModal(true); }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 shadow-sm">
+            <Upload className="w-4 h-4" /> Import / Update
+          </button>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> New Expense Claim
+          </button>
+        </div>
       </div>
 
       {/* Alerts */}
@@ -710,6 +779,85 @@ export default function ExpenseApproval() {
                 {reviewModal.action === 'approved' ? 'Approve' : 'Reject'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import/Update Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">📥 Import / Update Expenses</h3>
+              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-xs text-slate-500">Upload CSV: rows with ID column update existing records, rows without ID create new ones.</p>
+            <div className="flex items-center gap-3">
+              <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100">
+                <Download className="w-3.5 h-3.5" /> Download Template
+              </button>
+              <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100">
+                <Download className="w-3.5 h-3.5" /> Export Current Data
+              </button>
+            </div>
+            <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+              <input ref={csvInputRef} type="file" accept=".csv" onChange={handleCsvSelect} className="hidden" />
+              <button onClick={() => csvInputRef.current?.click()} className="flex items-center gap-2 mx-auto px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm hover:bg-slate-50 shadow-sm">
+                <Upload className="w-4 h-4 text-slate-500" /> Choose CSV File
+              </button>
+              <p className="text-xs text-slate-400 mt-2">Max 500 rows. Rows with ID = update, without ID = create new.</p>
+            </div>
+            {importData.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">{importData.length} rows parsed</span>
+                </div>
+                <div className="max-h-48 overflow-auto border border-slate-200 rounded-lg">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0"><tr>
+                      <th className="px-2 py-1 text-left">#</th><th className="px-2 py-1 text-left">Employee</th>
+                      <th className="px-2 py-1 text-left">Title</th><th className="px-2 py-1 text-left">Amount</th>
+                      <th className="px-2 py-1 text-left">Date</th><th className="px-2 py-1 text-left">ID</th>
+                    </tr></thead>
+                    <tbody>
+                      {importData.slice(0, 20).map((row, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-2 py-1 text-slate-400">{i + 1}</td>
+                          <td className="px-2 py-1">{row['Employee Name'] || '-'}</td>
+                          <td className="px-2 py-1">{row.title || '-'}</td>
+                          <td className="px-2 py-1">₹{row.amount || '0'}</td>
+                          <td className="px-2 py-1">{row.date || '-'}</td>
+                          <td className="px-2 py-1 text-slate-400">{row.id || 'new'}</td>
+                        </tr>
+                      ))}
+                      {importData.length > 20 && <tr><td colSpan={6} className="px-2 py-1 text-center text-slate-400">...and {importData.length - 20} more</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => { setImportData([]); setImportResult(null); }} className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Clear</button>
+                  <button onClick={handleImportSubmit} disabled={importLoading}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    Process {importData.length} Rows
+                  </button>
+                </div>
+              </div>
+            )}
+            {importResult && (
+              <div className={`p-3 rounded-lg border ${importResult.errors?.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                {(importResult.created > 0 || importResult.updated > 0) && (
+                  <p className="text-sm font-medium text-green-700">✅ {importResult.created > 0 ? `${importResult.created} created` : ''}{importResult.created > 0 && importResult.updated > 0 ? ', ' : ''}{importResult.updated > 0 ? `${importResult.updated} updated` : ''}</p>
+                )}
+                {importResult.errors?.length > 0 && (
+                  <div className="mt-1"><p className="text-sm font-medium text-amber-700">⚠️ {importResult.errors.length} errors:</p>
+                    <ul className="mt-1 text-xs text-amber-600 max-h-24 overflow-auto">
+                      {importResult.errors.map((e, i) => <li key={i}>Row {e.row}: {e.error}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

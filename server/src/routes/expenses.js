@@ -344,6 +344,97 @@ async function getFundBalance(prisma, fundRequestId, disbursedAmount) {
   return { spent: Math.round(spent * 100) / 100, remaining: Math.round(((disbursedAmount || 0) - spent) * 100) / 100 };
 }
 
+// ─── EXPORT: GET /export ─── Download all expenses as CSV (admin)
+router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, fromDate, toDate, status, category } = req.query;
+  const where = {};
+  if (userId) where.userId = parseInt(userId);
+  if (status) where.status = status;
+  if (category) where.category = category;
+  if (fromDate || toDate) {
+    where.date = {};
+    if (fromDate) where.date.gte = fromDate;
+    if (toDate) where.date.lte = toDate;
+  }
+
+  const expenses = await req.prisma.expenseClaim.findMany({
+    where,
+    include: { user: { select: { name: true, employeeId: true } } },
+    orderBy: [{ date: 'asc' }, { id: 'asc' }],
+  });
+
+  const headers = ['ID','Date','Employee Name','Employee ID','Title','Category','Amount','Status','Description'];
+  const escCsv = (v) => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows = expenses.map(e => [
+    e.id, e.date || '', e.user?.name || '', e.user?.employeeId || '', e.title, e.category, e.amount, e.status, e.description || ''
+  ].map(escCsv).join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=expenses_export_${new Date().toISOString().slice(0,10)}.csv`);
+  res.send(csv);
+}));
+
+// ─── BULK IMPORT/UPDATE: POST /bulk-import ─── (admin)
+router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
+  const { rows } = req.body;
+  if (!rows || !Array.isArray(rows) || rows.length === 0) throw badRequest('No rows provided');
+  if (rows.length > 500) throw badRequest('Maximum 500 rows per import');
+
+  const users = await req.prisma.user.findMany({ select: { id: true, name: true, employeeId: true } });
+  const userNameMap = {};
+  users.forEach(u => { userNameMap[u.name.toLowerCase().trim()] = u.id; userNameMap[String(u.id)] = u.id; if (u.employeeId) userNameMap[u.employeeId.toLowerCase().trim()] = u.id; });
+
+  const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    try {
+      const data = {};
+      if (row.title) data.title = row.title.trim();
+      if (row.category) { const cat = row.category.toLowerCase().trim().replace(/[ &]+/g, '_').replace(/_+/g, '_'); data.category = VALID_CATEGORIES.includes(cat) ? cat : 'other'; }
+      if (row.amount !== undefined && row.amount !== '') data.amount = parseFloat(row.amount) || 0;
+      if (row.date) data.date = row.date.trim();
+      if (row.description) data.description = row.description.trim();
+      if (row.status) { const st = row.status.toLowerCase().trim(); if (VALID_STATUSES.includes(st)) data.status = st; }
+
+      // Resolve user
+      const empName = (row['Employee Name'] || row.employeeName || '').trim();
+      const empId = (row['Employee ID'] || row.employeeId || '').toString().trim();
+      const userId = parseInt(row.userId || row.id_user || '');
+
+      let resolvedUserId = null;
+      if (userId && userNameMap[String(userId)]) resolvedUserId = userNameMap[String(userId)];
+      else if (empId && userNameMap[empId.toLowerCase()]) resolvedUserId = userNameMap[empId.toLowerCase()];
+      else if (empName && userNameMap[empName.toLowerCase()]) resolvedUserId = userNameMap[empName.toLowerCase()];
+
+      // Check if update (has ID)
+      const id = parseInt(row.id || row.ID || '');
+      if (id) {
+        const existing = await req.prisma.expenseClaim.findUnique({ where: { id } });
+        if (!existing) { results.errors.push({ row: i + 1, error: `Expense ID ${id} not found` }); continue; }
+        if (resolvedUserId) data.userId = resolvedUserId;
+        await req.prisma.expenseClaim.update({ where: { id }, data });
+        results.updated++;
+      } else {
+        // Create new
+        if (!resolvedUserId) { results.errors.push({ row: i + 1, error: 'Employee not found' }); continue; }
+        if (!data.title) { results.errors.push({ row: i + 1, error: 'Title is required' }); continue; }
+        if (!data.amount) { results.errors.push({ row: i + 1, error: 'Amount is required' }); continue; }
+        data.userId = resolvedUserId;
+        if (!data.category) data.category = 'other';
+        if (!data.status) data.status = 'pending';
+        if (!data.date) data.date = new Date().toISOString().slice(0, 10);
+        await req.prisma.expenseClaim.create({ data });
+        results.created++;
+      }
+    } catch (err) {
+      results.errors.push({ row: i + 1, error: err.message?.slice(0, 100) || 'Unknown error' });
+    }
+  }
+  res.json(results);
+}));
+
 // POST /fund-requests — Submit fund request
 router.post('/fund-requests', asyncHandler(async (req, res) => {
   requireFields(req.body, 'title', 'amount');
