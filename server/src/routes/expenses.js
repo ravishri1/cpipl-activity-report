@@ -335,8 +335,9 @@ router.get('/reports/summary', requireAdmin, asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const FUND_STATUSES = ['pending', 'approved', 'rejected', 'disbursed', 'acknowledged', 'settled', 'cancelled'];
-const FUND_TYPES = ['advance', 'reimbursement'];
+const FUND_TYPES = ['advance', 'reimbursement', 'income'];
 const FUND_CATEGORIES = ['travel', 'food', 'office', 'medical', 'other'];
+const INCOME_SOURCES = ['Scrap Sale', 'Old Newspaper Sale', 'Old Equipment Sale', 'Deposit Refund', 'Other'];
 const PAYMENT_MODES = ['bank_transfer', 'cash'];
 
 async function logFundAction(prisma, { fundRequestId, action, actionBy, notes }) {
@@ -452,18 +453,24 @@ router.post('/fund-requests', asyncHandler(async (req, res) => {
   requireEnum(frType, FUND_TYPES, 'type');
   if (frType === 'reimbursement' && category) requireEnum(category, FUND_CATEGORIES, 'category');
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const fr = await req.prisma.fundRequest.create({
     data: {
       requestedBy: req.user.id, title, purpose: purpose || null,
-      amount: parseFloat(amount), date: date || new Date().toISOString().slice(0, 10), status: 'pending',
+      amount: parseFloat(amount), date: date || today, status: 'pending',
       type: frType, category: category || null, billUrl: billUrl || null, billDriveId: billDriveId || null,
     },
   });
-  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `${frType === 'reimbursement' ? 'Reimbursement' : 'Advance'} requested ₹${amount} for ${title}` });
+  const typeLabel = frType === 'income' ? 'Income' : frType === 'reimbursement' ? 'Reimbursement' : 'Advance';
+  await logFundAction(req.prisma, { fundRequestId: fr.id, action: 'submitted', actionBy: req.user.id, notes: `${typeLabel} ₹${amount} submitted for ${title}` });
 
   // Notify admins
   const admins = await req.prisma.user.findMany({ where: { isActive: true, role: { in: ['admin', 'team_lead'] }, id: { not: req.user.id } }, select: { id: true } });
-  notifyUsers(req.prisma, { userIds: admins.map(a => a.id), type: 'fund_request', title: 'New Fund Request', message: `${req.user.name} requested ₹${amount} ${frType === 'reimbursement' ? '(Reimbursement)' : '(Advance)'} for ${title}`, link: '/expenses' });
+  const notifMsg = frType === 'income'
+    ? `${req.user.name} submitted income entry ₹${amount} from ${title} — needs acknowledgment`
+    : `${req.user.name} requested ₹${amount} ${frType === 'reimbursement' ? '(Reimbursement)' : '(Advance)'} for ${title}`;
+  notifyUsers(req.prisma, { userIds: admins.map(a => a.id), type: 'fund_request', title: frType === 'income' ? 'Income Entry Submitted' : 'New Fund Request', message: notifMsg, link: '/expenses' });
 
   res.status(201).json(fr);
 }));
@@ -645,6 +652,27 @@ router.put('/fund-requests/:id(\\d+)/acknowledge', asyncHandler(async (req, res)
   res.json(updated);
 }));
 
+// PUT /fund-requests/:id/acknowledge-income — Admin acknowledges an income entry (income-only)
+router.put('/fund-requests/:id(\\d+)/acknowledge-income', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { acknowledgeNote } = req.body;
+
+  const fr = await req.prisma.fundRequest.findUnique({ where: { id } });
+  if (!fr) throw notFound('Fund Request');
+  if (fr.type !== 'income') throw badRequest('This endpoint is only for income entries');
+  if (fr.status !== 'pending') throw badRequest('Only pending income entries can be acknowledged');
+
+  const updated = await req.prisma.fundRequest.update({
+    where: { id },
+    data: { status: 'acknowledged', acknowledgedAt: new Date(), acknowledgeNote: acknowledgeNote || null },
+  });
+  await logFundAction(req.prisma, { fundRequestId: id, action: 'acknowledged', actionBy: req.user.id, notes: acknowledgeNote || 'Income acknowledged by accounts' });
+
+  notifyUsers(req.prisma, { userIds: [fr.requestedBy], type: 'fund_request', title: 'Income Entry Acknowledged', message: `Your income entry "${fr.title}" (₹${fr.amount}) has been acknowledged.`, link: '/expenses' });
+
+  res.json(updated);
+}));
+
 // PUT /fund-requests/:id/settle — Mark settled
 router.put('/fund-requests/:id(\\d+)/settle', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
@@ -808,6 +836,11 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
   if (fromDate || toDate) reimWhere.date = dateFilter;
   const reimbursements = await req.prisma.fundRequest.findMany({ where: reimWhere, orderBy: { date: 'asc' } });
 
+  // Get income entries acknowledged (credits — Money In)
+  const incomeWhere = { requestedBy: uid, type: 'income', status: 'acknowledged' };
+  if (fromDate || toDate) incomeWhere.date = dateFilter;
+  const incomeEntries = await req.prisma.fundRequest.findMany({ where: incomeWhere, orderBy: { date: 'asc' } });
+
   // Get expenses linked to any fund request (debits)
   const expWhere = { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } };
   if (fromDate || toDate) expWhere.date = dateFilter;
@@ -847,6 +880,16 @@ router.get('/fund-requests/ledger', requireAdmin, asyncHandler(async (req, res) 
     moneyIn: fr.disbursedAmount || fr.amount || 0,
     moneyOut: 0,
     amount: fr.disbursedAmount || fr.amount || 0,
+    ref: `FR-${fr.id}`,
+  }));
+
+  incomeEntries.forEach(fr => entries.push({
+    date: fr.date,
+    entryType: 'income',
+    description: `Income: ${fr.title}`,
+    moneyIn: fr.amount,
+    moneyOut: 0,
+    amount: fr.amount,
     ref: `FR-${fr.id}`,
   }));
 
@@ -901,13 +944,17 @@ router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res)
 
   const advances = all.filter(f => f.type === 'advance');
   const reimbs = all.filter(f => f.type === 'reimbursement');
+  const incomes = all.filter(f => f.type === 'income');
 
   const totalRequested = all.reduce((s, f) => s + f.amount, 0);
   const totalDisbursed = all.filter(f => f.disbursedAmount).reduce((s, f) => s + f.disbursedAmount, 0);
   const totalSpent = all.reduce((s, f) => s + f.expenses.reduce((es, e) => es + e.amount, 0), 0);
   const byStatus = {};
   all.forEach(f => { byStatus[f.status] = (byStatus[f.status] || 0) + 1; });
-  const byType = { advance: advances.length, reimbursement: reimbs.length };
+  const byType = { advance: advances.length, reimbursement: reimbs.length, income: incomes.length };
+
+  const totalIncomeAcknowledged = incomes.filter(f => f.status === 'acknowledged').reduce((s, f) => s + f.amount, 0);
+  const totalIncomePending = incomes.filter(f => f.status === 'pending').length;
 
   // Outstanding per user (advances only)
   const activeRequests = advances.filter(f => ['acknowledged'].includes(f.status));
@@ -928,6 +975,8 @@ router.get('/fund-requests/summary', requireAdmin, asyncHandler(async (req, res)
     totalSpent: Math.round(totalSpent), totalOutstanding: Math.round(totalDisbursed - totalSpent),
     totalReimbursementsPending: reimbs.filter(f => f.status === 'pending').length,
     totalReimbursementsAmount: Math.round(reimbs.reduce((s, f) => s + f.amount, 0)),
+    totalIncomeAcknowledged: Math.round(totalIncomeAcknowledged),
+    totalIncomePending,
     byUser: Object.values(byUser),
   });
 }));

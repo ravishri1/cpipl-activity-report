@@ -25,11 +25,13 @@ const FUND_STATUS_STYLES = {
 const TYPE_STYLES = {
   advance: 'bg-green-100 text-green-700 border-green-200',
   reimbursement: 'bg-blue-100 text-blue-700 border-blue-200',
+  income: 'bg-lime-100 text-lime-700 border-lime-200',
 };
 
 const FUND_CATEGORIES = ['travel', 'food', 'office', 'medical', 'other'];
+const INCOME_SOURCES = ['Scrap Sale', 'Old Newspaper Sale', 'Old Equipment Sale', 'Deposit Refund', 'Other'];
 
-const INITIAL_FORM = { title: '', amount: '', purpose: '', date: '', type: 'advance', category: '', billUrl: '', billDriveId: '' };
+const INITIAL_FORM = { title: '', amount: '', purpose: '', date: '', type: 'advance', category: '', billUrl: '', billDriveId: '', incomeSource: '' };
 
 export default function MyFundRequests() {
   const { data: requests, loading, error: fetchErr, refetch } = useFetch('/expenses/fund-requests/my', []);
@@ -74,18 +76,21 @@ export default function MyFundRequests() {
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
+      const incomeTitle = form.type === 'income'
+        ? (form.incomeSource ? `${form.incomeSource}${form.title.trim() ? ' — ' + form.title.trim() : ''}` : form.title)
+        : form.title;
       await execute(
         () => api.post('/expenses/fund-requests', {
-          title: form.title,
+          title: incomeTitle,
           amount: parseFloat(form.amount),
           purpose: form.purpose || null,
           date: form.date || undefined,
           type: form.type,
           category: form.type === 'reimbursement' ? (form.category || null) : null,
-          billUrl: form.type === 'reimbursement' ? (form.billUrl || null) : null,
-          billDriveId: form.type === 'reimbursement' ? (form.billDriveId || null) : null,
+          billUrl: form.type !== 'advance' ? (form.billUrl || null) : null,
+          billDriveId: form.type !== 'advance' ? (form.billDriveId || null) : null,
         }),
-        form.type === 'reimbursement' ? 'Reimbursement request submitted!' : 'Fund request submitted!'
+        form.type === 'income' ? 'Income entry submitted!' : form.type === 'reimbursement' ? 'Reimbursement request submitted!' : 'Fund request submitted!'
       );
       refetch();
       setShowForm(false);
@@ -192,21 +197,50 @@ export default function MyFundRequests() {
                   >
                     Reimbursement
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, type: 'income' }))}
+                    className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${form.type === 'income' ? 'bg-lime-600 text-white border-lime-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Income
+                  </button>
                 </div>
                 {form.type === 'reimbursement' && (
                   <p className="text-xs text-slate-500 mt-1">Submit for expenses you have already paid.</p>
                 )}
+                {form.type === 'income' && (
+                  <p className="text-xs text-slate-500 mt-1">Record money received from other sources (scrap, newspaper, etc.).</p>
+                )}
               </div>
 
+              {/* Income-specific: Source field */}
+              {form.type === 'income' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Income Source *</label>
+                  <select
+                    value={form.incomeSource}
+                    onChange={e => setForm(f => ({ ...f, incomeSource: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Select source</option>
+                    {INCOME_SOURCES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {form.type === 'income' ? 'Details / Notes' : 'Title *'}
+                </label>
                 <input
                   type="text"
-                  required
+                  required={form.type !== 'income'}
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder={form.type === 'reimbursement' ? 'e.g. Client visit expenses' : 'e.g. Client Visit Travel Advance'}
+                  placeholder={form.type === 'income' ? 'e.g. 50 kg scrap sold to Ravi Traders' : form.type === 'reimbursement' ? 'e.g. Client visit expenses' : 'e.g. Client Visit Travel Advance'}
                 />
               </div>
               <div>
@@ -219,6 +253,16 @@ export default function MyFundRequests() {
                   onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                   placeholder="5000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
 
@@ -258,23 +302,37 @@ export default function MyFundRequests() {
                 </>
               )}
 
+              {/* Income-specific: optional document upload */}
+              {form.type === 'income' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Supporting Document (optional)</label>
+                  <input ref={billInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleBillUpload} className="hidden" />
+                  {form.billUrl ? (
+                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                      <span className="text-sm text-green-700 truncate flex-1">{billFileName || 'Document uploaded'}</span>
+                      <button type="button" onClick={() => { setForm(f => ({ ...f, billUrl: '', billDriveId: '' })); setBillFileName(''); }}
+                        className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => billInputRef.current?.click()} disabled={billUploading}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-lime-400 hover:text-lime-600 transition-colors">
+                      {billUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Document (PDF/Image)</>}
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{form.type === 'reimbursement' ? 'Description' : 'Purpose'}</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {form.type === 'income' ? 'Additional Description' : form.type === 'reimbursement' ? 'Description' : 'Purpose'}
+                </label>
                 <textarea
                   value={form.purpose}
                   onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                   rows={3}
-                  placeholder={form.type === 'reimbursement' ? 'Describe what was spent...' : 'Describe the purpose...'}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  placeholder={form.type === 'income' ? 'Any additional details...' : form.type === 'reimbursement' ? 'Describe what was spent...' : 'Describe the purpose...'}
                 />
               </div>
             </div>
@@ -283,7 +341,7 @@ export default function MyFundRequests() {
                 Cancel
               </button>
               <button type="submit" disabled={saving} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                {saving ? 'Submitting...' : (form.type === 'reimbursement' ? 'Submit Reimbursement' : 'Submit Request')}
+                {saving ? 'Submitting...' : (form.type === 'income' ? 'Record Income' : form.type === 'reimbursement' ? 'Submit Reimbursement' : 'Submit Request')}
               </button>
             </div>
           </form>
@@ -292,7 +350,7 @@ export default function MyFundRequests() {
 
       {/* Request List */}
       {requests.length === 0 ? (
-        <EmptyState icon="💰" title="No fund requests" subtitle="Request advance funds or submit reimbursements for business expenses" />
+        <EmptyState icon="💰" title="No fund requests" subtitle="Request advance funds, submit reimbursements, or record income entries" />
       ) : (
         <div className="space-y-3">
           {[...requests].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(req => (
@@ -306,7 +364,7 @@ export default function MyFundRequests() {
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-medium text-slate-800 truncate">{req.title}</span>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${TYPE_STYLES[req.type] || TYPE_STYLES.advance}`}>
-                      {req.type === 'reimbursement' ? 'Reimbursement' : 'Advance'}
+                      {req.type === 'income' ? 'Income' : req.type === 'reimbursement' ? 'Reimbursement' : 'Advance'}
                     </span>
                     <StatusBadge status={req.status} styleMap={FUND_STATUS_STYLES} />
                   </div>
@@ -376,7 +434,7 @@ export default function MyFundRequests() {
                 <div className="border-t px-4 py-3 text-sm space-y-3 bg-slate-50">
                   {req.purpose && (
                     <div>
-                      <span className="text-slate-500">{req.type === 'reimbursement' ? 'Description' : 'Purpose'}:</span>
+                      <span className="text-slate-500">{req.type === 'reimbursement' ? 'Description' : req.type === 'income' ? 'Details' : 'Purpose'}:</span>
                       <p className="text-slate-700 mt-0.5">{req.purpose}</p>
                     </div>
                   )}

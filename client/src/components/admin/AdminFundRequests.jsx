@@ -26,14 +26,16 @@ const FUND_STATUS_STYLES = {
 const TYPE_STYLES = {
   advance: 'bg-green-100 text-green-700 border-green-200',
   reimbursement: 'bg-blue-100 text-blue-700 border-blue-200',
+  income: 'bg-lime-100 text-lime-700 border-lime-200',
 };
 
 const FUND_CATEGORIES = ['travel', 'food', 'office', 'medical', 'other'];
+const INCOME_SOURCES = ['Scrap Sale', 'Old Newspaper Sale', 'Old Equipment Sale', 'Deposit Refund', 'Other'];
 const STATUS_OPTIONS = ['', 'pending', 'approved', 'rejected', 'disbursed', 'acknowledged', 'settled', 'cancelled'];
 
 const EMPTY_CREATE = {
   userId: '', title: '', amount: '', purpose: '', date: new Date().toISOString().split('T')[0],
-  type: 'advance', category: '', billUrl: '', billDriveId: '',
+  type: 'advance', category: '', billUrl: '', billDriveId: '', incomeSource: '',
 };
 
 export default function AdminFundRequests() {
@@ -157,6 +159,16 @@ export default function AdminFundRequests() {
     }
   };
 
+  const handleAcknowledgeIncome = async (id) => {
+    if (!window.confirm('Acknowledge this income entry?')) return;
+    try {
+      await execute(() => api.put(`/expenses/fund-requests/${id}/acknowledge-income`), 'Income acknowledged!');
+      refetch();
+    } catch {
+      // Error displayed by useApi
+    }
+  };
+
   const handleBillUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -180,17 +192,20 @@ export default function AdminFundRequests() {
   };
 
   const handleCreate = async () => {
-    if (!createForm.title.trim() || !createForm.amount) return;
+    const hasTitle = createForm.type === 'income' ? (createForm.incomeSource || createForm.title.trim()) : createForm.title.trim();
+    if (!hasTitle || !createForm.amount) return;
     try {
       const payload = {
-        title: createForm.title.trim(),
+        title: createForm.type === 'income'
+          ? (createForm.incomeSource ? `${createForm.incomeSource}${createForm.title.trim() ? ' — ' + createForm.title.trim() : ''}` : createForm.title.trim())
+          : createForm.title.trim(),
         amount: parseFloat(createForm.amount),
         purpose: createForm.purpose.trim() || null,
         date: createForm.date,
         type: createForm.type,
         category: createForm.type === 'reimbursement' ? (createForm.category || null) : null,
-        billUrl: createForm.type === 'reimbursement' ? (createForm.billUrl || null) : null,
-        billDriveId: createForm.type === 'reimbursement' ? (createForm.billDriveId || null) : null,
+        billUrl: createForm.type !== 'advance' ? (createForm.billUrl || null) : null,
+        billDriveId: createForm.type !== 'advance' ? (createForm.billDriveId || null) : null,
       };
       if (createForm.userId) {
         payload.userId = parseInt(createForm.userId);
@@ -289,6 +304,7 @@ export default function AdminFundRequests() {
           <option value="">All Types</option>
           <option value="advance">Advance</option>
           <option value="reimbursement">Reimbursement</option>
+          <option value="income">Income</option>
         </select>
         <input
           type="month"
@@ -329,6 +345,7 @@ export default function AdminFundRequests() {
             <tbody className="divide-y">
               {filteredRequests.map(req => {
                 const isReimb = req.type === 'reimbursement';
+                const isIncome = req.type === 'income';
                 const balance = (req.disbursedAmount || 0) - (req.spent || 0);
                 return (
                   <TableRowGroup key={req.id}>
@@ -337,19 +354,30 @@ export default function AdminFundRequests() {
                       <td className="px-4 py-3 text-slate-700">{req.title}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${TYPE_STYLES[req.type] || TYPE_STYLES.advance}`}>
-                          {isReimb ? 'Reimbursement' : 'Advance'}
+                          {isIncome ? 'Income' : isReimb ? 'Reimbursement' : 'Advance'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">{formatINR(req.amount)}</td>
                       <td className="px-4 py-3 text-right">{req.disbursedAmount ? formatINR(req.disbursedAmount) : '-'}</td>
                       <td className="px-4 py-3 text-right">{req.spent ? formatINR(req.spent) : '-'}</td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {isReimb ? '-' : (req.disbursedAmount ? formatINR(balance) : '-')}
+                        {(isReimb || isIncome) ? '-' : (req.disbursedAmount ? formatINR(balance) : '-')}
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={req.status} styleMap={FUND_STATUS_STYLES} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
-                          {req.status === 'pending' && (
+                          {/* Income: pending → acknowledge (no approval/disburse cycle) */}
+                          {isIncome && req.status === 'pending' && (
+                            <button
+                              onClick={() => handleAcknowledgeIncome(req.id)}
+                              disabled={saving}
+                              className="text-xs px-2 py-1 text-lime-700 border border-lime-300 rounded hover:bg-lime-50"
+                              title="Acknowledge Income"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />Acknowledge
+                            </button>
+                          )}
+                          {req.status === 'pending' && !isIncome && (
                             <>
                               <button
                                 onClick={() => handleApprove(req.id)}
@@ -369,7 +397,7 @@ export default function AdminFundRequests() {
                             </>
                           )}
                           {/* Advance: approved → disburse */}
-                          {!isReimb && req.status === 'approved' && (
+                          {!isReimb && !isIncome && req.status === 'approved' && (
                             <button
                               onClick={() => { setDisburseModal(req); setDisburseForm(f => ({ ...f, disbursedAmount: req.amount })); }}
                               className="text-xs px-2 py-1 text-purple-600 border border-purple-200 rounded hover:bg-purple-50"
@@ -378,7 +406,7 @@ export default function AdminFundRequests() {
                             </button>
                           )}
                           {/* Reimbursement: approved → pay */}
-                          {isReimb && req.status === 'approved' && (
+                          {isReimb && !isIncome && req.status === 'approved' && (
                             <button
                               onClick={() => handlePayReimbursement(req.id)}
                               className="text-xs px-2 py-1 text-green-600 border border-green-200 rounded hover:bg-green-50"
@@ -389,7 +417,7 @@ export default function AdminFundRequests() {
                           {req.status === 'disbursed' && (
                             <span className="text-xs text-slate-400 italic">Awaiting Ack</span>
                           )}
-                          {!isReimb && req.status === 'acknowledged' && (
+                          {!isReimb && !isIncome && req.status === 'acknowledged' && (
                             <button
                               onClick={() => setSettleModal(req.id)}
                               className="text-xs px-2 py-1 text-green-600 border border-green-200 rounded hover:bg-green-50"
@@ -611,7 +639,17 @@ export default function AdminFundRequests() {
                 >
                   Reimbursement
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, type: 'income' }))}
+                  className={`flex-1 py-2 text-sm rounded-lg border font-medium transition-colors ${createForm.type === 'income' ? 'bg-lime-600 text-white border-lime-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Income
+                </button>
               </div>
+              {createForm.type === 'income' && (
+                <p className="text-xs text-slate-500 mt-1">Record money received from other sources (scrap, newspaper, etc.).</p>
+              )}
             </div>
 
             <div>
@@ -625,10 +663,27 @@ export default function AdminFundRequests() {
               </select>
             </div>
 
+            {/* Income-specific: Source field */}
+            {createForm.type === 'income' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Income Source *</label>
+                <select value={createForm.incomeSource} onChange={e => setCreateForm(prev => ({ ...prev, incomeSource: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  <option value="">Select source</option>
+                  {INCOME_SOURCES.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {createForm.type === 'income' ? 'Details / Notes' : 'Title *'}
+              </label>
               <input type="text" value={createForm.title} onChange={e => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder={createForm.type === 'reimbursement' ? 'e.g. Client travel expenses' : 'e.g. Office supplies advance'} />
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder={createForm.type === 'income' ? 'e.g. 50 kg scrap sold to Ravi Traders' : createForm.type === 'reimbursement' ? 'e.g. Client travel expenses' : 'e.g. Office supplies advance'} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -677,18 +732,43 @@ export default function AdminFundRequests() {
               </>
             )}
 
+            {/* Income-specific: optional bill upload */}
+            {createForm.type === 'income' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Supporting Document (optional)</label>
+                <input ref={billInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleBillUpload} className="hidden" />
+                {createForm.billUrl ? (
+                  <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                    <span className="text-sm text-green-700 truncate flex-1">{billFileName || 'Document uploaded'}</span>
+                    <button type="button" onClick={() => { setCreateForm(prev => ({ ...prev, billUrl: '', billDriveId: '' })); setBillFileName(''); }}
+                      className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => billInputRef.current?.click()} disabled={billUploading}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-lime-400 hover:text-lime-600 transition-colors">
+                    {billUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Document (PDF/Image)</>}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{createForm.type === 'reimbursement' ? 'Description' : 'Purpose'}</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {createForm.type === 'income' ? 'Additional Description' : createForm.type === 'reimbursement' ? 'Description' : 'Purpose'}
+              </label>
               <textarea value={createForm.purpose} onChange={e => setCreateForm(prev => ({ ...prev, purpose: e.target.value }))}
                 className="w-full border rounded-lg px-3 py-2 text-sm" rows={2}
-                placeholder={createForm.type === 'reimbursement' ? 'Describe what was spent...' : 'Describe the purpose of this fund request...'} />
+                placeholder={createForm.type === 'income' ? 'Any additional details...' : createForm.type === 'reimbursement' ? 'Describe what was spent...' : 'Describe the purpose of this fund request...'} />
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => { setShowCreateModal(false); setCreateForm(EMPTY_CREATE); setBillFileName(''); }} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
-              <button onClick={handleCreate} disabled={saving || !createForm.title.trim() || !createForm.amount}
+              <button
+                onClick={handleCreate}
+                disabled={saving || !(createForm.type === 'income' ? (createForm.incomeSource || createForm.title.trim()) : createForm.title.trim()) || !createForm.amount}
                 className="px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50">
-                {saving ? 'Creating...' : 'Submit Request'}
+                {saving ? 'Creating...' : createForm.type === 'income' ? 'Record Income' : 'Submit Request'}
               </button>
             </div>
           </div>
