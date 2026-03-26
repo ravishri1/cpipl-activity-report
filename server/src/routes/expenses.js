@@ -711,6 +711,21 @@ router.put('/fund-requests/:id(\\d+)/cancel', asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
+// PATCH /fund-requests/:id — Admin update any field (admin only)
+router.patch('/fund-requests/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { date, disbursedOn, title, amount, status, purpose } = req.body;
+  const data = {};
+  if (date !== undefined) data.date = date;
+  if (disbursedOn !== undefined) data.disbursedOn = disbursedOn;
+  if (title !== undefined) data.title = title;
+  if (amount !== undefined) data.amount = parseFloat(amount);
+  if (status !== undefined) data.status = status;
+  if (purpose !== undefined) data.purpose = purpose;
+  const updated = await req.prisma.fundRequest.update({ where: { id }, data });
+  res.json(updated);
+}));
+
 // DELETE /fund-requests/:id — Hard delete (admin only)
 router.delete('/fund-requests/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
