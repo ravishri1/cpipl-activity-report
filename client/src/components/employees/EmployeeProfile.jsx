@@ -507,12 +507,14 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
   const [branches, setBranches] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [shifts, setShifts] = useState([]);
+  const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
     if (!canEdit) return;
     api.get('/branches').then(r => setBranches(r.data || [])).catch(() => {});
     api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
     api.get('/shifts').then(r => setShifts(r.data || [])).catch(() => {});
+    api.get('/departments').then(r => setDepartments(r.data || [])).catch(() => {});
   }, [canEdit]);
 
   const handleAdd = async () => {
@@ -549,7 +551,9 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
           <Field icon={Briefcase} label="Designation" value={profile.designation}
             editing={editing && canEdit} onChange={(v) => updateField('designation', v)} editValue={form.designation} />
           <Field icon={Building2} label="Department" value={profile.department}
-            editing={editing && canEdit} onChange={(v) => updateField('department', v)} editValue={form.department} />
+            editing={editing && canEdit} onChange={(v) => updateField('department', v)} editValue={form.department}
+            type={departments.length > 0 ? 'select' : 'text'}
+            options={departments.map(d => d.name)} />
           <Field icon={BadgeCheck} label="Grade / Level" value={profile.grade}
             editing={editing && canEdit} onChange={(v) => updateField('grade', v)} editValue={form.grade} />
           <Field icon={MapPin} label="Location" value={profile.location}
@@ -1063,6 +1067,9 @@ function Field({ icon: Icon, label, value, editing, onChange, editValue, type = 
             <select value={editValue || ''} onChange={(e) => onChange(e.target.value)}
               className="w-full border border-slate-200 rounded px-2 py-1 text-sm mt-0.5 bg-white capitalize">
               <option value="">Select...</option>
+              {editValue && !options.includes(editValue) && (
+                <option value={editValue}>{editValue}</option>
+              )}
               {options.map((o) => <option key={o} value={o} className="capitalize">{o.replace('_', ' ')}</option>)}
             </select>
           ) : type === 'textarea' ? (
