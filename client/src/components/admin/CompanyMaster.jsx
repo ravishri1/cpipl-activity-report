@@ -898,11 +898,13 @@ export default function CompanyMaster() {
     useFetch('/company-master/registrations', []);
 
   const [selectedEntityId, setSelectedEntityId] = useState(null);
+  const [selectedRegId, setSelectedRegId] = useState(null);
   const [entityModal, setEntityModal] = useState(null);
   const [regModal, setRegModal] = useState(null);
-  const [addAdditionalForId, setAddAdditionalForId] = useState(null); // principalId when adding additional place
+  const [addAdditionalForId, setAddAdditionalForId] = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [reactivateTarget, setReactivateTarget] = useState(null);
+  const [locationModal, setLocationModal] = useState(null); // { location: null|obj, regId, regState }
   const [showCityCodes, setShowCityCodes] = useState(false);
   const [cityCodes, setCityCodes] = useState([]);
   const [cityForm, setCityForm] = useState({ cityName: '', code: '' });
@@ -951,13 +953,14 @@ export default function CompanyMaster() {
   const topLevelRegs = entityRegs.filter(
     r => !r.principalRegistrationId || !entityRegIds.has(r.principalRegistrationId)
   );
-  const activeRegs = topLevelRegs.filter(r => r.isActive);
-  const inactiveRegs = topLevelRegs.filter(r => !r.isActive);
+
+  // Auto-select: if no reg selected or selected reg not in this entity, use first active
+  const selectedReg = (selectedRegId && topLevelRegs.find(r => r.id === selectedRegId))
+    || topLevelRegs.find(r => r.isActive)
+    || topLevelRegs[0]
+    || null;
 
   const handleSaved = () => { refetchEntities(); refetchRegs(); };
-
-  // Total locations across all registrations for this entity
-  const totalLocations = entityRegs.reduce((sum, r) => sum + (r.locations?.length || 0), 0);
 
   return (
     <div className="h-full flex flex-col">
@@ -1010,159 +1013,363 @@ export default function CompanyMaster() {
       {/* Branches tab */}
       {activeTab === 'branches' && <BranchManager embedded />}
 
-      {/* Registrations tab */}
+      {/* Registrations tab — 3-panel layout (like cpdesk) */}
       {activeTab === 'registrations' && (
         <div className="flex flex-1 overflow-hidden">
 
-          {/* Left panel: Legal Entities */}
-          <div className="w-72 border-r border-gray-200 flex flex-col overflow-hidden bg-gray-50/50">
-            <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Legal Entities ({entities.length})
-              </p>
+          {/* ── Panel 1: Companies ─────────────────────────────── */}
+          <div className="w-56 border-r border-gray-200 flex flex-col overflow-hidden bg-gray-100">
+            <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Company</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {entities.length === 0 ? (
-                <EmptyState icon="🏢" title="No entities yet" subtitle="Add a legal entity to start" />
-              ) : (
-                entities.map(entity => {
-                  const isSelected = entity.id === effectiveId;
-                  const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
-                  const locCount = registrations
-                    .filter(r => r.legalEntityId === entity.id)
-                    .reduce((s, r) => s + (r.locations?.length || 0), 0);
-                  return (
-                    <button key={entity.id}
-                      onClick={() => setSelectedEntityId(entity.id)}
-                      className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${
-                        isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100 border border-transparent'
-                      }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {entity.shortName && (
-                            <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${
-                              isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
-                            }`}>
-                              {entity.shortName}
-                            </span>
-                          )}
-                          <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
-                        </div>
-                        <ChevronRight size={14} className={`flex-shrink-0 ml-1 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {entity.pan && <span className="text-xs text-gray-400 font-mono">{entity.pan}</span>}
-                        <Badge color="blue">{regCount} GSTIN{regCount !== 1 ? 's' : ''}</Badge>
-                        {locCount > 0 && <Badge color="gray">{locCount} location{locCount !== 1 ? 's' : ''}</Badge>}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
+            <div className="flex-1 overflow-y-auto">
+              {entities.map(entity => {
+                const isSelected = entity.id === effectiveId;
+                const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
+                return (
+                  <button key={entity.id}
+                    onClick={() => { setSelectedEntityId(entity.id); setSelectedRegId(null); }}
+                    className={`w-full text-left px-4 py-3.5 border-l-4 transition-colors ${
+                      isSelected
+                        ? 'border-l-blue-500 bg-white text-blue-900'
+                        : 'border-l-transparent hover:bg-gray-50 text-gray-700'
+                    }`}>
+                    <p className={`text-sm font-semibold leading-tight ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>
+                      {entity.legalName}
+                    </p>
+                    {entity.pan && (
+                      <p className="text-xs text-gray-400 font-mono mt-0.5">{entity.pan}</p>
+                    )}
+                    <p className={`text-xs mt-1 font-medium ${isSelected ? 'text-blue-500' : 'text-gray-400'}`}>
+                      {regCount} GSTIN{regCount !== 1 ? 's' : ''}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="border-t border-gray-200 p-2.5 bg-gray-50">
+              <button onClick={() => setEntityModal('add')}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-blue-600 border border-blue-200 bg-white text-xs font-medium rounded-lg hover:bg-blue-50 transition-colors">
+                <Plus size={13} /> Add Company
+              </button>
             </div>
           </div>
 
-          {/* Right panel */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {!selectedEntity ? (
-              <div className="flex-1 flex items-center justify-center">
-                <EmptyState icon="👈" title="Select an entity" subtitle="Choose a legal entity from the left panel" />
-              </div>
-            ) : (
-              <>
-                {/* Entity header */}
-                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      {selectedEntity.shortName && (
-                        <span className="flex-shrink-0 inline-flex items-center justify-center bg-blue-600 text-white text-lg font-bold px-3 py-1.5 rounded-lg tracking-wide">
-                          {selectedEntity.shortName}
-                        </span>
-                      )}
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
-                          {selectedEntity.pan && (
-                            <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>
-                          )}
-                          {selectedEntity.tan && (
-                            <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>
-                          )}
-                          {selectedEntity.lei && (
-                            <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>
-                          )}
-                        </div>
-                        {/* Entity-level summary */}
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-                          <span>🏛️ {entityRegs.filter(r=>r.isActive).length} active registration{entityRegs.filter(r=>r.isActive).length !== 1 ? 's' : ''}</span>
-                          {totalLocations > 0 && (
-                            <span>📍 {totalLocations} registered location{totalLocations !== 1 ? 's' : ''}</span>
-                          )}
-                        </div>
-                      </div>
+          {/* ── Panel 2 + 3 (shown only when entity selected) ── */}
+          {!selectedEntity ? (
+            <div className="flex-1 flex items-center justify-center bg-gray-50">
+              <EmptyState icon="👈" title="Select a company" subtitle="Choose from the left panel" />
+            </div>
+          ) : (
+            <>
+              {/* ── Panel 2: GSTIN / State list ──────────────────── */}
+              <div className="w-72 border-r border-gray-200 flex flex-col overflow-hidden bg-white">
+                <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">GSTIN / State</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {entityRegs.filter(r => r.isActive).length} active
+                        {topLevelRegs.length !== entityRegs.filter(r=>r.isActive).length
+                          ? ` · ${topLevelRegs.filter(r=>r.isActive).length} principal${topLevelRegs.filter(r=>r.isActive).length!==1?'s':''}`
+                          : ''}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setEntityModal(selectedEntity)}
-                        className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
-                        <Edit2 size={14} /> Edit Entity
-                      </button>
-                      <button onClick={() => setRegModal('add')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-                        <Plus size={14} /> Add GSTIN
-                      </button>
-                    </div>
+                    <button onClick={() => setRegModal('add')}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                      <Plus size={12} /> Add
+                    </button>
                   </div>
                 </div>
 
-                {/* Registrations grid */}
-                <div className="flex-1 overflow-y-auto p-6">
-                  {regLoading ? (
-                    <LoadingSpinner />
-                  ) : entityRegs.length === 0 ? (
-                    <EmptyState icon="🏛️" title="No registrations" subtitle="Add a GSTIN registration for this entity" />
-                  ) : (
-                    <div className="space-y-8">
-                      {activeRegs.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                            Active Registrations ({entityRegs.filter(r => r.isActive).length} total
-                            {entityRegs.filter(r => r.isActive).length !== activeRegs.length
-                              ? ` · ${activeRegs.length} principal${activeRegs.length !== 1 ? 's' : ''}`
-                              : ''})
-                          </p>
-                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                            {activeRegs.map(reg => (
-                              <RegistrationCard key={reg.id} reg={reg}
-                                onEdit={r => setRegModal(r)}
-                                onDeactivate={r => setDeactivateTarget(r)}
-                                onReactivate={r => setReactivateTarget(r)}
-                                onLocationsUpdated={refetchRegs}
-                                onAddAdditional={id => { setAddAdditionalForId(id); setRegModal('add-additional'); }} />
-                            ))}
+                <div className="flex-1 overflow-y-auto">
+                  {regLoading ? <div className="p-4"><LoadingSpinner /></div>
+                  : topLevelRegs.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-gray-400">No registrations yet.<br />Click Add to create one.</div>
+                  ) : topLevelRegs.map(reg => {
+                    const isSelected = selectedReg?.id === reg.id;
+                    const additionalCount = reg.additionalRegistrations?.filter(r => r.isActive).length || 0;
+                    const locCount = reg.locations?.length || 0;
+                    const isPrincipal = (reg.placeType || '').includes('Principal');
+                    return (
+                      <button key={reg.id}
+                        onClick={() => setSelectedRegId(reg.id)}
+                        className={`w-full text-left px-4 py-3.5 border-l-4 transition-colors border-b border-gray-50 ${
+                          isSelected
+                            ? isPrincipal ? 'border-l-blue-500 bg-blue-50' : 'border-l-amber-500 bg-amber-50'
+                            : !reg.isActive
+                            ? 'border-l-gray-200 hover:bg-gray-50 opacity-50'
+                            : isPrincipal
+                            ? 'border-l-blue-200 hover:bg-blue-50/40'
+                            : 'border-l-amber-200 hover:bg-amber-50/40'
+                        }`}>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-sm font-mono font-bold ${isSelected ? (isPrincipal?'text-blue-700':'text-amber-700') : 'text-gray-800'}`}>
+                            {reg.abbr}
+                          </span>
+                          {(reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                            <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                              t==='Principal' ? 'bg-blue-100 text-blue-600' :
+                              t==='E-APOB'    ? 'bg-purple-100 text-purple-600' :
+                              t==='I-APOB'   ? 'bg-pink-100 text-pink-600' :
+                                               'bg-amber-100 text-amber-600'
+                            }`}>{t}</span>
+                          ))}
+                          {!reg.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">Off</span>}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                          <MapPin size={9} className="flex-shrink-0" />
+                          <span>{reg.officeCity} · {reg.state}</span>
+                        </div>
+                        {(additionalCount > 0 || locCount > 0) && (
+                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                            {additionalCount > 0 && (
+                              <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                                {additionalCount} sub-place{additionalCount!==1?'s':''}
+                              </span>
+                            )}
+                            {locCount > 0 && (
+                              <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                                {locCount} location{locCount!==1?'s':''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Entity info footer */}
+                <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-700 truncate">{selectedEntity.legalName}</p>
+                      <div className="flex gap-2 mt-0.5 text-xs text-gray-400 font-mono flex-wrap">
+                        {selectedEntity.pan && <span>PAN: {selectedEntity.pan}</span>}
+                        {selectedEntity.tan && <span>TAN: {selectedEntity.tan}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => setEntityModal(selectedEntity)}
+                      className="flex-shrink-0 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit entity details">
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Panel 3: Registration detail ─────────────────── */}
+              <div className="flex-1 overflow-y-auto bg-gray-50">
+                {!selectedReg ? (
+                  <div className="flex items-center justify-center h-full">
+                    <EmptyState icon="🏛️" title="No registrations" subtitle="Add a GSTIN registration" />
+                  </div>
+                ) : (
+                  <div className="p-6 max-w-3xl space-y-5">
+
+                    {/* Registration header card */}
+                    <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
+                      selectedReg.isActive ? 'border-gray-200' : 'border-gray-300 opacity-80'
+                    }`}>
+                      <div className={`border-l-4 ${(selectedReg.placeType||'').includes('Principal') ? 'border-l-blue-500' : 'border-l-amber-400'}`}>
+                        <div className="px-5 py-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-bold text-2xl text-gray-900">{selectedReg.abbr}</span>
+                                {(selectedReg.placeType||'Principal').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                                  <span key={t} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                    t==='Principal'?'bg-blue-100 text-blue-700':
+                                    t==='E-APOB'?'bg-purple-100 text-purple-700':
+                                    t==='I-APOB'?'bg-pink-100 text-pink-700':
+                                    'bg-amber-100 text-amber-700'
+                                  }`}>{t}</span>
+                                ))}
+                                {!selectedReg.isActive && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">Inactive</span>}
+                              </div>
+                              <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+                                <MapPin size={13} />
+                                <span>{selectedReg.officeCity}{selectedReg.district?`, ${selectedReg.district}`:''} · {selectedReg.state}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {selectedReg.isActive ? (
+                                <>
+                                  <button onClick={() => setRegModal(selectedReg)}
+                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                    <Edit2 size={15} />
+                                  </button>
+                                  <button onClick={() => setDeactivateTarget(selectedReg)}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Deactivate">
+                                    <Shield size={15} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button onClick={() => setReactivateTarget(selectedReg)}
+                                  className="text-xs text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                                  ↩ Reactivate
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                            <div>
+                              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">GSTIN</p>
+                              <p className="font-mono font-semibold text-gray-800 tracking-wide">{selectedReg.gstin}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">State Code</p>
+                              <p className="text-gray-700">{selectedReg.stateCode} — {selectedReg.state}</p>
+                            </div>
+                            {selectedReg.address && (
+                              <div className="col-span-2">
+                                <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Registered Address</p>
+                                <p className="text-gray-700 leading-relaxed">{selectedReg.address}</p>
+                              </div>
+                            )}
+                            {selectedReg.fssai && <div><p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">FSSAI</p><p className="font-mono text-gray-700">{selectedReg.fssai}</p></div>}
+                            {selectedReg.udyam && <div><p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Udyam</p><p className="font-mono text-gray-700">{selectedReg.udyam}</p></div>}
+                            {selectedReg.iec && <div><p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">IEC</p><p className="font-mono text-gray-700">{selectedReg.iec}</p></div>}
                           </div>
                         </div>
-                      )}
-                      {inactiveRegs.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                            Inactive ({inactiveRegs.length})
-                          </p>
-                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                            {inactiveRegs.map(reg => (
-                              <RegistrationCard key={reg.id} reg={reg}
-                                onEdit={() => {}} onDeactivate={() => {}}
-                                onReactivate={r => setReactivateTarget(r)}
-                                onLocationsUpdated={refetchRegs} />
-                            ))}
-                          </div>
+                      </div>
+                      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center gap-6 text-xs text-gray-500">
+                        <span>👥 {selectedReg._count?.users??0} employees</span>
+                        <span>🖥️ {selectedReg._count?.assets??0} assets</span>
+                        <span>📜 {selectedReg._count?.certificates??selectedReg.certificates?.length??0} certificates</span>
+                      </div>
+                    </div>
+
+                    {/* Additional Places section */}
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
+                        <div className="flex items-center gap-2">
+                          <Layers size={15} className="text-amber-500" />
+                          <span className="font-semibold text-gray-800 text-sm">Additional Places</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                            (selectedReg.additionalRegistrations?.filter(r=>r.isActive).length||0) > 0
+                              ? 'bg-amber-200 text-amber-800' : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {selectedReg.additionalRegistrations?.filter(r=>r.isActive).length||0}
+                          </span>
+                          <span className="text-xs text-gray-400 hidden sm:inline">E-APOB · I-APOB · Additional registrations</span>
+                        </div>
+                        {selectedReg.isActive && (
+                          <button onClick={() => { setAddAdditionalForId(selectedReg.id); setRegModal('add-additional'); }}
+                            className="flex items-center gap-1 text-xs text-amber-700 border border-amber-300 bg-white px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors font-medium">
+                            <Plus size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+                      {(!selectedReg.additionalRegistrations || selectedReg.additionalRegistrations.length===0) ? (
+                        <div className="px-5 py-8 text-center">
+                          <Layers size={28} className="mx-auto mb-2 text-gray-200" />
+                          <p className="text-sm text-gray-400 font-medium">No additional places registered</p>
+                          <p className="text-xs text-gray-300 mt-1">Additional, E-APOB, I-APOB registrations under this GSTIN will appear here</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-50">
+                          {selectedReg.additionalRegistrations.map(child => (
+                            <div key={child.id} className="group px-5 py-4 flex items-start gap-4 hover:bg-amber-50/30 transition-colors">
+                              <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${child.isActive?'bg-amber-400':'bg-gray-200'}`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-bold text-gray-900">{child.abbr}</span>
+                                  {(child.placeType||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                                    <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                      t==='E-APOB'?'bg-purple-100 text-purple-700':
+                                      t==='I-APOB'?'bg-pink-100 text-pink-700':
+                                      'bg-amber-100 text-amber-700'
+                                    }`}>{t}</span>
+                                  ))}
+                                  {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                                  <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
+                                </div>
+                                {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
+                                <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                              </div>
+                              <button onClick={() => setRegModal(child)}
+                                className="flex-shrink-0 p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                title="Edit this additional place">
+                                <Edit2 size={13} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+
+                    {/* Physical Locations section */}
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-blue-50/40">
+                        <div className="flex items-center gap-2">
+                          <MapPin size={15} className="text-blue-500" />
+                          <span className="font-semibold text-gray-800 text-sm">Physical Locations</span>
+                          {(selectedReg.locations?.length||0) > 0 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-200 text-blue-800">
+                              {selectedReg.locations.length}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-400 hidden sm:inline">Warehouses · Offices · Godowns under this GSTIN</span>
+                        </div>
+                        {selectedReg.isActive && (
+                          <button onClick={() => setLocationModal({ location: null, regId: selectedReg.id, regState: selectedReg.state })}
+                            className="flex items-center gap-1 text-xs text-blue-700 border border-blue-300 bg-white px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
+                            <Plus size={12} /> Add
+                          </button>
+                        )}
+                      </div>
+                      {(!selectedReg.locations || selectedReg.locations.length===0) ? (
+                        <div className="px-5 py-8 text-center">
+                          <MapPin size={28} className="mx-auto mb-2 text-gray-200" />
+                          <p className="text-sm text-gray-400 font-medium">No locations added yet</p>
+                          <p className="text-xs text-gray-300 mt-1">Add physical addresses listed in the GST certificate</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-50">
+                          {selectedReg.locations.map(loc => {
+                            const style = LOCATION_TYPE_STYLE[loc.locationType] || LOCATION_TYPE_STYLE['Additional Place'];
+                            return (
+                              <div key={loc.id} className="group px-5 py-3.5 flex items-start gap-3 hover:bg-blue-50/20 transition-colors">
+                                <span className={`flex-shrink-0 text-xs font-bold w-6 h-6 flex items-center justify-center rounded mt-0.5 ${style.bg} ${style.text}`}>
+                                  {style.short}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-xs font-semibold ${style.text}`}>{loc.locationType}</span>
+                                    {loc.locationName && <span className="text-xs text-gray-400">— {loc.locationName}</span>}
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-0.5">{loc.city}{loc.pincode?` — ${loc.pincode}`:''}</p>
+                                  {loc.address && <p className="text-xs text-gray-400 mt-0.5">{loc.address}</p>}
+                                </div>
+                                <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => setLocationModal({ location: loc, regId: selectedReg.id, regState: selectedReg.state })}
+                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
+                                    <Edit2 size={12} />
+                                  </button>
+                                  <button onClick={async () => {
+                                    if (!window.confirm(`Remove "${loc.city} — ${loc.locationType}"?`)) return;
+                                    try { await api.delete(`/company-master/locations/${loc.id}`); refetchRegs(); }
+                                    catch (err) { alert(err.response?.data?.error||'Failed'); }
+                                  }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Remove">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1193,6 +1400,14 @@ export default function CompanyMaster() {
           reg={reactivateTarget}
           onClose={() => setReactivateTarget(null)}
           onDone={handleSaved} />
+      )}
+      {locationModal && (
+        <LocationModal
+          location={locationModal.location}
+          registrationId={locationModal.regId}
+          registrationState={locationModal.regState}
+          onClose={() => setLocationModal(null)}
+          onSaved={() => refetchRegs()} />
       )}
 
       {/* City Codes Modal */}
