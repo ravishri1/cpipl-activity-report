@@ -55,18 +55,32 @@ function MaskedPassword({ password }) {
   );
 }
 
-function PortalFormModal({ portal, registrations, onClose, onSaved }) {
+function PortalFormModal({ portal, registrations, entities, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
   const isEdit = !!portal;
+
+  // Determine initial entity from portal (via legalEntityId or via companyRegistration.legalEntityId)
+  const initEntityId = portal?.legalEntityId
+    ? String(portal.legalEntityId)
+    : portal?.companyRegistration?.legalEntityId
+      ? String(portal.companyRegistration.legalEntityId)
+      : '';
+
   const [form, setForm] = useState({
     name: portal?.name || '',
     url: portal?.url || '',
     description: portal?.description || '',
     category: portal?.category || 'other',
-    companyRegistrationId: portal?.companyRegistrationId || '',
+    legalEntityId: initEntityId,
+    companyRegistrationId: portal?.companyRegistrationId ? String(portal.companyRegistrationId) : '',
   });
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Filter registrations by selected entity
+  const filteredRegs = form.legalEntityId
+    ? registrations.filter(r => String(r.legalEntityId) === form.legalEntityId)
+    : registrations;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,24 +99,55 @@ function PortalFormModal({ portal, registrations, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white">
           <h2 className="font-semibold text-slate-800">{isEdit ? 'Edit Portal' : 'Add Portal'}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100"><X className="w-4 h-4 text-slate-500" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {saveErr && <AlertMessage type="error" message={saveErr} />}
+
+          {/* Company Entity — first selector */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Portal Name *</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Company / Entity *</label>
+            <select required value={form.legalEntityId} onChange={e => {
+              setField('legalEntityId', e.target.value);
+              setField('companyRegistrationId', ''); // reset registration when entity changes
+            }}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">-- Select Company --</option>
+              {entities.map(ent => (
+                <option key={ent.id} value={String(ent.id)}>{ent.legalName}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Specific Registration — filtered by entity */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Specific GSTIN / Registration <span className="text-slate-400 font-normal">(optional — if credential is registration-specific)</span>
+            </label>
+            <select value={form.companyRegistrationId} onChange={e => setField('companyRegistrationId', e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!form.legalEntityId}>
+              <option value="">-- Entity-level (all registrations) --</option>
+              {filteredRegs.map(r => (
+                <option key={r.id} value={String(r.id)}>{r.abbr} — {r.officeCity} ({r.gstin})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Portal / Platform Name *</label>
             <input required value={form.name} onChange={e => setField('name', e.target.value)}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Gmail Workspace, GST Portal" />
+              placeholder="e.g. Gmail, Amazon Seller, Shiprocket, GST Portal" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Login URL</label>
             <input value={form.url} onChange={e => setField('url', e.target.value)}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="https://accounts.google.com" />
+              placeholder="https://sellercentral.amazon.in" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Category</label>
@@ -110,16 +155,6 @@ function PortalFormModal({ portal, registrations, onClose, onSaved }) {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               {PORTAL_CATEGORIES.map(c => (
                 <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Company Registration</label>
-            <select value={form.companyRegistrationId} onChange={e => setField('companyRegistrationId', e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">-- All / Unassigned --</option>
-              {registrations.map(r => (
-                <option key={r.id} value={r.id}>{r.abbr} — {r.officeCity} ({r.gstin})</option>
               ))}
             </select>
           </div>
@@ -156,6 +191,9 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     assignedTo: credential?.assignedTo || '',
     sharedWith: credential?.sharedWith || '',
     notes: credential?.notes || '',
+    phoneNumber: credential?.phoneNumber || '',
+    department: credential?.department || '',
+    purpose: credential?.purpose || '',
     status: credential?.status || 'active',
     lastRotated: credential?.lastRotated || '',
   });
@@ -271,6 +309,28 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
+              <input value={form.phoneNumber} onChange={e => setField('phoneNumber', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. 8369529033" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Department Using</label>
+              <input value={form.department} onChange={e => setField('department', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. Accounts, DA Team" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Purpose</label>
+            <input value={form.purpose} onChange={e => setField('purpose', e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Amazon orders, Delivery tracking, User delivery" />
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
             <textarea value={form.notes} onChange={e => setField('notes', e.target.value)}
@@ -331,8 +391,15 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
                 <span className="text-xs text-slate-400">{portal._count.credentials} credential{portal._count.credentials !== 1 ? 's' : ''}</span>
               )}
             </div>
-            {portal.companyRegistration && (
-              <div className="text-xs text-slate-400 mt-0.5">{portal.companyRegistration.abbr} — {portal.companyRegistration.officeCity}</div>
+            {(portal.legalEntity || portal.companyRegistration) && (
+              <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                <span className="font-medium text-slate-500">
+                  {portal.legalEntity?.shortName || portal.legalEntity?.legalName || portal.companyRegistration?.abbr?.split('/')[0]}
+                </span>
+                {portal.companyRegistration && (
+                  <span>· {portal.companyRegistration.abbr} ({portal.companyRegistration.officeCity})</span>
+                )}
+              </div>
             )}
             {portal.description && (
               <div className="text-xs text-slate-500 mt-0.5 truncate">{portal.description}</div>
@@ -383,6 +450,17 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
                       <span className="font-medium text-slate-600">Password:</span>
                       <MaskedPassword password={cred.password} />
                     </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                      {cred.phoneNumber && (
+                        <span className="text-xs text-slate-500">📞 {cred.phoneNumber}</span>
+                      )}
+                      {cred.department && (
+                        <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">🏢 {cred.department}</span>
+                      )}
+                      {cred.purpose && (
+                        <span className="text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium">🎯 {cred.purpose}</span>
+                      )}
+                    </div>
                     {cred.assignee && (
                       <div className="text-xs text-slate-500">Assigned to: <span className="text-slate-700">{cred.assignee.name}</span></div>
                     )}
@@ -430,9 +508,7 @@ export default function CredentialManager() {
   const params = new URLSearchParams();
   if (filterReg) {
     if (filterReg.startsWith('entity_')) {
-      const entityId = filterReg.replace('entity_', '');
-      const entityRegIds = registrations.filter(r => String(r.legalEntityId || r.legalEntity?.id) === entityId).map(r => r.id);
-      if (entityRegIds.length > 0) params.set('companyRegistrationIds', entityRegIds.join(','));
+      params.set('legalEntityId', filterReg.replace('entity_', ''));
     } else {
       params.set('companyRegistrationId', filterReg);
     }
@@ -512,6 +588,7 @@ export default function CredentialManager() {
         <PortalFormModal
           portal={editingPortal}
           registrations={registrations}
+          entities={entities}
           onClose={() => { setShowAddPortal(false); setEditingPortal(null); }}
           onSaved={handlePortalSaved}
         />

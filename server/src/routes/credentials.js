@@ -15,20 +15,22 @@ const VALID_TYPES      = ['individual', 'shared'];
 
 // GET /api/credentials/portals
 router.get('/portals', requireAdmin, asyncHandler(async (req, res) => {
-  const { companyRegistrationId, companyRegistrationIds, category } = req.query;
+  const { companyRegistrationId, companyRegistrationIds, legalEntityId, category } = req.query;
   const where = { isActive: true };
   if (companyRegistrationIds) {
     where.companyRegistrationId = { in: companyRegistrationIds.split(',').map(id => parseInt(id)).filter(Boolean) };
   } else if (companyRegistrationId) {
     where.companyRegistrationId = parseId(companyRegistrationId);
   }
+  if (legalEntityId) where.legalEntityId = parseId(legalEntityId);
   if (category) where.category = category;
 
   const portals = await req.prisma.companyPortal.findMany({
     where,
     include: {
+      legalEntity: { select: { id: true, legalName: true, shortName: true } },
       companyRegistration: {
-        select: { id: true, abbr: true, gstin: true, officeCity: true },
+        select: { id: true, abbr: true, gstin: true, officeCity: true, legalEntityId: true },
       },
       _count: { select: { credentials: true } },
     },
@@ -48,10 +50,12 @@ router.post('/portals', requireAdmin, asyncHandler(async (req, res) => {
       url: req.body.url || null,
       description: req.body.description || null,
       category: req.body.category || 'other',
+      legalEntityId: req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null,
       companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
     },
     include: {
-      companyRegistration: { select: { id: true, abbr: true, gstin: true, officeCity: true } },
+      legalEntity: { select: { id: true, legalName: true, shortName: true } },
+      companyRegistration: { select: { id: true, abbr: true, gstin: true, officeCity: true, legalEntityId: true } },
       _count: { select: { credentials: true } },
     },
   });
@@ -71,12 +75,16 @@ router.put('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
       ...(req.body.description !== undefined && { description: req.body.description || null }),
       ...(req.body.category !== undefined && { category: req.body.category }),
       ...(req.body.isActive !== undefined && { isActive: req.body.isActive }),
+      ...(req.body.legalEntityId !== undefined && {
+        legalEntityId: req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null,
+      }),
       ...(req.body.companyRegistrationId !== undefined && {
         companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
       }),
     },
     include: {
-      companyRegistration: { select: { id: true, abbr: true, gstin: true, officeCity: true } },
+      legalEntity: { select: { id: true, legalName: true, shortName: true } },
+      companyRegistration: { select: { id: true, abbr: true, gstin: true, officeCity: true, legalEntityId: true } },
       _count: { select: { credentials: true } },
     },
   });
@@ -179,6 +187,9 @@ router.post('/credentials', requireAdmin, asyncHandler(async (req, res) => {
       assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null,
       sharedWith: req.body.sharedWith || null,
       notes: req.body.notes || null,
+      phoneNumber: req.body.phoneNumber || null,
+      department: req.body.department || null,
+      purpose: req.body.purpose || null,
       status: req.body.status || 'active',
       lastRotated: req.body.lastRotated || null,
     },
@@ -206,6 +217,9 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
       ...(req.body.assignedTo !== undefined && { assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null }),
       ...(req.body.sharedWith !== undefined && { sharedWith: req.body.sharedWith || null }),
       ...(req.body.notes !== undefined && { notes: req.body.notes || null }),
+      ...(req.body.phoneNumber !== undefined && { phoneNumber: req.body.phoneNumber || null }),
+      ...(req.body.department !== undefined && { department: req.body.department || null }),
+      ...(req.body.purpose !== undefined && { purpose: req.body.purpose || null }),
       ...(req.body.status !== undefined && { status: req.body.status }),
       ...(req.body.lastRotated !== undefined && { lastRotated: req.body.lastRotated || null }),
     },

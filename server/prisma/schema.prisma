@@ -2159,6 +2159,7 @@ model LegalEntity {
   updatedAt DateTime @updatedAt
 
   registrations CompanyRegistration[]
+  portals       CompanyPortal[]
 }
 
 model CompanyRegistration {
@@ -2200,7 +2201,8 @@ model CompanyRegistration {
 
 model CompanyPortal {
   id                     Int      @id @default(autoincrement())
-  companyRegistrationId  Int?
+  legalEntityId          Int?     // entity-level portal (e.g. "CP Main" = Color Papers entity)
+  companyRegistrationId  Int?     // specific GSTIN/registration (optional refinement)
   name                   String   // "Gmail Workspace", "GST Portal", "Banking", "ERP", etc.
   url                    String?  // Portal login URL
   description            String?
@@ -2209,9 +2211,11 @@ model CompanyPortal {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
+  legalEntity            LegalEntity?         @relation(fields: [legalEntityId], references: [id])
   companyRegistration    CompanyRegistration? @relation(fields: [companyRegistrationId], references: [id])
   credentials            PortalCredential[]
 
+  @@index([legalEntityId])
   @@index([companyRegistrationId])
 }
 
@@ -2225,6 +2229,9 @@ model PortalCredential {
   assignedTo   Int?     // userId for individual, null for shared
   sharedWith   String?  // JSON array of userIds for shared credentials
   notes        String?
+  phoneNumber  String?  // phone/mobile associated with this login
+  department   String?  // who uses it: "Accounts", "DA Team", "Support", "PLD"
+  purpose      String?  // for what: "Amazon", "Delivery", "User delivery"
   status       String   @default("active") // active, revoked, expired
   lastRotated  String?  // date password was last changed
   createdAt    DateTime @default(now())
