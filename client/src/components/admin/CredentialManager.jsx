@@ -467,7 +467,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
 }
 
 function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [editingCred, setEditingCred] = useState(null);
   const { execute } = useApi();
 
