@@ -158,9 +158,16 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
   let abbr = existing.abbr;
   const newCity = officeCity ?? existing.officeCity;
   const newSiteCode = siteCode !== undefined ? siteCode : existing.siteCode;
-  if (officeCity !== undefined && officeCity !== existing.officeCity ||
-      siteCode !== undefined && (siteCode || '').trim().toUpperCase() !== (existing.siteCode || '').trim().toUpperCase()) {
-    abbr = await computeAbbr(req.prisma, existing.gstin, newCity, existing.legalEntityId, newSiteCode);
+  const cityChanged = officeCity !== undefined && officeCity !== existing.officeCity;
+  const siteChanged = siteCode !== undefined &&
+    (siteCode || '').trim().toUpperCase() !== (existing.siteCode || '').trim().toUpperCase();
+  if (cityChanged || siteChanged) {
+    try {
+      abbr = await computeAbbr(req.prisma, existing.gstin, newCity, existing.legalEntityId, newSiteCode);
+    } catch (e) {
+      // If entity/city code lookup fails, keep existing abbr but still save siteCode
+      console.warn(`[companyMaster] abbr recompute skipped for id=${id}: ${e.message}`);
+    }
   }
 
   const reg = await req.prisma.companyRegistration.update({
