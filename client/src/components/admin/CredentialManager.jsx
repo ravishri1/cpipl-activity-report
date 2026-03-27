@@ -180,6 +180,7 @@ function PortalFormModal({ portal, registrations, entities, onClose, onSaved }) 
 
 function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
+  const { data: departments } = useFetch('/api/departments', []);
   const isEdit = !!credential;
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({
@@ -318,9 +319,13 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Department Using</label>
-              <input value={form.department} onChange={e => setField('department', e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. Accounts, DA Team" />
+              <select value={form.department} onChange={e => setField('department', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">-- Select Department --</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

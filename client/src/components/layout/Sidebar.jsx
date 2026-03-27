@@ -343,6 +343,7 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { to: '/admin/company-master',          label: 'Company Master',          icon: Building2 },
         { to: '/admin/credentials',             label: 'Credential Manager',      icon: KeyRound },
+        { to: '/admin/departments',             label: 'Departments',             icon: Building2 },
         { to: '/admin/settings',                label: 'Settings',                icon: Settings },
       ],
     },

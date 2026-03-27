@@ -10,7 +10,7 @@ import {
   GraduationCap, Users, FileText, ChevronRight, Plus, Pencil,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
   Camera, Loader2, History, ChevronLeft, FolderOpen, Upload,
-  Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck,
+  Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 
 const TABS = [
@@ -345,8 +345,10 @@ export default function EmployeeProfile() {
         <div className="border-b border-slate-200 overflow-x-auto">
           <div className="flex min-w-max">
             {(canEdit && !isSelf && profile?.role !== 'admin' && (currentUser?.role === 'admin' || profile?.role !== 'sub_admin')
-              ? [...TABS, { key: 'permissions', label: 'Permissions', icon: ShieldCheck }]
-              : TABS
+              ? [...TABS, { key: 'credentials', label: 'Credentials', icon: KeyRound }, { key: 'permissions', label: 'Permissions', icon: ShieldCheck }]
+              : canEdit
+                ? [...TABS, { key: 'credentials', label: 'Credentials', icon: KeyRound }]
+                : TABS
             ).map(({ key, label, icon: Icon }) => (
               <button key={key} onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium border-b-2 transition-colors whitespace-nowrap
@@ -382,6 +384,9 @@ export default function EmployeeProfile() {
           )}
           {activeTab === 'history' && (
             <ChangeHistoryTab userId={id} />
+          )}
+          {activeTab === 'credentials' && canEdit && (
+            <CredentialsTab userId={id} />
           )}
           {activeTab === 'permissions' && canEdit && !isSelf && profile?.role !== 'admin' && (currentUser?.role === 'admin' || profile?.role !== 'sub_admin') && (
             <PermissionsTab userId={id} />
@@ -1724,6 +1729,72 @@ function PermissionsTab({ userId }) {
           Full access — no sections are currently restricted for this user.
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CREDENTIALS TAB — admin-only view of assigned credentials
+   ═══════════════════════════════════════════════════════════ */
+function CredentialsTab({ userId }) {
+  const { data: credentials, loading, error } = useFetch(`/api/credentials/user/${userId}`, []);
+  const [showPwd, setShowPwd] = useState({});
+
+  const togglePwd = (id) => setShowPwd(p => ({ ...p, [id]: !p[id] }));
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
+  if (error) return <div className="text-red-500 text-sm py-4">{error}</div>;
+
+  if (!credentials.length) return (
+    <div className="flex flex-col items-center py-10 text-slate-400">
+      <KeyRound className="w-8 h-8 mb-2" />
+      <p className="text-sm font-medium">No credentials assigned</p>
+      <p className="text-xs mt-1">Assign credentials from the <a href="/admin/credentials" className="text-blue-500 underline">Credential Manager</a></p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500 mb-3">Individual credentials assigned to this employee across all portals.</p>
+      {credentials.map(cred => (
+        <div key={cred.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm text-slate-800">{cred.portal.name}</span>
+                {cred.portal.legalEntity && (
+                  <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{cred.portal.legalEntity.legalName}</span>
+                )}
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cred.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {cred.status}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">{cred.username}</p>
+              {cred.password && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs font-mono text-slate-600">
+                    {showPwd[cred.id] ? cred.password : '••••••••'}
+                  </span>
+                  <button onClick={() => togglePwd(cred.id)} className="text-slate-400 hover:text-slate-600">
+                    {showPwd[cred.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              )}
+              {(cred.department || cred.purpose) && (
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  {cred.department && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">🏢 {cred.department}</span>}
+                  {cred.purpose && <span className="text-xs bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">🎯 {cred.purpose}</span>}
+                </div>
+              )}
+            </div>
+            {cred.portal.url && (
+              <a href={cred.portal.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-500 mt-0.5">
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

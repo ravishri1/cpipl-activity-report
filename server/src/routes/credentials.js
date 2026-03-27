@@ -138,6 +138,23 @@ router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
   res.json(credentials);
 }));
 
+// GET /api/credentials/user/:userId — admin views credentials assigned to any user
+router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseInt(req.params.userId);
+  if (!userId) throw badRequest('Invalid user ID');
+  const credentials = await req.prisma.portalCredential.findMany({
+    where: { assignedTo: userId },
+    include: {
+      portal: {
+        select: { id: true, name: true, category: true, url: true,
+          legalEntity: { select: { id: true, legalName: true, shortName: true } } },
+      },
+    },
+    orderBy: [{ portal: { name: 'asc' } }],
+  });
+  res.json(credentials);
+}));
+
 // GET /api/credentials/my-credentials  — employee sees own assigned credentials
 router.get('/my-credentials', asyncHandler(async (req, res) => {
   const userId = req.user.id;

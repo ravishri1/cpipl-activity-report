@@ -77,6 +77,7 @@ const PredictiveMaintenanceDashboard = lazy(() => import('./components/admin/Pre
 const HRAnalyticsDashboard = lazy(() => import('./components/admin/HRAnalyticsDashboard'));
 const AccessControlManager = lazy(() => import('./components/admin/AccessControlManager'));
 const CredentialManager = lazy(() => import('./components/admin/CredentialManager'));
+const DepartmentSetup = lazy(() => import('./components/admin/DepartmentSetup'));
 const MyCredentials = lazy(() => import('./components/credentials/MyCredentials'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
@@ -232,6 +233,7 @@ function AppRoutes() {
                   <Route path="/admin/error-reports" element={<SeparatedRoute><AdminRoute><ErrorReportsPanel /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/settings" element={<SeparatedRoute><AdminRoute><Settings /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/credentials" element={<SeparatedRoute><AdminRoute><CredentialManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/departments" element={<SeparatedRoute><AdminRoute><DepartmentSetup /></AdminRoute></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />
