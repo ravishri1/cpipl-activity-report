@@ -2170,7 +2170,8 @@ model CompanyRegistration {
   state          String
   district       String?
   stateCode      String  // gstin[0:1] as "09" (preserve leading zero)
-  regNo          Int     // gstin[12] as integer
+  regNo          Int     // gstin[12] as integer (kept for legacy, use siteCode for abbr)
+  siteCode       String? // manually entered site code (e.g. "R1", "HO", "WH1") — used in abbr
   placeType      String  @default("Principal") // Comma-separated: "Principal", "E-APOB", "I-APOB", "Additional"
   principalRegistrationId Int?  // Links Additional to its Principal registration
   address        String? // full registered address

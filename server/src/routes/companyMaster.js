@@ -9,16 +9,16 @@ const router = express.Router();
 router.use(authenticate);
 
 // ─── Abbr Auto-generation ──────────────────────────────────────────────────
-async function computeAbbr(prisma, gstin, officeCity, legalEntityId) {
+async function computeAbbr(prisma, gstin, officeCity, legalEntityId, siteCode) {
   const stateCode = gstin.slice(0, 2);
-  const regNo = parseInt(gstin[12]);
   const entity = await prisma.legalEntity.findUnique({ where: { id: legalEntityId } });
   if (!entity) throw badRequest('Legal entity not found');
   const entityCode = await prisma.entityCode.findFirst({ where: { legalName: entity.legalName } });
   if (!entityCode) throw badRequest(`No entity code found for "${entity.legalName}". Add one first.`);
   const cityCode = await prisma.cityCode.findFirst({ where: { cityName: officeCity } });
   if (!cityCode) throw badRequest(`No city code found for "${officeCity}". Add one first.`);
-  return `${entityCode.code}-${cityCode.code}/${stateCode}-R${regNo}`;
+  const code = (siteCode || '').trim().toUpperCase() || `R${parseInt(gstin[12])}`;
+  return `${entityCode.code}-${cityCode.code}/${stateCode}-${code}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -110,13 +110,14 @@ router.get('/registrations/:id', asyncHandler(async (req, res) => {
 router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'legalEntityId', 'gstin', 'officeCity', 'state');
   const { legalEntityId, gstin, officeCity, state, district, address,
-          placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness } = req.body;
+          placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, siteCode } = req.body;
   if (gstin.length !== 15) throw badRequest('GSTIN must be exactly 15 characters');
   const stateCode = gstin.slice(0, 2);
   const regNo = parseInt(gstin[12]);
-  const abbr = await computeAbbr(req.prisma, gstin, officeCity, parseInt(legalEntityId));
+  const abbr = await computeAbbr(req.prisma, gstin, officeCity, parseInt(legalEntityId), siteCode);
   const reg = await req.prisma.companyRegistration.create({
     data: { legalEntityId: parseInt(legalEntityId), gstin, stateCode, regNo, abbr,
+            siteCode: siteCode?.trim().toUpperCase() || null,
             officeCity, state, district, address, placeType: placeType || 'Principal',
             principalRegistrationId: principalRegistrationId ? parseInt(principalRegistrationId) : null,
             fssai, udyam, iec, primaryBusiness: primaryBusiness || null },
@@ -128,7 +129,7 @@ router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/company-master/registrations/:id
 router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, isActive } = req.body;
+  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, siteCode, isActive } = req.body;
 
   // Deactivation preview (isActive = false without ?confirm=true shows impact summary)
   if (isActive === false || isActive === 'false') {
@@ -151,12 +152,15 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
     return res.json({ deactivated: true, flaggedEmployees: empCount, flaggedAssets: assetCount, registration: reg });
   }
 
-  // Re-compute abbr if officeCity changed
+  // Re-compute abbr if officeCity or siteCode changed
   const existing = await req.prisma.companyRegistration.findUnique({ where: { id } });
   if (!existing) throw notFound('Company registration');
   let abbr = existing.abbr;
-  if (officeCity && officeCity !== existing.officeCity) {
-    abbr = await computeAbbr(req.prisma, existing.gstin, officeCity, existing.legalEntityId);
+  const newCity = officeCity ?? existing.officeCity;
+  const newSiteCode = siteCode !== undefined ? siteCode : existing.siteCode;
+  if (officeCity !== undefined && officeCity !== existing.officeCity ||
+      siteCode !== undefined && (siteCode || '').trim().toUpperCase() !== (existing.siteCode || '').trim().toUpperCase()) {
+    abbr = await computeAbbr(req.prisma, existing.gstin, newCity, existing.legalEntityId, newSiteCode);
   }
 
   const reg = await req.prisma.companyRegistration.update({
@@ -164,6 +168,7 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
     data: { officeCity: officeCity ?? existing.officeCity, state: state ?? existing.state,
             district: district ?? existing.district, address: address ?? existing.address,
             placeType: placeType ?? existing.placeType, abbr,
+            siteCode: siteCode !== undefined ? (siteCode?.trim().toUpperCase() || null) : existing.siteCode,
             principalRegistrationId: principalRegistrationId !== undefined ? (principalRegistrationId ? parseInt(principalRegistrationId) : null) : existing.principalRegistrationId,
             fssai: fssai ?? existing.fssai, udyam: udyam ?? existing.udyam,
             iec: iec ?? existing.iec,
