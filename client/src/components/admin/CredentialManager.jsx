@@ -1,4 +1,4 @@
-import { useState, Component } from 'react';
+import { useState } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -280,24 +280,6 @@ function DeptMultiPicker({ departments, selected, onChange }) {
   );
 }
 
-class CredentialModalBoundary extends Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(e) { return { error: e }; }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <div className="text-red-600 font-semibold mb-2">Modal Error</div>
-            <pre className="text-xs text-slate-700 bg-slate-50 p-3 rounded overflow-auto max-h-40">{this.state.error?.message}{'\n'}{this.state.error?.stack?.slice(0,500)}</pre>
-            <button onClick={this.props.onClose} className="mt-3 px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg">Close</button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
@@ -314,7 +296,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     sharedWith: (() => { try { const v = credential?.sharedWith; return Array.isArray(v) ? v.map(String) : (v ? JSON.parse(v) : []); } catch { return []; } })(),
     notes: credential?.notes || '',
     phoneNumber: credential?.phoneNumber || '',
-    department: (() => { try { const v = credential?.department; if (!v) return ''; const p = JSON.parse(v); return Array.isArray(p) ? p : v; } catch { return v || ''; } })(),
+    department: (() => { const v = credential?.department; if (!v) return ''; try { const p = JSON.parse(v); return Array.isArray(p) ? p : v; } catch { return v; } })(),
     purpose: credential?.purpose || '',
     status: credential?.status || 'active',
     lastRotated: credential?.lastRotated || '',
@@ -621,15 +603,13 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
             </div>
           )}
           {editingCred && (
-            <CredentialModalBoundary onClose={() => setEditingCred(null)}>
-              <CredentialFormModal
-                portalId={portal.id}
-                credential={editingCred}
-                users={users}
-                onClose={() => setEditingCred(null)}
-                onSaved={handleEditSaved}
-              />
-            </CredentialModalBoundary>
+            <CredentialFormModal
+              portalId={portal.id}
+              credential={editingCred}
+              users={users}
+              onClose={() => setEditingCred(null)}
+              onSaved={handleEditSaved}
+            />
           )}
         </div>
       )}
