@@ -9,7 +9,7 @@ import EmptyState from '../shared/EmptyState';
 import BranchManager from './BranchManager';
 import {
   Building2, Plus, Edit2, ChevronRight, ChevronDown, MapPin, Globe, Hash,
-  Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers
+  Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers, Key, Eye, EyeOff, ExternalLink
 } from 'lucide-react';
 
 const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
@@ -959,6 +959,143 @@ function ReactivateModal({ reg, onClose, onDone }) {
   );
 }
 
+// ─── Credentials Panel (shown inside Panel 3) ─────────────────────────────────
+
+function MaskedPwd({ password }) {
+  const [show, setShow] = useState(false);
+  if (!password) return <span className="text-gray-300 italic text-xs">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="font-mono text-xs">{show ? password : '••••••••'}</span>
+      <button onClick={() => setShow(v => !v)} className="text-gray-400 hover:text-gray-600">
+        {show ? <EyeOff size={11} /> : <Eye size={11} />}
+      </button>
+    </span>
+  );
+}
+
+function CredentialsPanel({ legalEntityId }) {
+  const { data: portals, loading, error } = useFetch(
+    legalEntityId ? `/credentials/portals?legalEntityId=${legalEntityId}` : null,
+    []
+  );
+
+  const totalCreds = portals.reduce((s, p) => s + (p._count?.credentials || 0), 0);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-indigo-50/40">
+        <div className="flex items-center gap-2">
+          <Key size={15} className="text-indigo-500" />
+          <span className="font-semibold text-gray-800 text-sm">Credentials</span>
+          {totalCreds > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-indigo-200 text-indigo-800">{totalCreds}</span>
+          )}
+          <span className="text-xs text-gray-400 hidden sm:inline">Portals & logins for this company</span>
+        </div>
+        <a href="/admin/credentials" className="flex items-center gap-1 text-xs text-indigo-700 border border-indigo-300 bg-white px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors font-medium">
+          <ExternalLink size={11} /> Manage
+        </a>
+      </div>
+
+      {loading ? (
+        <div className="px-5 py-6 text-center text-xs text-gray-400">Loading…</div>
+      ) : error ? (
+        <div className="px-5 py-4 text-xs text-red-500">{error}</div>
+      ) : portals.length === 0 ? (
+        <div className="px-5 py-8 text-center">
+          <Key size={28} className="mx-auto mb-2 text-gray-200" />
+          <p className="text-sm text-gray-400 font-medium">No credentials linked</p>
+          <p className="text-xs text-gray-300 mt-1">Go to Credentials to add portals for this company</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {portals.map(portal => (
+            <PortalCredRow key={portal.id} portal={portal} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortalCredRow({ portal }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: creds, loading } = useFetch(
+    expanded ? `/credentials/portals/${portal.id}/credentials` : null,
+    []
+  );
+
+  const CATEGORY_COLORS = {
+    email: 'bg-blue-100 text-blue-700',
+    tax: 'bg-orange-100 text-orange-700',
+    banking: 'bg-green-100 text-green-700',
+    erp: 'bg-purple-100 text-purple-700',
+    cloud: 'bg-sky-100 text-sky-700',
+    social: 'bg-pink-100 text-pink-700',
+    government: 'bg-red-100 text-red-700',
+    other: 'bg-slate-100 text-slate-600',
+  };
+
+  return (
+    <div>
+      <button onClick={() => setExpanded(v => !v)}
+        className="w-full px-5 py-3 flex items-center justify-between hover:bg-indigo-50/20 transition-colors text-left">
+        <div className="flex items-center gap-2.5">
+          {expanded ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
+          <span className="text-sm font-medium text-gray-800">{portal.name}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${CATEGORY_COLORS[portal.category] || CATEGORY_COLORS.other}`}>
+            {portal.category}
+          </span>
+          {portal._count?.credentials > 0 && (
+            <span className="text-xs text-gray-400">{portal._count.credentials} login{portal._count.credentials !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+        {portal.url && (
+          <a href={portal.url} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="text-gray-300 hover:text-blue-500 shrink-0">
+            <ExternalLink size={12} />
+          </a>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="bg-gray-50 border-t border-gray-100">
+          {loading ? (
+            <div className="px-6 py-3 text-xs text-gray-400">Loading…</div>
+          ) : creds.length === 0 ? (
+            <div className="px-6 py-3 text-xs text-gray-400 italic">No credentials added yet</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-200">
+                  <th className="px-5 py-2 text-left font-medium">Login ID</th>
+                  <th className="px-3 py-2 text-left font-medium">Password</th>
+                  <th className="px-3 py-2 text-left font-medium">Phone</th>
+                  <th className="px-3 py-2 text-left font-medium">Department</th>
+                  <th className="px-3 py-2 text-left font-medium">Purpose</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {creds.map(c => (
+                  <tr key={c.id} className="hover:bg-white transition-colors">
+                    <td className="px-5 py-2.5 font-mono text-gray-700">{c.username}</td>
+                    <td className="px-3 py-2.5"><MaskedPwd password={c.password} /></td>
+                    <td className="px-3 py-2.5 text-gray-500">{c.phoneNumber || '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500">{c.department || '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500">{c.purpose || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CompanyMaster() {
@@ -1559,6 +1696,9 @@ export default function CompanyMaster() {
                         </div>
                       )}
                     </div>
+
+                    {/* Credentials section */}
+                    <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
                   </div>
                 )}
