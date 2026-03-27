@@ -214,12 +214,12 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 GSTIN *
                 {principalReg && !registration && (
-                  <span className="text-xs text-blue-500 font-normal ml-1">· pre-filled from principal</span>
+                  <span className="text-xs text-blue-500 font-normal ml-1">· same as principal</span>
                 )}
               </label>
               <input value={form.gstin} onChange={e => set('gstin', e.target.value.toUpperCase())}
-                required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="27AAJCC2415M1ZJ" disabled={!!registration} />
+                required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                placeholder="27AAJCC2415M1ZJ" disabled={!!registration || !!principalReg} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

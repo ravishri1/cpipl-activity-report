@@ -2166,7 +2166,7 @@ model CompanyRegistration {
   legalEntityId  Int
   abbr           String  @unique // e.g. "CPIPL-MUM/27-R1" — auto-computed on save
   officeCity     String  // operational city
-  gstin          String  @unique // 15-char, PRIMARY identifier
+  gstin          String  // 15-char; principal has unique GSTIN, additional places share principal's GSTIN
   state          String
   district       String?
   stateCode      String  // gstin[0:1] as "09" (preserve leading zero)
