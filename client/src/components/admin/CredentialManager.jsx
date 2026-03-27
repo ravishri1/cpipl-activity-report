@@ -486,6 +486,14 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
     }
   };
 
+  const handleToggleStatus = async (cred) => {
+    const newStatus = cred.status === 'active' ? 'revoked' : 'active';
+    try {
+      await execute(() => api.put(`/credentials/credentials/${cred.id}`, { status: newStatus }));
+      refetchCreds();
+    } catch {}
+  };
+
   const handleEditSaved = () => {
     refetchCreds();
     setEditingCred(null);
@@ -560,9 +568,18 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${cred.type === 'shared' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
                         {cred.type === 'shared' ? 'Shared' : 'Individual'}
                       </span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${CREDENTIAL_STATUS_STYLES[cred.status] || 'bg-slate-100 text-slate-600'}`}>
-                        {cred.status}
-                      </span>
+                      <button
+                        onClick={() => handleToggleStatus(cred)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-colors ${
+                          cred.status === 'active'
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                        }`}
+                        title={cred.status === 'active' ? 'Click to mark as closed' : 'Click to mark as active'}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${cred.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+                        {cred.status === 'active' ? 'Active' : 'Closed'}
+                      </button>
                     </div>
                     <div className="text-sm text-slate-600 font-mono">{cred.username}</div>
                     <div className="flex items-center gap-1 text-xs text-slate-500">
