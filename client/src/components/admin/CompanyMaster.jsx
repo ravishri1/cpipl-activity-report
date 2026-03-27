@@ -1346,11 +1346,14 @@ export default function CompanyMaster() {
                                       ))}
                                       {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
                                     </div>
-                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                                      <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
+                                    <div className="flex items-center gap-1 text-xs font-semibold text-gray-700 mt-1">
+                                      <MapPin size={9} className="flex-shrink-0" />
+                                      <span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
                                     </div>
                                     {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
-                                    <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                                    {child.gstin && (
+                                      <p className="text-xs font-mono font-semibold text-gray-600 mt-0.5 tracking-wide">{child.gstin}</p>
+                                    )}
                                   </div>
                                   <button onClick={() => setRegModal(child)}
                                     className="flex-shrink-0 p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
@@ -1377,11 +1380,14 @@ export default function CompanyMaster() {
                                       </span>
                                       {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
                                     </div>
-                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                                      <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
+                                    <div className="flex items-center gap-1 text-xs font-semibold text-gray-700 mt-1">
+                                      <MapPin size={9} className="flex-shrink-0" />
+                                      <span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
                                     </div>
                                     {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
-                                    <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                                    {child.gstin && (
+                                      <p className="text-xs font-mono font-semibold text-gray-600 mt-0.5 tracking-wide">{child.gstin}</p>
+                                    )}
                                     <p className="text-xs text-amber-500 mt-1">
                                       Grouped by state code match · <button onClick={() => setRegModal(child)} className="underline hover:text-amber-700">Click Edit to formally link</button>
                                     </p>
