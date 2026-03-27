@@ -233,23 +233,43 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Registration Type</label>
               <div className="flex flex-wrap gap-2 mt-1">
-                {PLACE_TYPE_OPTIONS.map(opt => {
+                {(() => {
                   const selected = (form.placeType || '').split(',').map(s => s.trim()).filter(Boolean);
-                  const isChecked = selected.includes(opt);
-                  const toggle = () => {
-                    const next = isChecked
-                      ? selected.filter(s => s !== opt)
-                      : [...selected, opt];
-                    set('placeType', next.join(',') || 'Principal');
-                  };
-                  return (
-                    <label key={opt} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors
-                      ${isChecked ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                      <input type="checkbox" checked={isChecked} onChange={toggle} className="rounded text-blue-600 w-3.5 h-3.5" />
-                      {opt}
-                    </label>
-                  );
-                })}
+                  const hasAdditional = selected.some(s => ['Additional','E-APOB','I-APOB'].includes(s));
+                  const hasPrincipal = selected.includes('Principal');
+                  // Principal and Additional/E-APOB/I-APOB are mutually exclusive
+                  const visibleOptions = PLACE_TYPE_OPTIONS.filter(opt => {
+                    if (opt === 'Principal' && hasAdditional) return false;
+                    if (opt === 'Additional' && hasPrincipal) return false;
+                    return true;
+                  });
+                  return visibleOptions.map(opt => {
+                    const isChecked = selected.includes(opt);
+                    const toggle = () => {
+                      let next;
+                      if (isChecked) {
+                        next = selected.filter(s => s !== opt);
+                      } else {
+                        // Adding — enforce mutual exclusivity
+                        if (opt === 'Principal') {
+                          next = [...selected.filter(s => !['Additional'].includes(s)), opt];
+                        } else {
+                          next = [...selected.filter(s => s !== 'Principal'), opt];
+                        }
+                      }
+                      // Clear principalRegistrationId if switching to Principal
+                      if (opt === 'Principal' && !isChecked) set('principalRegistrationId', '');
+                      set('placeType', next.join(',') || 'Principal');
+                    };
+                    return (
+                      <label key={opt} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors
+                        ${isChecked ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                        <input type="checkbox" checked={isChecked} onChange={toggle} className="rounded text-blue-600 w-3.5 h-3.5" />
+                        {opt}
+                      </label>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
@@ -257,7 +277,15 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
           {!(form.placeType || '').includes('Principal') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Linked Principal Registration *</label>
-              <select value={form.principalRegistrationId} onChange={e => set('principalRegistrationId', e.target.value)}
+              <select value={form.principalRegistrationId}
+                onChange={e => {
+                  set('principalRegistrationId', e.target.value);
+                  // Auto-fill state from selected principal
+                  const principal = allRegistrations.find(r => r.id === parseInt(e.target.value));
+                  if (principal) {
+                    if (!form.state) set('state', principal.state);
+                  }
+                }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">-- Select Principal --</option>
                 {allRegistrations
@@ -301,7 +329,16 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
               </div>
             ) : (
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                <p className="text-xs text-slate-500 mb-2">Inherited from Principal {linkedPrincipal ? `(${linkedPrincipal.abbr})` : '— select a Principal above'}</p>
+                <p className="text-xs font-medium text-slate-600 mb-2">
+                  Principal: {linkedPrincipal ? linkedPrincipal.abbr : <span className="text-slate-400 font-normal">— select a Principal above</span>}
+                </p>
+                {linkedPrincipal && (
+                  <div className="mb-3 pb-2 border-b border-slate-200">
+                    <span className="text-xs text-gray-400 uppercase tracking-wide">GSTIN</span>
+                    <p className="text-sm font-mono font-bold text-blue-700 tracking-wider mt-0.5">{linkedPrincipal.gstin}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{linkedPrincipal.officeCity} · {linkedPrincipal.state}</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <span className="text-xs text-gray-500">FSSAI</span>
