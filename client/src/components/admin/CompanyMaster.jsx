@@ -148,6 +148,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     gstin: registration?.gstin || '',
+    siteCode: registration?.siteCode || '',
     officeCity: registration?.officeCity || '',
     state: registration?.state || '',
     district: registration?.district || '',
@@ -205,12 +206,30 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && <AlertMessage type="error" message={error} />}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN *</label>
-            <input value={form.gstin} onChange={e => set('gstin', e.target.value.toUpperCase())}
-              required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="27AAJCC2415M1ZJ" />
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN *</label>
+              <input value={form.gstin} onChange={e => set('gstin', e.target.value.toUpperCase())}
+                required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="27AAJCC2415M1ZJ" disabled={!!registration} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Site Code
+                <span className="text-xs text-gray-400 font-normal ml-1">(e.g. R1, HO, WH1)</span>
+              </label>
+              <input value={form.siteCode} onChange={e => set('siteCode', e.target.value.toUpperCase())}
+                maxLength={10} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="R1" />
+            </div>
           </div>
+          {abbrPreview && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className="text-xs text-gray-400 uppercase tracking-wide">Abbr Preview:</span>
+              <span className="text-sm font-mono font-bold text-blue-700 tracking-wider">{abbrPreview}</span>
+              {form.siteCode && <span className="text-xs text-gray-400">· will update on save</span>}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Principal City *</label>
@@ -1330,6 +1349,12 @@ export default function CompanyMaster() {
                               <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">State Code</p>
                               <p className="text-gray-700">{selectedReg.stateCode} — {selectedReg.state}</p>
                             </div>
+                            {selectedReg.siteCode && (
+                              <div>
+                                <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Site Code</p>
+                                <p className="font-mono font-bold text-blue-700">{selectedReg.siteCode}</p>
+                              </div>
+                            )}
                             {selectedReg.address && (
                               <div className="col-span-2">
                                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Registered Address</p>
