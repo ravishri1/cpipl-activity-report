@@ -187,16 +187,29 @@ function SharedWithPicker({ users, selected, onChange }) {
   const filtered = users.filter(u =>
     !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
   );
+  const selectedUsers = users.filter(u => selected.includes(String(u.id)));
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">
         Shared With {selected.length > 0 && <span className="text-blue-600">({selected.length} selected)</span>}
       </label>
+      {selectedUsers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+          {selectedUsers.map(u => (
+            <span key={u.id} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+              {u.name}
+              <button type="button" onClick={() => toggle(u.id)} className="hover:text-red-600 ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <input
         value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
         placeholder="Search employees..." />
-      <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-50">
+      <div className="border border-slate-200 rounded-lg max-h-36 overflow-y-auto divide-y divide-slate-50">
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 p-3 text-center">No employees found</p>
         ) : filtered.map(u => {
@@ -210,6 +223,47 @@ function SharedWithPicker({ users, selected, onChange }) {
                 <span className="text-sm text-slate-800 truncate block">{u.name}</span>
                 <span className="text-xs text-slate-400 truncate block">{u.email}</span>
               </div>
+            </label>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <button type="button" onClick={() => onChange([])}
+          className="text-xs text-red-500 hover:text-red-700 mt-1">Clear all</button>
+      )}
+    </div>
+  );
+}
+
+function DeptMultiPicker({ departments, selected, onChange }) {
+  const toggle = (name) => {
+    onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name]);
+  };
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">
+        Department Using {selected.length > 0 && <span className="text-blue-600">({selected.length} selected)</span>}
+      </label>
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+          {selected.map(name => (
+            <span key={name} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+              {name}
+              <button type="button" onClick={() => toggle(name)} className="hover:text-red-600 ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="border border-slate-200 rounded-lg divide-y divide-slate-50">
+        {departments.map(d => {
+          const checked = selected.includes(d.name);
+          return (
+            <label key={d.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(d.name)}
+                className="accent-blue-600 w-3.5 h-3.5 flex-shrink-0" />
+              <span className="text-sm text-slate-800">{d.name}</span>
             </label>
           );
         })}
@@ -237,7 +291,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     sharedWith: (() => { try { const v = credential?.sharedWith; return Array.isArray(v) ? v.map(String) : (v ? JSON.parse(v) : []); } catch { return []; } })(),
     notes: credential?.notes || '',
     phoneNumber: credential?.phoneNumber || '',
-    department: credential?.department || '',
+    department: (() => { try { const v = credential?.department; if (!v) return ''; const p = JSON.parse(v); return Array.isArray(p) ? p : v; } catch { return v || ''; } })(),
     purpose: credential?.purpose || '',
     status: credential?.status || 'active',
     lastRotated: credential?.lastRotated || '',
@@ -251,6 +305,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
       ...form,
       assignedTo: form.type === 'individual' && form.assignedTo ? parseInt(form.assignedTo) : null,
       sharedWith: form.type === 'shared' ? JSON.stringify(form.sharedWith) : null,
+      department: form.type === 'shared' && Array.isArray(form.department) ? JSON.stringify(form.department) : (Array.isArray(form.department) ? form.department.join(', ') : form.department),
     };
     try {
       if (isEdit) {
@@ -352,16 +407,23 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
-              <input value={form.phoneNumber} onChange={e => setField('phoneNumber', e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. 8369529033" />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
+            <input value={form.phoneNumber} onChange={e => setField('phoneNumber', e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. 8369529033" />
+          </div>
+
+          {form.type === 'shared' ? (
+            <DeptMultiPicker
+              departments={departments}
+              selected={Array.isArray(form.department) ? form.department : (form.department ? [form.department] : [])}
+              onChange={vals => setField('department', vals)}
+            />
+          ) : (
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Department Using</label>
-              <select value={form.department} onChange={e => setField('department', e.target.value)}
+              <select value={Array.isArray(form.department) ? '' : form.department} onChange={e => setField('department', e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">-- Select Department --</option>
                 {departments.map(d => (
@@ -369,7 +431,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
                 ))}
               </select>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Purpose</label>
