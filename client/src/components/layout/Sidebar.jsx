@@ -209,7 +209,6 @@ export default function Sidebar({ isOpen, onClose }) {
   const myWorkspaceItems = [
     { to: '/my-workspace',       label: 'My Assets',      icon: Package },
     { to: '/my-files',           label: 'My Files',       icon: FolderOpen },
-    { to: '/my-credentials',     label: 'My Credentials', icon: KeyRound },
   ];
 
   const teamItems = [
