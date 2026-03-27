@@ -110,7 +110,7 @@ router.get('/registrations/:id', asyncHandler(async (req, res) => {
 router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'legalEntityId', 'gstin', 'officeCity', 'state');
   const { legalEntityId, gstin, officeCity, state, district, address,
-          placeType, principalRegistrationId, fssai, udyam, iec } = req.body;
+          placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness } = req.body;
   if (gstin.length !== 15) throw badRequest('GSTIN must be exactly 15 characters');
   const stateCode = gstin.slice(0, 2);
   const regNo = parseInt(gstin[12]);
@@ -119,7 +119,7 @@ router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
     data: { legalEntityId: parseInt(legalEntityId), gstin, stateCode, regNo, abbr,
             officeCity, state, district, address, placeType: placeType || 'Principal',
             principalRegistrationId: principalRegistrationId ? parseInt(principalRegistrationId) : null,
-            fssai, udyam, iec },
+            fssai, udyam, iec, primaryBusiness: primaryBusiness || null },
     include: { legalEntity: { select: { legalName: true } }, principalRegistration: { select: { id: true, abbr: true, officeCity: true } } },
   });
   res.status(201).json(reg);
@@ -128,7 +128,7 @@ router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/company-master/registrations/:id
 router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, isActive } = req.body;
+  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, isActive } = req.body;
 
   // Deactivation preview (isActive = false without ?confirm=true shows impact summary)
   if (isActive === false || isActive === 'false') {
@@ -166,7 +166,9 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
             placeType: placeType ?? existing.placeType, abbr,
             principalRegistrationId: principalRegistrationId !== undefined ? (principalRegistrationId ? parseInt(principalRegistrationId) : null) : existing.principalRegistrationId,
             fssai: fssai ?? existing.fssai, udyam: udyam ?? existing.udyam,
-            iec: iec ?? existing.iec, isActive: true },
+            iec: iec ?? existing.iec,
+            primaryBusiness: primaryBusiness !== undefined ? (primaryBusiness || null) : existing.primaryBusiness,
+            isActive: true },
     include: { legalEntity: { select: { legalName: true } }, principalRegistration: { select: { id: true, abbr: true, officeCity: true } } },
   });
   res.json(reg);
