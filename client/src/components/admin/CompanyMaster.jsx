@@ -144,15 +144,15 @@ function EntityModal({ entity, onClose, onSaved }) {
 
 // ─── Registration Modal ───────────────────────────────────────────────────────
 
-function RegistrationModal({ registration, entityId, onClose, onSaved, allRegistrations = [] }) {
+function RegistrationModal({ registration, entityId, onClose, onSaved, allRegistrations = [], initialPrincipalId = null }) {
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     gstin: registration?.gstin || '',
     officeCity: registration?.officeCity || '',
     state: registration?.state || '',
     district: registration?.district || '',
-    placeType: registration?.placeType || 'Principal',
-    principalRegistrationId: registration?.principalRegistrationId || '',
+    placeType: registration?.placeType || (initialPrincipalId ? 'Additional' : 'Principal'),
+    principalRegistrationId: registration?.principalRegistrationId || initialPrincipalId || '',
     address: registration?.address || '',
     fssai: registration?.fssai || '',
     udyam: registration?.udyam || '',
@@ -194,7 +194,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              {registration ? 'Edit Registration' : 'Add GSTIN Registration'}
+              {registration ? 'Edit Registration' : initialPrincipalId ? 'Add Additional Place' : 'Add GSTIN Registration'}
             </h2>
             {abbrPreview && (
               <p className="text-xs text-blue-600 font-mono mt-0.5">Abbr: {abbrPreview}</p>
@@ -455,7 +455,7 @@ function LocationModal({ location, registrationId, registrationState, onClose, o
 
 // ─── Registration Card ────────────────────────────────────────────────────────
 
-function RegistrationCard({ reg, onEdit, onDeactivate, onReactivate, onLocationsUpdated }) {
+function RegistrationCard({ reg, onEdit, onDeactivate, onReactivate, onLocationsUpdated, onAddAdditional }) {
   const [showLocations, setShowLocations] = useState(true);
   const [locationModal, setLocationModal] = useState(null); // null | 'add' | location object
   const { execute } = useApi();
@@ -494,20 +494,12 @@ function RegistrationCard({ reg, onEdit, onDeactivate, onReactivate, onLocations
                 <MapPin size={10} className="flex-shrink-0" />
                 <span>{reg.officeCity}, {reg.state}</span>
               </div>
-              {/* Linked Principal */}
+              {/* Linked Principal — shown when standalone Additional card (principal in diff entity) */}
               {reg.principalRegistration && (
                 <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
                   ↳ Under Principal:
                   <span className="font-mono font-semibold">{reg.principalRegistration.abbr}</span>
                   <span className="text-blue-400">({reg.principalRegistration.officeCity})</span>
-                </p>
-              )}
-              {/* Additional linked */}
-              {reg.additionalRegistrations?.length > 0 && (
-                <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
-                  <Layers size={10} />
-                  {reg.additionalRegistrations.length} additional registration{reg.additionalRegistrations.length > 1 ? 's' : ''} linked:
-                  <span className="font-mono">{reg.additionalRegistrations.map(r => r.abbr).join(', ')}</span>
                 </p>
               )}
             </div>
@@ -574,6 +566,77 @@ function RegistrationCard({ reg, onEdit, onDeactivate, onReactivate, onLocations
           </>
         )}
       </div>
+
+      {/* ── Additional Places (nested child registrations) ── */}
+      {reg.additionalRegistrations?.length > 0 && (
+        <div className="border-t border-amber-100 bg-amber-50/20">
+          <div className="px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Layers size={12} className="text-amber-500 flex-shrink-0" />
+              <span className="text-xs font-semibold text-amber-700">
+                Additional Places ({reg.additionalRegistrations.filter(r => r.isActive).length} active
+                {reg.additionalRegistrations.filter(r => !r.isActive).length > 0
+                  ? `, ${reg.additionalRegistrations.filter(r => !r.isActive).length} inactive`
+                  : ''})
+              </span>
+            </div>
+            {reg.isActive && onAddAdditional && (
+              <button onClick={() => onAddAdditional(reg.id)}
+                className="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-0.5 px-2 py-0.5 rounded hover:bg-amber-100 transition-colors">
+                <Plus size={11} /> Add Place
+              </button>
+            )}
+          </div>
+          <div className="px-4 pb-3 space-y-2">
+            {reg.additionalRegistrations.map(child => (
+              <div key={child.id}
+                className={`group flex items-start gap-3 p-2.5 rounded-lg border transition-all ${
+                  child.isActive
+                    ? 'border-amber-200 bg-white hover:border-amber-300 hover:shadow-sm'
+                    : 'border-gray-200 bg-gray-50 opacity-60'
+                }`}>
+                {/* Left accent bar */}
+                <div className={`flex-shrink-0 w-1 self-stretch rounded-full mt-0.5 ${child.isActive ? 'bg-amber-400' : 'bg-gray-300'}`} />
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-mono font-bold text-gray-800">{child.abbr}</span>
+                    {(child.placeType || '').split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                      <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                        t === 'Principal' ? 'bg-blue-100 text-blue-700' :
+                        t === 'E-APOB' ? 'bg-purple-100 text-purple-700' :
+                        t === 'I-APOB' ? 'bg-pink-100 text-pink-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{t}</span>
+                    ))}
+                    {!child.isActive && (
+                      <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Inactive</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500">
+                    <MapPin size={9} className="flex-shrink-0" />
+                    <span>{child.officeCity}{child.district ? `, ${child.district}` : ''} · {child.state}</span>
+                  </div>
+                  {child.address && (
+                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>
+                  )}
+                  <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                </div>
+                {/* Edit action */}
+                {reg.isActive && (
+                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => onEdit(child)}
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Edit additional place">
+                      <Edit2 size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Locations Section ─────────────────────────────── */}
       <div className="border-t border-gray-100">
@@ -837,6 +900,7 @@ export default function CompanyMaster() {
   const [selectedEntityId, setSelectedEntityId] = useState(null);
   const [entityModal, setEntityModal] = useState(null);
   const [regModal, setRegModal] = useState(null);
+  const [addAdditionalForId, setAddAdditionalForId] = useState(null); // principalId when adding additional place
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [reactivateTarget, setReactivateTarget] = useState(null);
   const [showCityCodes, setShowCityCodes] = useState(false);
@@ -880,8 +944,15 @@ export default function CompanyMaster() {
   const effectiveId = selectedEntity?.id;
 
   const entityRegs = registrations.filter(r => r.legalEntityId === effectiveId);
-  const activeRegs = entityRegs.filter(r => r.isActive);
-  const inactiveRegs = entityRegs.filter(r => !r.isActive);
+  const entityRegIds = new Set(entityRegs.map(r => r.id));
+
+  // Top-level = no principal linked, OR principal belongs to a different entity (edge case)
+  // Additional registrations whose principal is in the same entity are shown INSIDE the principal's card
+  const topLevelRegs = entityRegs.filter(
+    r => !r.principalRegistrationId || !entityRegIds.has(r.principalRegistrationId)
+  );
+  const activeRegs = topLevelRegs.filter(r => r.isActive);
+  const inactiveRegs = topLevelRegs.filter(r => !r.isActive);
 
   const handleSaved = () => { refetchEntities(); refetchRegs(); };
 
@@ -1023,7 +1094,7 @@ export default function CompanyMaster() {
                         </div>
                         {/* Entity-level summary */}
                         <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-                          <span>🏛️ {activeRegs.length} active registration{activeRegs.length !== 1 ? 's' : ''}</span>
+                          <span>🏛️ {entityRegs.filter(r=>r.isActive).length} active registration{entityRegs.filter(r=>r.isActive).length !== 1 ? 's' : ''}</span>
                           {totalLocations > 0 && (
                             <span>📍 {totalLocations} registered location{totalLocations !== 1 ? 's' : ''}</span>
                           )}
@@ -1054,7 +1125,10 @@ export default function CompanyMaster() {
                       {activeRegs.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                            Active Registrations ({activeRegs.length})
+                            Active Registrations ({entityRegs.filter(r => r.isActive).length} total
+                            {entityRegs.filter(r => r.isActive).length !== activeRegs.length
+                              ? ` · ${activeRegs.length} principal${activeRegs.length !== 1 ? 's' : ''}`
+                              : ''})
                           </p>
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                             {activeRegs.map(reg => (
@@ -1062,7 +1136,8 @@ export default function CompanyMaster() {
                                 onEdit={r => setRegModal(r)}
                                 onDeactivate={r => setDeactivateTarget(r)}
                                 onReactivate={r => setReactivateTarget(r)}
-                                onLocationsUpdated={refetchRegs} />
+                                onLocationsUpdated={refetchRegs}
+                                onAddAdditional={id => { setAddAdditionalForId(id); setRegModal('add-additional'); }} />
                             ))}
                           </div>
                         </div>
@@ -1070,7 +1145,7 @@ export default function CompanyMaster() {
                       {inactiveRegs.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                            Inactive Registrations ({inactiveRegs.length})
+                            Inactive ({inactiveRegs.length})
                           </p>
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                             {inactiveRegs.map(reg => (
@@ -1100,11 +1175,12 @@ export default function CompanyMaster() {
       )}
       {regModal && (
         <RegistrationModal
-          registration={regModal === 'add' ? null : regModal}
+          registration={(regModal === 'add' || regModal === 'add-additional') ? null : regModal}
           entityId={effectiveId}
           allRegistrations={registrations || []}
-          onClose={() => setRegModal(null)}
-          onSaved={handleSaved} />
+          onClose={() => { setRegModal(null); setAddAdditionalForId(null); }}
+          onSaved={handleSaved}
+          initialPrincipalId={regModal === 'add-additional' ? addAdditionalForId : null} />
       )}
       {deactivateTarget && (
         <DeactivateModal

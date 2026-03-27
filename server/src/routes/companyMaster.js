@@ -74,7 +74,14 @@ router.get('/registrations', asyncHandler(async (req, res) => {
     include: {
       legalEntity: { select: { id: true, legalName: true, pan: true } },
       principalRegistration: { select: { id: true, abbr: true, officeCity: true, gstin: true } },
-      additionalRegistrations: { select: { id: true, abbr: true, officeCity: true, gstin: true, placeType: true } },
+      additionalRegistrations: {
+        select: {
+          id: true, abbr: true, officeCity: true, gstin: true, placeType: true,
+          state: true, district: true, address: true, isActive: true, stateCode: true,
+          fssai: true, udyam: true, iec: true, legalEntityId: true, principalRegistrationId: true,
+        },
+        orderBy: { abbr: 'asc' },
+      },
       _count: { select: { users: true, assets: true, certificates: true } },
       locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
     },
