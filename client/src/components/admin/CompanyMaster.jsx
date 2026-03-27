@@ -1634,69 +1634,6 @@ export default function CompanyMaster() {
                       );
                     })()}
 
-                    {/* Physical Locations section */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-blue-50/40">
-                        <div className="flex items-center gap-2">
-                          <MapPin size={15} className="text-blue-500" />
-                          <span className="font-semibold text-gray-800 text-sm">Physical Locations</span>
-                          {(selectedReg.locations?.length||0) > 0 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-200 text-blue-800">
-                              {selectedReg.locations.length}
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-400 hidden sm:inline">Warehouses · Offices · Godowns under this GSTIN</span>
-                        </div>
-                        {selectedReg.isActive && (
-                          <button onClick={() => setLocationModal({ location: null, regId: selectedReg.id, regState: selectedReg.state })}
-                            className="flex items-center gap-1 text-xs text-blue-700 border border-blue-300 bg-white px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors font-medium">
-                            <Plus size={12} /> Add
-                          </button>
-                        )}
-                      </div>
-                      {(!selectedReg.locations || selectedReg.locations.length===0) ? (
-                        <div className="px-5 py-8 text-center">
-                          <MapPin size={28} className="mx-auto mb-2 text-gray-200" />
-                          <p className="text-sm text-gray-400 font-medium">No locations added yet</p>
-                          <p className="text-xs text-gray-300 mt-1">Add physical addresses listed in the GST certificate</p>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-gray-50">
-                          {selectedReg.locations.map(loc => {
-                            const style = LOCATION_TYPE_STYLE[loc.locationType] || LOCATION_TYPE_STYLE['Additional Place'];
-                            return (
-                              <div key={loc.id} className="group px-5 py-3.5 flex items-start gap-3 hover:bg-blue-50/20 transition-colors">
-                                <span className={`flex-shrink-0 text-xs font-bold w-6 h-6 flex items-center justify-center rounded mt-0.5 ${style.bg} ${style.text}`}>
-                                  {style.short}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={`text-xs font-semibold ${style.text}`}>{loc.locationType}</span>
-                                    {loc.locationName && <span className="text-xs text-gray-400">— {loc.locationName}</span>}
-                                  </div>
-                                  <p className="text-xs text-gray-600 mt-0.5">{loc.city}{loc.pincode?` — ${loc.pincode}`:''}</p>
-                                  {loc.address && <p className="text-xs text-gray-400 mt-0.5">{loc.address}</p>}
-                                </div>
-                                <div className="flex-shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => setLocationModal({ location: loc, regId: selectedReg.id, regState: selectedReg.state })}
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
-                                    <Edit2 size={12} />
-                                  </button>
-                                  <button onClick={async () => {
-                                    if (!window.confirm(`Remove "${loc.city} — ${loc.locationType}"?`)) return;
-                                    try { await api.delete(`/company-master/locations/${loc.id}`); refetchRegs(); }
-                                    catch (err) { alert(err.response?.data?.error||'Failed'); }
-                                  }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Remove">
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
                     {/* Credentials section */}
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
