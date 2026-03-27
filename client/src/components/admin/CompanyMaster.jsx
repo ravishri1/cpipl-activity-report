@@ -146,11 +146,14 @@ function EntityModal({ entity, onClose, onSaved }) {
 
 function RegistrationModal({ registration, entityId, onClose, onSaved, allRegistrations = [], initialPrincipalId = null }) {
   const { execute, loading, error } = useApi();
+  const principalReg = initialPrincipalId
+    ? allRegistrations.find(r => r.id === parseInt(initialPrincipalId))
+    : null;
   const [form, setForm] = useState({
-    gstin: registration?.gstin || '',
+    gstin: registration?.gstin || principalReg?.gstin || '',
     siteCode: registration?.siteCode || '',
-    officeCity: registration?.officeCity || '',
-    state: registration?.state || '',
+    officeCity: registration?.officeCity || principalReg?.officeCity || '',
+    state: registration?.state || principalReg?.state || '',
     district: registration?.district || '',
     placeType: registration?.placeType || (initialPrincipalId ? 'Additional' : 'Principal'),
     principalRegistrationId: registration?.principalRegistrationId || initialPrincipalId || '',
@@ -208,7 +211,12 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
           {error && <AlertMessage type="error" message={error} />}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                GSTIN *
+                {principalReg && !registration && (
+                  <span className="text-xs text-blue-500 font-normal ml-1">· pre-filled from principal</span>
+                )}
+              </label>
               <input value={form.gstin} onChange={e => set('gstin', e.target.value.toUpperCase())}
                 required maxLength={15} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="27AAJCC2415M1ZJ" disabled={!!registration} />
