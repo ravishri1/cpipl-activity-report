@@ -529,7 +529,7 @@ export default function CredentialManager() {
   const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
   const { data: registrations, error: regErr } = useFetch('/company-master/registrations', []);
   const { data: entities } = useFetch('/company-master/legal-entities', []);
-  const { data: usersData, error: usersErr } = useFetch('/api/users?isActive=true&limit=200', { users: [] });
+  const { data: usersData, error: usersErr } = useFetch('/users?isActive=true&limit=200', { users: [] });
   const users = Array.isArray(usersData) ? usersData : (usersData?.users || []);
 
   const handlePortalSaved = () => refetch();
