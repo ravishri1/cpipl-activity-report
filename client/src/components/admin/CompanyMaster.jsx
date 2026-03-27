@@ -359,11 +359,11 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
           })()}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Primary Business <span className="text-xs text-gray-400 font-normal">(informational — e.g. Trading, Manufacturing, Warehousing)</span>
+              Label <span className="text-xs text-gray-400 font-normal">(short tag — e.g. Primary, Head Office, Regional Hub)</span>
             </label>
             <input value={form.primaryBusiness} onChange={e => set('primaryBusiness', e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Trading · Paper & Packaging" />
+              placeholder="e.g. Primary" maxLength={50} />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -1183,6 +1183,11 @@ export default function CompanyMaster() {
                               }`}>{t}</span>
                             ))}
                             {!reg.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">Off</span>}
+                            {reg.primaryBusiness && (
+                              <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-medium">
+                                🏷️ {reg.primaryBusiness}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
                             <MapPin size={9} className="flex-shrink-0" />
@@ -1332,9 +1337,10 @@ export default function CompanyMaster() {
                               </div>
                             )}
                             {selectedReg.primaryBusiness && (
-                              <div className="col-span-2">
-                                <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Primary Business</p>
-                                <p className="text-gray-800 font-medium">{selectedReg.primaryBusiness}</p>
+                              <div className="col-span-2 flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                  🏷️ {selectedReg.primaryBusiness}
+                                </span>
                               </div>
                             )}
                             {selectedReg.fssai && <div><p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">FSSAI</p><p className="font-mono text-gray-700">{selectedReg.fssai}</p></div>}
