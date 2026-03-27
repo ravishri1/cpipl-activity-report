@@ -180,7 +180,7 @@ function PortalFormModal({ portal, registrations, entities, onClose, onSaved }) 
 
 function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
-  const { data: departments } = useFetch('/api/departments', []);
+  const { data: departments } = useFetch('/departments', []);
   const isEdit = !!credential;
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({

@@ -7,7 +7,7 @@ import AlertMessage from '../shared/AlertMessage';
 import { Building2, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 
 export default function DepartmentSetup() {
-  const { data: departments, loading, error: fetchErr, refetch } = useFetch('/api/departments/all', []);
+  const { data: departments, loading, error: fetchErr, refetch } = useFetch('/departments/all', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -17,7 +17,7 @@ export default function DepartmentSetup() {
   const handleAdd = async (e) => {
     e.preventDefault();
     try {
-      await execute(() => api.post('/api/departments', form), 'Department added!');
+      await execute(() => api.post('/departments', form), 'Department added!');
       refetch();
       setShowAdd(false);
       setForm({ name: '', description: '' });
@@ -26,7 +26,7 @@ export default function DepartmentSetup() {
 
   const handleEdit = async (id) => {
     try {
-      await execute(() => api.put(`/api/departments/${id}`, editForm), 'Department updated!');
+      await execute(() => api.put(`/departments/${id}`, editForm), 'Department updated!');
       refetch();
       setEditId(null);
     } catch {}
@@ -35,14 +35,14 @@ export default function DepartmentSetup() {
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Delete department "${name}"? This cannot be undone.`)) return;
     try {
-      await execute(() => api.delete(`/api/departments/${id}`), 'Department deleted!');
+      await execute(() => api.delete(`/departments/${id}`), 'Department deleted!');
       refetch();
     } catch {}
   };
 
   const handleToggle = async (dept) => {
     try {
-      await execute(() => api.put(`/api/departments/${dept.id}`, { isActive: !dept.isActive }),
+      await execute(() => api.put(`/departments/${dept.id}`, { isActive: !dept.isActive }),
         dept.isActive ? 'Deactivated' : 'Activated');
       refetch();
     } catch {}
