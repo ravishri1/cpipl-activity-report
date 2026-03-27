@@ -76,6 +76,7 @@ router.get('/registrations', asyncHandler(async (req, res) => {
       principalRegistration: { select: { id: true, abbr: true, officeCity: true, gstin: true } },
       additionalRegistrations: { select: { id: true, abbr: true, officeCity: true, gstin: true, placeType: true } },
       _count: { select: { users: true, assets: true, certificates: true } },
+      locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
     },
     orderBy: [{ legalEntityId: 'asc' }, { abbr: 'asc' }],
   });
@@ -90,6 +91,7 @@ router.get('/registrations/:id', asyncHandler(async (req, res) => {
     include: {
       legalEntity: true,
       certificates: { orderBy: { certificateType: 'asc' } },
+      locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
       _count: { select: { users: true, assets: true } },
     },
   });
@@ -225,6 +227,60 @@ router.put('/city-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
 router.delete('/city-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   await req.prisma.cityCode.delete({ where: { id } });
+  res.json({ success: true });
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GST LOCATIONS (physical addresses under a GSTIN)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/company-master/registrations/:regId/locations
+router.get('/registrations/:regId/locations', asyncHandler(async (req, res) => {
+  const companyRegistrationId = parseId(req.params.regId);
+  const locations = await req.prisma.gstLocation.findMany({
+    where: { companyRegistrationId },
+    orderBy: [{ locationType: 'asc' }, { city: 'asc' }],
+  });
+  res.json(locations);
+}));
+
+// POST /api/company-master/registrations/:regId/locations
+router.post('/registrations/:regId/locations', requireAdmin, asyncHandler(async (req, res) => {
+  const companyRegistrationId = parseId(req.params.regId);
+  requireFields(req.body, 'city', 'locationType');
+  const { locationType, locationName, address, city, state, district, pincode } = req.body;
+  const loc = await req.prisma.gstLocation.create({
+    data: { companyRegistrationId, locationType, locationName: locationName || null,
+            address: address || null, city, state: state || null,
+            district: district || null, pincode: pincode || null },
+  });
+  res.status(201).json(loc);
+}));
+
+// PUT /api/company-master/locations/:id
+router.put('/locations/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { locationType, locationName, address, city, state, district, pincode, isActive } = req.body;
+  const loc = await req.prisma.gstLocation.update({
+    where: { id },
+    data: {
+      locationType: locationType ?? undefined,
+      locationName: locationName !== undefined ? (locationName || null) : undefined,
+      address: address !== undefined ? (address || null) : undefined,
+      city: city ?? undefined,
+      state: state !== undefined ? (state || null) : undefined,
+      district: district !== undefined ? (district || null) : undefined,
+      pincode: pincode !== undefined ? (pincode || null) : undefined,
+      isActive: isActive !== undefined ? Boolean(isActive) : undefined,
+    },
+  });
+  res.json(loc);
+}));
+
+// DELETE /api/company-master/locations/:id
+router.delete('/locations/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.gstLocation.delete({ where: { id } });
   res.json({ success: true });
 }));
 
