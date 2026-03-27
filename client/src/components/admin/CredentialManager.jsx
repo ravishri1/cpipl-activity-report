@@ -178,6 +178,50 @@ function PortalFormModal({ portal, registrations, entities, onClose, onSaved }) 
   );
 }
 
+function SharedWithPicker({ users, selected, onChange }) {
+  const [search, setSearch] = useState('');
+  const toggle = (id) => {
+    const sid = String(id);
+    onChange(selected.includes(sid) ? selected.filter(x => x !== sid) : [...selected, sid]);
+  };
+  const filtered = users.filter(u =>
+    !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">
+        Shared With {selected.length > 0 && <span className="text-blue-600">({selected.length} selected)</span>}
+      </label>
+      <input
+        value={search} onChange={e => setSearch(e.target.value)}
+        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+        placeholder="Search employees..." />
+      <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-50">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 p-3 text-center">No employees found</p>
+        ) : filtered.map(u => {
+          const sid = String(u.id);
+          const checked = selected.includes(sid);
+          return (
+            <label key={u.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(u.id)}
+                className="accent-blue-600 w-3.5 h-3.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <span className="text-sm text-slate-800 truncate block">{u.name}</span>
+                <span className="text-xs text-slate-400 truncate block">{u.email}</span>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <button type="button" onClick={() => onChange([])}
+          className="text-xs text-red-500 hover:text-red-700 mt-1">Clear all</button>
+      )}
+    </div>
+  );
+}
+
 function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
   const { data: departments } = useFetch('/departments', []);
@@ -190,7 +234,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     password: credential?.password || '',
     label: credential?.label || '',
     assignedTo: credential?.assignedTo || '',
-    sharedWith: credential?.sharedWith || '',
+    sharedWith: (() => { try { const v = credential?.sharedWith; return Array.isArray(v) ? v.map(String) : (v ? JSON.parse(v) : []); } catch { return []; } })(),
     notes: credential?.notes || '',
     phoneNumber: credential?.phoneNumber || '',
     department: credential?.department || '',
@@ -206,7 +250,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
     const payload = {
       ...form,
       assignedTo: form.type === 'individual' && form.assignedTo ? parseInt(form.assignedTo) : null,
-      sharedWith: form.type === 'shared' ? form.sharedWith : null,
+      sharedWith: form.type === 'shared' ? JSON.stringify(form.sharedWith) : null,
     };
     try {
       if (isEdit) {
@@ -285,13 +329,11 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
           )}
 
           {form.type === 'shared' && (
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Shared With (user IDs, JSON array)</label>
-              <input value={form.sharedWith} onChange={e => setField('sharedWith', e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder='["1","2","3"]' />
-              <p className="text-xs text-slate-400 mt-1">Enter a JSON array of user IDs to share with, or leave blank for all admins.</p>
-            </div>
+            <SharedWithPicker
+              users={users}
+              selected={form.sharedWith}
+              onChange={ids => setField('sharedWith', ids)}
+            />
           )}
 
           <div>
