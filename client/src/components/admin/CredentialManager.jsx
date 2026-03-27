@@ -180,18 +180,20 @@ function PortalFormModal({ portal, registrations, entities, onClose, onSaved }) 
 
 function SharedWithPicker({ users, selected, onChange }) {
   const [search, setSearch] = useState('');
+  const sel = Array.isArray(selected) ? selected : [];
+  const allUsers = Array.isArray(users) ? users : [];
   const toggle = (id) => {
     const sid = String(id);
-    onChange(selected.includes(sid) ? selected.filter(x => x !== sid) : [...selected, sid]);
+    onChange(sel.includes(sid) ? sel.filter(x => x !== sid) : [...sel, sid]);
   };
-  const filtered = users.filter(u =>
+  const filtered = allUsers.filter(u =>
     !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase())
   );
-  const selectedUsers = users.filter(u => selected.includes(String(u.id)));
+  const selectedUsers = allUsers.filter(u => sel.includes(String(u.id)));
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">
-        Shared With {selected.length > 0 && <span className="text-blue-600">({selected.length} selected)</span>}
+        Shared With {sel.length > 0 && <span className="text-blue-600">({sel.length} selected)</span>}
       </label>
       {selectedUsers.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
@@ -214,7 +216,7 @@ function SharedWithPicker({ users, selected, onChange }) {
           <p className="text-xs text-slate-400 p-3 text-center">No employees found</p>
         ) : filtered.map(u => {
           const sid = String(u.id);
-          const checked = selected.includes(sid);
+          const checked = sel.includes(sid);
           return (
             <label key={u.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
               <input type="checkbox" checked={checked} onChange={() => toggle(u.id)}
@@ -227,7 +229,7 @@ function SharedWithPicker({ users, selected, onChange }) {
           );
         })}
       </div>
-      {selected.length > 0 && (
+      {sel.length > 0 && (
         <button type="button" onClick={() => onChange([])}
           className="text-xs text-red-500 hover:text-red-700 mt-1">Clear all</button>
       )}
@@ -236,17 +238,19 @@ function SharedWithPicker({ users, selected, onChange }) {
 }
 
 function DeptMultiPicker({ departments, selected, onChange }) {
+  const sel = Array.isArray(selected) ? selected : [];
+  const allDepts = Array.isArray(departments) ? departments : [];
   const toggle = (name) => {
-    onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name]);
+    onChange(sel.includes(name) ? sel.filter(x => x !== name) : [...sel, name]);
   };
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">
-        Department Using {selected.length > 0 && <span className="text-blue-600">({selected.length} selected)</span>}
+        Department Using {sel.length > 0 && <span className="text-blue-600">({sel.length} selected)</span>}
       </label>
-      {selected.length > 0 && (
+      {sel.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-          {selected.map(name => (
+          {sel.map(name => (
             <span key={name} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
               {name}
               <button type="button" onClick={() => toggle(name)} className="hover:text-red-600 ml-0.5">
@@ -257,8 +261,8 @@ function DeptMultiPicker({ departments, selected, onChange }) {
         </div>
       )}
       <div className="border border-slate-200 rounded-lg divide-y divide-slate-50">
-        {departments.map(d => {
-          const checked = selected.includes(d.name);
+        {allDepts.map(d => {
+          const checked = sel.includes(d.name);
           return (
             <label key={d.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
               <input type="checkbox" checked={checked} onChange={() => toggle(d.name)}
@@ -268,7 +272,7 @@ function DeptMultiPicker({ departments, selected, onChange }) {
           );
         })}
       </div>
-      {selected.length > 0 && (
+      {sel.length > 0 && (
         <button type="button" onClick={() => onChange([])}
           className="text-xs text-red-500 hover:text-red-700 mt-1">Clear all</button>
       )}
