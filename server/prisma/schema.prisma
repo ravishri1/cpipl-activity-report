@@ -2177,6 +2177,7 @@ model CompanyRegistration {
   fssai          String? // FSSAI licence number
   udyam          String? // Udyam registration number
   iec            String? // Import Export Code
+  primaryBusiness String? // e.g. "Trading", "Manufacturing", "Warehousing" — informational label
   isActive       Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

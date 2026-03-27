@@ -157,6 +157,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
     fssai: registration?.fssai || '',
     udyam: registration?.udyam || '',
     iec: registration?.iec || '',
+    primaryBusiness: registration?.primaryBusiness || '',
     legalEntityId: registration?.legalEntityId || entityId || '',
   });
   const [abbrPreview, setAbbrPreview] = useState(registration?.abbr || '');
@@ -356,6 +357,15 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
               </div>
             );
           })()}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Primary Business <span className="text-xs text-gray-400 font-normal">(informational — e.g. Trading, Manufacturing, Warehousing)</span>
+            </label>
+            <input value={form.primaryBusiness} onChange={e => set('primaryBusiness', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Trading · Paper & Packaging" />
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -1319,6 +1329,12 @@ export default function CompanyMaster() {
                               <div className="col-span-2">
                                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Registered Address</p>
                                 <p className="text-gray-700 leading-relaxed">{selectedReg.address}</p>
+                              </div>
+                            )}
+                            {selectedReg.primaryBusiness && (
+                              <div className="col-span-2">
+                                <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Primary Business</p>
+                                <p className="text-gray-800 font-medium">{selectedReg.primaryBusiness}</p>
                               </div>
                             )}
                             {selectedReg.fssai && <div><p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">FSSAI</p><p className="font-mono text-gray-700">{selectedReg.fssai}</p></div>}
