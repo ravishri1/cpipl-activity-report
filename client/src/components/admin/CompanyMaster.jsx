@@ -1108,7 +1108,9 @@ export default function CompanyMaster() {
   const { data: registrations, loading: regLoading, refetch: refetchRegs } =
     useFetch('/company-master/registrations', []);
 
-  const [selectedEntityId, setSelectedEntityId] = useState(null);
+  // Auto-select entity from URL param ?entityId=X (deep-link from Credentials page)
+  const urlEntityId = parseInt(new URLSearchParams(location.search).get('entityId')) || null;
+  const [selectedEntityId, setSelectedEntityId] = useState(urlEntityId);
   const [selectedRegId, setSelectedRegId] = useState(null);
   const [entityModal, setEntityModal] = useState(null);
   const [regModal, setRegModal] = useState(null);
@@ -1127,6 +1129,11 @@ export default function CompanyMaster() {
       setCityCodes(res.data);
     } catch { /* ignore */ }
   };
+
+  // Sync entity selection when URL param changes
+  useEffect(() => {
+    if (urlEntityId) setSelectedEntityId(urlEntityId);
+  }, [urlEntityId]);
 
   const handleAddCity = async () => {
     if (!cityForm.cityName.trim() || !cityForm.code.trim()) return;

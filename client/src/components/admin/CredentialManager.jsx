@@ -393,9 +393,14 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
             </div>
             {(portal.legalEntity || portal.companyRegistration) && (
               <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                <span className="font-medium text-slate-500">
-                  {portal.legalEntity?.shortName || portal.legalEntity?.legalName || portal.companyRegistration?.abbr?.split('/')[0]}
-                </span>
+                <a
+                  href={`/admin/company-master?entityId=${portal.legalEntity?.id || portal.companyRegistration?.legalEntityId}`}
+                  className="font-medium text-indigo-500 hover:text-indigo-700 hover:underline"
+                  title="Open in Company Master"
+                  onClick={e => e.stopPropagation()}
+                >
+                  🏢 {portal.legalEntity?.legalName || portal.companyRegistration?.abbr?.split('/')[0]}
+                </a>
                 {portal.companyRegistration && (
                   <span>· {portal.companyRegistration.abbr} ({portal.companyRegistration.officeCity})</span>
                 )}
