@@ -960,6 +960,23 @@ export default function CompanyMaster() {
     || topLevelRegs[0]
     || null;
 
+  // Visual grouping: standalone Additional registrations (no DB link) grouped under state-matching Principal
+  const principalTopLevel = topLevelRegs.filter(r => (r.placeType || 'Principal').includes('Principal'));
+  const standaloneAdds = topLevelRegs.filter(r => !(r.placeType || 'Principal').includes('Principal'));
+  const inferredUnder = {}; // principalId -> [additional regs matched by stateCode]
+  const orphanedAdds = [];
+  standaloneAdds.forEach(add => {
+    const match = principalTopLevel.find(p => p.stateCode === add.stateCode);
+    if (match) {
+      if (!inferredUnder[match.id]) inferredUnder[match.id] = [];
+      inferredUnder[match.id].push(add);
+    } else {
+      orphanedAdds.push(add);
+    }
+  });
+  // Panel 2 order: principals (with nested inferred children) + any orphaned additionals
+  const panel2Regs = [...principalTopLevel, ...orphanedAdds];
+
   const handleSaved = () => { refetchEntities(); refetchRegs(); };
 
   return (
@@ -1084,58 +1101,97 @@ export default function CompanyMaster() {
 
                 <div className="flex-1 overflow-y-auto">
                   {regLoading ? <div className="p-4"><LoadingSpinner /></div>
-                  : topLevelRegs.length === 0 ? (
+                  : panel2Regs.length === 0 ? (
                     <div className="p-6 text-center text-sm text-gray-400">No registrations yet.<br />Click Add to create one.</div>
-                  ) : topLevelRegs.map(reg => {
+                  ) : panel2Regs.map(reg => {
                     const isSelected = selectedReg?.id === reg.id;
-                    const additionalCount = reg.additionalRegistrations?.filter(r => r.isActive).length || 0;
+                    const formalChildCount = reg.additionalRegistrations?.filter(r => r.isActive).length || 0;
+                    const inferredChildren = inferredUnder[reg.id] || [];
+                    const totalChildCount = formalChildCount + inferredChildren.filter(r => r.isActive).length;
                     const locCount = reg.locations?.length || 0;
-                    const isPrincipal = (reg.placeType || '').includes('Principal');
+                    const isPrincipal = (reg.placeType || 'Principal').includes('Principal');
                     return (
-                      <button key={reg.id}
-                        onClick={() => setSelectedRegId(reg.id)}
-                        className={`w-full text-left px-4 py-3.5 border-l-4 transition-colors border-b border-gray-50 ${
-                          isSelected
-                            ? isPrincipal ? 'border-l-blue-500 bg-blue-50' : 'border-l-amber-500 bg-amber-50'
-                            : !reg.isActive
-                            ? 'border-l-gray-200 hover:bg-gray-50 opacity-50'
-                            : isPrincipal
-                            ? 'border-l-blue-200 hover:bg-blue-50/40'
-                            : 'border-l-amber-200 hover:bg-amber-50/40'
-                        }`}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-sm font-mono font-bold ${isSelected ? (isPrincipal?'text-blue-700':'text-amber-700') : 'text-gray-800'}`}>
-                            {reg.abbr}
-                          </span>
-                          {(reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
-                            <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                              t==='Principal' ? 'bg-blue-100 text-blue-600' :
-                              t==='E-APOB'    ? 'bg-purple-100 text-purple-600' :
-                              t==='I-APOB'   ? 'bg-pink-100 text-pink-600' :
-                                               'bg-amber-100 text-amber-600'
-                            }`}>{t}</span>
-                          ))}
-                          {!reg.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">Off</span>}
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                          <MapPin size={9} className="flex-shrink-0" />
-                          <span>{reg.officeCity} · {reg.state}</span>
-                        </div>
-                        {(additionalCount > 0 || locCount > 0) && (
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                            {additionalCount > 0 && (
-                              <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                                {additionalCount} sub-place{additionalCount!==1?'s':''}
-                              </span>
-                            )}
-                            {locCount > 0 && (
-                              <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                                {locCount} location{locCount!==1?'s':''}
-                              </span>
-                            )}
+                      <div key={reg.id}>
+                        <button
+                          onClick={() => setSelectedRegId(reg.id)}
+                          className={`w-full text-left px-4 py-3.5 border-l-4 transition-colors border-b border-gray-50 ${
+                            isSelected
+                              ? isPrincipal ? 'border-l-blue-500 bg-blue-50' : 'border-l-amber-500 bg-amber-50'
+                              : !reg.isActive
+                              ? 'border-l-gray-200 hover:bg-gray-50 opacity-50'
+                              : isPrincipal
+                              ? 'border-l-blue-200 hover:bg-blue-50/40'
+                              : 'border-l-amber-200 hover:bg-amber-50/40'
+                          }`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-sm font-mono font-bold ${isSelected ? (isPrincipal?'text-blue-700':'text-amber-700') : 'text-gray-800'}`}>
+                              {reg.abbr}
+                            </span>
+                            {(reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                              <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                t==='Principal' ? 'bg-blue-100 text-blue-600' :
+                                t==='E-APOB'    ? 'bg-purple-100 text-purple-600' :
+                                t==='I-APOB'   ? 'bg-pink-100 text-pink-600' :
+                                                 'bg-amber-100 text-amber-600'
+                              }`}>{t}</span>
+                            ))}
+                            {!reg.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">Off</span>}
                           </div>
-                        )}
-                      </button>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                            <MapPin size={9} className="flex-shrink-0" />
+                            <span>{reg.officeCity} · {reg.state}</span>
+                          </div>
+                          {(totalChildCount > 0 || locCount > 0) && (
+                            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                              {totalChildCount > 0 && (
+                                <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                                  {totalChildCount} sub-place{totalChildCount!==1?'s':''}
+                                </span>
+                              )}
+                              {locCount > 0 && (
+                                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                                  {locCount} location{locCount!==1?'s':''}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </button>
+
+                        {/* Inferred children: nested under this principal by stateCode match */}
+                        {inferredChildren.map(child => {
+                          const childSelected = selectedReg?.id === child.id;
+                          return (
+                            <button key={child.id}
+                              onClick={() => setSelectedRegId(child.id)}
+                              className={`w-full text-left pl-8 pr-4 py-2.5 border-l-4 transition-colors border-b border-gray-50 ${
+                                childSelected
+                                  ? 'border-l-amber-500 bg-amber-50'
+                                  : !child.isActive
+                                  ? 'border-l-gray-200 hover:bg-gray-50 opacity-50'
+                                  : 'border-l-amber-300 hover:bg-amber-50/50 bg-amber-50/20'
+                              }`}>
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className="text-gray-300 text-xs select-none">└</span>
+                                <span className={`text-xs font-mono font-bold ${childSelected ? 'text-amber-700' : 'text-gray-700'}`}>
+                                  {child.abbr}
+                                </span>
+                                {(child.placeType||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                                  <span key={t} className={`text-xs px-1 py-0.5 rounded font-medium ${
+                                    t==='E-APOB'?'bg-purple-100 text-purple-600':
+                                    t==='I-APOB'?'bg-pink-100 text-pink-600':
+                                    'bg-amber-100 text-amber-600'
+                                  }`}>{t}</span>
+                                ))}
+                                {!child.isActive && <span className="text-xs bg-gray-200 text-gray-500 px-1 rounded">Off</span>}
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-gray-400 pl-3">
+                                <MapPin size={8} className="flex-shrink-0" />
+                                <span>{child.officeCity} · {child.state}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     );
                   })}
                 </div>
@@ -1242,65 +1298,106 @@ export default function CompanyMaster() {
                     </div>
 
                     {/* Additional Places section */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
-                        <div className="flex items-center gap-2">
-                          <Layers size={15} className="text-amber-500" />
-                          <span className="font-semibold text-gray-800 text-sm">Additional Places</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                            (selectedReg.additionalRegistrations?.filter(r=>r.isActive).length||0) > 0
-                              ? 'bg-amber-200 text-amber-800' : 'bg-gray-100 text-gray-400'
-                          }`}>
-                            {selectedReg.additionalRegistrations?.filter(r=>r.isActive).length||0}
-                          </span>
-                          <span className="text-xs text-gray-400 hidden sm:inline">E-APOB · I-APOB · Additional registrations</span>
-                        </div>
-                        {selectedReg.isActive && (
-                          <button onClick={() => { setAddAdditionalForId(selectedReg.id); setRegModal('add-additional'); }}
-                            className="flex items-center gap-1 text-xs text-amber-700 border border-amber-300 bg-white px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors font-medium">
-                            <Plus size={12} /> Add
-                          </button>
-                        )}
-                      </div>
-                      {(!selectedReg.additionalRegistrations || selectedReg.additionalRegistrations.length===0) ? (
-                        <div className="px-5 py-8 text-center">
-                          <Layers size={28} className="mx-auto mb-2 text-gray-200" />
-                          <p className="text-sm text-gray-400 font-medium">No additional places registered</p>
-                          <p className="text-xs text-gray-300 mt-1">Additional, E-APOB, I-APOB registrations under this GSTIN will appear here</p>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-gray-50">
-                          {selectedReg.additionalRegistrations.map(child => (
-                            <div key={child.id} className="group px-5 py-4 flex items-start gap-4 hover:bg-amber-50/30 transition-colors">
-                              <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${child.isActive?'bg-amber-400':'bg-gray-200'}`} />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-mono font-bold text-gray-900">{child.abbr}</span>
-                                  {(child.placeType||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
-                                    <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                                      t==='E-APOB'?'bg-purple-100 text-purple-700':
-                                      t==='I-APOB'?'bg-pink-100 text-pink-700':
-                                      'bg-amber-100 text-amber-700'
-                                    }`}>{t}</span>
-                                  ))}
-                                  {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                                  <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
-                                </div>
-                                {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
-                                <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
-                              </div>
-                              <button onClick={() => setRegModal(child)}
-                                className="flex-shrink-0 p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                title="Edit this additional place">
-                                <Edit2 size={13} />
-                              </button>
+                    {(() => {
+                      const formalChildren = selectedReg.additionalRegistrations || [];
+                      const inferredChildren = inferredUnder[selectedReg.id] || [];
+                      const allChildren = [...formalChildren, ...inferredChildren];
+                      const activeCount = allChildren.filter(r => r.isActive).length;
+                      return (
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                          <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
+                            <div className="flex items-center gap-2">
+                              <Layers size={15} className="text-amber-500" />
+                              <span className="font-semibold text-gray-800 text-sm">Additional Places</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                                activeCount > 0 ? 'bg-amber-200 text-amber-800' : 'bg-gray-100 text-gray-400'
+                              }`}>
+                                {activeCount}
+                              </span>
+                              <span className="text-xs text-gray-400 hidden sm:inline">E-APOB · I-APOB · Additional registrations</span>
                             </div>
-                          ))}
+                            {selectedReg.isActive && (
+                              <button onClick={() => { setAddAdditionalForId(selectedReg.id); setRegModal('add-additional'); }}
+                                className="flex items-center gap-1 text-xs text-amber-700 border border-amber-300 bg-white px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors font-medium">
+                                <Plus size={12} /> Add
+                              </button>
+                            )}
+                          </div>
+                          {allChildren.length === 0 ? (
+                            <div className="px-5 py-8 text-center">
+                              <Layers size={28} className="mx-auto mb-2 text-gray-200" />
+                              <p className="text-sm text-gray-400 font-medium">No additional places registered</p>
+                              <p className="text-xs text-gray-300 mt-1">Additional, E-APOB, I-APOB registrations under this GSTIN will appear here</p>
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-gray-50">
+                              {formalChildren.map(child => (
+                                <div key={child.id} className="group px-5 py-4 flex items-start gap-4 hover:bg-amber-50/30 transition-colors">
+                                  <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${child.isActive?'bg-amber-400':'bg-gray-200'}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-mono font-bold text-gray-900">{child.abbr}</span>
+                                      {(child.placeType||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                                        <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                          t==='E-APOB'?'bg-purple-100 text-purple-700':
+                                          t==='I-APOB'?'bg-pink-100 text-pink-700':
+                                          'bg-amber-100 text-amber-700'
+                                        }`}>{t}</span>
+                                      ))}
+                                      {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                                      <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
+                                    </div>
+                                    {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
+                                    <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                                  </div>
+                                  <button onClick={() => setRegModal(child)}
+                                    className="flex-shrink-0 p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Edit this additional place">
+                                    <Edit2 size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                              {inferredChildren.map(child => (
+                                <div key={child.id} className="group px-5 py-4 flex items-start gap-4 hover:bg-amber-50/30 transition-colors bg-amber-50/10">
+                                  <div className={`flex-shrink-0 w-1 self-stretch rounded-full ${child.isActive?'bg-amber-300':'bg-gray-200'}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-mono font-bold text-gray-900">{child.abbr}</span>
+                                      {(child.placeType||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                                        <span key={t} className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                                          t==='E-APOB'?'bg-purple-100 text-purple-700':
+                                          t==='I-APOB'?'bg-pink-100 text-pink-700':
+                                          'bg-amber-100 text-amber-700'
+                                        }`}>{t}</span>
+                                      ))}
+                                      <span className="text-xs bg-amber-100 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded font-medium" title="Not formally linked — same state code match">
+                                        ⚠ Unlinked
+                                      </span>
+                                      {!child.isActive && <span className="text-xs bg-red-100 text-red-600 px-1.5 rounded">Inactive</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                                      <MapPin size={9} /><span>{child.officeCity}{child.district?`, ${child.district}`:''} · {child.state}</span>
+                                    </div>
+                                    {child.address && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{child.address}</p>}
+                                    <p className="text-xs font-mono text-gray-300 mt-0.5">{child.gstin}</p>
+                                    <p className="text-xs text-amber-500 mt-1">
+                                      Grouped by state code match · <button onClick={() => setRegModal(child)} className="underline hover:text-amber-700">Click Edit to formally link</button>
+                                    </p>
+                                  </div>
+                                  <button onClick={() => setRegModal(child)}
+                                    className="flex-shrink-0 p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Edit to formally link this additional place">
+                                    <Edit2 size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()}
 
                     {/* Physical Locations section */}
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
