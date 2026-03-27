@@ -222,4 +222,10 @@ router.put('/city-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json(cc);
 }));
 
+router.delete('/city-codes/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.cityCode.delete({ where: { id } });
+  res.json({ success: true });
+}));
+
 module.exports = router;

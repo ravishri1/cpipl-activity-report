@@ -7,7 +7,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
 import BranchManager from './BranchManager';
-import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle, GitBranch } from 'lucide-react';
+import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle, GitBranch, Settings, X, Trash2 } from 'lucide-react';
 
 const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
 
@@ -512,6 +512,32 @@ export default function CompanyMaster() {
   const [regModal, setRegModal] = useState(null);           // null | 'add' | registration object
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [reactivateTarget, setReactivateTarget] = useState(null);
+  const [showCityCodes, setShowCityCodes] = useState(false);
+  const [cityCodes, setCityCodes] = useState([]);
+  const [cityForm, setCityForm] = useState({ cityName: '', code: '' });
+  const [cityLoading, setCityLoading] = useState(false);
+
+  const loadCityCodes = async () => {
+    try {
+      const res = await api.get('/company-master/city-codes');
+      setCityCodes(res.data);
+    } catch { /* ignore */ }
+  };
+  const handleAddCity = async () => {
+    if (!cityForm.cityName.trim() || !cityForm.code.trim()) return;
+    setCityLoading(true);
+    try {
+      await api.post('/company-master/city-codes', { cityName: cityForm.cityName.trim(), code: cityForm.code.trim().toUpperCase() });
+      setCityForm({ cityName: '', code: '' });
+      await loadCityCodes();
+    } catch (err) { alert(err.response?.data?.error || 'Failed'); }
+    finally { setCityLoading(false); }
+  };
+  const handleDeleteCity = async (id) => {
+    if (!window.confirm('Delete this city code?')) return;
+    try { await api.delete(`/company-master/city-codes/${id}`); await loadCityCodes(); }
+    catch (err) { alert(err.response?.data?.error || 'Failed'); }
+  };
 
   if (entLoading) return <LoadingSpinner />;
   if (entError) return <AlertMessage type="error" message={entError} />;
@@ -537,12 +563,19 @@ export default function CompanyMaster() {
               <p className="text-xs text-gray-500">Legal entities, GSTIN registrations & branches</p>
             </div>
           </div>
-          {activeTab === 'registrations' && (
-            <button onClick={() => setEntityModal('add')}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-              <Plus size={15} /> Add Entity
+          <div className="flex items-center gap-2">
+            <button onClick={() => { setShowCityCodes(true); loadCityCodes(); }}
+              className="flex items-center gap-1.5 px-3 py-2 text-slate-600 border border-slate-200 text-sm rounded-lg hover:bg-slate-50"
+              title="Manage City Codes">
+              <Settings size={15} /> City Codes
             </button>
-          )}
+            {activeTab === 'registrations' && (
+              <button onClick={() => setEntityModal('add')}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                <Plus size={15} /> Add Entity
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex gap-1 border-b border-slate-100 -mb-4 pb-0">
           <button
@@ -723,6 +756,46 @@ export default function CompanyMaster() {
           reg={reactivateTarget}
           onClose={() => setReactivateTarget(null)}
           onDone={handleSaved} />
+      )}
+
+      {/* City Codes Modal */}
+      {showCityCodes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCityCodes(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">City Codes</h3>
+              <button onClick={() => setShowCityCodes(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-slate-500">City codes are used to generate registration abbreviations (e.g., Mumbai → MUM → CP-MUM/27-R1)</p>
+              <div className="flex gap-2">
+                <input type="text" placeholder="City Name" value={cityForm.cityName}
+                  onChange={e => setCityForm(p => ({ ...p, cityName: e.target.value }))}
+                  className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" placeholder="Code" value={cityForm.code} maxLength={5}
+                  onChange={e => setCityForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                  className="w-20 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase" />
+                <button onClick={handleAddCity} disabled={cityLoading || !cityForm.cityName.trim() || !cityForm.code.trim()}
+                  className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div className="max-h-60 overflow-auto border rounded-lg divide-y">
+                {cityCodes.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">No city codes yet</p>
+                ) : cityCodes.map(cc => (
+                  <div key={cc.id} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50">
+                    <div>
+                      <span className="text-sm font-medium text-slate-700">{cc.cityName}</span>
+                      <span className="ml-2 text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded">{cc.code}</span>
+                    </div>
+                    <button onClick={() => handleDeleteCity(cc.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
