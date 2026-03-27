@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -7,22 +7,41 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
 import BranchManager from './BranchManager';
-import { Building2, Plus, Edit2, ChevronRight, MapPin, Globe, Hash, Shield, AlertTriangle, GitBranch, Settings, X, Trash2 } from 'lucide-react';
+import {
+  Building2, Plus, Edit2, ChevronRight, ChevronDown, MapPin, Globe, Hash,
+  Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers
+} from 'lucide-react';
 
 const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
+const LOCATION_TYPES = [
+  'Principal Place', 'Additional Place', 'E-APOB', 'I-APOB',
+  'Godown', 'Warehouse', 'Factory', 'Office',
+];
+
+const LOCATION_TYPE_STYLE = {
+  'Principal Place':  { bg: 'bg-blue-100',   text: 'text-blue-700',   short: 'P' },
+  'Additional Place': { bg: 'bg-amber-100',  text: 'text-amber-700',  short: 'A' },
+  'E-APOB':           { bg: 'bg-purple-100', text: 'text-purple-700', short: 'E' },
+  'I-APOB':           { bg: 'bg-pink-100',   text: 'text-pink-700',   short: 'I' },
+  'Godown':           { bg: 'bg-gray-100',   text: 'text-gray-600',   short: 'G' },
+  'Warehouse':        { bg: 'bg-slate-100',  text: 'text-slate-600',  short: 'W' },
+  'Factory':          { bg: 'bg-orange-100', text: 'text-orange-700', short: 'F' },
+  'Office':           { bg: 'bg-teal-100',   text: 'text-teal-700',   short: 'O' },
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function Badge({ children, color = 'gray' }) {
   const colors = {
-    green: 'bg-green-100 text-green-800',
-    red: 'bg-red-100 text-red-800',
-    blue: 'bg-blue-100 text-blue-800',
-    gray: 'bg-gray-100 text-gray-700',
-    amber: 'bg-amber-100 text-amber-800',
+    green:  'bg-green-100 text-green-800',
+    red:    'bg-red-100 text-red-800',
+    blue:   'bg-blue-100 text-blue-800',
+    gray:   'bg-gray-100 text-gray-700',
+    amber:  'bg-amber-100 text-amber-800',
+    purple: 'bg-purple-100 text-purple-700',
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color]}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colors[color] || colors.gray}`}>
       {children}
     </span>
   );
@@ -51,13 +70,15 @@ function EntityModal({ entity, onClose, onSaved }) {
       tan: form.tan || null,
       lei: form.lei || null,
     };
-    if (entity) {
-      await execute(() => api.put(`/company-master/legal-entities/${entity.id}`, payload), 'Entity updated!');
-    } else {
-      await execute(() => api.post('/company-master/legal-entities', payload), 'Entity created!');
-    }
-    onSaved();
-    onClose();
+    try {
+      if (entity) {
+        await execute(() => api.put(`/company-master/legal-entities/${entity.id}`, payload), 'Entity updated!');
+      } else {
+        await execute(() => api.post('/company-master/legal-entities', payload), 'Entity created!');
+      }
+      onSaved();
+      onClose();
+    } catch {}
   };
 
   return (
@@ -130,7 +151,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
     officeCity: registration?.officeCity || '',
     state: registration?.state || '',
     district: registration?.district || '',
-    placeType: registration?.placeType || 'Principal',  // comma-separated
+    placeType: registration?.placeType || 'Principal',
     principalRegistrationId: registration?.principalRegistrationId || '',
     address: registration?.address || '',
     fssai: registration?.fssai || '',
@@ -154,15 +175,17 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
       udyam: form.udyam || null,
       iec: form.iec || null,
     };
-    let result;
-    if (registration) {
-      result = await execute(() => api.put(`/company-master/registrations/${registration.id}`, payload), 'Registration updated!');
-    } else {
-      result = await execute(() => api.post('/company-master/registrations', payload), 'Registration created!');
-    }
-    if (result?.abbr) setAbbrPreview(result.abbr);
-    onSaved();
-    onClose();
+    try {
+      let result;
+      if (registration) {
+        result = await execute(() => api.put(`/company-master/registrations/${registration.id}`, payload), 'Registration updated!');
+      } else {
+        result = await execute(() => api.post('/company-master/registrations', payload), 'Registration created!');
+      }
+      if (result?.abbr) setAbbrPreview(result.abbr);
+      onSaved();
+      onClose();
+    } catch {}
   };
 
   return (
@@ -189,7 +212,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Office City *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Principal City *</label>
               <input value={form.officeCity} onChange={e => set('officeCity', e.target.value)}
                 required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Mumbai" />
@@ -208,7 +231,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Place Type(s)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Registration Type</label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {PLACE_TYPE_OPTIONS.map(opt => {
                   const selected = (form.placeType || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -256,21 +279,24 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
               ? allRegistrations.find(r => r.id === parseInt(form.principalRegistrationId))
               : null;
             return isPrincipal ? (
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">FSSAI</label>
-                  <input value={form.fssai} onChange={e => set('fssai', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Udyam</label>
-                  <input value={form.udyam} onChange={e => set('udyam', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">IEC</label>
-                  <input value={form.iec} onChange={e => set('iec', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-medium">Licences & Registrations</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">FSSAI</label>
+                    <input value={form.fssai} onChange={e => set('fssai', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Udyam</label>
+                    <input value={form.udyam} onChange={e => set('udyam', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IEC</label>
+                    <input value={form.iec} onChange={e => set('iec', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -309,82 +335,377 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
   );
 }
 
-// ─── Registration Detail Panel ────────────────────────────────────────────────
+// ─── Location Modal ───────────────────────────────────────────────────────────
 
-function RegistrationDetail({ reg, onEdit, onDeactivate, onReactivate }) {
-  const fields = [
-    { label: 'GSTIN', value: reg.gstin, mono: true },
-    { label: 'State Code', value: reg.stateCode },
-    { label: 'State', value: reg.state },
-    { label: 'District', value: reg.district },
-    { label: 'Place Type', value: reg.placeType },
-    { label: 'Address', value: reg.address },
-    { label: 'FSSAI', value: reg.fssai },
-    { label: 'Udyam', value: reg.udyam },
-    { label: 'IEC', value: reg.iec },
-  ].filter(f => f.value);
+function LocationModal({ location, registrationId, registrationState, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
+  const [form, setForm] = useState({
+    locationType: location?.locationType || 'Additional Place',
+    locationName: location?.locationName || '',
+    city: location?.city || '',
+    state: location?.state || registrationState || '',
+    district: location?.district || '',
+    pincode: location?.pincode || '',
+    address: location?.address || '',
+  });
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      locationType: form.locationType,
+      locationName: form.locationName || null,
+      city: form.city,
+      state: form.state || null,
+      district: form.district || null,
+      pincode: form.pincode || null,
+      address: form.address || null,
+    };
+    try {
+      if (location) {
+        await execute(() => api.put(`/company-master/locations/${location.id}`, payload), 'Location updated!');
+      } else {
+        await execute(() => api.post(`/company-master/registrations/${registrationId}/locations`, payload), 'Location added!');
+      }
+      onSaved();
+      onClose();
+    } catch {}
+  };
 
   return (
-    <div className={`border rounded-xl p-4 transition-all ${
-      reg.isActive
-        ? 'bg-white border-gray-200'
-        : 'bg-gray-100 border-gray-300 grayscale opacity-75'
-    }`}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className={`font-mono font-semibold text-sm ${reg.isActive ? 'text-blue-700' : 'text-gray-500'}`}>
-              {reg.abbr}
-            </span>
-            {!reg.isActive && <Badge color="gray">Inactive</Badge>}
-            {reg.isActive && (reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
-              <Badge key={t} color={t === 'Principal' ? 'blue' : 'amber'}>{t}</Badge>
-            ))}
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+        <div className="border-b px-6 py-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              {location ? 'Edit Location' : 'Add Location'}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">Physical address registered under this GSTIN</p>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">{reg.officeCity} · {reg.state}</p>
-          {reg.principalRegistration && (
-            <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
-              ↳ Principal: <span className="font-mono font-semibold">{reg.principalRegistration.abbr}</span> ({reg.principalRegistration.officeCity})
-            </p>
-          )}
-          {reg.additionalRegistrations?.length > 0 && (
-            <p className="text-xs text-amber-600 mt-0.5">
-              📎 {reg.additionalRegistrations.length} linked: {reg.additionalRegistrations.map(r => r.abbr).join(', ')}
-            </p>
-          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
-        {reg.isActive ? (
-          <div className="flex items-center gap-2">
-            <button onClick={() => onEdit(reg)}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-              <Edit2 size={12} /> Edit
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <AlertMessage type="error" message={error} />}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location Type *</label>
+              <select value={form.locationType} onChange={e => set('locationType', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {LOCATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">As registered in GST certificate</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location Name / Label</label>
+              <input value={form.locationName} onChange={e => set('locationName', e.target.value)}
+                placeholder="e.g. Head Office, North Warehouse"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-xs text-gray-400 mt-1">Optional — for internal reference</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+              <input value={form.city} onChange={e => set('city', e.target.value)}
+                required placeholder="Mumbai"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+              <input value={form.state} onChange={e => set('state', e.target.value)}
+                placeholder="Maharashtra"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+              <input value={form.district} onChange={e => set('district', e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
+              <input value={form.pincode} onChange={e => set('pincode', e.target.value)}
+                maxLength={6} placeholder="400001"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
+            <textarea value={form.address} onChange={e => set('address', e.target.value)}
+              rows={2} placeholder="Shop No. 5, Tardeo Road, Mumbai — 400034"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancel
             </button>
-            <button onClick={() => onDeactivate(reg)}
-              className="text-xs text-red-500 hover:underline">
-              Deactivate
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : location ? 'Update Location' : 'Add Location'}
             </button>
           </div>
-        ) : (
-          <button onClick={() => onReactivate(reg)}
-            className="text-xs text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md flex items-center gap-1 transition-colors">
-            ↩ Reactivate
-          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Registration Card ────────────────────────────────────────────────────────
+
+function RegistrationCard({ reg, onEdit, onDeactivate, onReactivate, onLocationsUpdated }) {
+  const [showLocations, setShowLocations] = useState(true);
+  const [locationModal, setLocationModal] = useState(null); // null | 'add' | location object
+  const { execute } = useApi();
+
+  const locations = reg.locations || [];
+  const isPrincipal = (reg.placeType || '').includes('Principal');
+
+  const handleDeleteLocation = async (loc) => {
+    if (!window.confirm(`Remove "${loc.city} — ${loc.locationType}" from this registration?`)) return;
+    try {
+      await execute(() => api.delete(`/company-master/locations/${loc.id}`), 'Location removed');
+      onLocationsUpdated();
+    } catch {}
+  };
+
+  return (
+    <div className={`border rounded-xl overflow-hidden transition-all shadow-sm ${
+      reg.isActive ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-300 opacity-70'
+    }`}>
+
+      {/* ── Card Header ─────────────────────────────────────── */}
+      <div className={`flex items-stretch ${isPrincipal ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-amber-400'}`}>
+        <div className="flex-1 px-4 py-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              {/* Abbr + status badges */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono font-bold text-sm text-gray-900">{reg.abbr}</span>
+                {!reg.isActive && <Badge color="gray">Inactive</Badge>}
+                {reg.isActive && (reg.placeType || 'Principal').split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                  <Badge key={t} color={t === 'Principal' ? 'blue' : 'amber'}>{t}</Badge>
+                ))}
+              </div>
+              {/* City + State */}
+              <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500">
+                <MapPin size={10} className="flex-shrink-0" />
+                <span>{reg.officeCity}, {reg.state}</span>
+              </div>
+              {/* Linked Principal */}
+              {reg.principalRegistration && (
+                <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
+                  ↳ Under Principal:
+                  <span className="font-mono font-semibold">{reg.principalRegistration.abbr}</span>
+                  <span className="text-blue-400">({reg.principalRegistration.officeCity})</span>
+                </p>
+              )}
+              {/* Additional linked */}
+              {reg.additionalRegistrations?.length > 0 && (
+                <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                  <Layers size={10} />
+                  {reg.additionalRegistrations.length} additional registration{reg.additionalRegistrations.length > 1 ? 's' : ''} linked:
+                  <span className="font-mono">{reg.additionalRegistrations.map(r => r.abbr).join(', ')}</span>
+                </p>
+              )}
+            </div>
+            {/* Action buttons */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {reg.isActive ? (
+                <>
+                  <button onClick={() => onEdit(reg)}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit registration">
+                    <Edit2 size={14} />
+                  </button>
+                  <button onClick={() => onDeactivate(reg)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Deactivate">
+                    <Shield size={14} />
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => onReactivate(reg)}
+                  className="text-xs text-green-700 border border-green-300 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md flex items-center gap-1 transition-colors">
+                  ↩ Reactivate
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Registration Details ──────────────────────────── */}
+      <div className="px-4 py-3 border-t border-gray-100 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+        <div>
+          <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">GSTIN</p>
+          <p className="font-mono text-gray-800 font-semibold tracking-wide">{reg.gstin}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">State Code</p>
+          <p className="text-gray-700">{reg.stateCode} — {reg.state}</p>
+        </div>
+        {reg.address && (
+          <div className="col-span-2">
+            <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">Registered Address</p>
+            <p className="text-gray-700 leading-relaxed">{reg.address}</p>
+          </div>
+        )}
+        {(reg.fssai || reg.udyam || reg.iec) && (
+          <>
+            {reg.fssai && (
+              <div>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">FSSAI</p>
+                <p className="font-mono text-gray-700">{reg.fssai}</p>
+              </div>
+            )}
+            {reg.udyam && (
+              <div>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">Udyam</p>
+                <p className="font-mono text-gray-700">{reg.udyam}</p>
+              </div>
+            )}
+            {reg.iec && (
+              <div>
+                <p className="text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">IEC</p>
+                <p className="font-mono text-gray-700">{reg.iec}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-        {fields.map(f => (
-          <div key={f.label} className="min-w-0">
-            <p className="text-xs text-gray-400">{f.label}</p>
-            <p className={`text-xs text-gray-700 truncate ${f.mono ? 'font-mono' : ''}`}>{f.value}</p>
+
+      {/* ── Locations Section ─────────────────────────────── */}
+      <div className="border-t border-gray-100">
+        {/* Locations toggle header */}
+        <button
+          onClick={() => setShowLocations(s => !s)}
+          className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/80 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <MapPin size={12} className="text-blue-500 flex-shrink-0" />
+            <span className="text-xs font-semibold text-gray-600">
+              Locations under this GSTIN
+            </span>
+            {locations.length > 0 ? (
+              <span className="text-xs bg-blue-100 text-blue-700 font-semibold px-1.5 py-0.5 rounded-full">
+                {locations.length}
+              </span>
+            ) : (
+              <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                None added
+              </span>
+            )}
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+            {reg.isActive && (
+              <button
+                onClick={e => { e.stopPropagation(); setLocationModal('add'); }}
+                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-0.5 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+              >
+                <Plus size={11} /> Add Location
+              </button>
+            )}
+            <ChevronDown
+              size={13}
+              className={`text-gray-400 transition-transform ${showLocations ? 'rotate-180' : ''}`}
+            />
+          </div>
+        </button>
+
+        {/* Locations list */}
+        {showLocations && (
+          <div className="px-4 pb-3">
+            {locations.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 py-4 text-center">
+                <MapPin size={18} className="mx-auto mb-1.5 text-gray-300" />
+                <p className="text-xs text-gray-400 font-medium">No locations registered yet</p>
+                <p className="text-xs text-gray-300 mt-0.5">
+                  Add all physical addresses listed in the GST certificate
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {locations.map(loc => {
+                  const style = LOCATION_TYPE_STYLE[loc.locationType] || LOCATION_TYPE_STYLE['Additional Place'];
+                  return (
+                    <div key={loc.id}
+                      className="group flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+                      {/* Type badge */}
+                      <span className={`flex-shrink-0 mt-0.5 text-xs font-bold w-5 h-5 flex items-center justify-center rounded ${style.bg} ${style.text}`}>
+                        {style.short}
+                      </span>
+                      {/* Location info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-xs font-semibold ${style.text}`}>{loc.locationType}</span>
+                          {loc.locationName && (
+                            <span className="text-xs text-gray-500">— {loc.locationName}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-700 mt-0.5 font-medium">
+                          {loc.city}
+                          {loc.state && loc.state !== reg.state ? `, ${loc.state}` : ''}
+                          {loc.pincode ? ` — ${loc.pincode}` : ''}
+                          {loc.district ? ` (${loc.district})` : ''}
+                        </p>
+                        {loc.address && (
+                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{loc.address}</p>
+                        )}
+                      </div>
+                      {/* Edit / Delete — visible on hover */}
+                      {reg.isActive && (
+                        <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setLocationModal(loc)}
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                            title="Edit location"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLocation(loc)}
+                            className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded transition-colors"
+                            title="Remove location"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {/* Stats */}
-      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-4 text-xs text-gray-500">
-        <span>{reg._count?.users ?? 0} employees</span>
-        <span>{reg._count?.assets ?? 0} assets</span>
-        <span>{reg._count?.certificates ?? reg.certificates?.length ?? 0} certs</span>
+
+      {/* ── Stats Footer ─────────────────────────────────── */}
+      <div className={`px-4 py-2.5 border-t flex items-center gap-5 text-xs text-gray-500 ${
+        reg.isActive ? 'bg-gray-50/50 border-gray-100' : 'bg-gray-100 border-gray-200'
+      }`}>
+        <span title="Employees assigned to this registration">
+          👥 {reg._count?.users ?? 0} employees
+        </span>
+        <span title="Assets assigned to this registration">
+          🖥️ {reg._count?.assets ?? 0} assets
+        </span>
+        <span title="Compliance certificates">
+          📜 {reg._count?.certificates ?? reg.certificates?.length ?? 0} certificates
+        </span>
       </div>
+
+      {/* Location Modal (rendered inside card, above everything) */}
+      {locationModal && (
+        <LocationModal
+          location={locationModal === 'add' ? null : locationModal}
+          registrationId={reg.id}
+          registrationState={reg.state}
+          onClose={() => setLocationModal(null)}
+          onSaved={onLocationsUpdated}
+        />
+      )}
     </div>
   );
 }
@@ -397,22 +718,26 @@ function DeactivateModal({ reg, onClose, onDone }) {
   const [checked, setChecked] = useState(false);
 
   const fetchPreview = async () => {
-    const res = await execute(
-      () => api.put(`/company-master/registrations/${reg.id}`, { isActive: false }),
-      null
-    );
-    if (res?.preview) setPreview(res);
+    try {
+      const res = await execute(
+        () => api.put(`/company-master/registrations/${reg.id}`, { isActive: false }),
+        null
+      );
+      if (res?.preview) setPreview(res);
+    } catch {}
   };
 
   useEffect(() => { fetchPreview(); }, []);
 
   const handleConfirm = async () => {
-    await execute(
-      () => api.put(`/company-master/registrations/${reg.id}?confirm=true`, { isActive: false }),
-      'Registration deactivated'
-    );
-    onDone();
-    onClose();
+    try {
+      await execute(
+        () => api.put(`/company-master/registrations/${reg.id}?confirm=true`, { isActive: false }),
+        'Registration deactivated'
+      );
+      onDone();
+      onClose();
+    } catch {}
   };
 
   return (
@@ -458,12 +783,14 @@ function ReactivateModal({ reg, onClose, onDone }) {
   const { execute, loading, error } = useApi();
 
   const handleConfirm = async () => {
-    await execute(
-      () => api.put(`/company-master/registrations/${reg.id}`, { isActive: true }),
-      'Registration reactivated'
-    );
-    onDone();
-    onClose();
+    try {
+      await execute(
+        () => api.put(`/company-master/registrations/${reg.id}`, { isActive: true }),
+        'Registration reactivated'
+      );
+      onDone();
+      onClose();
+    } catch {}
   };
 
   return (
@@ -508,8 +835,8 @@ export default function CompanyMaster() {
     useFetch('/company-master/registrations', []);
 
   const [selectedEntityId, setSelectedEntityId] = useState(null);
-  const [entityModal, setEntityModal] = useState(null);    // null | 'add' | entity object
-  const [regModal, setRegModal] = useState(null);           // null | 'add' | registration object
+  const [entityModal, setEntityModal] = useState(null);
+  const [regModal, setRegModal] = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [reactivateTarget, setReactivateTarget] = useState(null);
   const [showCityCodes, setShowCityCodes] = useState(false);
@@ -523,20 +850,27 @@ export default function CompanyMaster() {
       setCityCodes(res.data);
     } catch { /* ignore */ }
   };
+
   const handleAddCity = async () => {
     if (!cityForm.cityName.trim() || !cityForm.code.trim()) return;
     setCityLoading(true);
     try {
-      await api.post('/company-master/city-codes', { cityName: cityForm.cityName.trim(), code: cityForm.code.trim().toUpperCase() });
+      await api.post('/company-master/city-codes', {
+        cityName: cityForm.cityName.trim(),
+        code: cityForm.code.trim().toUpperCase(),
+      });
       setCityForm({ cityName: '', code: '' });
       await loadCityCodes();
     } catch (err) { alert(err.response?.data?.error || 'Failed'); }
     finally { setCityLoading(false); }
   };
+
   const handleDeleteCity = async (id) => {
     if (!window.confirm('Delete this city code?')) return;
-    try { await api.delete(`/company-master/city-codes/${id}`); await loadCityCodes(); }
-    catch (err) { alert(err.response?.data?.error || 'Failed'); }
+    try {
+      await api.delete(`/company-master/city-codes/${id}`);
+      await loadCityCodes();
+    } catch (err) { alert(err.response?.data?.error || 'Failed'); }
   };
 
   if (entLoading) return <LoadingSpinner />;
@@ -551,22 +885,25 @@ export default function CompanyMaster() {
 
   const handleSaved = () => { refetchEntities(); refetchRegs(); };
 
+  // Total locations across all registrations for this entity
+  const totalLocations = entityRegs.reduce((sum, r) => sum + (r.locations?.length || 0), 0);
+
   return (
     <div className="h-full flex flex-col">
-      {/* Page Header with Tabs */}
+      {/* Page Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <Building2 className="text-blue-600" size={22} />
             <div>
               <h1 className="text-xl font-bold text-gray-900">Company Master</h1>
-              <p className="text-xs text-gray-500">Legal entities, GSTIN registrations & branches</p>
+              <p className="text-xs text-gray-500">Legal entities · GSTIN registrations · Physical locations</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => { setShowCityCodes(true); loadCityCodes(); }}
               className="flex items-center gap-1.5 px-3 py-2 text-slate-600 border border-slate-200 text-sm rounded-lg hover:bg-slate-50"
-              title="Manage City Codes">
+              title="Manage City Codes (used for GSTIN abbreviation generation)">
               <Settings size={15} /> City Codes
             </button>
             {activeTab === 'registrations' && (
@@ -602,135 +939,159 @@ export default function CompanyMaster() {
       {/* Branches tab */}
       {activeTab === 'branches' && <BranchManager embedded />}
 
-      {/* Registrations tab — Two-panel layout */}
+      {/* Registrations tab */}
       {activeTab === 'registrations' && (
-      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
 
-        {/* Left panel: Legal Entities */}
-        <div className="w-72 border-r border-gray-200 flex flex-col overflow-hidden">
-          <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Legal Entities ({entities.length})
-            </p>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {entities.length === 0 ? (
-              <EmptyState icon="🏢" title="No entities yet" subtitle="Add a legal entity to start" />
-            ) : (
-              entities.map(entity => {
-                const isSelected = entity.id === (effectiveId);
-                const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
-                return (
-                  <button key={entity.id}
-                    onClick={() => setSelectedEntityId(entity.id)}
-                    className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100 border border-transparent'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {entity.shortName && (
-                          <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                            {entity.shortName}
-                          </span>
-                        )}
-                        <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
+          {/* Left panel: Legal Entities */}
+          <div className="w-72 border-r border-gray-200 flex flex-col overflow-hidden bg-gray-50/50">
+            <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Legal Entities ({entities.length})
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {entities.length === 0 ? (
+                <EmptyState icon="🏢" title="No entities yet" subtitle="Add a legal entity to start" />
+              ) : (
+                entities.map(entity => {
+                  const isSelected = entity.id === effectiveId;
+                  const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
+                  const locCount = registrations
+                    .filter(r => r.legalEntityId === entity.id)
+                    .reduce((s, r) => s + (r.locations?.length || 0), 0);
+                  return (
+                    <button key={entity.id}
+                      onClick={() => setSelectedEntityId(entity.id)}
+                      className={`w-full text-left rounded-lg px-3 py-2.5 transition-colors ${
+                        isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-100 border border-transparent'
+                      }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {entity.shortName && (
+                            <span className={`flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${
+                              isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                            }`}>
+                              {entity.shortName}
+                            </span>
+                          )}
+                          <p className="text-sm font-medium text-gray-900 truncate">{entity.legalName}</p>
+                        </div>
+                        <ChevronRight size={14} className={`flex-shrink-0 ml-1 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
                       </div>
-                      <ChevronRight size={14} className={`flex-shrink-0 ml-1 ${isSelected ? 'text-blue-500' : 'text-gray-400'}`} />
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {entity.pan && <span className="text-xs text-gray-400 font-mono">{entity.pan}</span>}
+                        <Badge color="blue">{regCount} GSTIN{regCount !== 1 ? 's' : ''}</Badge>
+                        {locCount > 0 && <Badge color="gray">{locCount} location{locCount !== 1 ? 's' : ''}</Badge>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right panel */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {!selectedEntity ? (
+              <div className="flex-1 flex items-center justify-center">
+                <EmptyState icon="👈" title="Select an entity" subtitle="Choose a legal entity from the left panel" />
+              </div>
+            ) : (
+              <>
+                {/* Entity header */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      {selectedEntity.shortName && (
+                        <span className="flex-shrink-0 inline-flex items-center justify-center bg-blue-600 text-white text-lg font-bold px-3 py-1.5 rounded-lg tracking-wide">
+                          {selectedEntity.shortName}
+                        </span>
+                      )}
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                          {selectedEntity.pan && (
+                            <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>
+                          )}
+                          {selectedEntity.tan && (
+                            <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>
+                          )}
+                          {selectedEntity.lei && (
+                            <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>
+                          )}
+                        </div>
+                        {/* Entity-level summary */}
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
+                          <span>🏛️ {activeRegs.length} active registration{activeRegs.length !== 1 ? 's' : ''}</span>
+                          {totalLocations > 0 && (
+                            <span>📍 {totalLocations} registered location{totalLocations !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {entity.pan && <span className="text-xs text-gray-400 font-mono">{entity.pan}</span>}
-                      <Badge color="blue">{regCount} GSTINs</Badge>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setEntityModal(selectedEntity)}
+                        className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
+                        <Edit2 size={14} /> Edit Entity
+                      </button>
+                      <button onClick={() => setRegModal('add')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                        <Plus size={14} /> Add GSTIN
+                      </button>
                     </div>
-                  </button>
-                );
-              })
+                  </div>
+                </div>
+
+                {/* Registrations grid */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {regLoading ? (
+                    <LoadingSpinner />
+                  ) : entityRegs.length === 0 ? (
+                    <EmptyState icon="🏛️" title="No registrations" subtitle="Add a GSTIN registration for this entity" />
+                  ) : (
+                    <div className="space-y-8">
+                      {activeRegs.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                            Active Registrations ({activeRegs.length})
+                          </p>
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            {activeRegs.map(reg => (
+                              <RegistrationCard key={reg.id} reg={reg}
+                                onEdit={r => setRegModal(r)}
+                                onDeactivate={r => setDeactivateTarget(r)}
+                                onReactivate={r => setReactivateTarget(r)}
+                                onLocationsUpdated={refetchRegs} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {inactiveRegs.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                            Inactive Registrations ({inactiveRegs.length})
+                          </p>
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            {inactiveRegs.map(reg => (
+                              <RegistrationCard key={reg.id} reg={reg}
+                                onEdit={() => {}} onDeactivate={() => {}}
+                                onReactivate={r => setReactivateTarget(r)}
+                                onLocationsUpdated={refetchRegs} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
-
-        {/* Right panel: Registrations for selected entity */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {!selectedEntity ? (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState icon="👈" title="Select an entity" subtitle="Choose a legal entity from the left panel" />
-            </div>
-          ) : (
-            <>
-              {/* Entity header */}
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    {selectedEntity.shortName && (
-                      <span className="flex-shrink-0 inline-flex items-center justify-center bg-blue-600 text-white text-lg font-bold px-3 py-1.5 rounded-lg tracking-wide">
-                        {selectedEntity.shortName}
-                      </span>
-                    )}
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">{selectedEntity.legalName}</h2>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                        {selectedEntity.pan && <span><span className="text-gray-400">PAN:</span> <span className="font-mono">{selectedEntity.pan}</span></span>}
-                        {selectedEntity.tan && <span><span className="text-gray-400">TAN:</span> <span className="font-mono">{selectedEntity.tan}</span></span>}
-                        {selectedEntity.lei && <span><span className="text-gray-400">LEI:</span> <span className="font-mono truncate max-w-[140px]">{selectedEntity.lei}</span></span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setEntityModal(selectedEntity)}
-                      className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
-                      <Edit2 size={14} /> Edit Entity
-                    </button>
-                    <button onClick={() => setRegModal('add')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-                      <Plus size={14} /> Add GSTIN
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Registrations grid */}
-              <div className="flex-1 overflow-y-auto p-6">
-                {regLoading ? (
-                  <LoadingSpinner />
-                ) : entityRegs.length === 0 ? (
-                  <EmptyState icon="🏛️" title="No registrations" subtitle="Add a GSTIN registration for this entity" />
-                ) : (
-                  <div className="space-y-6">
-                    {activeRegs.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                          Active ({activeRegs.length})
-                        </p>
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          {activeRegs.map(reg => (
-                            <RegistrationDetail key={reg.id} reg={reg}
-                              onEdit={r => setRegModal(r)}
-                              onDeactivate={r => setDeactivateTarget(r)} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {inactiveRegs.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-                          Inactive ({inactiveRegs.length})
-                        </p>
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          {inactiveRegs.map(reg => (
-                            <RegistrationDetail key={reg.id} reg={reg}
-                              onEdit={() => {}} onDeactivate={() => {}}
-                              onReactivate={r => setReactivateTarget(r)} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
       )}
 
-      {/* Modals */}
+      {/* Global Modals */}
       {entityModal && (
         <EntityModal
           entity={entityModal === 'add' ? null : entityModal}
@@ -763,11 +1124,13 @@ export default function CompanyMaster() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCityCodes(false)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">City Codes</h3>
+              <div>
+                <h3 className="text-lg font-semibold">City Codes</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Used to auto-generate GSTIN abbreviations (e.g. Mumbai → MUM → CPIPL-MUM/27-R1)</p>
+              </div>
               <button onClick={() => setShowCityCodes(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-xs text-slate-500">City codes are used to generate registration abbreviations (e.g., Mumbai → MUM → CP-MUM/27-R1)</p>
               <div className="flex gap-2">
                 <input type="text" placeholder="City Name" value={cityForm.cityName}
                   onChange={e => setCityForm(p => ({ ...p, cityName: e.target.value }))}
@@ -780,7 +1143,7 @@ export default function CompanyMaster() {
                   <Plus size={16} />
                 </button>
               </div>
-              <div className="max-h-60 overflow-auto border rounded-lg divide-y">
+              <div className="max-h-64 overflow-auto border rounded-lg divide-y">
                 {cityCodes.length === 0 ? (
                   <p className="text-sm text-slate-400 text-center py-4">No city codes yet</p>
                 ) : cityCodes.map(cc => (

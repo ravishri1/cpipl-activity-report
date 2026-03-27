@@ -2188,6 +2188,7 @@ model CompanyRegistration {
   assets         Asset[]     @relation("AssetCompanyRegistration")
   certificates   ComplianceCertificate[]
   portals        CompanyPortal[]
+  locations      GstLocation[]           @relation("RegistrationLocations")
 
   @@index([legalEntityId])
   @@index([principalRegistrationId])
@@ -2256,6 +2257,28 @@ model ComplianceCertificate {
   @@index([companyRegistrationId])
   @@index([expiryDate])
   @@index([certificateType])
+}
+
+// Physical locations registered under a GSTIN (Principal + Additional + E-APOB etc.)
+// Multiple locations can share the same GSTIN (same CompanyRegistration)
+model GstLocation {
+  id                    Int      @id @default(autoincrement())
+  companyRegistrationId Int
+  locationType          String   @default("Additional Place")
+  // Principal Place | Additional Place | E-APOB | I-APOB | Godown | Warehouse | Factory | Office
+  locationName          String?  // optional label e.g. "Head Office", "North Warehouse"
+  address               String?  // full address
+  city                  String
+  state                 String?
+  district              String?
+  pincode               String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  companyRegistration   CompanyRegistration @relation("RegistrationLocations", fields: [companyRegistrationId], references: [id], onDelete: Cascade)
+
+  @@index([companyRegistrationId])
 }
 
 model EntityCode {
