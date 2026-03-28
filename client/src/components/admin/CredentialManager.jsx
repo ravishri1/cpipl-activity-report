@@ -466,7 +466,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
   );
 }
 
-function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
+function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const [editingCred, setEditingCred] = useState(null);
   const { execute } = useApi();
@@ -525,6 +525,13 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
     <div className={`bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden ${!canExpand ? 'opacity-70' : ''}`}>
       {/* Portal header */}
       <div className="px-4 py-3 flex items-center justify-between gap-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={e => { e.stopPropagation(); onToggleSelect(portal.id); }}
+          onClick={e => e.stopPropagation()}
+          className="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer"
+        />
         <button
           className={`flex items-center gap-2 flex-1 min-w-0 text-left ${!canExpand ? 'cursor-not-allowed' : ''}`}
           onClick={() => canExpand && setExpanded(v => !v)}
@@ -696,6 +703,8 @@ export default function CredentialManager() {
   const [showAddPortal, setShowAddPortal] = useState(false);
   const [editingPortal, setEditingPortal] = useState(null);
   const [addCredPortal, setAddCredPortal] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const { execute: bulkExecute, loading: bulkLoading, error: bulkErr, success: bulkSuccess } = useApi();
 
   const params = new URLSearchParams();
   if (filterReg) {
@@ -715,6 +724,32 @@ export default function CredentialManager() {
   const users = Array.isArray(usersData) ? usersData : (usersData?.users || []);
 
   const handlePortalSaved = () => refetch();
+
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === portals.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(portals.map(p => p.id)));
+    }
+  };
+
+  const handleBulkAction = async (action) => {
+    const ids = [...selectedIds];
+    const label = action === 'delete' ? `permanently delete ${ids.length} portal(s) and all their credentials` : `${action} ${ids.length} portal(s)`;
+    if (!window.confirm(`Are you sure you want to ${label}?`)) return;
+    try {
+      await bulkExecute(() => api.post('/credentials/portals/bulk', { ids, action }),
+        `${ids.length} portal(s) ${action}d`);
+      setSelectedIds(new Set());
+      refetch();
+    } catch {}
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -754,6 +789,8 @@ export default function CredentialManager() {
       {fetchErr && <AlertMessage type="error" message={fetchErr} />}
       {regErr && <AlertMessage type="error" message={regErr} />}
       {usersErr && <AlertMessage type="error" message={usersErr} />}
+      {bulkErr && <AlertMessage type="error" message={bulkErr} />}
+      {bulkSuccess && <AlertMessage type="success" message={bulkSuccess} />}
 
       {/* Portal list */}
       {loading ? (
@@ -761,18 +798,53 @@ export default function CredentialManager() {
       ) : portals.length === 0 ? (
         <EmptyState icon="🔑" title="No portals yet" subtitle="Add your first portal to start managing credentials" />
       ) : (
-        <div className="space-y-3">
-          {portals.map(portal => (
-            <PortalCard
-              key={portal.id}
-              portal={portal}
-              users={users}
-              onEdit={setEditingPortal}
-              onAddCredential={setAddCredPortal}
-              onRefresh={refetch}
-            />
-          ))}
-        </div>
+        <>
+          {/* Select all + bulk action bar */}
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedIds.size === portals.length && portals.length > 0}
+                ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < portals.length; }}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 accent-blue-600"
+              />
+              {selectedIds.size > 0 ? `${selectedIds.size} of ${portals.length} selected` : 'Select all'}
+            </label>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 mr-1">Bulk:</span>
+                <button onClick={() => handleBulkAction('enable')} disabled={bulkLoading}
+                  className="px-3 py-1.5 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 font-medium disabled:opacity-50">
+                  Enable
+                </button>
+                <button onClick={() => handleBulkAction('disable')} disabled={bulkLoading}
+                  className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium disabled:opacity-50">
+                  Disable
+                </button>
+                <button onClick={() => handleBulkAction('delete')} disabled={bulkLoading}
+                  className="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium disabled:opacity-50">
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {portals.map(portal => (
+              <PortalCard
+                key={portal.id}
+                portal={portal}
+                users={users}
+                onEdit={setEditingPortal}
+                onAddCredential={setAddCredPortal}
+                onRefresh={refetch}
+                selected={selectedIds.has(portal.id)}
+                onToggleSelect={toggleSelect}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Portal add/edit modal */}

@@ -98,6 +98,24 @@ router.delete('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: 'Portal deleted' });
 }));
 
+// POST /api/credentials/portals/bulk  — bulk enable/disable/delete
+router.post('/portals/bulk', requireAdmin, asyncHandler(async (req, res) => {
+  const { ids, action } = req.body;
+  requireFields(req.body, 'ids', 'action');
+  requireEnum(action, ['enable', 'disable', 'delete'], 'action');
+  if (!Array.isArray(ids) || ids.length === 0) throw badRequest('ids must be a non-empty array');
+  const portalIds = ids.map(id => parseInt(id)).filter(Boolean);
+  if (action === 'delete') {
+    await req.prisma.companyPortal.deleteMany({ where: { id: { in: portalIds } } });
+    return res.json({ message: `${portalIds.length} portal(s) deleted` });
+  }
+  await req.prisma.companyPortal.updateMany({
+    where: { id: { in: portalIds } },
+    data: { isActive: action === 'enable' },
+  });
+  res.json({ message: `${portalIds.length} portal(s) ${action}d` });
+}));
+
 // ─── CREDENTIALS ────────────────────────────────────────────────────────────
 
 // GET /api/credentials/portals/:id/credentials
