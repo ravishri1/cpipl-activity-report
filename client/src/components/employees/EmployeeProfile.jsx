@@ -1786,7 +1786,7 @@ function CredentialCard({ cred, showPwd, togglePwd }) {
 }
 
 function CredentialsTab({ userId }) {
-  const { data: resp, loading, error } = useFetch(`/api/credentials/user/${userId}`, null);
+  const { data: resp, loading, error } = useFetch(`/credentials/user/${userId}`, null);
   const [showPwd, setShowPwd] = useState({});
 
   const togglePwd = (id) => setShowPwd(p => ({ ...p, [id]: !p[id] }));

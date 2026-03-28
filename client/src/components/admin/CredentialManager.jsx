@@ -467,7 +467,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
 }
 
 function CredentialHistoryModal({ credentialId, onClose }) {
-  const { data: history, loading, error } = useFetch(`/api/credentials/credentials/${credentialId}/history`, []);
+  const { data: history, loading, error } = useFetch(`/credentials/credentials/${credentialId}/history`, []);
 
   const FIELD_LABELS = {
     username: 'Username', password: 'Password', label: 'Label', type: 'Type',
