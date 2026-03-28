@@ -1244,7 +1244,7 @@ function BankAccountModal({ account, legalEntityId, onClose, onSaved }) {
   );
 }
 
-function BankAccountsPanel({ legalEntityId, selectedReg }) {
+function BankAccountsPanel({ legalEntityId, selectedReg, entityRegs = [] }) {
   const { data: accounts, loading, error, refetch } = useFetch(
     legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
     []
@@ -1253,8 +1253,11 @@ function BankAccountsPanel({ legalEntityId, selectedReg }) {
   const [modal, setModal] = useState(null); // null | 'add' | accountObj
   const [showNums, setShowNums] = useState({});
 
-  // Add button only for the registration marked as primary
-  const canAdd = selectedReg?.isPrimary === true;
+  // If any registration is explicitly marked isPrimary, only that one gets Add.
+  // If none is marked, the Principal registration acts as default.
+  const entityHasPrimary = entityRegs.some(r => r.isPrimary);
+  const isPrincipal = (selectedReg?.placeType || 'Principal').includes('Principal');
+  const canAdd = selectedReg?.isPrimary === true || (!entityHasPrimary && isPrincipal);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Remove this bank account?')) return;
@@ -1284,12 +1287,14 @@ function BankAccountsPanel({ legalEntityId, selectedReg }) {
         )}
       </div>
 
-      {/* Notice for non-primary registrations */}
+      {/* Notice for non-primary/non-principal registrations */}
       {selectedReg && !canAdd && (
         <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
           <Landmark size={12} className="text-amber-500 shrink-0" />
           <p className="text-xs text-amber-700">
-            Showing accounts from the primary registration. To manage, select the <span className="font-semibold">Primary</span> GSTIN.
+            {entityHasPrimary
+              ? <>Showing accounts from the primary registration. To manage, select the <span className="font-semibold">Primary</span> GSTIN.</>
+              : <>This is an additional registration. Select the <span className="font-semibold">Principal</span> GSTIN to manage bank accounts.</>}
           </p>
         </div>
       )}
@@ -2400,7 +2405,7 @@ export default function CompanyMaster() {
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
                     {/* Bank Accounts section — entity level (shared across all GSTINs) */}
-                    <BankAccountsPanel legalEntityId={selectedEntity?.id} selectedReg={selectedReg} />
+                    <BankAccountsPanel legalEntityId={selectedEntity?.id} selectedReg={selectedReg} entityRegs={entityRegs} />
 
                   </div>
                 )}
