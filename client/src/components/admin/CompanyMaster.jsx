@@ -9,7 +9,8 @@ import EmptyState from '../shared/EmptyState';
 import BranchManager from './BranchManager';
 import {
   Building2, Plus, Edit2, ChevronRight, ChevronDown, MapPin, Globe, Hash,
-  Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers, Key, Eye, EyeOff, ExternalLink
+  Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers, Key, Eye, EyeOff, ExternalLink,
+  Network, Users, User, Lock
 } from 'lucide-react';
 
 const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
@@ -1098,10 +1099,242 @@ function PortalCredRow({ portal }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// ─── Company Tree View ───────────────────────────────────────────────────────
+
+const CATEGORY_COLORS = {
+  email:      'bg-blue-100 text-blue-700',
+  tax:        'bg-orange-100 text-orange-700',
+  banking:    'bg-green-100 text-green-700',
+  erp:        'bg-purple-100 text-purple-700',
+  cloud:      'bg-sky-100 text-sky-700',
+  social:     'bg-pink-100 text-pink-700',
+  government: 'bg-red-100 text-red-700',
+  other:      'bg-slate-100 text-slate-600',
+};
+const CATEGORY_LABELS = {
+  email: 'Email', tax: 'Tax', banking: 'Banking', erp: 'ERP',
+  cloud: 'Cloud', social: 'Social', government: 'Govt', other: 'Other',
+};
+
+function TreeCredential({ cred }) {
+  const [open, setOpen] = useState(false);
+  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
+  const statusColor = cred.status === 'active' ? 'bg-emerald-100 text-emerald-700'
+    : cred.status === 'revoked' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
+  return (
+    <div className="ml-4 border-l-2 border-slate-100 pl-3 mt-1">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full text-left py-1 hover:bg-slate-50 rounded px-1 group">
+        <Key className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <span className="text-xs font-mono text-slate-700 truncate">{cred.username}</span>
+        {cred.label && <span className="text-xs text-slate-400 truncate">· {cred.label}</span>}
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${statusColor}`}>{cred.status}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 shrink-0 capitalize">{cred.type}</span>
+        {totalUsers > 0 && (
+          <span className="ml-auto text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0">
+            <Users className="w-3 h-3" />{totalUsers}
+          </span>
+        )}
+        {open ? <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" /> : <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />}
+      </button>
+      {open && (
+        <div className="ml-4 border-l border-dashed border-slate-200 pl-3 pb-1 space-y-0.5">
+          {cred.purpose && (
+            <p className="text-[11px] text-slate-500 italic py-0.5">{cred.purpose}</p>
+          )}
+          {cred.assignee && (
+            <div className="flex items-center gap-1.5 py-0.5">
+              <User className="w-3 h-3 text-blue-400 shrink-0" />
+              <span className="text-xs text-slate-700">{cred.assignee.name}</span>
+              <span className="text-[10px] text-slate-400">({cred.assignee.employeeId})</span>
+              <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded">assigned</span>
+            </div>
+          )}
+          {cred.sharedWithUsers.map(u => (
+            <div key={u.id} className="flex items-center gap-1.5 py-0.5">
+              <Users className="w-3 h-3 text-purple-400 shrink-0" />
+              <span className="text-xs text-slate-700">{u.name}</span>
+              <span className="text-[10px] text-slate-400">({u.employeeId})</span>
+              <span className="text-[10px] bg-purple-50 text-purple-600 px-1 rounded">shared</span>
+            </div>
+          ))}
+          {cred.department && (
+            <div className="flex items-center gap-1.5 py-0.5">
+              <Building2 className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="text-xs text-slate-700">{cred.department}</span>
+              <span className="text-[10px] bg-amber-50 text-amber-600 px-1 rounded">dept access</span>
+            </div>
+          )}
+          {totalUsers === 0 && (
+            <p className="text-[11px] text-slate-400 italic py-0.5">No assignments</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TreePortal({ portal }) {
+  const [open, setOpen] = useState(false);
+  const credCount = portal.credentials.length;
+  const activeCount = portal.credentials.filter(c => c.status === 'active').length;
+  const catColor = CATEGORY_COLORS[portal.category] || CATEGORY_COLORS.other;
+  const catLabel = CATEGORY_LABELS[portal.category] || 'Other';
+  return (
+    <div className="ml-4 border-l-2 border-slate-100 pl-3 mt-1.5">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full text-left py-1.5 hover:bg-slate-50 rounded px-1">
+        <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+        <span className="text-sm font-medium text-slate-700 truncate">{portal.name}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${catColor}`}>{catLabel}</span>
+        <span className="ml-auto text-[10px] text-slate-400 shrink-0">{activeCount}/{credCount} creds</span>
+        {portal.url && (
+          <a href={portal.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+            className="text-slate-300 hover:text-blue-500 shrink-0"><ExternalLink className="w-3 h-3" /></a>
+        )}
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+      </button>
+      {open && (
+        <div>
+          {credCount === 0 ? (
+            <p className="ml-4 text-[11px] text-slate-400 italic py-1">No credentials</p>
+          ) : (
+            portal.credentials.map(cred => <TreeCredential key={cred.id} cred={cred} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TreeRegistration({ reg }) {
+  const [open, setOpen] = useState(false);
+  const portalCount = reg.portals.length;
+  const totalCreds = reg.portals.reduce((s, p) => s + p.credentials.length, 0);
+  return (
+    <div className="ml-4 border-l-2 border-blue-100 pl-3 mt-2">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full text-left py-1.5 hover:bg-blue-50 rounded px-1">
+        <Hash className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+        <span className="text-sm font-semibold text-slate-700 font-mono">{reg.abbr || reg.gstin}</span>
+        {reg.officeCity && <span className="text-xs text-slate-400">{reg.officeCity}</span>}
+        {reg.gstin && reg.abbr && <span className="text-[10px] font-mono text-slate-400 truncate">{reg.gstin}</span>}
+        <span className="ml-auto text-[10px] text-slate-400 shrink-0">{portalCount} portals · {totalCreds} creds</span>
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+      </button>
+      {open && (
+        <div>
+          {portalCount === 0 ? (
+            <p className="ml-4 text-[11px] text-slate-400 italic py-1">No portals linked</p>
+          ) : (
+            reg.portals.map(portal => <TreePortal key={portal.id} portal={portal} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompanyTreeView() {
+  const { data: tree, loading, error } = useFetch('/credentials/tree', []);
+  const [expandAll, setExpandAll] = useState(false);
+  const [search, setSearch] = useState('');
+
+  if (loading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (error) return <AlertMessage type="error" message={error} />;
+
+  const filtered = search.trim()
+    ? tree.filter(entity => {
+        const q = search.toLowerCase();
+        if (entity.legalName.toLowerCase().includes(q) || entity.shortName?.toLowerCase().includes(q)) return true;
+        return entity.registrations.some(reg =>
+          reg.abbr?.toLowerCase().includes(q) || reg.gstin?.toLowerCase().includes(q) ||
+          reg.officeCity?.toLowerCase().includes(q) ||
+          reg.portals.some(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.credentials.some(c =>
+              c.username.toLowerCase().includes(q) || c.label?.toLowerCase().includes(q) ||
+              c.assignee?.name.toLowerCase().includes(q) ||
+              c.sharedWithUsers.some(u => u.name.toLowerCase().includes(q))
+            )
+          )
+        );
+      })
+    : tree;
+
+  const totalPortals = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.length, 0), 0);
+  const totalCreds = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.reduce((s3, p) => s3 + p.credentials.length, 0), 0), 0);
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex gap-4 text-sm text-slate-500">
+          <span><strong className="text-slate-700">{tree.length}</strong> entities</span>
+          <span><strong className="text-slate-700">{totalPortals}</strong> portals</span>
+          <span><strong className="text-slate-700">{totalCreds}</strong> credentials</span>
+        </div>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search company, portal, employee..."
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState icon="🌲" title="No results" subtitle="Try a different search" />
+      ) : (
+        <div className="space-y-4">
+          {filtered.map(entity => {
+            const totalRegPortals = entity.registrations.reduce((s, r) => s + r.portals.length, 0);
+            const totalRegCreds = entity.registrations.reduce((s, r) => s + r.portals.reduce((s2, p) => s2 + p.credentials.length, 0), 0);
+            return (
+              <EntityNode key={entity.id} entity={entity}
+                totalPortals={totalRegPortals} totalCreds={totalRegCreds} />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EntityNode({ entity, totalPortals, totalCreds }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-3 w-full text-left px-5 py-3.5 bg-slate-50 hover:bg-slate-100 border-b border-slate-100">
+        <Building2 className="w-5 h-5 text-blue-600 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-800 truncate">{entity.legalName}</p>
+          <p className="text-xs text-slate-400">{entity.shortName} · PAN: {entity.pan}</p>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-slate-400 shrink-0">
+          <span>{entity.registrations.length} registrations</span>
+          <span>{totalPortals} portals</span>
+          <span>{totalCreds} creds</span>
+        </div>
+        {open ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+      </button>
+      {open && (
+        <div className="px-4 py-3">
+          {entity.registrations.length === 0 ? (
+            <p className="text-sm text-slate-400 italic py-2">No registrations</p>
+          ) : (
+            entity.registrations.map(reg => <TreeRegistration key={reg.id} reg={reg} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CompanyMaster() {
   const location = useLocation();
   const navigate = useNavigate();
-  const activeTab = location.pathname === '/admin/branches' ? 'branches' : 'registrations';
+  const activeTab = location.pathname === '/admin/branches' ? 'branches'
+    : new URLSearchParams(location.search).get('view') === 'tree' ? 'tree'
+    : 'registrations';
 
   const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
     useFetch('/company-master/legal-entities', []);
@@ -1242,11 +1475,23 @@ export default function CompanyMaster() {
             }`}>
             <span className="flex items-center gap-1.5"><GitBranch size={14} /> Branches</span>
           </button>
+          <button
+            onClick={() => navigate('/admin/company-master?view=tree')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === 'tree'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
+            <span className="flex items-center gap-1.5"><Network size={14} /> Company Tree</span>
+          </button>
         </div>
       </div>
 
       {/* Branches tab */}
       {activeTab === 'branches' && <BranchManager embedded />}
+
+      {/* Tree tab */}
+      {activeTab === 'tree' && <CompanyTreeView />}
 
       {/* Registrations tab — 3-panel layout (like cpdesk) */}
       {activeTab === 'registrations' && (

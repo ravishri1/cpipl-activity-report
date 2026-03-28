@@ -173,6 +173,105 @@ router.post('/portals/bulk', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: `${portalIds.length} portal(s) ${action}d` });
 }));
 
+// ─── TREE ───────────────────────────────────────────────────────────────────
+
+// GET /api/credentials/tree — full company → registration → portal → credential tree
+router.get('/tree', requireAdmin, asyncHandler(async (req, res) => {
+  // Fetch all legal entities with registrations → portals → credentials
+  const entities = await req.prisma.legalEntity.findMany({
+    include: {
+      registrations: {
+        include: {
+          portals: {
+            where: { isActive: true },
+            include: {
+              credentials: {
+                include: {
+                  assignee: { select: { id: true, name: true, employeeId: true } },
+                },
+                orderBy: [{ type: 'asc' }, { label: 'asc' }],
+              },
+            },
+            orderBy: [{ category: 'asc' }, { name: 'asc' }],
+          },
+        },
+        orderBy: [{ abbr: 'asc' }],
+      },
+    },
+    orderBy: [{ legalName: 'asc' }],
+  });
+
+  // Collect all unique sharedWith user IDs across all credentials
+  const allUserIds = new Set();
+  for (const entity of entities) {
+    for (const reg of entity.registrations) {
+      for (const portal of reg.portals) {
+        for (const cred of portal.credentials) {
+          if (cred.sharedWith) {
+            try {
+              const ids = JSON.parse(cred.sharedWith);
+              if (Array.isArray(ids)) ids.forEach(id => allUserIds.add(parseInt(id)));
+            } catch {}
+          }
+        }
+      }
+    }
+  }
+
+  // Fetch all referenced users in one query
+  const usersMap = {};
+  if (allUserIds.size > 0) {
+    const users = await req.prisma.user.findMany({
+      where: { id: { in: [...allUserIds] } },
+      select: { id: true, name: true, employeeId: true },
+    });
+    users.forEach(u => { usersMap[u.id] = u; });
+  }
+
+  // Build response — strip password, resolve sharedWith to user objects
+  const tree = entities.map(entity => ({
+    id: entity.id,
+    legalName: entity.legalName,
+    shortName: entity.shortName,
+    pan: entity.pan,
+    registrations: entity.registrations.map(reg => ({
+      id: reg.id,
+      abbr: reg.abbr,
+      gstin: reg.gstin,
+      officeCity: reg.officeCity,
+      state: reg.state,
+      portals: reg.portals.map(portal => ({
+        id: portal.id,
+        name: portal.name,
+        category: portal.category,
+        url: portal.url,
+        credentials: portal.credentials.map(cred => {
+          let sharedWithUsers = [];
+          if (cred.sharedWith) {
+            try {
+              const ids = JSON.parse(cred.sharedWith);
+              if (Array.isArray(ids)) sharedWithUsers = ids.map(id => usersMap[parseInt(id)]).filter(Boolean);
+            } catch {}
+          }
+          return {
+            id: cred.id,
+            username: cred.username,
+            label: cred.label,
+            type: cred.type,
+            status: cred.status,
+            department: cred.department,
+            purpose: cred.purpose,
+            assignee: cred.assignee,
+            sharedWithUsers,
+          };
+        }),
+      })),
+    })),
+  }));
+
+  res.json(tree);
+}));
+
 // ─── CREDENTIALS ────────────────────────────────────────────────────────────
 
 // GET /api/credentials/portals/:id/credentials
