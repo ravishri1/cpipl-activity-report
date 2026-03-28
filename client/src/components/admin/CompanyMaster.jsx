@@ -10,7 +10,7 @@ import BranchManager from './BranchManager';
 import {
   Building2, Plus, Edit2, ChevronRight, ChevronDown, MapPin, Globe, Hash,
   Shield, AlertTriangle, GitBranch, Settings, X, Trash2, Layers, Key, Eye, EyeOff, ExternalLink,
-  Network, Users, User, Lock
+  Network, Users, User, Lock, Landmark
 } from 'lucide-react';
 
 const PLACE_TYPE_OPTIONS = ['Principal', 'Additional', 'E-APOB', 'I-APOB'];
@@ -1097,6 +1097,259 @@ function PortalCredRow({ portal }) {
   );
 }
 
+// ─── Bank Accounts Panel ─────────────────────────────────────────────────────
+
+const ACCOUNT_TYPE_LABELS = { current: 'Current', savings: 'Savings', cc: 'Cash Credit', od: 'OD' };
+const ACCOUNT_TYPE_COLORS = {
+  current:  'bg-blue-100 text-blue-700',
+  savings:  'bg-green-100 text-green-700',
+  cc:       'bg-orange-100 text-orange-700',
+  od:       'bg-red-100 text-red-700',
+};
+
+function BankAccountModal({ account, legalEntityId, registrations, onClose, onSaved }) {
+  const { execute, loading, error } = useApi();
+  const [form, setForm] = useState({
+    accountHolderName: account?.accountHolderName || '',
+    bankName:          account?.bankName || '',
+    accountNumber:     account?.accountNumber || '',
+    ifscCode:          account?.ifscCode || '',
+    branchName:        account?.branchName || '',
+    accountType:       account?.accountType || 'current',
+    isPrimary:         account?.isPrimary || false,
+    notes:             account?.notes || '',
+    companyRegistrationId: account?.companyRegistrationId || '',
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const payload = {
+      legalEntityId,
+      accountHolderName: form.accountHolderName,
+      bankName:          form.bankName,
+      accountNumber:     form.accountNumber,
+      ifscCode:          form.ifscCode,
+      branchName:        form.branchName || null,
+      accountType:       form.accountType,
+      isPrimary:         form.isPrimary,
+      notes:             form.notes || null,
+      companyRegistrationId: form.companyRegistrationId || null,
+    };
+    try {
+      if (account) {
+        await execute(() => api.put(`/company-master/bank-accounts/${account.id}`, payload), 'Bank account updated!');
+      } else {
+        await execute(() => api.post('/company-master/bank-accounts', payload), 'Bank account added!');
+      }
+      onSaved();
+      onClose();
+    } catch { /* useApi shows error */ }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b">
+          <h3 className="text-lg font-semibold">{account ? 'Edit Bank Account' : 'Add Bank Account'}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && <AlertMessage type="error" message={error} />}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Account Holder Name *</label>
+              <input value={form.accountHolderName} onChange={e => set('accountHolderName', e.target.value)} required
+                placeholder="Color Papers India Private Limited"
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Bank Name *</label>
+              <input value={form.bankName} onChange={e => set('bankName', e.target.value)} required
+                placeholder="State Bank of India"
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Account Number *</label>
+              <input value={form.accountNumber} onChange={e => set('accountNumber', e.target.value)} required
+                placeholder="12345678901234"
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">IFSC Code *</label>
+              <input value={form.ifscCode} onChange={e => set('ifscCode', e.target.value.toUpperCase())} required
+                placeholder="SBIN0001234" maxLength={11}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Branch</label>
+              <input value={form.branchName} onChange={e => set('branchName', e.target.value)}
+                placeholder="Lucknow Main Branch"
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Account Type</label>
+              <select value={form.accountType} onChange={e => set('accountType', e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="current">Current</option>
+                <option value="savings">Savings</option>
+                <option value="cc">Cash Credit (CC)</option>
+                <option value="od">Overdraft (OD)</option>
+              </select>
+            </div>
+            {registrations?.length > 0 && (
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Linked GSTIN (optional)</label>
+                <select value={form.companyRegistrationId} onChange={e => set('companyRegistrationId', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— Entity-level (all GSTINs) —</option>
+                  {registrations.map(r => (
+                    <option key={r.id} value={r.id}>{r.abbr} · {r.gstin}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Link to a specific GSTIN only if this account is exclusively for GST refunds.</p>
+              </div>
+            )}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+              <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
+                placeholder="e.g. Used for salary disbursement, GST payments..."
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.isPrimary} onChange={e => set('isPrimary', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
+                <span className="text-sm text-slate-700">Mark as Primary Account</span>
+                <span className="text-xs text-slate-400">(used for salary credit, expense reimbursement)</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving…' : account ? 'Update' : 'Add Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BankAccountsPanel({ legalEntityId, registrations }) {
+  const { data: accounts, loading, error, refetch } = useFetch(
+    legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
+    []
+  );
+  const { execute } = useApi();
+  const [modal, setModal] = useState(null); // null | 'add' | accountObj
+  const [showNums, setShowNums] = useState({});
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Remove this bank account?')) return;
+    try {
+      await execute(() => api.delete(`/company-master/bank-accounts/${id}`), 'Removed');
+      refetch();
+    } catch { /* ignore */ }
+  };
+
+  const maskAccount = (num) => num ? `****${num.slice(-4)}` : '—';
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-emerald-50/40">
+        <div className="flex items-center gap-2">
+          <Landmark size={15} className="text-emerald-600" />
+          <span className="font-semibold text-gray-800 text-sm">Bank Accounts</span>
+          {accounts.length > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-200 text-emerald-800">{accounts.length}</span>
+          )}
+        </div>
+        <button onClick={() => setModal('add')}
+          className="flex items-center gap-1 text-xs text-emerald-700 border border-emerald-300 bg-white px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors font-medium">
+          <Plus size={11} /> Add
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="px-5 py-6 text-center text-xs text-gray-400">Loading…</div>
+      ) : error ? (
+        <div className="px-5 py-4 text-xs text-red-500">{error}</div>
+      ) : accounts.length === 0 ? (
+        <div className="px-5 py-8 text-center">
+          <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
+          <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
+          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {accounts.map(acc => (
+            <div key={acc.id} className="px-5 py-3.5 flex items-start justify-between group hover:bg-gray-50/50 transition-colors">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center mt-0.5">
+                  <Landmark size={14} className="text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-gray-800">{acc.bankName}</span>
+                    {acc.isPrimary && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Primary</span>
+                    )}
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ACCOUNT_TYPE_COLORS[acc.accountType] || 'bg-slate-100 text-slate-600'}`}>
+                      {ACCOUNT_TYPE_LABELS[acc.accountType] || acc.accountType}
+                    </span>
+                    {acc.companyRegistration && (
+                      <span className="text-xs text-slate-400">{acc.companyRegistration.abbr}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">{acc.accountHolderName}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs font-mono text-gray-600">
+                      {showNums[acc.id] ? acc.accountNumber : maskAccount(acc.accountNumber)}
+                    </span>
+                    <button onClick={() => setShowNums(p => ({ ...p, [acc.id]: !p[acc.id] }))}
+                      className="text-slate-300 hover:text-slate-500">
+                      {showNums[acc.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                    </button>
+                    <span className="text-xs font-mono text-gray-400">{acc.ifscCode}</span>
+                    {acc.branchName && <span className="text-xs text-gray-400">{acc.branchName}</span>}
+                  </div>
+                  {acc.notes && <p className="text-xs text-gray-400 italic mt-1">{acc.notes}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-3">
+                <button onClick={() => setModal(acc)}
+                  className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                  <Edit2 size={13} />
+                </button>
+                <button onClick={() => handleDelete(acc.id)}
+                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal && (
+        <BankAccountModal
+          account={modal === 'add' ? null : modal}
+          legalEntityId={legalEntityId}
+          registrations={registrations}
+          onClose={() => setModal(null)}
+          onSaved={refetch}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 // ─── Company Org Chart ───────────────────────────────────────────────────────
@@ -2118,6 +2371,9 @@ export default function CompanyMaster() {
 
                     {/* Credentials section */}
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
+
+                    {/* Bank Accounts section */}
+                    <BankAccountsPanel legalEntityId={selectedEntity?.id} registrations={entityRegs} />
 
                   </div>
                 )}

@@ -2161,6 +2161,7 @@ model LegalEntity {
 
   registrations CompanyRegistration[]
   portals       CompanyPortal[]
+  bankAccounts  CompanyBankAccount[]
 }
 
 model CompanyRegistration {
@@ -2193,11 +2194,35 @@ model CompanyRegistration {
   certificates   ComplianceCertificate[]
   portals        CompanyPortal[]
   locations      GstLocation[]           @relation("RegistrationLocations")
+  bankAccounts   CompanyBankAccount[]
 
   @@index([legalEntityId])
   @@index([principalRegistrationId])
   @@index([stateCode])
   @@index([isActive])
+}
+
+model CompanyBankAccount {
+  id                    Int      @id @default(autoincrement())
+  legalEntityId         Int
+  companyRegistrationId Int?                              // optional: link to specific GSTIN (e.g. GST refund account)
+  accountHolderName     String                            // name on the account
+  bankName              String                            // "State Bank of India", "HDFC Bank"
+  accountNumber         String                            // actual account number
+  ifscCode              String                            // "SBIN0001234"
+  branchName            String?                           // branch name / city
+  accountType           String   @default("current")     // current, savings, cc, od
+  isPrimary             Boolean  @default(false)          // main salary/disbursement account
+  notes                 String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  legalEntity           LegalEntity           @relation(fields: [legalEntityId], references: [id])
+  companyRegistration   CompanyRegistration?  @relation(fields: [companyRegistrationId], references: [id])
+
+  @@index([legalEntityId])
+  @@index([companyRegistrationId])
 }
 
 model CompanyPortal {

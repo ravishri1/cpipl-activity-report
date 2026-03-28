@@ -372,13 +372,30 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
         select: {
           id: true, name: true, email: true, employeeId: true, designation: true, department: true,
           bankName: true, bankAccountNumber: true, bankIfscCode: true,
+          companyRegistrationId: true,
         }
       },
     },
   });
   if (!payslip) throw notFound('Payslip');
   if (!isAdminRole(req.user) && payslip.userId !== req.user.id) throw forbidden('Access denied');
-  res.json(payslip);
+
+  // Attach company primary bank account (for payslip display)
+  let companyBankAccount = null;
+  if (payslip.user?.companyRegistrationId) {
+    const reg = await req.prisma.companyRegistration.findUnique({
+      where: { id: payslip.user.companyRegistrationId },
+      select: { legalEntityId: true },
+    });
+    if (reg?.legalEntityId) {
+      companyBankAccount = await req.prisma.companyBankAccount.findFirst({
+        where: { legalEntityId: reg.legalEntityId, isPrimary: true, isActive: true },
+        select: { bankName: true, accountHolderName: true, accountNumber: true, ifscCode: true, branchName: true },
+      });
+    }
+  }
+
+  res.json({ ...payslip, companyBankAccount });
 }));
 
 // PUT /payslip/:id/publish — Publish single payslip (admin)

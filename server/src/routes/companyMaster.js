@@ -305,4 +305,96 @@ router.delete('/locations/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+// ─── BANK ACCOUNTS ──────────────────────────────────────────────────────────
+
+// GET /api/company-master/bank-accounts?legalEntityId=X
+router.get('/bank-accounts', asyncHandler(async (req, res) => {
+  const { legalEntityId } = req.query;
+  const where = { isActive: true };
+  if (legalEntityId) where.legalEntityId = parseId(legalEntityId);
+
+  const accounts = await req.prisma.companyBankAccount.findMany({
+    where,
+    include: {
+      companyRegistration: { select: { id: true, abbr: true, gstin: true } },
+    },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+  });
+  res.json(accounts);
+}));
+
+// POST /api/company-master/bank-accounts
+router.post('/bank-accounts', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'legalEntityId', 'bankName', 'accountNumber', 'ifscCode', 'accountHolderName');
+
+  const legalEntityId = parseInt(req.body.legalEntityId);
+
+  // Only one primary per entity — unset others first
+  if (req.body.isPrimary) {
+    await req.prisma.companyBankAccount.updateMany({
+      where: { legalEntityId, isPrimary: true },
+      data: { isPrimary: false },
+    });
+  }
+
+  const account = await req.prisma.companyBankAccount.create({
+    data: {
+      legalEntityId,
+      companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
+      accountHolderName: req.body.accountHolderName.trim(),
+      bankName: req.body.bankName.trim(),
+      accountNumber: req.body.accountNumber.trim(),
+      ifscCode: req.body.ifscCode.trim().toUpperCase(),
+      branchName: req.body.branchName?.trim() || null,
+      accountType: req.body.accountType || 'current',
+      isPrimary: Boolean(req.body.isPrimary),
+      notes: req.body.notes?.trim() || null,
+    },
+    include: { companyRegistration: { select: { id: true, abbr: true, gstin: true } } },
+  });
+  res.status(201).json(account);
+}));
+
+// PUT /api/company-master/bank-accounts/:id
+router.put('/bank-accounts/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  // If setting as primary, unset others for same entity
+  if (req.body.isPrimary) {
+    const existing = await req.prisma.companyBankAccount.findUnique({ where: { id }, select: { legalEntityId: true } });
+    if (existing) {
+      await req.prisma.companyBankAccount.updateMany({
+        where: { legalEntityId: existing.legalEntityId, isPrimary: true, NOT: { id } },
+        data: { isPrimary: false },
+      });
+    }
+  }
+
+  const account = await req.prisma.companyBankAccount.update({
+    where: { id },
+    data: {
+      ...(req.body.accountHolderName !== undefined && { accountHolderName: req.body.accountHolderName.trim() }),
+      ...(req.body.bankName !== undefined && { bankName: req.body.bankName.trim() }),
+      ...(req.body.accountNumber !== undefined && { accountNumber: req.body.accountNumber.trim() }),
+      ...(req.body.ifscCode !== undefined && { ifscCode: req.body.ifscCode.trim().toUpperCase() }),
+      ...(req.body.branchName !== undefined && { branchName: req.body.branchName?.trim() || null }),
+      ...(req.body.accountType !== undefined && { accountType: req.body.accountType }),
+      ...(req.body.isPrimary !== undefined && { isPrimary: Boolean(req.body.isPrimary) }),
+      ...(req.body.notes !== undefined && { notes: req.body.notes?.trim() || null }),
+      ...(req.body.companyRegistrationId !== undefined && {
+        companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
+      }),
+    },
+    include: { companyRegistration: { select: { id: true, abbr: true, gstin: true } } },
+  });
+  res.json(account);
+}));
+
+// DELETE /api/company-master/bank-accounts/:id  (soft delete)
+router.delete('/bank-accounts/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  await req.prisma.companyBankAccount.update({ where: { id }, data: { isActive: false } });
+  res.json({ message: 'Bank account removed' });
+}));
+
 module.exports = router;
