@@ -173,6 +173,7 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
     udyam: registration?.udyam || '',
     iec: registration?.iec || '',
     primaryBusiness: registration?.primaryBusiness || '',
+    isPrimary: registration?.isPrimary || false,
     legalEntityId: registration?.legalEntityId || entityId || '',
   });
   const [abbrPreview, setAbbrPreview] = useState(registration?.abbr || '');
@@ -403,6 +404,13 @@ function RegistrationModal({ registration, entityId, onClose, onSaved, allRegist
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. Primary" maxLength={50} />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={!!form.isPrimary} onChange={e => set('isPrimary', e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+            <span className="text-sm font-medium text-gray-700">Primary registration</span>
+            <span className="text-xs text-gray-400">(bank accounts managed here; other branches auto-inherit)</span>
+          </label>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
@@ -1236,22 +1244,17 @@ function BankAccountModal({ account, legalEntityId, onClose, onSaved }) {
   );
 }
 
-function BankAccountsPanel({ legalEntityId }) {
-  const { data: resp, loading, error, refetch } = useFetch(
+function BankAccountsPanel({ legalEntityId, selectedReg }) {
+  const { data: accounts, loading, error, refetch } = useFetch(
     legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
-    { accounts: [], isPrimary: false, sourcedFrom: null }
+    []
   );
   const { execute } = useApi();
   const [modal, setModal] = useState(null); // null | 'add' | accountObj
   const [showNums, setShowNums] = useState({});
 
-  const accounts = resp?.accounts || [];
-  const isPrimary = resp?.isPrimary || false;
-  const sourcedFrom = resp?.sourcedFrom || null;
-  // Only the primary entity can add/edit/delete bank accounts
-  const canAdd = isPrimary;
-  // actual legalEntityId to save against (primary entity's id when sourced)
-  const targetEntityId = sourcedFrom ? sourcedFrom.id : legalEntityId;
+  // Add button only for the registration marked as primary
+  const canAdd = selectedReg?.isPrimary === true;
 
   const handleDelete = async (id) => {
     if (!window.confirm('Remove this bank account?')) return;
@@ -1281,12 +1284,12 @@ function BankAccountsPanel({ legalEntityId }) {
         )}
       </div>
 
-      {/* Inherited notice for non-primary entities */}
-      {sourcedFrom && (
+      {/* Notice for non-primary registrations */}
+      {selectedReg && !canAdd && (
         <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
           <Landmark size={12} className="text-amber-500 shrink-0" />
           <p className="text-xs text-amber-700">
-            Showing bank accounts from <span className="font-semibold">{sourcedFrom.legalName}</span> (primary entity)
+            Showing accounts from the primary registration. To manage, select the <span className="font-semibold">Primary</span> GSTIN.
           </p>
         </div>
       )}
@@ -1299,9 +1302,9 @@ function BankAccountsPanel({ legalEntityId }) {
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
           <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
-          {isPrimary
+          {canAdd
             ? <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
-            : <p className="text-xs text-gray-300 mt-1">Edit this entity → check <span className="font-semibold">Primary Entity</span> to enable bank account management</p>
+            : <p className="text-xs text-gray-300 mt-1">Select the <span className="font-semibold">Primary</span> GSTIN registration to add bank accounts</p>
           }
         </div>
       ) : (
@@ -1360,7 +1363,7 @@ function BankAccountsPanel({ legalEntityId }) {
       {modal && (
         <BankAccountModal
           account={modal === 'add' ? null : modal}
-          legalEntityId={targetEntityId}
+          legalEntityId={legalEntityId}
           onClose={() => setModal(null)}
           onSaved={refetch}
         />
@@ -2397,7 +2400,7 @@ export default function CompanyMaster() {
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
                     {/* Bank Accounts section — entity level (shared across all GSTINs) */}
-                    <BankAccountsPanel legalEntityId={selectedEntity?.id} />
+                    <BankAccountsPanel legalEntityId={selectedEntity?.id} selectedReg={selectedReg} />
 
                   </div>
                 )}

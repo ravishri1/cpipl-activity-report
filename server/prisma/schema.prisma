@@ -2183,6 +2183,7 @@ model CompanyRegistration {
   udyam          String? // Udyam registration number
   iec            String? // Import Export Code
   primaryBusiness String? // e.g. "Trading", "Manufacturing", "Warehousing" — informational label
+  isPrimary      Boolean @default(false) // primary registration — bank accounts are managed here; others auto-inherit
   isActive       Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

@@ -140,7 +140,7 @@ router.post('/registrations', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/company-master/registrations/:id
 router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, siteCode, isActive } = req.body;
+  const { officeCity, state, district, address, placeType, principalRegistrationId, fssai, udyam, iec, primaryBusiness, siteCode, isActive, isPrimary } = req.body;
 
   // Deactivation preview (isActive = false without ?confirm=true shows impact summary)
   if (isActive === false || isActive === 'false') {
@@ -161,6 +161,17 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
       where: { id }, data: { isActive: false },
     });
     return res.json({ deactivated: true, flaggedEmployees: empCount, flaggedAssets: assetCount, registration: reg });
+  }
+
+  // If marking as primary, unset all others for the same entity
+  if (isPrimary === true) {
+    const cur = await req.prisma.companyRegistration.findUnique({ where: { id }, select: { legalEntityId: true } });
+    if (cur) {
+      await req.prisma.companyRegistration.updateMany({
+        where: { legalEntityId: cur.legalEntityId, NOT: { id } },
+        data: { isPrimary: false },
+      });
+    }
   }
 
   // Re-compute abbr if officeCity or siteCode changed
@@ -191,6 +202,7 @@ router.put('/registrations/:id', requireAdmin, asyncHandler(async (req, res) => 
             fssai: fssai ?? existing.fssai, udyam: udyam ?? existing.udyam,
             iec: iec ?? existing.iec,
             primaryBusiness: primaryBusiness !== undefined ? (primaryBusiness || null) : existing.primaryBusiness,
+            ...(isPrimary !== undefined && { isPrimary: Boolean(isPrimary) }),
             isActive: true },
     include: { legalEntity: { select: { legalName: true } }, principalRegistration: { select: { id: true, abbr: true, officeCity: true } } },
   });
@@ -319,39 +331,16 @@ router.delete('/locations/:id', requireAdmin, asyncHandler(async (req, res) => {
 // ─── BANK ACCOUNTS ──────────────────────────────────────────────────────────
 
 // GET /api/company-master/bank-accounts?legalEntityId=X
-// Returns { accounts, isPrimary, sourcedFrom } — non-primary entities auto-source from the primary entity
 router.get('/bank-accounts', asyncHandler(async (req, res) => {
   const { legalEntityId } = req.query;
-  if (!legalEntityId) return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
-
-  const entityId = parseId(legalEntityId);
-  const entity = await req.prisma.legalEntity.findUnique({
-    where: { id: entityId },
-    select: { id: true, legalName: true, isPrimary: true },
-  });
-  if (!entity) return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
-
-  let targetId = entityId;
-  let sourcedFrom = null;
-
-  if (!entity.isPrimary) {
-    const primary = await req.prisma.legalEntity.findFirst({
-      where: { isPrimary: true },
-      select: { id: true, legalName: true },
-    });
-    if (primary) {
-      targetId = primary.id;
-      sourcedFrom = primary;
-    }
-    // else: no primary set — show entity's own accounts (targetId stays as entityId)
-  }
+  if (!legalEntityId) return res.json([]);
 
   const accounts = await req.prisma.companyBankAccount.findMany({
-    where: { legalEntityId: targetId, isActive: true },
+    where: { legalEntityId: parseId(legalEntityId), isActive: true },
     include: { companyRegistration: { select: { id: true, abbr: true, gstin: true } } },
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
   });
-  res.json({ accounts, isPrimary: entity.isPrimary, sourcedFrom });
+  res.json(accounts);
 }));
 
 // POST /api/company-master/bank-accounts
