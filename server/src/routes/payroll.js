@@ -381,17 +381,25 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
   if (!isAdminRole(req.user) && payslip.userId !== req.user.id) throw forbidden('Access denied');
 
   // Attach company primary bank account (for payslip display)
+  // Look up registration-level first, then fall back to entity-level
   let companyBankAccount = null;
   if (payslip.user?.companyRegistrationId) {
-    const reg = await req.prisma.companyRegistration.findUnique({
-      where: { id: payslip.user.companyRegistrationId },
-      select: { legalEntityId: true },
+    const regId = payslip.user.companyRegistrationId;
+    const bankSelect = { bankName: true, accountHolderName: true, accountNumber: true, ifscCode: true, branchName: true };
+    // Registration-specific primary account
+    companyBankAccount = await req.prisma.companyBankAccount.findFirst({
+      where: { companyRegistrationId: regId, isPrimary: true, isActive: true },
+      select: bankSelect,
     });
-    if (reg?.legalEntityId) {
-      companyBankAccount = await req.prisma.companyBankAccount.findFirst({
-        where: { legalEntityId: reg.legalEntityId, isPrimary: true, isActive: true },
-        select: { bankName: true, accountHolderName: true, accountNumber: true, ifscCode: true, branchName: true },
-      });
+    // Fall back to entity-level primary account
+    if (!companyBankAccount) {
+      const reg = await req.prisma.companyRegistration.findUnique({ where: { id: regId }, select: { legalEntityId: true } });
+      if (reg?.legalEntityId) {
+        companyBankAccount = await req.prisma.companyBankAccount.findFirst({
+          where: { legalEntityId: reg.legalEntityId, companyRegistrationId: null, isPrimary: true, isActive: true },
+          select: bankSelect,
+        });
+      }
     }
   }
 

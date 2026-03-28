@@ -1107,7 +1107,7 @@ const ACCOUNT_TYPE_COLORS = {
   od:       'bg-red-100 text-red-700',
 };
 
-function BankAccountModal({ account, legalEntityId, registrations, onClose, onSaved }) {
+function BankAccountModal({ account, companyRegistrationId, reg, onClose, onSaved }) {
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     accountHolderName: account?.accountHolderName || '',
@@ -1118,14 +1118,13 @@ function BankAccountModal({ account, legalEntityId, registrations, onClose, onSa
     accountType:       account?.accountType || 'current',
     isPrimary:         account?.isPrimary || false,
     notes:             account?.notes || '',
-    companyRegistrationId: account?.companyRegistrationId || '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
-      legalEntityId,
+      companyRegistrationId,
       accountHolderName: form.accountHolderName,
       bankName:          form.bankName,
       accountNumber:     form.accountNumber,
@@ -1134,7 +1133,6 @@ function BankAccountModal({ account, legalEntityId, registrations, onClose, onSa
       accountType:       form.accountType,
       isPrimary:         form.isPrimary,
       notes:             form.notes || null,
-      companyRegistrationId: form.companyRegistrationId || null,
     };
     try {
       if (account) {
@@ -1151,7 +1149,10 @@ function BankAccountModal({ account, legalEntityId, registrations, onClose, onSa
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b">
-          <h3 className="text-lg font-semibold">{account ? 'Edit Bank Account' : 'Add Bank Account'}</h3>
+          <div>
+            <h3 className="text-lg font-semibold">{account ? 'Edit Bank Account' : 'Add Bank Account'}</h3>
+            {reg && <p className="text-xs text-slate-400 mt-0.5">{reg.abbr} · {reg.gstin} · {reg.officeCity}</p>}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -1198,23 +1199,10 @@ function BankAccountModal({ account, legalEntityId, registrations, onClose, onSa
                 <option value="od">Overdraft (OD)</option>
               </select>
             </div>
-            {registrations?.length > 0 && (
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Linked GSTIN (optional)</label>
-                <select value={form.companyRegistrationId} onChange={e => set('companyRegistrationId', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— Entity-level (all GSTINs) —</option>
-                  {registrations.map(r => (
-                    <option key={r.id} value={r.id}>{r.abbr} · {r.gstin}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-400 mt-1">Link to a specific GSTIN only if this account is exclusively for GST refunds.</p>
-              </div>
-            )}
             <div className="col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
               <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-                placeholder="e.g. Used for salary disbursement, GST payments..."
+                placeholder="e.g. Used for GST refunds, salary disbursement..."
                 className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
             </div>
             <div className="col-span-2">
@@ -1241,9 +1229,9 @@ function BankAccountModal({ account, legalEntityId, registrations, onClose, onSa
   );
 }
 
-function BankAccountsPanel({ legalEntityId, registrations }) {
+function BankAccountsPanel({ companyRegistrationId, reg }) {
   const { data: accounts, loading, error, refetch } = useFetch(
-    legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
+    companyRegistrationId ? `/company-master/bank-accounts?companyRegistrationId=${companyRegistrationId}` : null,
     []
   );
   const { execute } = useApi();
@@ -1283,8 +1271,8 @@ function BankAccountsPanel({ legalEntityId, registrations }) {
       ) : accounts.length === 0 ? (
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
-          <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
-          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+          <p className="text-sm text-gray-400 font-medium">No bank accounts for this GSTIN</p>
+          <p className="text-xs text-gray-300 mt-1">{reg ? `Add accounts for ${reg.abbr} (${reg.officeCity})` : 'Select a registration first'}</p>
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
@@ -1340,8 +1328,8 @@ function BankAccountsPanel({ legalEntityId, registrations }) {
       {modal && (
         <BankAccountModal
           account={modal === 'add' ? null : modal}
-          legalEntityId={legalEntityId}
-          registrations={registrations}
+          companyRegistrationId={companyRegistrationId}
+          reg={reg}
           onClose={() => setModal(null)}
           onSaved={refetch}
         />
@@ -2372,8 +2360,8 @@ export default function CompanyMaster() {
                     {/* Credentials section */}
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
-                    {/* Bank Accounts section */}
-                    <BankAccountsPanel legalEntityId={selectedEntity?.id} registrations={entityRegs} />
+                    {/* Bank Accounts section — per GSTIN/state registration */}
+                    <BankAccountsPanel companyRegistrationId={selectedReg?.id} reg={selectedReg} />
 
                   </div>
                 )}
