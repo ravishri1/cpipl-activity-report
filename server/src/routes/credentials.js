@@ -16,7 +16,7 @@ const VALID_TYPES      = ['individual', 'shared'];
 // GET /api/credentials/portals
 router.get('/portals', requireAdmin, asyncHandler(async (req, res) => {
   const { companyRegistrationId, companyRegistrationIds, legalEntityId, category } = req.query;
-  const where = { isActive: true };
+  const where = {};
   if (companyRegistrationIds) {
     where.companyRegistrationId = { in: companyRegistrationIds.split(',').map(id => parseInt(id)).filter(Boolean) };
   } else if (companyRegistrationId) {
