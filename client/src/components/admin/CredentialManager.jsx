@@ -722,7 +722,8 @@ export default function CredentialManager() {
   const queryStr = params.toString() ? `?${params.toString()}` : '';
 
   const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
-  const { data: allCreds } = useFetch('/credentials/all', []);
+  const { data: allCreds, refetch: refetchAllCreds } = useFetch('/credentials/all', []);
+  const [searchEditingCred, setSearchEditingCred] = useState(null);
   const { data: registrations, error: regErr } = useFetch('/company-master/registrations', []);
   const { data: entities } = useFetch('/company-master/legal-entities', []);
   const { data: usersData, error: usersErr } = useFetch('/users?isActive=true&limit=200', { users: [] });
@@ -872,11 +873,29 @@ export default function CredentialManager() {
                       {cred.phoneNumber && <span>📞 {cred.phoneNumber}</span>}
                     </div>
                   </div>
+                  <button
+                    onClick={() => setSearchEditingCred(cred)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 shrink-0"
+                    title="Edit credential"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* Search result edit modal */}
+      {searchEditingCred && (
+        <CredentialFormModal
+          portalId={searchEditingCred.portalId}
+          credential={searchEditingCred}
+          users={users}
+          onClose={() => setSearchEditingCred(null)}
+          onSaved={() => { setSearchEditingCred(null); refetchAllCreds(); refetch(); }}
+        />
       )}
 
       {/* Portal list */}
