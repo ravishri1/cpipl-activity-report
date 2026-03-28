@@ -326,29 +326,22 @@ router.get('/bank-accounts', asyncHandler(async (req, res) => {
 
 // POST /api/company-master/bank-accounts
 router.post('/bank-accounts', requireAdmin, asyncHandler(async (req, res) => {
-  requireFields(req.body, 'bankName', 'accountNumber', 'ifscCode', 'accountHolderName');
-  if (!req.body.legalEntityId && !req.body.companyRegistrationId) throw badRequest('legalEntityId or companyRegistrationId is required');
+  requireFields(req.body, 'legalEntityId', 'bankName', 'accountNumber', 'ifscCode', 'accountHolderName');
 
-  const companyRegistrationId = req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null;
+  const legalEntityId = parseInt(req.body.legalEntityId);
 
-  // Auto-derive legalEntityId from registration if not provided
-  let legalEntityId = req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null;
-  if (!legalEntityId && companyRegistrationId) {
-    const reg = await req.prisma.companyRegistration.findUnique({ where: { id: companyRegistrationId }, select: { legalEntityId: true } });
-    if (!reg) throw badRequest('Registration not found');
-    legalEntityId = reg.legalEntityId;
-  }
-
-  // Only one primary per registration (or entity if no registration)
+  // Only one primary per entity
   if (req.body.isPrimary) {
-    const primaryWhere = companyRegistrationId ? { companyRegistrationId, isPrimary: true } : { legalEntityId, companyRegistrationId: null, isPrimary: true };
-    await req.prisma.companyBankAccount.updateMany({ where: primaryWhere, data: { isPrimary: false } });
+    await req.prisma.companyBankAccount.updateMany({
+      where: { legalEntityId, isPrimary: true },
+      data: { isPrimary: false },
+    });
   }
 
   const account = await req.prisma.companyBankAccount.create({
     data: {
       legalEntityId,
-      companyRegistrationId,
+      companyRegistrationId: null,
       accountHolderName: req.body.accountHolderName.trim(),
       bankName: req.body.bankName.trim(),
       accountNumber: req.body.accountNumber.trim(),

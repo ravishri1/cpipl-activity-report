@@ -1107,7 +1107,7 @@ const ACCOUNT_TYPE_COLORS = {
   od:       'bg-red-100 text-red-700',
 };
 
-function BankAccountModal({ account, companyRegistrationId, reg, onClose, onSaved }) {
+function BankAccountModal({ account, legalEntityId, onClose, onSaved }) {
   const { execute, loading, error } = useApi();
   const [form, setForm] = useState({
     accountHolderName: account?.accountHolderName || '',
@@ -1124,7 +1124,7 @@ function BankAccountModal({ account, companyRegistrationId, reg, onClose, onSave
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
-      companyRegistrationId,
+      legalEntityId,
       accountHolderName: form.accountHolderName,
       bankName:          form.bankName,
       accountNumber:     form.accountNumber,
@@ -1149,10 +1149,7 @@ function BankAccountModal({ account, companyRegistrationId, reg, onClose, onSave
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b">
-          <div>
-            <h3 className="text-lg font-semibold">{account ? 'Edit Bank Account' : 'Add Bank Account'}</h3>
-            {reg && <p className="text-xs text-slate-400 mt-0.5">{reg.abbr} · {reg.gstin} · {reg.officeCity}</p>}
-          </div>
+          <h3 className="text-lg font-semibold">{account ? 'Edit Bank Account' : 'Add Bank Account'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -1229,9 +1226,9 @@ function BankAccountModal({ account, companyRegistrationId, reg, onClose, onSave
   );
 }
 
-function BankAccountsPanel({ companyRegistrationId, reg }) {
+function BankAccountsPanel({ legalEntityId }) {
   const { data: accounts, loading, error, refetch } = useFetch(
-    companyRegistrationId ? `/company-master/bank-accounts?companyRegistrationId=${companyRegistrationId}` : null,
+    legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
     []
   );
   const { execute } = useApi();
@@ -1271,8 +1268,8 @@ function BankAccountsPanel({ companyRegistrationId, reg }) {
       ) : accounts.length === 0 ? (
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
-          <p className="text-sm text-gray-400 font-medium">No bank accounts for this GSTIN</p>
-          <p className="text-xs text-gray-300 mt-1">{reg ? `Add accounts for ${reg.abbr} (${reg.officeCity})` : 'Select a registration first'}</p>
+          <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
+          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
@@ -1328,8 +1325,7 @@ function BankAccountsPanel({ companyRegistrationId, reg }) {
       {modal && (
         <BankAccountModal
           account={modal === 'add' ? null : modal}
-          companyRegistrationId={companyRegistrationId}
-          reg={reg}
+          legalEntityId={legalEntityId}
           onClose={() => setModal(null)}
           onSaved={refetch}
         />
@@ -2360,8 +2356,8 @@ export default function CompanyMaster() {
                     {/* Credentials section */}
                     <CredentialsPanel legalEntityId={selectedEntity?.id} />
 
-                    {/* Bank Accounts section — per GSTIN/state registration */}
-                    <BankAccountsPanel companyRegistrationId={selectedReg?.id} reg={selectedReg} />
+                    {/* Bank Accounts section — entity level (shared across all GSTINs) */}
+                    <BankAccountsPanel legalEntityId={selectedEntity?.id} />
 
                   </div>
                 )}
