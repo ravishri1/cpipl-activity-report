@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -815,9 +816,20 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
 }
 
 export default function CredentialManager() {
-  const [filterReg, setFilterReg] = useState('');
+  const location = useLocation();
+  const [filterReg, setFilterReg] = useState(() => {
+    const p = new URLSearchParams(location.search);
+    return p.get('reg') || '';
+  });
   const [filterCat, setFilterCat] = useState('');
   const [sortBy, setSortBy] = useState('newest');
+
+  // Sync if user navigates here again with a different ?reg= param
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const reg = p.get('reg') || '';
+    setFilterReg(reg);
+  }, [location.search]);
   const [search, setSearch] = useState('');
   const [showAddPortal, setShowAddPortal] = useState(false);
   const [editingPortal, setEditingPortal] = useState(null);

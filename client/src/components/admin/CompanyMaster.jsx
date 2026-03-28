@@ -1128,7 +1128,8 @@ const OCT_CSS = `
 .oct-gap{height:28px}
 `;
 
-function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon: Icon }) {
+function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon: Icon, manageUrl }) {
+  const navigate = useNavigate();
   return (
     <div
       onClick={onClick}
@@ -1141,6 +1142,13 @@ function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon
       {badge && <div className="mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-white bg-opacity-60 inline-block font-medium">{badge}</div>}
       {count !== undefined && count > 0 && !open && (
         <div className="text-[9px] opacity-40 mt-0.5">▼ {count} below</div>
+      )}
+      {manageUrl && (
+        <div
+          onClick={e => { e.stopPropagation(); navigate(manageUrl); }}
+          className="mt-1.5 text-[9px] flex items-center justify-center gap-0.5 opacity-40 hover:opacity-90 cursor-pointer font-medium underline underline-offset-1">
+          <ExternalLink className="w-2.5 h-2.5" /> Credential Manager
+        </div>
       )}
     </div>
   );
@@ -1193,7 +1201,7 @@ function CredOrgNode({ cred }) {
   );
 }
 
-function PortalOrgNode({ portal }) {
+function PortalOrgNode({ portal, regId }) {
   const [open, setOpen] = useState(false);
   const catLabel = CATEGORY_LABELS[portal.category] || 'Other';
   return (
@@ -1207,6 +1215,7 @@ function PortalOrgNode({ portal }) {
         open={open}
         count={portal.credentials.length}
         icon={Globe}
+        manageUrl={`/admin/credentials?reg=${regId || portal.companyRegistrationId}`}
       />
       {open && portal.credentials.length > 0 && (
         <OrgRow>
@@ -1230,10 +1239,11 @@ function RegOrgNode({ reg }) {
         open={open}
         count={reg.portals.length}
         icon={Hash}
+        manageUrl={`/admin/credentials?reg=${reg.id}`}
       />
       {open && reg.portals.length > 0 && (
         <OrgRow>
-          {reg.portals.map(portal => <PortalOrgNode key={portal.id} portal={portal} />)}
+          {reg.portals.map(portal => <PortalOrgNode key={portal.id} portal={portal} regId={reg.id} />)}
         </OrgRow>
       )}
     </div>
