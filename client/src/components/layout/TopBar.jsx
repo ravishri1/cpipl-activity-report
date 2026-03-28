@@ -39,12 +39,12 @@ export default function TopBar({ onMenuToggle, onSearchOpen }) {
           {/* Global Search trigger */}
           <button
             onClick={onSearchOpen}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors w-64"
             title="Search (Ctrl+K)"
           >
-            <Search className="w-3.5 h-3.5" />
-            <span className="hidden md:inline text-xs">Search…</span>
-            <kbd className="hidden md:inline text-[10px] font-mono border border-slate-200 rounded px-1 bg-white text-slate-400">⌃K</kbd>
+            <Search className="w-4 h-4 shrink-0" />
+            <span className="flex-1 text-left text-sm">Search modules & features…</span>
+            <kbd className="hidden md:inline text-[10px] font-mono border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-400 shrink-0">⌃K</kbd>
           </button>
           <NotificationBell />
           <div className="hidden sm:block text-right">
