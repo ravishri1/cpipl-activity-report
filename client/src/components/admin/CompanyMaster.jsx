@@ -1228,22 +1228,23 @@ function PortalOrgNode({ portal, regId }) {
 
 function RegOrgNode({ reg }) {
   const [open, setOpen] = useState(false);
+  const isEntityLevel = reg.id?.toString().startsWith('entity_');
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <OrgBox
-        label={reg.abbr || reg.gstin}
+        label={reg.abbr || reg.gstin || 'Direct'}
         sublabel={reg.officeCity}
         badge={`${reg.portals.length} portals`}
-        colorClass="bg-blue-50 border-blue-400 text-blue-900"
+        colorClass={isEntityLevel ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-blue-50 border-blue-400 text-blue-900'}
         onClick={() => setOpen(o => !o)}
         open={open}
         count={reg.portals.length}
-        icon={Hash}
-        manageUrl={`/admin/credentials?reg=${reg.id}`}
+        icon={isEntityLevel ? Building2 : Hash}
+        manageUrl={reg.manageUrl || `/admin/credentials?reg=${reg.id}`}
       />
       {open && reg.portals.length > 0 && (
         <OrgRow>
-          {reg.portals.map(portal => <PortalOrgNode key={portal.id} portal={portal} regId={reg.id} />)}
+          {reg.portals.map(portal => <PortalOrgNode key={portal.id} portal={portal} regId={isEntityLevel ? undefined : reg.id} />)}
         </OrgRow>
       )}
     </div>
@@ -1267,15 +1268,19 @@ function CompanyOrgChartView() {
 
   const entity = tree.find(e => e.id === selectedId);
   const regsWithPortals = (entity?.registrations || []).filter(r => r.portals.length > 0);
+  const entityLevelVirtual = entity?.entityPortals?.length > 0
+    ? [{ id: `entity_${entity.id}`, abbr: 'Direct Portals', officeCity: 'Entity-level (no specific registration)', portals: entity.entityPortals, manageUrl: `/admin/credentials?reg=entity_${entity.id}` }]
+    : [];
+  const allRegs = [...entityLevelVirtual, ...regsWithPortals];
   const filteredRegs = search.trim()
-    ? regsWithPortals.filter(reg => {
+    ? allRegs.filter(reg => {
         const q = search.toLowerCase();
         return reg.abbr?.toLowerCase().includes(q) || reg.officeCity?.toLowerCase().includes(q) ||
           reg.portals.some(p => p.name.toLowerCase().includes(q) ||
             p.credentials.some(c => c.username.toLowerCase().includes(q) || c.label?.toLowerCase().includes(q))
           );
       })
-    : regsWithPortals;
+    : allRegs;
 
   const totalPortals = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.length, 0), 0);
   const totalCreds = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.reduce((s3, p) => s3 + p.credentials.length, 0), 0), 0);
