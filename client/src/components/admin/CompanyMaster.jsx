@@ -1099,7 +1099,7 @@ function PortalCredRow({ portal }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-// ─── Company Tree View ───────────────────────────────────────────────────────
+// ─── Company Org Chart ───────────────────────────────────────────────────────
 
 const CATEGORY_COLORS = {
   email:      'bg-blue-100 text-blue-700',
@@ -1116,6 +1116,221 @@ const CATEGORY_LABELS = {
   cloud: 'Cloud', social: 'Social', government: 'Govt', other: 'Other',
 };
 
+const OCT_CSS = `
+.oct-row{display:flex;flex-direction:row;position:relative;padding-top:28px}
+.oct-row::before{content:'';position:absolute;top:0;left:50%;margin-left:-1px;width:2px;height:28px;background:#94a3b8}
+.oct-col{display:flex;flex-direction:column;align-items:center;padding:0 10px;position:relative}
+.oct-col::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:#94a3b8}
+.oct-col:first-child::before{left:50%}
+.oct-col:last-child::before{right:50%}
+.oct-col:only-child::before{display:none}
+.oct-col::after{content:'';position:absolute;top:0;left:50%;margin-left:-1px;width:2px;height:28px;background:#94a3b8}
+.oct-gap{height:28px}
+`;
+
+function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon: Icon }) {
+  return (
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      style={{ minWidth: 110, maxWidth: 160 }}
+      className={`border-2 rounded-xl px-3 py-2 text-center shadow-sm transition-all select-none ${colorClass} ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-105' : ''}`}>
+      {Icon && <Icon className="w-4 h-4 mx-auto mb-0.5 opacity-50" />}
+      <div className="text-xs font-semibold leading-tight break-words">{label}</div>
+      {sublabel && <div className="text-[10px] opacity-60 leading-tight mt-0.5">{sublabel}</div>}
+      {badge && <div className="mt-1 text-[9px] px-1.5 py-0.5 rounded-full bg-white bg-opacity-60 inline-block font-medium">{badge}</div>}
+      {count !== undefined && count > 0 && !open && (
+        <div className="text-[9px] opacity-40 mt-0.5">▼ {count} below</div>
+      )}
+    </div>
+  );
+}
+
+function OrgRow({ children }) {
+  const kids = [].concat(children).flat().filter(Boolean);
+  if (!kids.length) return null;
+  return (
+    <div className="oct-row">
+      {kids.map((child, i) => (
+        <div key={i} className="oct-col">
+          <div className="oct-gap" />
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CredOrgNode({ cred }) {
+  const [open, setOpen] = useState(false);
+  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
+  const statusBadge = cred.status === 'active' ? '● active' : cred.status === 'revoked' ? '✕ revoked' : '⊘ expired';
+  const employees = [
+    cred.assignee && { id: 'a', label: cred.assignee.name, sub: `${cred.assignee.employeeId} · assigned`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: User },
+    ...cred.sharedWithUsers.map(u => ({ id: u.id, label: u.name, sub: `${u.employeeId} · shared`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: Users })),
+    cred.department && { id: 'dept', label: cred.department, sub: 'dept access', color: 'bg-orange-50 border-orange-300 text-orange-900', icon: Building2 },
+  ].filter(Boolean);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <OrgBox
+        label={cred.username}
+        sublabel={cred.label || cred.type}
+        badge={statusBadge}
+        colorClass="bg-amber-50 border-amber-300 text-amber-900"
+        onClick={totalUsers ? () => setOpen(o => !o) : undefined}
+        open={open}
+        count={totalUsers}
+        icon={Key}
+      />
+      {open && employees.length > 0 && (
+        <OrgRow>
+          {employees.map(e => (
+            <OrgBox key={e.id} label={e.label} sublabel={e.sub} colorClass={e.color} icon={e.icon} />
+          ))}
+        </OrgRow>
+      )}
+    </div>
+  );
+}
+
+function PortalOrgNode({ portal }) {
+  const [open, setOpen] = useState(false);
+  const catLabel = CATEGORY_LABELS[portal.category] || 'Other';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <OrgBox
+        label={portal.name}
+        sublabel={catLabel}
+        badge={`${portal.credentials.length} credentials`}
+        colorClass="bg-purple-50 border-purple-400 text-purple-900"
+        onClick={() => setOpen(o => !o)}
+        open={open}
+        count={portal.credentials.length}
+        icon={Globe}
+      />
+      {open && portal.credentials.length > 0 && (
+        <OrgRow>
+          {portal.credentials.map(cred => <CredOrgNode key={cred.id} cred={cred} />)}
+        </OrgRow>
+      )}
+    </div>
+  );
+}
+
+function RegOrgNode({ reg }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <OrgBox
+        label={reg.abbr || reg.gstin}
+        sublabel={reg.officeCity}
+        badge={`${reg.portals.length} portals`}
+        colorClass="bg-blue-50 border-blue-400 text-blue-900"
+        onClick={() => setOpen(o => !o)}
+        open={open}
+        count={reg.portals.length}
+        icon={Hash}
+      />
+      {open && reg.portals.length > 0 && (
+        <OrgRow>
+          {reg.portals.map(portal => <PortalOrgNode key={portal.id} portal={portal} />)}
+        </OrgRow>
+      )}
+    </div>
+  );
+}
+
+function CompanyOrgChartView() {
+  const { data: tree, loading, error } = useFetch('/credentials/tree', []);
+  const [selectedId, setSelectedId] = useState(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (tree && tree.length > 0 && !selectedId) {
+      const best = tree.find(e => e.registrations.some(r => r.portals.length > 0)) || tree[0];
+      setSelectedId(best?.id ?? null);
+    }
+  }, [tree]);
+
+  if (loading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (error) return <AlertMessage type="error" message={error} />;
+
+  const entity = tree.find(e => e.id === selectedId);
+  const regsWithPortals = (entity?.registrations || []).filter(r => r.portals.length > 0);
+  const filteredRegs = search.trim()
+    ? regsWithPortals.filter(reg => {
+        const q = search.toLowerCase();
+        return reg.abbr?.toLowerCase().includes(q) || reg.officeCity?.toLowerCase().includes(q) ||
+          reg.portals.some(p => p.name.toLowerCase().includes(q) ||
+            p.credentials.some(c => c.username.toLowerCase().includes(q) || c.label?.toLowerCase().includes(q))
+          );
+      })
+    : regsWithPortals;
+
+  const totalPortals = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.length, 0), 0);
+  const totalCreds = tree.reduce((s, e) => s + e.registrations.reduce((s2, r) => s2 + r.portals.reduce((s3, p) => s3 + p.credentials.length, 0), 0), 0);
+
+  return (
+    <div className="p-6 space-y-4">
+      <style>{OCT_CSS}</style>
+
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex gap-4 text-sm text-slate-500">
+          <span><strong className="text-slate-700">{tree.length}</strong> entities</span>
+          <span><strong className="text-slate-700">{totalPortals}</strong> portals</span>
+          <span><strong className="text-slate-700">{totalCreds}</strong> credentials</span>
+        </div>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search registration, portal, credential..."
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        {tree.map(e => (
+          <button key={e.id} onClick={() => { setSelectedId(e.id); setSearch(''); }}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              selectedId === e.id
+                ? 'bg-emerald-600 text-white border-emerald-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+            }`}>
+            {e.shortName || e.legalName}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-auto rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-10 min-h-[300px]">
+        {entity ? (
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', minWidth: '100%' }}>
+            <OrgBox
+              label={entity.legalName}
+              sublabel={`PAN: ${entity.pan}`}
+              badge={`${entity.registrations.length} registrations`}
+              colorClass="bg-emerald-100 border-emerald-500 text-emerald-900"
+              icon={Building2}
+            />
+            {filteredRegs.length > 0 ? (
+              <OrgRow>
+                {filteredRegs.map(reg => <RegOrgNode key={reg.id} reg={reg} />)}
+              </OrgRow>
+            ) : (
+              <p className="mt-8 text-sm text-slate-400 italic">
+                {search ? 'No matching registrations' : 'No portals linked yet'}
+              </p>
+            )}
+          </div>
+        ) : (
+          <EmptyState icon="🏢" title="Select an entity" subtitle="Choose a company above to view its chart" />
+        )}
+      </div>
+
+      <p className="text-xs text-slate-400 text-center">
+        Click any node to expand · Registrations without portals are hidden
+      </p>
+    </div>
+  );
+}
+
+// (kept for backwards compat — unused)
 function TreeCredential({ cred }) {
   const [open, setOpen] = useState(false);
   const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
@@ -1491,7 +1706,7 @@ export default function CompanyMaster() {
       {activeTab === 'branches' && <BranchManager embedded />}
 
       {/* Tree tab */}
-      {activeTab === 'tree' && <CompanyTreeView />}
+      {activeTab === 'tree' && <CompanyOrgChartView />}
 
       {/* Registrations tab — 3-panel layout (like cpdesk) */}
       {activeTab === 'registrations' && (
