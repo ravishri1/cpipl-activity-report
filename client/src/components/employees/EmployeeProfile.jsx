@@ -1796,9 +1796,10 @@ function CredentialsTab({ userId }) {
   if (error) return <div className="text-red-500 text-sm py-4">{error}</div>;
 
   const assigned = resp?.assigned || [];
+  const shared = resp?.shared || [];
   const deptCreds = resp?.department || [];
   const userDept = resp?.userDepartment;
-  const total = assigned.length + deptCreds.length;
+  const total = assigned.length + shared.length + deptCreds.length;
 
   if (total === 0) return (
     <div className="flex flex-col items-center py-10 text-slate-400">
@@ -1815,6 +1816,14 @@ function CredentialsTab({ userId }) {
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Individually Assigned ({assigned.length})</p>
           <div className="space-y-3">
             {assigned.map(cred => <CredentialCard key={cred.id} cred={cred} showPwd={showPwd} togglePwd={togglePwd} />)}
+          </div>
+        </div>
+      )}
+      {shared.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Shared Access ({shared.length})</p>
+          <div className="space-y-3">
+            {shared.map(cred => <CredentialCard key={cred.id} cred={cred} showPwd={showPwd} togglePwd={togglePwd} />)}
           </div>
         </div>
       )}

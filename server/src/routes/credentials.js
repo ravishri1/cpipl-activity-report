@@ -346,7 +346,7 @@ router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
   res.json(credentials);
 }));
 
-// GET /api/credentials/user/:userId — admin views credentials assigned to a user + dept-based
+// GET /api/credentials/user/:userId — admin views credentials assigned to a user + shared + dept-based
 router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseInt(req.params.userId);
   if (!userId) throw badRequest('Invalid user ID');
@@ -368,8 +368,18 @@ router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
     orderBy: [{ portal: { name: 'asc' } }],
   });
 
-  // Fetch department-based credentials (exclude already-assigned to avoid duplicates)
-  const assignedIds = new Set(assigned.map(c => c.id));
+  const seenIds = new Set(assigned.map(c => c.id));
+
+  // Fetch shared credentials where this user is in sharedWith JSON array
+  const sharedAll = await req.prisma.portalCredential.findMany({
+    where: { type: 'shared', status: 'active', sharedWith: { contains: `"${userId}"` } },
+    include: portalInclude,
+    orderBy: [{ portal: { name: 'asc' } }],
+  });
+  const shared = sharedAll.filter(c => !seenIds.has(c.id));
+  shared.forEach(c => seenIds.add(c.id));
+
+  // Fetch department-based credentials (exclude already-seen to avoid duplicates)
   let departmentCreds = [];
   if (user.department) {
     const deptCreds = await req.prisma.portalCredential.findMany({
@@ -383,10 +393,10 @@ router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
       include: portalInclude,
       orderBy: [{ portal: { name: 'asc' } }],
     });
-    departmentCreds = deptCreds.filter(c => !assignedIds.has(c.id));
+    departmentCreds = deptCreds.filter(c => !seenIds.has(c.id));
   }
 
-  res.json({ assigned, department: departmentCreds, userDepartment: user.department });
+  res.json({ assigned, shared, department: departmentCreds, userDepartment: user.department });
 }));
 
 // GET /api/credentials/my-credentials  — employee sees own assigned credentials
