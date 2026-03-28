@@ -1248,8 +1248,8 @@ function BankAccountsPanel({ legalEntityId }) {
   const accounts = resp?.accounts || [];
   const isPrimary = resp?.isPrimary || false;
   const sourcedFrom = resp?.sourcedFrom || null;
-  // canAdd: true if this IS the primary entity, OR if no primary entity has been set yet (sourcedFrom === null)
-  const canAdd = isPrimary || sourcedFrom === null;
+  // Only the primary entity can add/edit/delete bank accounts
+  const canAdd = isPrimary;
   // actual legalEntityId to save against (primary entity's id when sourced)
   const targetEntityId = sourcedFrom ? sourcedFrom.id : legalEntityId;
 
@@ -1299,7 +1299,10 @@ function BankAccountsPanel({ legalEntityId }) {
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
           <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
-          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+          {isPrimary
+            ? <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+            : <p className="text-xs text-gray-300 mt-1">Edit this entity → check <span className="font-semibold">Primary Entity</span> to enable bank account management</p>
+          }
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
