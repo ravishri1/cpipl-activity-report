@@ -6,7 +6,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
-import { Key, Eye, EyeOff, Plus, ExternalLink, ChevronDown, ChevronRight, Edit2, Trash2, X, RefreshCw, Search } from 'lucide-react';
+import { Key, Eye, EyeOff, Plus, ExternalLink, ChevronDown, ChevronRight, Edit2, Trash2, X, RefreshCw, Search, Clock } from 'lucide-react';
 
 const PORTAL_CATEGORIES = [
   { value: 'email',      label: 'Email / Workspace',  color: 'bg-blue-100 text-blue-700' },
@@ -466,9 +466,90 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
   );
 }
 
+function CredentialHistoryModal({ credentialId, onClose }) {
+  const { data: history, loading, error } = useFetch(`/api/credentials/credentials/${credentialId}/history`, []);
+
+  const FIELD_LABELS = {
+    username: 'Username', password: 'Password', label: 'Label', type: 'Type',
+    assignedTo: 'Assigned To', sharedWith: 'Shared With', notes: 'Notes',
+    phoneNumber: 'Phone', department: 'Department', purpose: 'Purpose',
+    status: 'Status', lastRotated: 'Last Rotated',
+  };
+
+  const ACTION_COLORS = {
+    create: 'bg-emerald-100 text-emerald-700',
+    update: 'bg-blue-100 text-blue-700',
+    revoke: 'bg-red-100 text-red-700',
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-500" />
+            <h2 className="font-semibold text-slate-800">Change History</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4">
+          {error && <AlertMessage type="error" message={error} />}
+          {loading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : history.length === 0 ? (
+            <EmptyState icon="🕐" title="No history" subtitle="No changes recorded yet" />
+          ) : (
+            <div className="space-y-3">
+              {history.map(entry => {
+                const changes = (() => { try { return JSON.parse(entry.changes); } catch { return {}; } })();
+                const changedFields = Object.keys(changes);
+                return (
+                  <div key={entry.id} className="border border-slate-100 rounded-lg p-3 bg-slate-50">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${ACTION_COLORS[entry.action] || ACTION_COLORS.update}`}>
+                          {entry.action}
+                        </span>
+                        <span className="text-xs text-slate-600 font-medium">{entry.changedByUser?.name || 'Unknown'}</span>
+                        {entry.changedByUser?.employeeId && (
+                          <span className="text-xs text-slate-400">({entry.changedByUser.employeeId})</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400 shrink-0">
+                        {new Date(entry.changedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {changedFields.length > 0 && (
+                      <div className="space-y-1">
+                        {changedFields.map(field => (
+                          <div key={field} className="text-xs flex items-start gap-1">
+                            <span className="text-slate-500 font-medium shrink-0 w-24">{FIELD_LABELS[field] || field}:</span>
+                            <span className="text-red-600 line-through mr-1 font-mono">
+                              {field === 'password' ? (changes[field].old ? '••••' : '—') : (String(changes[field].old ?? '—'))}
+                            </span>
+                            <span className="text-slate-400">→</span>
+                            <span className="text-emerald-700 ml-1 font-mono">
+                              {field === 'password' ? (changes[field].new ? '••••' : '—') : (String(changes[field].new ?? '—'))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const [editingCred, setEditingCred] = useState(null);
+  const [historyCredId, setHistoryCredId] = useState(null);
   const { execute } = useApi();
 
   const { data: credentials, loading: credsLoading, error: credsErr, refetch: refetchCreds } = useFetch(
@@ -670,16 +751,21 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
                     )}
                     {cred.notes && <div className="text-xs text-slate-400 italic">{cred.notes}</div>}
                   </div>
-                  {isActive && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => setEditingCred(cred)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Edit">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleRevoke(cred.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50" title="Revoke">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setHistoryCredId(cred.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="View history">
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
+                    {isActive && (
+                      <>
+                        <button onClick={() => setEditingCred(cred)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Edit">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleRevoke(cred.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50" title="Revoke">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -694,6 +780,9 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
             />
           )}
         </div>
+      )}
+      {historyCredId && (
+        <CredentialHistoryModal credentialId={historyCredId} onClose={() => setHistoryCredId(null)} />
       )}
     </div>
   );
@@ -724,6 +813,7 @@ export default function CredentialManager() {
   const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
   const { data: allCreds, refetch: refetchAllCreds } = useFetch('/credentials/all', []);
   const [searchEditingCred, setSearchEditingCred] = useState(null);
+  const [searchHistoryCredId, setSearchHistoryCredId] = useState(null);
   const { data: registrations, error: regErr } = useFetch('/company-master/registrations', []);
   const { data: entities } = useFetch('/company-master/legal-entities', []);
   const { data: usersData, error: usersErr } = useFetch('/users?isActive=true&limit=200', { users: [] });
@@ -873,13 +963,22 @@ export default function CredentialManager() {
                       {cred.phoneNumber && <span>📞 {cred.phoneNumber}</span>}
                     </div>
                   </div>
-                  <button
-                    onClick={() => setSearchEditingCred(cred)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 shrink-0"
-                    title="Edit credential"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setSearchHistoryCredId(cred.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      title="View history"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setSearchEditingCred(cred)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                      title="Edit credential"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -887,7 +986,7 @@ export default function CredentialManager() {
         </div>
       )}
 
-      {/* Search result edit modal */}
+      {/* Search result modals */}
       {searchEditingCred && (
         <CredentialFormModal
           portalId={searchEditingCred.portalId}
@@ -896,6 +995,9 @@ export default function CredentialManager() {
           onClose={() => setSearchEditingCred(null)}
           onSaved={() => { setSearchEditingCred(null); refetchAllCreds(); refetch(); }}
         />
+      )}
+      {searchHistoryCredId && (
+        <CredentialHistoryModal credentialId={searchHistoryCredId} onClose={() => setSearchHistoryCredId(null)} />
       )}
 
       {/* Portal list */}

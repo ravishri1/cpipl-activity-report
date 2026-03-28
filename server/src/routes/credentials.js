@@ -11,6 +11,23 @@ const VALID_CATEGORIES = ['email', 'tax', 'banking', 'erp', 'cloud', 'social', '
 const VALID_STATUSES   = ['active', 'revoked', 'expired'];
 const VALID_TYPES      = ['individual', 'shared'];
 
+// Tracked fields for history diff
+const TRACKED_FIELDS = ['type', 'username', 'password', 'label', 'assignedTo', 'sharedWith',
+  'notes', 'phoneNumber', 'department', 'purpose', 'status', 'lastRotated'];
+
+function buildDiff(before, body) {
+  const changes = {};
+  for (const field of TRACKED_FIELDS) {
+    if (body[field] === undefined) continue;
+    const oldVal = before[field] ?? null;
+    const newVal = (field === 'assignedTo' && body[field]) ? parseInt(body[field]) : (body[field] || null);
+    if (String(oldVal) !== String(newVal)) {
+      changes[field] = { old: oldVal, new: newVal };
+    }
+  }
+  return changes;
+}
+
 // ─── PORTALS ────────────────────────────────────────────────────────────────
 
 // GET /api/credentials/portals
@@ -156,26 +173,48 @@ router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
   res.json(credentials);
 }));
 
-// GET /api/credentials/user/:userId — admin views credentials assigned to any user
+// GET /api/credentials/user/:userId — admin views credentials assigned to a user + dept-based
 router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseInt(req.params.userId);
   if (!userId) throw badRequest('Invalid user ID');
-  const credentials = await req.prisma.portalCredential.findMany({
-    where: { assignedTo: userId },
-    include: {
-      portal: {
-        select: { id: true, name: true, category: true, url: true,
-          legalEntity: { select: { id: true, legalName: true, shortName: true } } },
-      },
+
+  const user = await req.prisma.user.findUnique({ where: { id: userId }, select: { id: true, department: true } });
+  if (!user) throw notFound('User');
+
+  const portalInclude = {
+    portal: {
+      select: { id: true, name: true, category: true, url: true,
+        legalEntity: { select: { id: true, legalName: true, shortName: true } } },
     },
+  };
+
+  // Fetch individually assigned credentials
+  const assigned = await req.prisma.portalCredential.findMany({
+    where: { assignedTo: userId },
+    include: portalInclude,
     orderBy: [{ portal: { name: 'asc' } }],
   });
-  res.json(credentials);
+
+  // Fetch department-based credentials (exclude already-assigned to avoid duplicates)
+  const assignedIds = new Set(assigned.map(c => c.id));
+  let departmentCreds = [];
+  if (user.department) {
+    const deptCreds = await req.prisma.portalCredential.findMany({
+      where: { department: user.department, status: 'active' },
+      include: portalInclude,
+      orderBy: [{ portal: { name: 'asc' } }],
+    });
+    departmentCreds = deptCreds.filter(c => !assignedIds.has(c.id));
+  }
+
+  res.json({ assigned, department: departmentCreds, userDepartment: user.department });
 }));
 
 // GET /api/credentials/my-credentials  — employee sees own assigned credentials
 router.get('/my-credentials', asyncHandler(async (req, res) => {
   const userId = req.user.id;
+
+  const user = await req.prisma.user.findUnique({ where: { id: userId }, select: { id: true, department: true } });
 
   // Get individually assigned credentials
   const individual = await req.prisma.portalCredential.findMany({
@@ -199,7 +238,21 @@ router.get('/my-credentials', asyncHandler(async (req, res) => {
     orderBy: [{ portal: { name: 'asc' } }],
   });
 
-  res.json({ individual, shared });
+  // Get department-based credentials (deduplicated)
+  const assignedIds = new Set([...individual.map(c => c.id), ...shared.map(c => c.id)]);
+  let department = [];
+  if (user?.department) {
+    const deptCreds = await req.prisma.portalCredential.findMany({
+      where: { department: user.department, status: 'active' },
+      include: {
+        portal: { select: { id: true, name: true, category: true, url: true } },
+      },
+      orderBy: [{ portal: { name: 'asc' } }],
+    });
+    department = deptCreds.filter(c => !assignedIds.has(c.id));
+  }
+
+  res.json({ individual, shared, department });
 }));
 
 // POST /api/credentials/credentials
@@ -233,6 +286,17 @@ router.post('/credentials', requireAdmin, asyncHandler(async (req, res) => {
       assignee: { select: { id: true, name: true, email: true, employeeId: true } },
     },
   });
+
+  // Log creation
+  await req.prisma.portalCredentialHistory.create({
+    data: {
+      credentialId: credential.id,
+      changedBy: req.user.id,
+      action: 'create',
+      changes: JSON.stringify({ username: { old: null, new: credential.username } }),
+    },
+  });
+
   res.status(201).json(credential);
 }));
 
@@ -241,6 +305,10 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   if (req.body.type) requireEnum(req.body.type, VALID_TYPES, 'type');
   if (req.body.status) requireEnum(req.body.status, VALID_STATUSES, 'status');
+
+  // Fetch before state for diff
+  const before = await req.prisma.portalCredential.findUnique({ where: { id } });
+  if (!before) throw notFound('Credential');
 
   const credential = await req.prisma.portalCredential.update({
     where: { id },
@@ -263,6 +331,20 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
       assignee: { select: { id: true, name: true, email: true, employeeId: true } },
     },
   });
+
+  // Log only if something changed
+  const changes = buildDiff(before, req.body);
+  if (Object.keys(changes).length > 0) {
+    await req.prisma.portalCredentialHistory.create({
+      data: {
+        credentialId: id,
+        changedBy: req.user.id,
+        action: 'update',
+        changes: JSON.stringify(changes),
+      },
+    });
+  }
+
   res.json(credential);
 }));
 
@@ -270,7 +352,30 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
 router.delete('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   await req.prisma.portalCredential.update({ where: { id }, data: { status: 'revoked' } });
+
+  await req.prisma.portalCredentialHistory.create({
+    data: {
+      credentialId: id,
+      changedBy: req.user.id,
+      action: 'revoke',
+      changes: JSON.stringify({ status: { old: 'active', new: 'revoked' } }),
+    },
+  });
+
   res.json({ message: 'Credential revoked' });
+}));
+
+// GET /api/credentials/credentials/:id/history  — audit log for a credential
+router.get('/credentials/:id/history', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const history = await req.prisma.portalCredentialHistory.findMany({
+    where: { credentialId: id },
+    include: {
+      changedByUser: { select: { id: true, name: true, email: true, employeeId: true } },
+    },
+    orderBy: [{ changedAt: 'desc' }],
+  });
+  res.json(history);
 }));
 
 module.exports = router;

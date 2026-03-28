@@ -229,6 +229,7 @@ model User {
 
   // ── Portal Credentials ──
   portalCredentials         PortalCredential[] @relation("CredentialAssignee")
+  credentialHistories       PortalCredentialHistory[] @relation("CredentialHistoryAuthor")
 
   @@index([department])
   @@index([isActive])
@@ -2239,10 +2240,26 @@ model PortalCredential {
 
   portal       CompanyPortal @relation(fields: [portalId], references: [id], onDelete: Cascade)
   assignee     User?    @relation("CredentialAssignee", fields: [assignedTo], references: [id])
+  history      PortalCredentialHistory[]
 
   @@index([portalId])
   @@index([assignedTo])
   @@index([status])
+}
+
+model PortalCredentialHistory {
+  id             Int      @id @default(autoincrement())
+  credentialId   Int
+  changedBy      Int      // userId of admin who made the change
+  changedAt      DateTime @default(now())
+  changes        String   // JSON: {field: {old, new}, ...}
+  action         String   @default("update") // "create" | "update" | "revoke"
+
+  credential     PortalCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  changedByUser  User     @relation("CredentialHistoryAuthor", fields: [changedBy], references: [id])
+
+  @@index([credentialId])
+  @@index([changedBy])
 }
 
 model Department {

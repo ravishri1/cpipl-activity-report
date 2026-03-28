@@ -1743,8 +1743,50 @@ function PermissionsTab({ userId }) {
 /* ═══════════════════════════════════════════════════════════
    CREDENTIALS TAB — admin-only view of assigned credentials
    ═══════════════════════════════════════════════════════════ */
+function CredentialCard({ cred, showPwd, togglePwd }) {
+  return (
+    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm text-slate-800">{cred.portal.name}</span>
+            {cred.portal.legalEntity && (
+              <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{cred.portal.legalEntity.legalName}</span>
+            )}
+            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cred.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {cred.status}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">{cred.username}</p>
+          {cred.password && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs font-mono text-slate-600">
+                {showPwd[cred.id] ? cred.password : '••••••••'}
+              </span>
+              <button onClick={() => togglePwd(cred.id)} className="text-slate-400 hover:text-slate-600">
+                {showPwd[cred.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          )}
+          {(cred.department || cred.purpose) && (
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {cred.department && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">🏢 {cred.department}</span>}
+              {cred.purpose && <span className="text-xs bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">🎯 {cred.purpose}</span>}
+            </div>
+          )}
+        </div>
+        {cred.portal.url && (
+          <a href={cred.portal.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-500 mt-0.5">
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CredentialsTab({ userId }) {
-  const { data: credentials, loading, error } = useFetch(`/api/credentials/user/${userId}`, []);
+  const { data: resp, loading, error } = useFetch(`/api/credentials/user/${userId}`, null);
   const [showPwd, setShowPwd] = useState({});
 
   const togglePwd = (id) => setShowPwd(p => ({ ...p, [id]: !p[id] }));
@@ -1752,7 +1794,12 @@ function CredentialsTab({ userId }) {
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
   if (error) return <div className="text-red-500 text-sm py-4">{error}</div>;
 
-  if (!credentials.length) return (
+  const assigned = resp?.assigned || [];
+  const deptCreds = resp?.department || [];
+  const userDept = resp?.userDepartment;
+  const total = assigned.length + deptCreds.length;
+
+  if (total === 0) return (
     <div className="flex flex-col items-center py-10 text-slate-400">
       <KeyRound className="w-8 h-8 mb-2" />
       <p className="text-sm font-medium">No credentials assigned</p>
@@ -1761,47 +1808,23 @@ function CredentialsTab({ userId }) {
   );
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-slate-500 mb-3">Individual credentials assigned to this employee across all portals.</p>
-      {credentials.map(cred => (
-        <div key={cred.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm text-slate-800">{cred.portal.name}</span>
-                {cred.portal.legalEntity && (
-                  <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{cred.portal.legalEntity.legalName}</span>
-                )}
-                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cred.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {cred.status}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">{cred.username}</p>
-              {cred.password && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs font-mono text-slate-600">
-                    {showPwd[cred.id] ? cred.password : '••••••••'}
-                  </span>
-                  <button onClick={() => togglePwd(cred.id)} className="text-slate-400 hover:text-slate-600">
-                    {showPwd[cred.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              )}
-              {(cred.department || cred.purpose) && (
-                <div className="flex gap-2 mt-1 flex-wrap">
-                  {cred.department && <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">🏢 {cred.department}</span>}
-                  {cred.purpose && <span className="text-xs bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded">🎯 {cred.purpose}</span>}
-                </div>
-              )}
-            </div>
-            {cred.portal.url && (
-              <a href={cred.portal.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-500 mt-0.5">
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
+    <div className="space-y-4">
+      {assigned.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Individually Assigned ({assigned.length})</p>
+          <div className="space-y-3">
+            {assigned.map(cred => <CredentialCard key={cred.id} cred={cred} showPwd={showPwd} togglePwd={togglePwd} />)}
           </div>
         </div>
-      ))}
+      )}
+      {deptCreds.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Department Access — {userDept} ({deptCreds.length})</p>
+          <div className="space-y-3">
+            {deptCreds.map(cred => <CredentialCard key={cred.id} cred={cred} showPwd={showPwd} togglePwd={togglePwd} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
