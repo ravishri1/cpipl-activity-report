@@ -101,14 +101,22 @@ router.post('/portals', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name');
   if (req.body.category) requireEnum(req.body.category, VALID_CATEGORIES, 'category');
 
+  const companyRegistrationId = req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null;
+  let legalEntityId = req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null;
+  // Auto-derive legalEntityId from registration so portal always appears in the tree
+  if (companyRegistrationId && !legalEntityId) {
+    const reg = await req.prisma.companyRegistration.findUnique({ where: { id: companyRegistrationId }, select: { legalEntityId: true } });
+    if (reg) legalEntityId = reg.legalEntityId;
+  }
+
   const portal = await req.prisma.companyPortal.create({
     data: {
       name: req.body.name,
       url: req.body.url || null,
       description: req.body.description || null,
       category: req.body.category || 'other',
-      legalEntityId: req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null,
-      companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
+      legalEntityId,
+      companyRegistrationId,
     },
     include: {
       legalEntity: { select: { id: true, legalName: true, shortName: true } },
@@ -124,6 +132,16 @@ router.put('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   if (req.body.category) requireEnum(req.body.category, VALID_CATEGORIES, 'category');
 
+  // Auto-derive legalEntityId from companyRegistrationId when only registration is changed
+  let derivedLegalEntityId;
+  if (req.body.companyRegistrationId !== undefined && req.body.legalEntityId === undefined) {
+    const regId = req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null;
+    if (regId) {
+      const reg = await req.prisma.companyRegistration.findUnique({ where: { id: regId }, select: { legalEntityId: true } });
+      if (reg) derivedLegalEntityId = reg.legalEntityId;
+    }
+  }
+
   const portal = await req.prisma.companyPortal.update({
     where: { id },
     data: {
@@ -135,6 +153,7 @@ router.put('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
       ...(req.body.legalEntityId !== undefined && {
         legalEntityId: req.body.legalEntityId ? parseInt(req.body.legalEntityId) : null,
       }),
+      ...(derivedLegalEntityId !== undefined && { legalEntityId: derivedLegalEntityId }),
       ...(req.body.companyRegistrationId !== undefined && {
         companyRegistrationId: req.body.companyRegistrationId ? parseInt(req.body.companyRegistrationId) : null,
       }),
@@ -177,6 +196,25 @@ router.post('/portals/bulk', requireAdmin, asyncHandler(async (req, res) => {
 
 // GET /api/credentials/tree — full company → registration → portal → credential tree
 router.get('/tree', requireAdmin, asyncHandler(async (req, res) => {
+  // Heal orphaned portals: if companyRegistrationId is set but legalEntityId is null, derive it
+  const orphans = await req.prisma.companyPortal.findMany({
+    where: { legalEntityId: null, companyRegistrationId: { not: null } },
+    select: { id: true, companyRegistrationId: true },
+  });
+  if (orphans.length > 0) {
+    const regIds = [...new Set(orphans.map(p => p.companyRegistrationId))];
+    const regs = await req.prisma.companyRegistration.findMany({
+      where: { id: { in: regIds } },
+      select: { id: true, legalEntityId: true },
+    });
+    const regMap = {};
+    regs.forEach(r => { regMap[r.id] = r.legalEntityId; });
+    await Promise.all(orphans.map(p => {
+      const eid = regMap[p.companyRegistrationId];
+      if (eid) return req.prisma.companyPortal.update({ where: { id: p.id }, data: { legalEntityId: eid } });
+    }).filter(Boolean));
+  }
+
   const credInclude = {
     credentials: {
       include: { assignee: { select: { id: true, name: true, employeeId: true } } },
