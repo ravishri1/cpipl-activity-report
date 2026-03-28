@@ -34,7 +34,7 @@ router.get('/portals', requireAdmin, asyncHandler(async (req, res) => {
       },
       _count: { select: { credentials: true } },
     },
-    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    orderBy: [{ createdAt: 'desc' }],
   });
   res.json(portals);
 }));
