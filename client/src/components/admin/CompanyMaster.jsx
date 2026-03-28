@@ -1248,6 +1248,8 @@ function BankAccountsPanel({ legalEntityId }) {
   const accounts = resp?.accounts || [];
   const isPrimary = resp?.isPrimary || false;
   const sourcedFrom = resp?.sourcedFrom || null;
+  // canAdd: true if this IS the primary entity, OR if no primary entity has been set yet (sourcedFrom === null)
+  const canAdd = isPrimary || sourcedFrom === null;
   // actual legalEntityId to save against (primary entity's id when sourced)
   const targetEntityId = sourcedFrom ? sourcedFrom.id : legalEntityId;
 
@@ -1271,7 +1273,7 @@ function BankAccountsPanel({ legalEntityId }) {
             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-200 text-emerald-800">{accounts.length}</span>
           )}
         </div>
-        {isPrimary && (
+        {canAdd && (
           <button onClick={() => setModal('add')}
             className="flex items-center gap-1 text-xs text-emerald-700 border border-emerald-300 bg-white px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors font-medium">
             <Plus size={11} /> Add
@@ -1297,11 +1299,7 @@ function BankAccountsPanel({ legalEntityId }) {
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
           <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
-          {isPrimary ? (
-            <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
-          ) : (
-            <p className="text-xs text-gray-300 mt-1">Mark an entity as Primary to manage bank accounts</p>
-          )}
+          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
@@ -1339,7 +1337,7 @@ function BankAccountsPanel({ legalEntityId }) {
                   {acc.notes && <p className="text-xs text-gray-400 italic mt-1">{acc.notes}</p>}
                 </div>
               </div>
-              {isPrimary && (
+              {canAdd && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-3">
                   <button onClick={() => setModal(acc)}
                     className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
