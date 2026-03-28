@@ -15,12 +15,52 @@ const VALID_TYPES      = ['individual', 'shared'];
 const TRACKED_FIELDS = ['type', 'username', 'password', 'label', 'assignedTo', 'sharedWith',
   'notes', 'phoneNumber', 'department', 'purpose', 'status', 'lastRotated'];
 
-function buildDiff(before, body) {
+async function resolveUserName(userId, prisma) {
+  if (!userId) return null;
+  const id = parseInt(userId);
+  if (!id) return null;
+  const user = await prisma.user.findUnique({ where: { id }, select: { name: true } });
+  return user?.name || String(userId);
+}
+
+async function resolveSharedWith(jsonStr, prisma) {
+  if (!jsonStr) return null;
+  try {
+    const ids = JSON.parse(jsonStr);
+    if (!Array.isArray(ids) || ids.length === 0) return null;
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids.map(id => parseInt(id)).filter(Boolean) } },
+      select: { name: true },
+    });
+    return users.map(u => u.name).join(', ') || jsonStr;
+  } catch {
+    return jsonStr;
+  }
+}
+
+async function buildDiff(before, body, prisma) {
   const changes = {};
   for (const field of TRACKED_FIELDS) {
     if (body[field] === undefined) continue;
-    const oldVal = before[field] ?? null;
-    const newVal = (field === 'assignedTo' && body[field]) ? parseInt(body[field]) : (body[field] || null);
+    let oldVal = before[field] ?? null;
+    let newVal = (field === 'assignedTo' && body[field]) ? parseInt(body[field]) : (body[field] || null);
+
+    if (field === 'sharedWith') {
+      const oldNames = await resolveSharedWith(oldVal, prisma);
+      const newNames = await resolveSharedWith(newVal, prisma);
+      if (String(oldNames) !== String(newNames)) {
+        changes[field] = { old: oldNames, new: newNames };
+      }
+      continue;
+    }
+    if (field === 'assignedTo') {
+      const oldName = await resolveUserName(oldVal, prisma);
+      const newName = await resolveUserName(newVal, prisma);
+      if (String(oldName) !== String(newName)) {
+        changes[field] = { old: oldName, new: newName };
+      }
+      continue;
+    }
     if (String(oldVal) !== String(newVal)) {
       changes[field] = { old: oldVal, new: newVal };
     }
@@ -333,7 +373,7 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
   });
 
   // Log only if something changed
-  const changes = buildDiff(before, req.body);
+  const changes = await buildDiff(before, req.body, req.prisma);
   if (Object.keys(changes).length > 0) {
     await req.prisma.portalCredentialHistory.create({
       data: {

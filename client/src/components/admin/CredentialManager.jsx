@@ -482,6 +482,14 @@ function CredentialHistoryModal({ credentialId, onClose }) {
     revoke: 'bg-red-100 text-red-700',
   };
 
+  function getActionSummary(action, changedFields) {
+    if (action === 'create') return 'Created credential';
+    if (action === 'revoke') return 'Revoked credential';
+    if (changedFields.length === 0) return 'Updated';
+    const labels = changedFields.map(f => FIELD_LABELS[f] || f);
+    return `Changed ${labels.join(', ')}`;
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
@@ -505,30 +513,30 @@ function CredentialHistoryModal({ credentialId, onClose }) {
                 const changedFields = Object.keys(changes);
                 return (
                   <div key={entry.id} className="border border-slate-100 rounded-lg p-3 bg-slate-50">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${ACTION_COLORS[entry.action] || ACTION_COLORS.update}`}>
-                          {entry.action}
-                        </span>
-                        <span className="text-xs text-slate-600 font-medium">{entry.changedByUser?.name || 'Unknown'}</span>
-                        {entry.changedByUser?.employeeId && (
-                          <span className="text-xs text-slate-400">({entry.changedByUser.employeeId})</span>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-xs text-slate-400 shrink-0">
                         {new Date(entry.changedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    {changedFields.length > 0 && (
-                      <div className="space-y-1">
+                    <div className="flex items-start gap-2 mb-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${ACTION_COLORS[entry.action] || ACTION_COLORS.update}`}>
+                        {getActionSummary(entry.action, changedFields)}
+                      </span>
+                      <span className="text-xs text-slate-600 font-medium">by {entry.changedByUser?.name || 'Unknown'}</span>
+                      {entry.changedByUser?.employeeId && (
+                        <span className="text-xs text-slate-400">({entry.changedByUser.employeeId})</span>
+                      )}
+                    </div>
+                    {changedFields.length > 0 && entry.action === 'update' && (
+                      <div className="space-y-1 border-t border-slate-200 pt-2 mt-1">
                         {changedFields.map(field => (
                           <div key={field} className="text-xs flex items-start gap-1">
                             <span className="text-slate-500 font-medium shrink-0 w-24">{FIELD_LABELS[field] || field}:</span>
-                            <span className="text-red-600 line-through mr-1 font-mono">
+                            <span className="text-red-600 line-through mr-1 font-mono break-all">
                               {field === 'password' ? (changes[field].old ? '••••' : '—') : (String(changes[field].old ?? '—'))}
                             </span>
                             <span className="text-slate-400">→</span>
-                            <span className="text-emerald-700 ml-1 font-mono">
+                            <span className="text-emerald-700 ml-1 font-mono break-all">
                               {field === 'password' ? (changes[field].new ? '••••' : '—') : (String(changes[field].new ?? '—'))}
                             </span>
                           </div>
