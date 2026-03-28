@@ -11,6 +11,18 @@ const VALID_CATEGORIES = ['email', 'tax', 'banking', 'erp', 'cloud', 'social', '
 const VALID_STATUSES   = ['active', 'revoked', 'expired'];
 const VALID_TYPES      = ['individual', 'shared'];
 
+// Normalize sharedWith to always store string IDs so contains '"userId"' queries work correctly
+function normalizeSharedWith(raw) {
+  if (!raw) return null;
+  try {
+    const arr = Array.isArray(raw) ? raw : JSON.parse(raw);
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    return JSON.stringify(arr.map(id => String(id)));
+  } catch {
+    return typeof raw === 'string' ? raw : null;
+  }
+}
+
 // Tracked fields for history diff
 const TRACKED_FIELDS = ['type', 'username', 'password', 'label', 'assignedTo', 'sharedWith',
   'notes', 'phoneNumber', 'department', 'purpose', 'status', 'lastRotated'];
@@ -468,7 +480,7 @@ router.post('/credentials', requireAdmin, asyncHandler(async (req, res) => {
       password: req.body.password || null,
       label: req.body.label || null,
       assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null,
-      sharedWith: req.body.sharedWith || null,
+      sharedWith: normalizeSharedWith(req.body.sharedWith),
       notes: req.body.notes || null,
       phoneNumber: req.body.phoneNumber || null,
       department: req.body.department || null,
@@ -513,7 +525,7 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
       ...(req.body.password !== undefined && { password: req.body.password || null }),
       ...(req.body.label !== undefined && { label: req.body.label || null }),
       ...(req.body.assignedTo !== undefined && { assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null }),
-      ...(req.body.sharedWith !== undefined && { sharedWith: req.body.sharedWith || null }),
+      ...(req.body.sharedWith !== undefined && { sharedWith: normalizeSharedWith(req.body.sharedWith) }),
       ...(req.body.notes !== undefined && { notes: req.body.notes || null }),
       ...(req.body.phoneNumber !== undefined && { phoneNumber: req.body.phoneNumber || null }),
       ...(req.body.department !== undefined && { department: req.body.department || null }),
