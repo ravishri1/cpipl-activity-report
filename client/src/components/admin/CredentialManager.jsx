@@ -700,6 +700,7 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
 export default function CredentialManager() {
   const [filterReg, setFilterReg] = useState('');
   const [filterCat, setFilterCat] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
   const [showAddPortal, setShowAddPortal] = useState(false);
   const [editingPortal, setEditingPortal] = useState(null);
   const [addCredPortal, setAddCredPortal] = useState(null);
@@ -725,6 +726,14 @@ export default function CredentialManager() {
 
   const handlePortalSaved = () => refetch();
 
+  const sortedPortals = [...portals].sort((a, b) => {
+    if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+    if (sortBy === 'oldest') return new Date(a.createdAt) - new Date(b.createdAt);
+    if (sortBy === 'name_az') return a.name.localeCompare(b.name);
+    if (sortBy === 'name_za') return b.name.localeCompare(a.name);
+    return 0;
+  });
+
   const toggleSelect = (id) => setSelectedIds(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -732,10 +741,10 @@ export default function CredentialManager() {
   });
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === portals.length) {
+    if (selectedIds.size === sortedPortals.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(portals.map(p => p.id)));
+      setSelectedIds(new Set(sortedPortals.map(p => p.id)));
     }
   };
 
@@ -783,6 +792,13 @@ export default function CredentialManager() {
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="name_az">Name A→Z</option>
+          <option value="name_za">Name Z→A</option>
+        </select>
       </div>
 
       {/* Errors */}
@@ -795,7 +811,7 @@ export default function CredentialManager() {
       {/* Portal list */}
       {loading ? (
         <LoadingSpinner />
-      ) : portals.length === 0 ? (
+      ) : sortedPortals.length === 0 ? (
         <EmptyState icon="🔑" title="No portals yet" subtitle="Add your first portal to start managing credentials" />
       ) : (
         <>
@@ -804,12 +820,12 @@ export default function CredentialManager() {
             <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
               <input
                 type="checkbox"
-                checked={selectedIds.size === portals.length && portals.length > 0}
-                ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < portals.length; }}
+                checked={selectedIds.size === sortedPortals.length && sortedPortals.length > 0}
+                ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < sortedPortals.length; }}
                 onChange={toggleSelectAll}
                 className="w-4 h-4 accent-blue-600"
               />
-              {selectedIds.size > 0 ? `${selectedIds.size} of ${portals.length} selected` : 'Select all'}
+              {selectedIds.size > 0 ? `${selectedIds.size} of ${sortedPortals.length} selected` : 'Select all'}
             </label>
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-2">
@@ -831,7 +847,7 @@ export default function CredentialManager() {
           </div>
 
           <div className="space-y-3">
-            {portals.map(portal => (
+            {sortedPortals.map(portal => (
               <PortalCard
                 key={portal.id}
                 portal={portal}
