@@ -237,9 +237,8 @@ function SharedWithPicker({ users, selected, onChange }) {
   );
 }
 
-function DeptMultiPicker({ departments, selected, onChange }) {
+function DeptMultiPicker({ deptOptions, selected, onChange }) {
   const sel = Array.isArray(selected) ? selected : [];
-  const allDepts = Array.isArray(departments) ? departments : [];
   const toggle = (name) => {
     onChange(sel.includes(name) ? sel.filter(x => x !== name) : [...sel, name]);
   };
@@ -261,13 +260,13 @@ function DeptMultiPicker({ departments, selected, onChange }) {
         </div>
       )}
       <div className="border border-slate-200 rounded-lg divide-y divide-slate-50">
-        {allDepts.map(d => {
-          const checked = sel.includes(d.name);
+        {deptOptions.map(dept => {
+          const checked = sel.includes(dept);
           return (
-            <label key={d.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
-              <input type="checkbox" checked={checked} onChange={() => toggle(d.name)}
+            <label key={dept} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 ${checked ? 'bg-blue-50' : ''}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(dept)}
                 className="accent-blue-600 w-3.5 h-3.5 flex-shrink-0" />
-              <span className="text-sm text-slate-800">{d.name}</span>
+              <span className="text-sm text-slate-800">{dept}</span>
             </label>
           );
         })}
@@ -283,7 +282,7 @@ function DeptMultiPicker({ departments, selected, onChange }) {
 
 function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) {
   const { execute, loading, error: saveErr } = useApi();
-  const { data: departments } = useFetch('/departments', []);
+  const deptOptions = [...new Set((users || []).map(u => u.department).filter(Boolean))].sort();
   const isEdit = !!credential;
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({
@@ -421,7 +420,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
 
           {form.type === 'shared' ? (
             <DeptMultiPicker
-              departments={departments}
+              deptOptions={deptOptions}
               selected={Array.isArray(form.department) ? form.department : (form.department ? [form.department] : [])}
               onChange={vals => setField('department', vals)}
             />
@@ -431,8 +430,8 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
               <select value={Array.isArray(form.department) ? '' : form.department} onChange={e => setField('department', e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">-- Select Department --</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
+                {deptOptions.map(d => (
+                  <option key={d} value={d}>{d}</option>
                 ))}
               </select>
             </div>
