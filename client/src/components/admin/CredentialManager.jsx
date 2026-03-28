@@ -627,8 +627,8 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
     setEditingCred(null);
   };
 
-  const canExpand = true;
   const isActive = portal.isActive !== false;
+  const canExpand = isActive;
 
   return (
     <div className={`bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden ${!isActive ? 'opacity-70' : ''}`}>
@@ -642,10 +642,12 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
           className="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer"
         />
         <button
-          className="flex items-center gap-2 flex-1 min-w-0 text-left"
-          onClick={() => setExpanded(v => !v)}
+          className={`flex items-center gap-2 flex-1 min-w-0 text-left ${!canExpand ? 'cursor-not-allowed' : ''}`}
+          onClick={() => canExpand && setExpanded(v => !v)}
+          disabled={!canExpand}
+          title={!canExpand ? 'Portal is closed — enable it to view credentials' : undefined}
         >
-          <span className="text-slate-400">
+          <span className={canExpand ? 'text-slate-400' : 'text-slate-300'}>
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </span>
           <div className="min-w-0">

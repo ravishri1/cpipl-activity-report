@@ -50,10 +50,21 @@ router.post('/legal-entities', requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/company-master/legal-entities/:id
 router.put('/legal-entities/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { legalName, shortName, pan, tan, lei } = req.body;
+  const { legalName, shortName, pan, tan, lei, isPrimary } = req.body;
+  // If marking this entity as primary, unset all others first
+  if (isPrimary === true) {
+    await req.prisma.legalEntity.updateMany({ where: { NOT: { id } }, data: { isPrimary: false } });
+  }
   const entity = await req.prisma.legalEntity.update({
     where: { id },
-    data: { legalName, shortName: shortName !== undefined ? (shortName?.trim() || null) : undefined, pan, tan, lei },
+    data: {
+      legalName,
+      shortName: shortName !== undefined ? (shortName?.trim() || null) : undefined,
+      pan,
+      tan,
+      lei,
+      ...(isPrimary !== undefined && { isPrimary: Boolean(isPrimary) }),
+    },
   });
   res.json(entity);
 }));
@@ -307,21 +318,42 @@ router.delete('/locations/:id', requireAdmin, asyncHandler(async (req, res) => {
 
 // ─── BANK ACCOUNTS ──────────────────────────────────────────────────────────
 
-// GET /api/company-master/bank-accounts?companyRegistrationId=X  (or ?legalEntityId=X for entity-level)
+// GET /api/company-master/bank-accounts?legalEntityId=X
+// Returns { accounts, isPrimary, sourcedFrom } — non-primary entities auto-source from the primary entity
 router.get('/bank-accounts', asyncHandler(async (req, res) => {
-  const { legalEntityId, companyRegistrationId } = req.query;
-  const where = { isActive: true };
-  if (companyRegistrationId) where.companyRegistrationId = parseId(companyRegistrationId);
-  else if (legalEntityId) where.legalEntityId = parseId(legalEntityId);
+  const { legalEntityId } = req.query;
+  if (!legalEntityId) return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
+
+  const entityId = parseId(legalEntityId);
+  const entity = await req.prisma.legalEntity.findUnique({
+    where: { id: entityId },
+    select: { id: true, legalName: true, isPrimary: true },
+  });
+  if (!entity) return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
+
+  let targetId = entityId;
+  let sourcedFrom = null;
+
+  if (!entity.isPrimary) {
+    const primary = await req.prisma.legalEntity.findFirst({
+      where: { isPrimary: true },
+      select: { id: true, legalName: true },
+    });
+    if (primary) {
+      targetId = primary.id;
+      sourcedFrom = primary;
+    } else {
+      // No primary set — show nothing with no add button
+      return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
+    }
+  }
 
   const accounts = await req.prisma.companyBankAccount.findMany({
-    where,
-    include: {
-      companyRegistration: { select: { id: true, abbr: true, gstin: true } },
-    },
+    where: { legalEntityId: targetId, isActive: true },
+    include: { companyRegistration: { select: { id: true, abbr: true, gstin: true } } },
     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
   });
-  res.json(accounts);
+  res.json({ accounts, isPrimary: entity.isPrimary, sourcedFrom });
 }));
 
 // POST /api/company-master/bank-accounts

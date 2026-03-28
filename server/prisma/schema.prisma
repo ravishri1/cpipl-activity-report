@@ -2156,6 +2156,7 @@ model LegalEntity {
   pan       String?  @unique
   tan       String?  @unique
   lei       String?  // Legal Entity Identifier (yearly renewal)
+  isPrimary Boolean  @default(false) // primary entity whose bank accounts are used by all others
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -58,6 +58,7 @@ function EntityModal({ entity, onClose, onSaved }) {
     pan: entity?.pan || '',
     tan: entity?.tan || '',
     lei: entity?.lei || '',
+    isPrimary: entity?.isPrimary || false,
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -70,6 +71,7 @@ function EntityModal({ entity, onClose, onSaved }) {
       pan: form.pan || null,
       tan: form.tan || null,
       lei: form.lei || null,
+      isPrimary: form.isPrimary,
     };
     try {
       if (entity) {
@@ -127,6 +129,14 @@ function EntityModal({ entity, onClose, onSaved }) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="20-char alphanumeric" />
           </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.isPrimary} onChange={e => set('isPrimary', e.target.checked)}
+              className="w-4 h-4 accent-emerald-600" />
+            <span className="text-sm text-gray-700">
+              <span className="font-medium">Primary Entity</span>
+              <span className="text-gray-400 ml-1">— bank accounts belong to this entity; others inherit them</span>
+            </span>
+          </label>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -1227,13 +1237,19 @@ function BankAccountModal({ account, legalEntityId, onClose, onSaved }) {
 }
 
 function BankAccountsPanel({ legalEntityId }) {
-  const { data: accounts, loading, error, refetch } = useFetch(
+  const { data: resp, loading, error, refetch } = useFetch(
     legalEntityId ? `/company-master/bank-accounts?legalEntityId=${legalEntityId}` : null,
-    []
+    { accounts: [], isPrimary: false, sourcedFrom: null }
   );
   const { execute } = useApi();
   const [modal, setModal] = useState(null); // null | 'add' | accountObj
   const [showNums, setShowNums] = useState({});
+
+  const accounts = resp?.accounts || [];
+  const isPrimary = resp?.isPrimary || false;
+  const sourcedFrom = resp?.sourcedFrom || null;
+  // actual legalEntityId to save against (primary entity's id when sourced)
+  const targetEntityId = sourcedFrom ? sourcedFrom.id : legalEntityId;
 
   const handleDelete = async (id) => {
     if (!window.confirm('Remove this bank account?')) return;
@@ -1255,11 +1271,23 @@ function BankAccountsPanel({ legalEntityId }) {
             <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-200 text-emerald-800">{accounts.length}</span>
           )}
         </div>
-        <button onClick={() => setModal('add')}
-          className="flex items-center gap-1 text-xs text-emerald-700 border border-emerald-300 bg-white px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors font-medium">
-          <Plus size={11} /> Add
-        </button>
+        {isPrimary && (
+          <button onClick={() => setModal('add')}
+            className="flex items-center gap-1 text-xs text-emerald-700 border border-emerald-300 bg-white px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors font-medium">
+            <Plus size={11} /> Add
+          </button>
+        )}
       </div>
+
+      {/* Inherited notice for non-primary entities */}
+      {sourcedFrom && (
+        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+          <Landmark size={12} className="text-amber-500 shrink-0" />
+          <p className="text-xs text-amber-700">
+            Showing bank accounts from <span className="font-semibold">{sourcedFrom.legalName}</span> (primary entity)
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="px-5 py-6 text-center text-xs text-gray-400">Loading…</div>
@@ -1269,7 +1297,11 @@ function BankAccountsPanel({ legalEntityId }) {
         <div className="px-5 py-8 text-center">
           <Landmark size={28} className="mx-auto mb-2 text-gray-200" />
           <p className="text-sm text-gray-400 font-medium">No bank accounts added</p>
-          <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+          {isPrimary ? (
+            <p className="text-xs text-gray-300 mt-1">Add the company's current / savings accounts</p>
+          ) : (
+            <p className="text-xs text-gray-300 mt-1">Mark an entity as Primary to manage bank accounts</p>
+          )}
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
@@ -1307,16 +1339,18 @@ function BankAccountsPanel({ legalEntityId }) {
                   {acc.notes && <p className="text-xs text-gray-400 italic mt-1">{acc.notes}</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-3">
-                <button onClick={() => setModal(acc)}
-                  className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                  <Edit2 size={13} />
-                </button>
-                <button onClick={() => handleDelete(acc.id)}
-                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
-                  <Trash2 size={13} />
-                </button>
-              </div>
+              {isPrimary && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-3">
+                  <button onClick={() => setModal(acc)}
+                    className="p-1.5 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                    <Edit2 size={13} />
+                  </button>
+                  <button onClick={() => handleDelete(acc.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Remove">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1325,7 +1359,7 @@ function BankAccountsPanel({ legalEntityId }) {
       {modal && (
         <BankAccountModal
           account={modal === 'add' ? null : modal}
-          legalEntityId={legalEntityId}
+          legalEntityId={targetEntityId}
           onClose={() => setModal(null)}
           onSaved={refetch}
         />
@@ -1981,9 +2015,14 @@ export default function CompanyMaster() {
                         ? 'border-l-blue-500 bg-white text-blue-900'
                         : 'border-l-transparent hover:bg-gray-50 text-gray-700'
                     }`}>
-                    <p className={`text-sm font-semibold leading-tight ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>
-                      {entity.legalName}
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className={`text-sm font-semibold leading-tight ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>
+                        {entity.legalName}
+                      </p>
+                      {entity.isPrimary && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium leading-tight">Primary</span>
+                      )}
+                    </div>
                     {entity.pan && (
                       <p className="text-xs text-gray-400 font-mono mt-0.5">{entity.pan}</p>
                     )}
