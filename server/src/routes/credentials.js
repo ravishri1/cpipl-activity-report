@@ -240,7 +240,13 @@ router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
   let departmentCreds = [];
   if (user.department) {
     const deptCreds = await req.prisma.portalCredential.findMany({
-      where: { department: user.department, status: 'active' },
+      where: {
+        status: 'active',
+        OR: [
+          { department: user.department },
+          { department: { contains: `"${user.department}"` } },
+        ],
+      },
       include: portalInclude,
       orderBy: [{ portal: { name: 'asc' } }],
     });
@@ -283,7 +289,13 @@ router.get('/my-credentials', asyncHandler(async (req, res) => {
   let department = [];
   if (user?.department) {
     const deptCreds = await req.prisma.portalCredential.findMany({
-      where: { department: user.department, status: 'active' },
+      where: {
+        status: 'active',
+        OR: [
+          { department: user.department },
+          { department: { contains: `"${user.department}"` } },
+        ],
+      },
       include: {
         portal: { select: { id: true, name: true, category: true, url: true } },
       },
