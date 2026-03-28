@@ -342,10 +342,8 @@ router.get('/bank-accounts', asyncHandler(async (req, res) => {
     if (primary) {
       targetId = primary.id;
       sourcedFrom = primary;
-    } else {
-      // No primary set — show nothing with no add button
-      return res.json({ accounts: [], isPrimary: false, sourcedFrom: null });
     }
+    // else: no primary set — show entity's own accounts (targetId stays as entityId)
   }
 
   const accounts = await req.prisma.companyBankAccount.findMany({
