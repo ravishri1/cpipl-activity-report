@@ -6,7 +6,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
 import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
-import { Key, Eye, EyeOff, Plus, ExternalLink, ChevronDown, ChevronRight, Edit2, Trash2, X, RefreshCw } from 'lucide-react';
+import { Key, Eye, EyeOff, Plus, ExternalLink, ChevronDown, ChevronRight, Edit2, Trash2, X, RefreshCw, Search } from 'lucide-react';
 
 const PORTAL_CATEGORIES = [
   { value: 'email',      label: 'Email / Workspace',  color: 'bg-blue-100 text-blue-700' },
@@ -703,6 +703,7 @@ export default function CredentialManager() {
   const [filterReg, setFilterReg] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [sortBy, setSortBy] = useState('newest');
+  const [search, setSearch] = useState('');
   const [showAddPortal, setShowAddPortal] = useState(false);
   const [editingPortal, setEditingPortal] = useState(null);
   const [addCredPortal, setAddCredPortal] = useState(null);
@@ -721,6 +722,7 @@ export default function CredentialManager() {
   const queryStr = params.toString() ? `?${params.toString()}` : '';
 
   const { data: portals, loading, error: fetchErr, refetch } = useFetch(`/credentials/portals${queryStr}`, []);
+  const { data: allCreds } = useFetch('/credentials/all', []);
   const { data: registrations, error: regErr } = useFetch('/company-master/registrations', []);
   const { data: entities } = useFetch('/company-master/legal-entities', []);
   const { data: usersData, error: usersErr } = useFetch('/users?isActive=true&limit=200', { users: [] });
@@ -735,6 +737,17 @@ export default function CredentialManager() {
     if (sortBy === 'name_za') return b.name.localeCompare(a.name);
     return 0;
   });
+
+  const searchTerm = search.trim().toLowerCase();
+  const searchResults = searchTerm
+    ? allCreds.filter(c => {
+        const haystack = [
+          c.username, c.label, c.department, c.purpose,
+          c.assignee?.name, c.portal?.name, c.portal?.category, c.notes,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(searchTerm);
+      })
+    : [];
 
   const toggleSelect = (id) => setSelectedIds(prev => {
     const next = new Set(prev);
@@ -778,6 +791,23 @@ export default function CredentialManager() {
         </button>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by email, department, employee, purpose, platform..."
+          className="w-full pl-9 pr-9 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <select value={filterReg} onChange={e => setFilterReg(e.target.value)}
@@ -810,12 +840,51 @@ export default function CredentialManager() {
       {bulkErr && <AlertMessage type="error" message={bulkErr} />}
       {bulkSuccess && <AlertMessage type="success" message={bulkSuccess} />}
 
+      {/* Search results */}
+      {searchTerm && (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-500">{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for <span className="font-medium text-slate-700">"{search}"</span></p>
+          {searchResults.length === 0 ? (
+            <EmptyState icon="🔍" title="No matches" subtitle="Try a different search term" />
+          ) : (
+            <div className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              {searchResults.map(cred => (
+                <div key={cred.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${getCategoryInfo(cred.portal?.category).color}`}>
+                        {cred.portal?.name}
+                      </span>
+                      {cred.label && <span className="text-sm font-medium text-slate-700">{cred.label}</span>}
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${cred.type === 'shared' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {cred.type === 'shared' ? 'Shared' : 'Individual'}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-semibold ${cred.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${cred.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+                        {cred.status === 'active' ? 'Active' : 'Closed'}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-700 font-mono">{cred.username}</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                      {cred.department && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">🏢 {cred.department}</span>}
+                      {cred.purpose && <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium">🎯 {cred.purpose}</span>}
+                      {cred.assignee && <span>👤 {cred.assignee.name}</span>}
+                      {cred.phoneNumber && <span>📞 {cred.phoneNumber}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Portal list */}
-      {loading ? (
+      {!searchTerm && loading ? (
         <LoadingSpinner />
-      ) : sortedPortals.length === 0 ? (
+      ) : !searchTerm && sortedPortals.length === 0 ? (
         <EmptyState icon="🔑" title="No portals yet" subtitle="Add your first portal to start managing credentials" />
-      ) : (
+      ) : !searchTerm && (
         <>
           {/* Select all + bulk action bar */}
           <div className="flex items-center justify-between">
