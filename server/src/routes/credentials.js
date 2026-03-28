@@ -91,11 +91,11 @@ router.put('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
   res.json(portal);
 }));
 
-// DELETE /api/credentials/portals/:id  (soft delete — set isActive: false)
+// DELETE /api/credentials/portals/:id  (hard delete — cascades to credentials)
 router.delete('/portals/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  await req.prisma.companyPortal.update({ where: { id }, data: { isActive: false } });
-  res.json({ message: 'Portal deactivated' });
+  await req.prisma.companyPortal.delete({ where: { id } });
+  res.json({ message: 'Portal deleted' });
 }));
 
 // ─── CREDENTIALS ────────────────────────────────────────────────────────────

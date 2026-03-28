@@ -505,6 +505,15 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
     } catch {}
   };
 
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Permanently delete "${portal.name}" and all its credentials? This cannot be undone.`)) return;
+    try {
+      await execute(() => api.delete(`/credentials/portals/${portal.id}`), 'Portal deleted');
+      onRefresh();
+    } catch {}
+  };
+
   const handleEditSaved = () => {
     refetchCreds();
     setEditingCred(null);
@@ -584,6 +593,9 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh }) {
           </button>
           <button onClick={() => onEdit(portal)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="Edit portal">
             <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={handleDelete} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50" title="Delete portal">
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
           {canExpand && (
             <button onClick={() => onAddCredential(portal)}
