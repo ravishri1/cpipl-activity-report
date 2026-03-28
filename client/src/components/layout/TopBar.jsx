@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { UserButton } from '@clerk/clerk-react';
-import { FileText, Menu } from 'lucide-react';
+import { FileText, Menu, Search } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import Breadcrumb from './Breadcrumb';
 
-export default function TopBar({ onMenuToggle }) {
+export default function TopBar({ onMenuToggle, onSearchOpen }) {
   const { user, isAdmin } = useAuth();
 
   return (
@@ -34,8 +34,18 @@ export default function TopBar({ onMenuToggle }) {
           </div>
         </div>
 
-        {/* Right: notification bell + user info + Clerk button */}
+        {/* Right: search + notification bell + user info + Clerk button */}
         <div className="flex items-center gap-3">
+          {/* Global Search trigger */}
+          <button
+            onClick={onSearchOpen}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            title="Search (Ctrl+K)"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span className="hidden md:inline text-xs">Search…</span>
+            <kbd className="hidden md:inline text-[10px] font-mono border border-slate-200 rounded px-1 bg-white text-slate-400">⌃K</kbd>
+          </button>
           <NotificationBell />
           <div className="hidden sm:block text-right">
             <p className="text-sm font-medium text-slate-700">{user?.name}</p>

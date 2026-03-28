@@ -1,12 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import GlobalSearch from '../shared/GlobalSearch';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AppLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { isSeparated } = useAuth();
+
+  // Global Ctrl+K / Cmd+K shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -21,7 +35,8 @@ export default function AppLayout({ children }) {
 
         {/* Main content area - scrollable */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+          <TopBar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} onSearchOpen={() => setSearchOpen(true)} />
+          <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
 
           {/* Separated employee banner */}
           {isSeparated && (
