@@ -466,7 +466,7 @@ function CredentialFormModal({ portalId, credential, users, onClose, onSaved }) 
   );
 }
 
-function CredentialHistoryModal({ credentialId, onClose }) {
+function CredentialHistoryModal({ credentialId, onClose, users }) {
   const { data: history, loading, error } = useFetch(`/credentials/credentials/${credentialId}/history`, []);
 
   const FIELD_LABELS = {
@@ -475,6 +475,25 @@ function CredentialHistoryModal({ credentialId, onClose }) {
     phoneNumber: 'Phone', department: 'Department', purpose: 'Purpose',
     status: 'Status', lastRotated: 'Last Rotated',
   };
+
+  // Resolve old ["10"] format to names using users list
+  function resolveDisplay(field, val) {
+    if (val === null || val === undefined || val === 'null') return '—';
+    if (field === 'sharedWith') {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) {
+          if (parsed.length === 0) return '—';
+          return parsed.map(id => {
+            const u = users?.find(u => String(u.id) === String(id));
+            return u?.name || `User #${id}`;
+          }).join(', ');
+        }
+      } catch {}
+      return val || '—'; // Already resolved to names (new format)
+    }
+    return String(val);
+  }
 
   const ACTION_COLORS = {
     create: 'bg-emerald-100 text-emerald-700',
@@ -533,11 +552,11 @@ function CredentialHistoryModal({ credentialId, onClose }) {
                           <div key={field} className="text-xs flex items-start gap-1">
                             <span className="text-slate-500 font-medium shrink-0 w-24">{FIELD_LABELS[field] || field}:</span>
                             <span className="text-red-600 line-through mr-1 font-mono break-all">
-                              {field === 'password' ? (changes[field].old ? '••••' : '—') : (String(changes[field].old ?? '—'))}
+                              {field === 'password' ? (changes[field].old ? '••••' : '—') : resolveDisplay(field, changes[field].old)}
                             </span>
                             <span className="text-slate-400">→</span>
                             <span className="text-emerald-700 ml-1 font-mono break-all">
-                              {field === 'password' ? (changes[field].new ? '••••' : '—') : (String(changes[field].new ?? '—'))}
+                              {field === 'password' ? (changes[field].new ? '••••' : '—') : resolveDisplay(field, changes[field].new)}
                             </span>
                           </div>
                         ))}
@@ -790,7 +809,7 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
         </div>
       )}
       {historyCredId && (
-        <CredentialHistoryModal credentialId={historyCredId} onClose={() => setHistoryCredId(null)} />
+        <CredentialHistoryModal credentialId={historyCredId} onClose={() => setHistoryCredId(null)} users={users} />
       )}
     </div>
   );
@@ -1005,7 +1024,7 @@ export default function CredentialManager() {
         />
       )}
       {searchHistoryCredId && (
-        <CredentialHistoryModal credentialId={searchHistoryCredId} onClose={() => setSearchHistoryCredId(null)} />
+        <CredentialHistoryModal credentialId={searchHistoryCredId} onClose={() => setSearchHistoryCredId(null)} users={usersData?.users || []} />
       )}
 
       {/* Portal list */}
