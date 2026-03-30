@@ -142,12 +142,14 @@ router.get('/companies/active', asyncHandler(async (req, res) => {
  *   automation      — Sun 11 PM IST      → schedule: "30 17 * * 0"
  *   fy-rollover     — Mar 31 11:55 PM IST → schedule: "25 18 31 3 *"
  */
-router.get('/cron', asyncHandler(async (req, res) => {
+// Vercel Cron uses clean path routing (/cron/:job) — query strings not allowed in vercel.json
+// Legacy/local dev still supports ?job= query param via the same handler
+router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
   if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const job = req.query.job;
+  const job = req.params.job || req.query.job;
   if (!job) return res.status(400).json({ error: 'job query param required' });
 
   const prisma = req.prisma;
