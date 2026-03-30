@@ -216,6 +216,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const myWorkspaceItems = [
     { to: '/my-workspace',       label: 'My Assets',      icon: Package },
+    { to: '/my-asset-requests',  label: 'Asset Requests', icon: Briefcase },
     { to: '/my-files',           label: 'My Files',       icon: FolderOpen },
   ];
 
@@ -313,6 +314,7 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: Package,
       items: [
         { to: '/admin/assets',                  label: 'Asset Manager',           icon: Package },
+        { to: '/admin/asset-requests',          label: 'Asset Requests',          icon: Briefcase },
         { to: '/admin/asset-lifecycle',         label: 'Asset Lifecycle',         icon: Activity },
         { to: '/admin/predictive-maintenance',  label: 'Predictive Maintenance',  icon: HeartPulse },
       ],
@@ -344,6 +346,8 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: PieChart,
       items: [
         { to: '/admin/hr-analytics',            label: 'HR Analytics',            icon: LineChart },
+        { to: '/admin/hr-calendar',             label: 'HR Calendar',             icon: CalendarDays },
+        { to: '/admin/visitors',                label: 'Visitor Register',        icon: UsersRound },
         { to: '/admin/reports',                 label: 'HR Reports',              icon: PieChart },
         { to: '/admin/tickets',                 label: 'Helpdesk',                icon: LifeBuoy },
         { to: '/admin/error-reports',           label: 'Error Reports',           icon: Bug },

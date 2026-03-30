@@ -90,6 +90,10 @@ const MyWFH = lazy(() => import('./components/workspace/MyWFH'));
 const ExitInterviewForm = lazy(() => import('./components/workspace/ExitInterviewForm'));
 const ExitInterviewAdmin = lazy(() => import('./components/admin/ExitInterviewAdmin'));
 const DocumentExpiryDashboard = lazy(() => import('./components/admin/DocumentExpiryDashboard'));
+const HRCalendar = lazy(() => import('./components/admin/HRCalendar'));
+const AssetRequestManager = lazy(() => import('./components/admin/AssetRequestManager'));
+const MyAssetRequests = lazy(() => import('./components/workspace/MyAssetRequests'));
+const VisitorRegister = lazy(() => import('./components/admin/VisitorRegister'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -256,6 +260,10 @@ function AppRoutes() {
                   <Route path="/my-exit-interview" element={<ExitInterviewForm />} />
                   <Route path="/admin/exit-interviews" element={<SeparatedRoute><AdminRoute><ExitInterviewAdmin /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/document-expiry" element={<SeparatedRoute><AdminRoute><DocumentExpiryDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/hr-calendar" element={<SeparatedRoute><AdminRoute><HRCalendar /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/asset-requests" element={<SeparatedRoute><AdminRoute><AssetRequestManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/my-asset-requests" element={<SeparatedRoute><MyAssetRequests /></SeparatedRoute>} />
+                  <Route path="/admin/visitors" element={<SeparatedRoute><AdminRoute><VisitorRegister /></AdminRoute></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />

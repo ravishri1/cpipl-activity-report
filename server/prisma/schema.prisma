@@ -233,6 +233,9 @@ model User {
   wfhReviewed               WFHRequest[]         @relation("WFHRequestReviewer")
   exitInterviews            ExitInterview[]      @relation("ExitInterviewEmployee")
   exitInterviewsConducted   ExitInterview[]      @relation("ExitInterviewConductor")
+  assetRequests             AssetRequest[]       @relation("AssetRequests")
+  assetRequestsReviewed     AssetRequest[]       @relation("AssetRequestReviewed")
+  visitorsHosted            Visitor[]            @relation("VisitorHost")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -2930,5 +2933,49 @@ model ExitInterview {
 
   @@index([userId])
   @@index([status])
+}
+
+// ── Asset Requests ────────────────────────────────────────────────────────────
+
+model AssetRequest {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  assetType   String                              // laptop, chair, monitor, headset, keyboard, mouse, desk, other
+  quantity    Int       @default(1)
+  reason      String?
+  priority    String    @default("normal")        // low | normal | high | urgent
+  status      String    @default("pending")       // pending | approved | fulfilled | rejected
+  reviewedBy  Int?
+  reviewNote  String?
+  fulfilledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation("AssetRequests",        fields: [userId],     references: [id])
+  reviewer    User?     @relation("AssetRequestReviewed", fields: [reviewedBy], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ── Visitor Register ──────────────────────────────────────────────────────────
+
+model Visitor {
+  id          Int       @id @default(autoincrement())
+  name        String
+  phone       String?
+  company     String?
+  purpose     String?
+  hostUserId  Int
+  checkIn     DateTime  @default(now())
+  checkOut    DateTime?
+  badgeNumber String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  host        User @relation("VisitorHost", fields: [hostUserId], references: [id])
+
+  @@index([hostUserId])
+  @@index([checkIn])
 }
 

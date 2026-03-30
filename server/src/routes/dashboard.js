@@ -86,4 +86,43 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   });
 }));
 
+// ── GET /api/dashboard/calendar-events?month=YYYY-MM ─────────────────────────
+router.get('/calendar-events', authenticate, asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().slice(0, 7);
+
+  const [leaves, holidays, wfhList, users] = await Promise.all([
+    req.prisma.leaveRequest.findMany({
+      where: { status: 'approved', OR: [{ startDate: { startsWith: month } }, { endDate: { startsWith: month } }] },
+      include: { user: { select: { id: true, name: true, department: true } }, leaveType: { select: { name: true } } },
+    }),
+    req.prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
+    req.prisma.wFHRequest.findMany({
+      where: { status: 'approved', date: { startsWith: month } },
+      include: { user: { select: { id: true, name: true, department: true } } },
+    }),
+    req.prisma.user.findMany({
+      where: { isActive: true, isHibernated: false },
+      select: { id: true, name: true, dateOfBirth: true, dateOfJoining: true, department: true },
+    }),
+  ]);
+
+  const mm = month.slice(5, 7);
+  const yyyy = month.slice(0, 4);
+
+  const birthdays = users
+    .filter(u => u.dateOfBirth && u.dateOfBirth.slice(5, 7) === mm)
+    .map(u => ({ userId: u.id, name: u.name, department: u.department, date: `${yyyy}-${u.dateOfBirth.slice(5, 10)}` }));
+
+  const anniversaries = users
+    .filter(u => u.dateOfJoining && u.dateOfJoining.slice(5, 7) === mm)
+    .map(u => ({
+      userId: u.id, name: u.name, department: u.department,
+      date: `${yyyy}-${u.dateOfJoining.slice(5, 10)}`,
+      years: parseInt(yyyy) - parseInt(u.dateOfJoining.slice(0, 4)),
+    }))
+    .filter(a => a.years > 0);
+
+  res.json({ leaves, holidays, wfh: wfhList, birthdays, anniversaries });
+}));
+
 module.exports = router;
