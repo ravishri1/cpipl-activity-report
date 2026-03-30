@@ -32,7 +32,7 @@ async function runRenewalAlerts(prisma) {
 
     // Determine recipients — fetch admin emails
     const admins = await prisma.user.findMany({
-      where: { role: { in: ['admin', 'team_lead'] }, status: 'active' },
+      where: { role: { in: ['admin', 'team_lead'] }, isActive: true },
       select: { email: true, name: true },
     });
 

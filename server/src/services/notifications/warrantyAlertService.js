@@ -42,8 +42,8 @@ async function runWarrantyExpiryCheck(prisma) {
     },
     include: {
       handovers: {
-        where: { returnedAt: null },
-        orderBy: { assignedAt: 'desc' },
+        where: { toUserId: { not: null } },
+        orderBy: { handoverDate: 'desc' },
         take: 1,
         include: {
           user: { select: { id: true, name: true, email: true } },
