@@ -93,12 +93,14 @@ function RenewalModal({ renewal, categories, accounts, onClose, onSaved }) {
     if (!body.paymentAccountId) delete body.paymentAccountId;
     if (!body.startDate) delete body.startDate;
 
-    await execute(
-      () => isEdit ? api.put(`/renewals/${renewal.id}`, body) : api.post('/renewals', body),
-      isEdit ? 'Renewal updated!' : 'Renewal created!'
-    );
-    onSaved();
-    onClose();
+    try {
+      await execute(
+        () => isEdit ? api.put(`/renewals/${renewal.id}`, body) : api.post('/renewals', body),
+        isEdit ? 'Renewal updated!' : 'Renewal created!'
+      );
+      onSaved();
+      onClose();
+    } catch { /* error displayed by useApi */ }
   };
 
   const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
@@ -296,16 +298,18 @@ function MarkPaidModal({ renewal, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await execute(
-      () => api.post(`/renewals/${renewal.id}/mark-paid`, {
-        amount: amount ? parseFloat(amount) : undefined,
-        paidOn,
-        notes,
-      }),
-      'Marked as paid!'
-    );
-    onSaved();
-    onClose();
+    try {
+      await execute(
+        () => api.post(`/renewals/${renewal.id}/mark-paid`, {
+          amount: amount ? parseFloat(amount) : undefined,
+          paidOn,
+          notes,
+        }),
+        'Marked as paid!'
+      );
+      onSaved();
+      onClose();
+    } catch { /* error displayed by useApi */ }
   };
 
   const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
@@ -459,24 +463,30 @@ export default function RenewalManager() {
 
   async function handleDeleteCat(id) {
     if (!window.confirm('Delete this category?')) return;
-    await execute(() => api.delete(`/renewals/categories/${id}`), 'Category deleted');
-    refetchCats();
+    try {
+      await execute(() => api.delete(`/renewals/categories/${id}`), 'Category deleted');
+      refetchCats();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function handleSaveCat() {
-    if (editCat) {
-      await execute(() => api.put(`/renewals/categories/${editCat.id}`, catForm), 'Category updated');
-    } else {
-      await execute(() => api.post('/renewals/categories', catForm), 'Category created');
-    }
-    setCatModal(false); setEditCat(null); setCatForm({ name: '', icon: '' });
-    refetchCats();
+    try {
+      if (editCat) {
+        await execute(() => api.put(`/renewals/categories/${editCat.id}`, catForm), 'Category updated');
+      } else {
+        await execute(() => api.post('/renewals/categories', catForm), 'Category created');
+      }
+      setCatModal(false); setEditCat(null); setCatForm({ name: '', icon: '' });
+      refetchCats();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function handleDeleteAcct(id) {
     if (!window.confirm('Delete this account?')) return;
-    await execute(() => api.delete(`/renewals/accounts/${id}`), 'Account deleted');
-    refetchAccts();
+    try {
+      await execute(() => api.delete(`/renewals/accounts/${id}`), 'Account deleted');
+      refetchAccts();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function handleDeleteRenewal(id) {
@@ -526,13 +536,15 @@ export default function RenewalManager() {
   }
 
   async function handleSaveAcct() {
-    if (editAcct) {
-      await execute(() => api.put(`/renewals/accounts/${editAcct.id}`, acctForm), 'Account updated');
-    } else {
-      await execute(() => api.post('/renewals/accounts', acctForm), 'Account created');
-    }
-    setAcctModal(false); setEditAcct(null); setAcctForm({ accountCode: '', type: '', name: '', identifier: '' });
-    refetchAccts();
+    try {
+      if (editAcct) {
+        await execute(() => api.put(`/renewals/accounts/${editAcct.id}`, acctForm), 'Account updated');
+      } else {
+        await execute(() => api.post('/renewals/accounts', acctForm), 'Account created');
+      }
+      setAcctModal(false); setEditAcct(null); setAcctForm({ accountCode: '', type: '', name: '', identifier: '' });
+      refetchAccts();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function handleScanEmail() {
@@ -554,8 +566,10 @@ export default function RenewalManager() {
   }
 
   async function handleDismissScan(id) {
-    await execute(() => api.post(`/renewals/email-scans/${id}/dismiss`), 'Dismissed');
-    refetchScans();
+    try {
+      await execute(() => api.post(`/renewals/email-scans/${id}/dismiss`), 'Dismissed');
+      refetchScans();
+    } catch { /* error displayed by useApi */ }
   }
 
   // ── Summary card config ────────────────────────────────────────────────────

@@ -19,14 +19,18 @@ export default function CompOffManager() {
 
   const handleApprove = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/comp-off/${id}/review`, { status: 'approved' }), 'Request approved!');
-    refetch();
+    try {
+      await execute(() => api.put(`/comp-off/${id}/review`, { status: 'approved' }), 'Request approved!');
+      refetch();
+    } catch { /* error displayed by useApi */ }
   };
 
   const handleReject = async (id) => {
     clearMessages();
-    await execute(() => api.put(`/comp-off/${id}/review`, { status: 'rejected', reviewNote: rejectNote }), 'Request rejected.');
-    setRejectId(null); setRejectNote(''); refetch();
+    try {
+      await execute(() => api.put(`/comp-off/${id}/review`, { status: 'rejected', reviewNote: rejectNote }), 'Request rejected.');
+      setRejectId(null); setRejectNote(''); refetch();
+    } catch { /* error displayed by useApi */ }
   };
 
   return (

@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-03-26T08:21:08.722Z",
+  "timestamp": "2026-03-30T02:31:00.040Z",
   "version": 2,
   "stats": {
-    "filesScanned": 121,
-    "apiCallsFound": 429,
-    "routesFound": 502,
+    "filesScanned": 125,
+    "apiCallsFound": 458,
+    "routesFound": 539,
     "issuesFound": 0
   },
   "missingRoutes": [
@@ -32,10 +32,22 @@
       "severity": "LOW"
     },
     {
+      "file": "components\\admin\\CompanyMaster.jsx",
+      "type": "MISSING_REFETCH",
+      "message": "handleDeleteLocation() calls execute() but no refetch() or data-refresh callback found",
+      "severity": "HIGH"
+    },
+    {
       "file": "components\\admin\\ConfirmationManager.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
       "severity": "LOW"
+    },
+    {
+      "file": "components\\admin\\CredentialManager.jsx",
+      "type": "MISSING_REFETCH",
+      "message": "handleDelete() calls execute() but no refetch() or data-refresh callback found",
+      "severity": "HIGH"
     },
     {
       "file": "components\\admin\\ExpenseApproval.jsx",
@@ -81,12 +93,6 @@
     },
     {
       "file": "components\\employees\\EmployeeDirectory.jsx",
-      "type": "MANUAL_FETCH",
-      "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
-      "severity": "LOW"
-    },
-    {
-      "file": "components\\employees\\EmployeeProfile.jsx",
       "type": "MANUAL_FETCH",
       "message": "Uses manual useState+useEffect+api.get instead of useFetch() hook",
       "severity": "LOW"
@@ -164,5 +170,5 @@
       "severity": "MEDIUM"
     }
   ],
-  "matchedCount": 427
+  "matchedCount": 456
 }

@@ -317,53 +317,69 @@ export default function RecruitmentManager() {
   const [showOfferForm, setShowOfferForm] = useState(false);
 
   async function saveJob(form) {
-    if (editJob) {
-      await execute(() => api.put(`/recruitment/openings/${editJob.id}`, form), 'Job updated!');
-    } else {
-      await execute(() => api.post('/recruitment/openings', form), 'Job created!');
-    }
-    setShowJobForm(false); setEditJob(null); refetchJobs();
+    try {
+      if (editJob) {
+        await execute(() => api.put(`/recruitment/openings/${editJob.id}`, form), 'Job updated!');
+      } else {
+        await execute(() => api.post('/recruitment/openings', form), 'Job created!');
+      }
+      setShowJobForm(false); setEditJob(null); refetchJobs();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function closeJob(id) {
     if (!window.confirm('Close this job opening?')) return;
-    await execute(() => api.put(`/recruitment/openings/${id}`, { status: 'closed' }), 'Job closed.');
-    refetchJobs();
+    try {
+      await execute(() => api.put(`/recruitment/openings/${id}`, { status: 'closed' }), 'Job closed.');
+      refetchJobs();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function addCandidate(form) {
-    await execute(() => api.post('/recruitment/candidates', form), 'Candidate added!');
-    setShowCandForm(false); refetchCands();
+    try {
+      await execute(() => api.post('/recruitment/candidates', form), 'Candidate added!');
+      setShowCandForm(false); refetchCands();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function moveStage(candidateId, newStage) {
-    await execute(() => api.put(`/recruitment/candidates/${candidateId}/stage`, { stage: newStage }), 'Stage updated!');
-    refetchCands();
+    try {
+      await execute(() => api.put(`/recruitment/candidates/${candidateId}/stage`, { stage: newStage }), 'Stage updated!');
+      refetchCands();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function scheduleInterview(form) {
-    if (editInterview) {
-      await execute(() => api.put(`/recruitment/interviews/${editInterview.id}`, form), 'Interview updated!');
-    } else {
-      await execute(() => api.post('/recruitment/interviews', form), 'Interview scheduled!');
-    }
-    setShowInterviewForm(false); setEditInterview(null); refetchIntvs();
+    try {
+      if (editInterview) {
+        await execute(() => api.put(`/recruitment/interviews/${editInterview.id}`, form), 'Interview updated!');
+      } else {
+        await execute(() => api.post('/recruitment/interviews', form), 'Interview scheduled!');
+      }
+      setShowInterviewForm(false); setEditInterview(null); refetchIntvs();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function deleteInterview(id) {
     if (!window.confirm('Delete this interview?')) return;
-    await execute(() => api.delete(`/recruitment/interviews/${id}`), 'Interview deleted.');
-    refetchIntvs();
+    try {
+      await execute(() => api.delete(`/recruitment/interviews/${id}`), 'Interview deleted.');
+      refetchIntvs();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function createOffer(form) {
-    await execute(() => api.post('/recruitment/offers', form), 'Offer created!');
-    setShowOfferForm(false); refetchOffers(); refetchCands();
+    try {
+      await execute(() => api.post('/recruitment/offers', form), 'Offer created!');
+      setShowOfferForm(false); refetchOffers(); refetchCands();
+    } catch { /* error displayed by useApi */ }
   }
 
   async function updateOfferStatus(id, status) {
-    await execute(() => api.put(`/recruitment/offers/${id}`, { status }), 'Offer updated!');
-    refetchOffers(); refetchCands();
+    try {
+      await execute(() => api.put(`/recruitment/offers/${id}`, { status }), 'Offer updated!');
+      refetchOffers(); refetchCands();
+    } catch { /* error displayed by useApi */ }
   }
 
   const loading = tab === TAB_JOBS ? jobsLoading : tab === TAB_CANDIDATES ? candsLoading : tab === TAB_INTERVIEWS ? intvLoading : offersLoading;

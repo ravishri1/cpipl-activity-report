@@ -124,28 +124,34 @@ function DetailPanel({ report, onClose, onUpdated }) {
   const [resolution, setResolution] = useState(report.resolution || '');
 
   const handleAnalyze = async () => {
-    await execute(async () => {
-      const res = await api.post(`/error-reports/${report.id}/analyze`);
-      setAnalysis(res.data.analysis);
-      if (res.data.model) setAiModel(res.data.model);
-      return res;
-    }, 'Analysis complete!');
-    onUpdated();
+    try {
+      await execute(async () => {
+        const res = await api.post(`/error-reports/${report.id}/analyze`);
+        setAnalysis(res.data.analysis);
+        if (res.data.model) setAiModel(res.data.model);
+        return res;
+      }, 'Analysis complete!');
+      onUpdated();
+    } catch { /* error displayed by useApi */ }
   };
 
   const handleSetStatus = async (status) => {
-    await execute(
-      () => api.put(`/error-reports/${report.id}/status`, { status, resolution }),
-      `Marked as ${status}`
-    );
-    onUpdated();
+    try {
+      await execute(
+        () => api.put(`/error-reports/${report.id}/status`, { status, resolution }),
+        `Marked as ${status}`
+      );
+      onUpdated();
+    } catch { /* error displayed by useApi */ }
   };
 
   const handleDelete = async () => {
     if (!window.confirm('Delete this error report permanently?')) return;
-    await execute(() => api.delete(`/error-reports/${report.id}`), 'Deleted.');
-    onClose();
-    onUpdated();
+    try {
+      await execute(() => api.delete(`/error-reports/${report.id}`), 'Deleted.');
+      onClose();
+      onUpdated();
+    } catch { /* error displayed by useApi */ }
   };
 
   const affectedUsers = (() => {

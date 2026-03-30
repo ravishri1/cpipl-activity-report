@@ -37,12 +37,14 @@ export default function WorkspacePendingAlerts() {
 
   const handleMarkDone = async (userId) => {
     setMarkingId(userId);
-    await execute(
-      () => api.put(`/users/${userId}/workspace-done`),
-      'Workspace account marked as suspended.'
-    );
-    setMarkingId(null);
-    refetch();
+    try {
+      await execute(
+        () => api.put(`/users/${userId}/workspace-done`),
+        'Workspace account marked as suspended.'
+      );
+      refetch();
+    } catch { /* error displayed by useApi */ }
+    finally { setMarkingId(null); }
   };
 
   return (

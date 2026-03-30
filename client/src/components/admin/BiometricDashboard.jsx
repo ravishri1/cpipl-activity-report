@@ -477,27 +477,22 @@ function UnmatchedTab({ employees }) {
 
   const handleConfirmAssign = async () => {
     if (!selectedUser || !assignModal) return;
-    // We assign the latest punch for this enroll number
-    // Find punch id via punch log — we use the enrollNumber directly via assign endpoint
-    // The assign endpoint needs a punch ID; we need to get one
-    // Fetch unmatched punches for this enroll number
-    const res = await execute(
-      async () => {
-        // Get one punch id for this enroll number
-        const punch = await api.get(`/biometric/punches?enrollNumber=${assignModal.enrollNumber}&matchStatus=unmatched&limit=1`);
-        const punchId = punch.data.punches?.[0]?.id;
-        if (!punchId) throw new Error('No unmatched punch found');
-        return api.post(`/biometric/punches/${punchId}/assign`, {
-          userId: selectedUser,
-          saveMapping,
-        });
-      },
-      'Employee assigned!'
-    );
-    if (res) {
+    try {
+      await execute(
+        async () => {
+          const punch = await api.get(`/biometric/punches?enrollNumber=${assignModal.enrollNumber}&matchStatus=unmatched&limit=1`);
+          const punchId = punch.data.punches?.[0]?.id;
+          if (!punchId) throw new Error('No unmatched punch found');
+          return api.post(`/biometric/punches/${punchId}/assign`, {
+            userId: selectedUser,
+            saveMapping,
+          });
+        },
+        'Employee assigned!'
+      );
       setAssignModal(null);
       refetch();
-    }
+    } catch { /* error displayed by useApi */ }
   };
 
   return (
