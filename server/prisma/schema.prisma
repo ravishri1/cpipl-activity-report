@@ -222,6 +222,9 @@ model User {
   ledgersGenerated          MonthlyLedger[]      @relation("LedgerGeneratedBy")
   ledgerAdjustments         LedgerAdjustment[]   @relation("LedgerAdjustments")
   ledgerAdjustmentsCreated  LedgerAdjustment[]   @relation("LedgerAdjustmentCreator")
+  appraisalCyclesCreated    AppraisalCycle[]     @relation("AppraisalCycleCreator")
+  appraisalReviews          AppraisalReview[]    @relation("AppraisalEmployee")
+  appraisalReviewsGiven     AppraisalReview[]    @relation("AppraisalReviewer")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -2729,4 +2732,56 @@ model LedgerAdjustment {
 
   user        User     @relation("LedgerAdjustments", fields: [userId], references: [id])
   creator     User     @relation("LedgerAdjustmentCreator", fields: [createdBy], references: [id])
+}
+
+// ── Appraisal / Performance Review ────────────────────────────────────────────
+
+model AppraisalCycle {
+  id               Int      @id @default(autoincrement())
+  name             String                       // "Annual Review 2026"
+  period           String                       // annual | half_yearly | quarterly
+  year             Int
+  startDate        String                       // YYYY-MM-DD (self-assessment opens)
+  endDate          String                       // YYYY-MM-DD (manager review deadline)
+  status           String   @default("draft")  // draft | active | closed
+  templateSections String?                      // JSON: [{id,name,weight,maxScore}]
+  createdBy        Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  creator          User?             @relation("AppraisalCycleCreator", fields: [createdBy], references: [id])
+  reviews          AppraisalReview[]
+
+  @@index([status])
+  @@index([year])
+}
+
+model AppraisalReview {
+  id               Int       @id @default(autoincrement())
+  cycleId          Int
+  employeeId       Int
+  reviewerId       Int?                          // manager / admin doing manager review
+  status           String    @default("pending") // pending | self_submitted | manager_reviewed | completed
+  selfScores       String?                       // JSON: [{sectionId,score,comment}]
+  managerScores    String?                       // JSON: [{sectionId,score,comment}]
+  selfRating       Float?                        // weighted avg of self scores
+  managerRating    Float?                        // weighted avg of manager scores
+  finalRating      Float?                        // HR override or = managerRating
+  employeeComment  String?                       // overall comment from employee
+  managerComment   String?                       // overall comment from manager
+  hrNotes          String?
+  selfSubmittedAt  DateTime?
+  reviewedAt       DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cycle            AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee         User           @relation("AppraisalEmployee", fields: [employeeId], references: [id])
+  reviewer         User?          @relation("AppraisalReviewer", fields: [reviewerId], references: [id])
+
+  @@unique([cycleId, employeeId])
+  @@index([employeeId])
+  @@index([cycleId])
+  @@index([status])
 }

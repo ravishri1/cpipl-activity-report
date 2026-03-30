@@ -199,10 +199,11 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Support & Policies',
       icon: ShieldCheck,
       items: [
-        { to: '/my-compliance', label: 'Compliance',    icon: ShieldCheck },
-        { to: '/surveys',       label: 'Surveys',       icon: ClipboardList },
-        { to: '/my-support',    label: 'My Support',    icon: LifeBuoy },
-        { to: '/wiki',          label: 'Knowledge Base',icon: BookOpen },
+        { to: '/my-compliance',  label: 'Compliance',    icon: ShieldCheck },
+        { to: '/surveys',        label: 'Surveys',       icon: ClipboardList },
+        { to: '/my-support',     label: 'My Support',    icon: LifeBuoy },
+        { to: '/wiki',           label: 'Knowledge Base',icon: BookOpen },
+        { to: '/my-appraisals',  label: 'My Appraisals', icon: LineChart },
       ],
     },
   ];
@@ -253,6 +254,7 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { to: '/admin/surveys',        label: 'Survey Manager',   icon: ClipboardList },
         { to: '/admin/suggestions',    label: 'Suggestions',      icon: MessageSquare },
+        { to: '/admin/appraisals',     label: 'Appraisals',       icon: LineChart },
       ],
     },
   ];

@@ -52,6 +52,7 @@ const compOffRoutes = require('./routes/compOff');
 const regularizationRoutes = require('./routes/regularization');
 const recruitmentRoutes = require('./routes/recruitment');
 const musterRoutes = require('./routes/muster');
+const appraisalRoutes = require('./routes/appraisals');
 const internalRoutes = require('./routes/internal');
 const credentialRoutes = require('./routes/credentials');
 const departmentRoutes = require('./routes/departments');
@@ -364,6 +365,7 @@ app.use('/api/internal', internalRoutes);
 app.use('/api/credentials', credentialRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/security-audit', securityAuditRoutes);
+app.use('/api/appraisals', appraisalRoutes);
 
 // ═══ Health check — real DB ping + circuit breaker status ═══
 // Pattern: Active health probe that distinguishes "process is up" from

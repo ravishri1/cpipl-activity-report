@@ -80,6 +80,8 @@ const CredentialManager = lazy(() => import('./components/admin/CredentialManage
 const DepartmentSetup = lazy(() => import('./components/admin/DepartmentSetup'));
 const SecurityAuditPanel = lazy(() => import('./components/admin/SecurityAuditPanel'));
 const MyCredentials = lazy(() => import('./components/credentials/MyCredentials'));
+const AppraisalManager = lazy(() => import('./components/admin/AppraisalManager'));
+const MyAppraisals = lazy(() => import('./components/workspace/MyAppraisals'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -236,6 +238,8 @@ function AppRoutes() {
                   <Route path="/admin/credentials" element={<SeparatedRoute><AdminRoute><CredentialManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/departments" element={<SeparatedRoute><AdminRoute><DepartmentSetup /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/security-audit" element={<SeparatedRoute><AdminRoute><SecurityAuditPanel /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/appraisals" element={<SeparatedRoute><AdminRoute><AppraisalManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/my-appraisals" element={<SeparatedRoute><MyAppraisals /></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />
