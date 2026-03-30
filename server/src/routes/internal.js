@@ -141,6 +141,7 @@ router.get('/companies/active', asyncHandler(async (req, res) => {
  *   weekly          — Mon 8:30 AM IST    → schedule: "0 3 * * 1"
  *   automation      — Sun 11 PM IST      → schedule: "30 17 * * 0"
  *   fy-rollover     — Mar 31 11:55 PM IST → schedule: "25 18 31 3 *"
+ *   auto-payroll    — 9th of month 9 AM IST → schedule: "30 3 9 * *"
  */
 // Vercel Cron uses clean path routing (/cron/:job) — query strings not allowed in vercel.json
 // Legacy/local dev still supports ?job= query param via the same handler
@@ -303,6 +304,97 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
       const { runAutomationAnalysis } = require('../services/automationAnalyzer');
       const result = await runAutomationAnalysis(prisma, { triggeredBy: 'vercel-cron', periodDays: 30 });
       log(`Automation analysis: ${result.insightsCreated} insights from ${result.totalTasks} tasks (${result.durationMs}ms).`);
+    }
+
+    // ── Auto Payroll (9th of each month, 9 AM IST) ────────────────────────
+    else if (job === 'auto-payroll') {
+      // Generate payslips for the PREVIOUS month for all active employees
+      const now = new Date();
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const month = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+
+      const salaries = await prisma.salaryStructure.findMany({
+        include: { user: { select: { id: true, name: true, isActive: true, branchId: true, company: { select: { name: true } } } } },
+      });
+      const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
+
+      if (activeSalaries.length === 0) {
+        log(`auto-payroll: No active employees with salary structures — skipping ${month}.`);
+      } else {
+        const year = parseInt(month.split('-')[0]);
+        const monthNum = parseInt(month.split('-')[1]);
+        const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+        const holidays = await prisma.holiday.findMany({ where: { date: { startsWith: month } } });
+        const globalHolidayDates = new Set(holidays.map(h => h.date));
+
+        const branchHolidayCache = {};
+        const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
+        for (const branchId of uniqueBranchIds) {
+          const bh = await prisma.branchHoliday.findMany({ where: { branchId, date: { startsWith: month } } });
+          branchHolidayCache[branchId] = new Set(bh.map(h => h.date));
+        }
+
+        const calcWorkingDays = (holidaySet) => {
+          let count = 0;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const date = `${month}-${String(d).padStart(2, '0')}`;
+            if (new Date(year, monthNum - 1, d).getDay() !== 0 && !holidaySet.has(date)) count++;
+          }
+          return count;
+        };
+
+        let generated = 0, skipped = 0;
+        for (const sal of activeSalaries) {
+          try {
+            const existing = await prisma.payslip.findUnique({ where: { userId_month: { userId: sal.userId, month } } });
+            if (existing) { skipped++; continue; }
+
+            const mergedHolidays = new Set(globalHolidayDates);
+            if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
+              branchHolidayCache[sal.user.branchId].forEach(d => mergedHolidays.add(d));
+            }
+            const workingDays = calcWorkingDays(mergedHolidays);
+
+            const attendances = await prisma.attendance.findMany({ where: { userId: sal.userId, date: { startsWith: month } } });
+            let presentDays = 0, lopDays = 0;
+            for (const att of attendances) {
+              if (att.status === 'present') presentDays++;
+              else if (att.status === 'half_day') presentDays += 0.5;
+              else if (att.status === 'absent') lopDays++;
+            }
+            if (attendances.length === 0) { presentDays = workingDays; lopDays = 0; }
+
+            const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
+            const lopDeduction = Math.round(perDaySalary * lopDays);
+            const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
+              sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+            const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
+            const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction);
+
+            await prisma.payslip.create({
+              data: {
+                userId: sal.userId, month, year,
+                basic: sal.basic, hra: sal.hra, da: sal.da,
+                specialAllowance: sal.specialAllowance, medicalAllowance: sal.medicalAllowance,
+                conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
+                otherAllowanceLabel: sal.otherAllowanceLabel, grossEarnings,
+                employerPf: sal.employerPf, employerEsi: sal.employerEsi,
+                employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
+                professionalTax: sal.professionalTax, tds: sal.tds,
+                otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
+                netPay, workingDays, presentDays, lopDays, lopDeduction,
+                companyName: sal.user.company?.name || null,
+                status: 'generated', generatedAt: new Date(),
+              },
+            });
+            generated++;
+          } catch (err) {
+            warn(`auto-payroll: failed for userId ${sal.userId}: ${err.message}`);
+          }
+        }
+        log(`auto-payroll (${month}): ${generated} payslip(s) generated, ${skipped} skipped (already existed).`);
+      }
     }
 
     // ── FY Rollover (March 31) ─────────────────────────────────────────────
