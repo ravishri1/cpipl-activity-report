@@ -107,7 +107,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
 // GET /api/reports/history?from=YYYY-MM-DD&to=YYYY-MM-DD&userId=X
 router.get('/history', authenticate, asyncHandler(async (req, res) => {
-  const { from, to, userId } = req.query;
+  const { from, to, userId, department } = req.query;
   const where = {};
 
   if (from) where.reportDate = { ...where.reportDate, gte: from };
@@ -125,8 +125,13 @@ router.get('/history', authenticate, asyncHandler(async (req, res) => {
       if (!target || target.department !== req.user.department) return res.json([]);
       where.userId = parseInt(userId);
     }
-  } else if (userId) {
-    where.userId = parseInt(userId);
+  } else {
+    // admin: support userId and/or department filter
+    if (userId) {
+      where.userId = parseInt(userId);
+    } else if (department && department !== 'all') {
+      where.user = { department };
+    }
   }
 
   const reports = await req.prisma.dailyReport.findMany({

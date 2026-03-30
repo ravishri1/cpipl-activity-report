@@ -9,12 +9,13 @@ export default function ReportHistory() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selectedUser, setSelectedUser] = useState('');
+  const [selectedDept, setSelectedDept] = useState('');
   const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
-    // Set default date range to last 7 days
     const today = new Date();
     const weekAgo = new Date();
     weekAgo.setDate(today.getDate() - 7);
@@ -22,19 +23,24 @@ export default function ReportHistory() {
     setFrom(weekAgo.toISOString().split('T')[0]);
 
     if (isAdmin) {
-      api.get('/users').then((res) => setUsers(res.data)).catch(() => {});
+      api.get('/users').then((res) => {
+        setUsers(res.data);
+        const depts = [...new Set(res.data.map(u => u.department).filter(Boolean))].sort();
+        setDepartments(depts);
+      }).catch(() => {});
     }
   }, []);
 
   useEffect(() => {
     if (from && to) fetchReports();
-  }, [from, to, selectedUser]);
+  }, [from, to, selectedUser, selectedDept]);
 
   const fetchReports = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from, to });
       if (selectedUser) params.append('userId', selectedUser);
+      else if (selectedDept) params.append('department', selectedDept);
       const res = await api.get(`/reports/history?${params}`);
       setReports(res.data);
     } catch (err) {
@@ -60,10 +66,14 @@ export default function ReportHistory() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `reports_${from}_to_${to}.csv`;
+    a.download = `reports_${from}_to_${to}${selectedDept ? `_${selectedDept}` : ''}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // When user is selected, clear dept and vice versa
+  const handleUserChange = (v) => { setSelectedUser(v); if (v) setSelectedDept(''); };
+  const handleDeptChange = (v) => { setSelectedDept(v); if (v) setSelectedUser(''); };
 
   return (
     <div>
@@ -92,16 +102,30 @@ export default function ReportHistory() {
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           {isAdmin && (
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Member</label>
-              <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">All Members</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Department</label>
+                <select value={selectedDept} onChange={(e) => handleDeptChange(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">All Departments</option>
+                  {departments.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Member</label>
+                <select value={selectedUser} onChange={(e) => handleUserChange(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">All Members</option>
+                  {users
+                    .filter(u => !selectedDept || u.department === selectedDept)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                </select>
+              </div>
+            </>
           )}
           <button onClick={fetchReports}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
@@ -109,6 +133,14 @@ export default function ReportHistory() {
             Search
           </button>
         </div>
+        {isAdmin && reports.length > 0 && (
+          <p className="text-xs text-slate-400 mt-3">
+            {reports.length} report(s)
+            {selectedDept ? ` · ${selectedDept}` : ''}
+            {selectedUser ? ` · ${users.find(u => u.id == selectedUser)?.name || ''}` : ''}
+            {' '}from {from} to {to}
+          </p>
+        )}
       </div>
 
       {/* Results */}
@@ -144,7 +176,6 @@ export default function ReportHistory() {
               </button>
               {expanded === r.id && (
                 <div className="px-5 pb-4 border-t border-slate-100 pt-4 space-y-3">
-                  {/* Task breakdown with hours */}
                   {r.tasks && r.tasks.length > 0 ? (
                     <div>
                       <p className="text-sm font-medium text-slate-600 mb-2">Tasks & Hours</p>
