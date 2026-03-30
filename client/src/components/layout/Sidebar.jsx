@@ -325,6 +325,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/compliance',              label: 'Compliance Tracker',      icon: BadgeCheck },
         { to: '/admin/renewals',                label: 'Renewal Manager',         icon: RefreshCw },
         { to: '/admin/insurance',               label: 'Insurance Management',    icon: Heart },
+        { to: '/admin/document-expiry',         label: 'Document Expiry',         icon: CalendarDays },
       ],
     },
     {

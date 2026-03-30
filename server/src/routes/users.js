@@ -960,4 +960,28 @@ router.post('/:id/reactivate', authenticate, requireAdmin, asyncHandler(async (r
   res.json({ message: `${user.name}'s account has been reactivated.` });
 }));
 
+// ── GET /users/documents-expiring — Admin: docs expiring within N days ────────
+router.get('/documents-expiring', requireAdmin, asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days) || 60;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const future = new Date(today);
+  future.setDate(future.getDate() + days);
+
+  const todayStr  = today.toISOString().slice(0, 10);
+  const futureStr = future.toISOString().slice(0, 10);
+
+  const docs = await req.prisma.employeeDocument.findMany({
+    where: {
+      expiryDate: { not: null, lte: futureStr },
+    },
+    include: {
+      user: { select: { id: true, name: true, employeeId: true, department: true } },
+    },
+    orderBy: { expiryDate: 'asc' },
+  });
+
+  res.json(docs);
+}));
+
 module.exports = router;

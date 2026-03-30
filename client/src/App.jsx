@@ -89,6 +89,7 @@ const WFHManager = lazy(() => import('./components/admin/WFHManager'));
 const MyWFH = lazy(() => import('./components/workspace/MyWFH'));
 const ExitInterviewForm = lazy(() => import('./components/workspace/ExitInterviewForm'));
 const ExitInterviewAdmin = lazy(() => import('./components/admin/ExitInterviewAdmin'));
+const DocumentExpiryDashboard = lazy(() => import('./components/admin/DocumentExpiryDashboard'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -254,6 +255,7 @@ function AppRoutes() {
                   <Route path="/my-wfh" element={<SeparatedRoute><MyWFH /></SeparatedRoute>} />
                   <Route path="/my-exit-interview" element={<ExitInterviewForm />} />
                   <Route path="/admin/exit-interviews" element={<SeparatedRoute><AdminRoute><ExitInterviewAdmin /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/document-expiry" element={<SeparatedRoute><AdminRoute><DocumentExpiryDashboard /></AdminRoute></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />

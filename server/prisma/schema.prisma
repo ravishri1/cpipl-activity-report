@@ -599,11 +599,15 @@ model EmployeeDocument {
   name       String                              // "Aadhar Card"
   type       String                              // "id_proof", "address_proof", "education", "other"
   fileUrl    String                              // Vercel Blob URL
+  docNumber  String?                             // document number / reference
+  issueDate  String?                             // "YYYY-MM-DD"
+  expiryDate String?                             // "YYYY-MM-DD" — null if no expiry
   uploadedAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([expiryDate])
 }
 
 model ProfileChangeLog {
@@ -2927,3 +2931,4 @@ model ExitInterview {
   @@index([userId])
   @@index([status])
 }
+
