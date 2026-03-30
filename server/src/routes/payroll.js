@@ -1050,4 +1050,220 @@ router.get('/stopped-employees', requireAdmin, asyncHandler(async (req, res) => 
   res.json(stopped);
 }));
 
+// ── GET /export?month=YYYY-MM — Download all payslips as Excel ───────────────
+router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be YYYY-MM format.');
+
+  const XLSX = require('xlsx');
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, email: true } } },
+    orderBy: { user: { name: 'asc' } },
+  });
+
+  if (payslips.length === 0) throw notFound('No payslips found for this month.');
+
+  const rows = payslips.map(p => ({
+    'Emp ID':         p.user?.employeeId || '',
+    'Name':           p.user?.name || '',
+    'Department':     p.user?.department || '',
+    'Designation':    p.user?.designation || '',
+    'Basic':          p.basic || 0,
+    'HRA':            p.hra || 0,
+    'DA':             p.da || 0,
+    'Special Allow.': p.specialAllowance || 0,
+    'Medical Allow.': p.medicalAllowance || 0,
+    'Conveyance':     p.conveyanceAllowance || 0,
+    'Other Allow.':   p.otherAllowance || 0,
+    'Gross Earnings': p.grossEarnings || 0,
+    'Emp PF':         p.employeePf || 0,
+    'Emp ESI':        p.employeeEsi || 0,
+    'Prof. Tax':      p.professionalTax || 0,
+    'TDS':            p.tds || 0,
+    'LOP Deduction':  p.lopDeduction || 0,
+    'Other Ded.':     p.otherDeductions || 0,
+    'Total Deductions': p.totalDeductions || 0,
+    'Net Pay':        p.netPay || 0,
+    'Employer PF':    p.employerPf || 0,
+    'Employer ESI':   p.employerEsi || 0,
+    'LOP Days':       p.lopDays || 0,
+    'Working Days':   p.workingDays || 0,
+    'Present Days':   p.presentDays || 0,
+    'Status':         p.status || '',
+  }));
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 12) }));
+  XLSX.utils.book_append_sheet(wb, ws, `Payroll ${month}`);
+
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="payroll_${month}.xlsx"`);
+  res.send(buffer);
+}));
+
+// ── POST /increment — Propose salary increment (tied to appraisal or standalone) ──
+router.post('/increment', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, newCtcAnnual, effectiveFrom, reason, appraisalReviewId } = req.body;
+  if (!userId || !newCtcAnnual || !effectiveFrom) throw badRequest('userId, newCtcAnnual, and effectiveFrom are required.');
+
+  const uid = parseInt(userId);
+  const existing = await req.prisma.salaryStructure.findUnique({ where: { userId: uid } });
+  if (!existing) throw notFound('No salary structure found for this employee. Create one first.');
+
+  const increment = newCtcAnnual - existing.ctcAnnual;
+  if (increment <= 0) throw badRequest('New CTC must be higher than current CTC.');
+
+  const incrementPct = Math.round((increment / existing.ctcAnnual) * 10000) / 100;
+  const newCtcMonthly = Math.round((newCtcAnnual / 12) * 100) / 100;
+
+  // Proportionally scale all components
+  const scaleFactor = newCtcAnnual / existing.ctcAnnual;
+  const scale = (v) => Math.round((v || 0) * scaleFactor * 100) / 100;
+
+  const data = {
+    ctcAnnual: newCtcAnnual,
+    ctcMonthly: newCtcMonthly,
+    basic: scale(existing.basic),
+    hra: scale(existing.hra),
+    da: scale(existing.da),
+    specialAllowance: scale(existing.specialAllowance),
+    medicalAllowance: scale(existing.medicalAllowance),
+    conveyanceAllowance: scale(existing.conveyanceAllowance),
+    otherAllowance: scale(existing.otherAllowance),
+    employerPf: scale(existing.employerPf),
+    employerEsi: scale(existing.employerEsi),
+    employeePf: scale(existing.employeePf),
+    employeeEsi: scale(existing.employeeEsi),
+    professionalTax: existing.professionalTax,
+    tds: scale(existing.tds),
+    effectiveFrom,
+  };
+  data.grossEarnings = data.basic + data.hra + data.da + data.specialAllowance + data.medicalAllowance + data.conveyanceAllowance + data.otherAllowance;
+  data.netPayMonthly = data.grossEarnings - data.employeePf - data.employeeEsi - (data.professionalTax || 0) - data.tds;
+
+  const [updated] = await req.prisma.$transaction([
+    req.prisma.salaryStructure.update({ where: { userId: uid }, data }),
+    req.prisma.salaryRevision.create({
+      data: {
+        userId: uid, effectiveFrom,
+        oldCtc: existing.ctcAnnual, newCtc: newCtcAnnual,
+        reason: reason || `Salary increment ${incrementPct}%`,
+        revisedBy: req.user.id,
+      },
+    }),
+  ]);
+
+  // Mark appraisal review if linked
+  if (appraisalReviewId) {
+    await req.prisma.appraisalReview.update({
+      where: { id: parseInt(appraisalReviewId) },
+      data: { hrNotes: (await req.prisma.appraisalReview.findUnique({ where: { id: parseInt(appraisalReviewId) }, select: { hrNotes: true } }))?.hrNotes
+        ? undefined
+        : `Increment applied: ₹${existing.ctcAnnual.toLocaleString('en-IN')} → ₹${newCtcAnnual.toLocaleString('en-IN')} (${incrementPct}%) effective ${effectiveFrom}` },
+    }).catch(() => {});
+  }
+
+  res.json({ message: `Increment applied. ${incrementPct}% raise effective ${effectiveFrom}.`, incrementPct, oldCtc: existing.ctcAnnual, newCtc: newCtcAnnual, salaryStructure: updated });
+}));
+
+// ── GET /statutory?month=YYYY-MM — PF/ESI/TDS statutory report ──────────────
+router.get('/statutory', requireAdmin, asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be YYYY-MM format.');
+
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    orderBy: { user: { name: 'asc' } },
+  });
+
+  const rows = payslips.map(p => ({
+    userId: p.userId,
+    employeeId: p.user?.employeeId || '',
+    name: p.user?.name || '',
+    department: p.user?.department || '',
+    designation: p.user?.designation || '',
+    grossEarnings: p.grossEarnings || 0,
+    basic: p.basic || 0,
+    // PF
+    employeePf: p.employeePf || 0,
+    employerPf: p.employerPf || 0,
+    totalPf: (p.employeePf || 0) + (p.employerPf || 0),
+    // ESI
+    employeeEsi: p.employeeEsi || 0,
+    employerEsi: p.employerEsi || 0,
+    totalEsi: (p.employeeEsi || 0) + (p.employerEsi || 0),
+    // TDS / PT
+    tds: p.tds || 0,
+    professionalTax: p.professionalTax || 0,
+    netPay: p.netPay || 0,
+  }));
+
+  const totals = rows.reduce((acc, r) => {
+    acc.grossEarnings  += r.grossEarnings;
+    acc.employeePf     += r.employeePf;
+    acc.employerPf     += r.employerPf;
+    acc.totalPf        += r.totalPf;
+    acc.employeeEsi    += r.employeeEsi;
+    acc.employerEsi    += r.employerEsi;
+    acc.totalEsi       += r.totalEsi;
+    acc.tds            += r.tds;
+    acc.professionalTax+= r.professionalTax;
+    acc.netPay         += r.netPay;
+    return acc;
+  }, { grossEarnings: 0, employeePf: 0, employerPf: 0, totalPf: 0, employeeEsi: 0, employerEsi: 0, totalEsi: 0, tds: 0, professionalTax: 0, netPay: 0 });
+
+  res.json({ month, headcount: rows.length, rows, totals });
+}));
+
+// ── GET /statutory-export?month=YYYY-MM — Download statutory report as Excel ─
+router.get('/statutory-export', requireAdmin, asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be YYYY-MM format.');
+
+  const XLSX = require('xlsx');
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    orderBy: { user: { name: 'asc' } },
+  });
+  if (payslips.length === 0) throw notFound('No payslips found for this month.');
+
+  const rows = payslips.map(p => ({
+    'Emp ID':       p.user?.employeeId || '',
+    'Name':         p.user?.name || '',
+    'Department':   p.user?.department || '',
+    'Gross':        p.grossEarnings || 0,
+    'Basic':        p.basic || 0,
+    'Emp PF (12%)': p.employeePf || 0,
+    'Emp ESI (0.75%)': p.employeeEsi || 0,
+    'TDS':          p.tds || 0,
+    'Prof. Tax':    p.professionalTax || 0,
+    'Employer PF (12%)': p.employerPf || 0,
+    'Employer ESI (3.25%)': p.employerEsi || 0,
+    'Total PF':     (p.employeePf || 0) + (p.employerPf || 0),
+    'Total ESI':    (p.employeeEsi || 0) + (p.employerEsi || 0),
+    'Net Pay':      p.netPay || 0,
+  }));
+
+  // Summary row
+  const totals = rows.reduce((acc, r) => {
+    Object.keys(r).forEach(k => { if (typeof r[k] === 'number') acc[k] = (acc[k] || 0) + r[k]; });
+    return acc;
+  }, { 'Emp ID': '', 'Name': 'TOTAL', 'Department': '' });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet([...rows, totals]);
+  ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 14) }));
+  XLSX.utils.book_append_sheet(wb, ws, `Statutory ${month}`);
+
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="statutory_${month}.xlsx"`);
+  res.send(buffer);
+}));
+
 module.exports = router;

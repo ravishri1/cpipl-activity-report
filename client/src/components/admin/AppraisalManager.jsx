@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { useApi } from '../../hooks/useApi';
 import { useFetch } from '../../hooks/useFetch';
-import { formatDate } from '../../utils/formatters';
+import { formatDate, formatINR } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import StatusBadge from '../shared/StatusBadge';
-import { Plus, ChevronDown, ChevronRight, Users, CheckCircle, Clock, BarChart3, RefreshCw, Edit2, Lock, Unlock, X } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Users, CheckCircle, Clock, BarChart3, RefreshCw, Edit2, Lock, Unlock, X, TrendingUp, IndianRupee } from 'lucide-react';
 
 const CYCLE_STATUS_STYLES = {
   draft:  { label: 'Draft',  className: 'bg-slate-100 text-slate-600' },
@@ -409,6 +409,110 @@ function ReviewDetailModal({ review, onClose, onSaved, isManagerMode }) {
   );
 }
 
+// ── Increment Modal ────────────────────────────────────────────────────────────
+function IncrementModal({ review, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    newCtcAnnual: '',
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    reason: `Performance increment — ${review?.cycle?.name || 'Appraisal'}`,
+  });
+  const [salaryData, setSalaryData] = useState(null);
+  const { execute, loading, error } = useApi();
+
+  useEffect(() => {
+    if (!review?.employeeId) return;
+    api.get(`/payroll/salary/${review.employeeId}`)
+      .then(r => setSalaryData(r.data))
+      .catch(() => {});
+  }, [review?.employeeId]);
+
+  const currentCTC = salaryData?.ctcAnnual || 0;
+  const newCTC = parseFloat(form.newCtcAnnual) || 0;
+  const increment = newCTC - currentCTC;
+  const incrementPct = currentCTC > 0 && increment > 0 ? ((increment / currentCTC) * 100).toFixed(2) : null;
+
+  const handleSubmit = async () => {
+    try {
+      await execute(() => api.post('/payroll/increment', {
+        userId: review.employeeId,
+        newCtcAnnual: newCTC,
+        effectiveFrom: form.effectiveFrom,
+        reason: form.reason,
+        appraisalReviewId: review.id,
+      }), `Increment applied! ${incrementPct}% raise.`);
+      onSaved();
+      onClose();
+    } catch {}
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">Propose Salary Increment</h2>
+            <p className="text-sm text-slate-500">{review?.employee?.name}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && <AlertMessage type="error" message={error} />}
+
+          <div className="bg-slate-50 rounded-xl p-4 flex justify-between text-sm">
+            <div><p className="text-slate-500 text-xs">Current CTC (Annual)</p><p className="font-bold text-slate-700">{formatINR(currentCTC)}</p></div>
+            {review?.finalRating && <div><p className="text-slate-500 text-xs">Final Rating</p><p className="font-bold text-amber-600">{review.finalRating} / 5</p></div>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">New Annual CTC (₹) *</label>
+            <input
+              type="number"
+              value={form.newCtcAnnual}
+              onChange={e => setForm(f => ({ ...f, newCtcAnnual: e.target.value }))}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={`Current: ${currentCTC}`}
+            />
+            {incrementPct && (
+              <p className="text-sm text-green-600 mt-1">
+                +{incrementPct}% increment — {formatINR(increment)} raise — new monthly: {formatINR(newCTC / 12)}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Effective From *</label>
+            <input
+              type="date"
+              value={form.effectiveFrom}
+              onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Reason</label>
+            <input
+              value={form.reason}
+              onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !newCTC || !incrementPct}
+            className="px-5 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+          >
+            {loading ? 'Applying…' : 'Apply Increment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function AppraisalManager() {
   const [showCycleModal, setShowCycleModal] = useState(false);
@@ -416,6 +520,7 @@ export default function AppraisalManager() {
   const [expandedCycle, setExpandedCycle] = useState(null);
   const [cycleDetails, setCycleDetails] = useState({});
   const [reviewModal, setReviewModal] = useState(null); // { review, isManagerMode }
+  const [incrementModal, setIncrementModal] = useState(null); // { review }
   const [refresh, setRefresh] = useState(0);
 
   const { data: cycles, loading, error } = useFetch('/appraisals/cycles', [], [refresh]);
@@ -600,12 +705,22 @@ export default function AppraisalManager() {
                                 <td className="px-4 py-2.5 text-center font-medium text-green-600">{r.managerRating ?? '—'}</td>
                                 <td className="px-4 py-2.5 text-center font-bold text-amber-600">{r.finalRating ?? '—'}</td>
                                 <td className="px-4 py-2.5 text-right">
-                                  <button
-                                    onClick={() => setReviewModal({ review: { ...r, cycle: detail }, isManagerMode: ['self_submitted', 'manager_reviewed'].includes(r.status) })}
-                                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                                  >
-                                    {['self_submitted', 'manager_reviewed'].includes(r.status) ? 'Review →' : 'View'}
-                                  </button>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      onClick={() => setReviewModal({ review: { ...r, cycle: detail }, isManagerMode: ['self_submitted', 'manager_reviewed'].includes(r.status) })}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      {['self_submitted', 'manager_reviewed'].includes(r.status) ? 'Review →' : 'View'}
+                                    </button>
+                                    {r.status === 'completed' && (
+                                      <button
+                                        onClick={() => setIncrementModal({ review: r })}
+                                        className="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-lg hover:bg-green-100 flex items-center gap-1"
+                                      >
+                                        <TrendingUp className="w-3 h-3" /> Increment
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -639,6 +754,14 @@ export default function AppraisalManager() {
             loadCycleDetails(reviewModal.review.cycleId);
             setRefresh(r => r + 1);
           }}
+        />
+      )}
+
+      {incrementModal && (
+        <IncrementModal
+          review={incrementModal.review}
+          onClose={() => setIncrementModal(null)}
+          onSaved={() => setRefresh(r => r + 1)}
         />
       )}
     </div>

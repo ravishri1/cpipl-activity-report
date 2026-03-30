@@ -204,6 +204,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/my-support',     label: 'My Support',    icon: LifeBuoy },
         { to: '/wiki',           label: 'Knowledge Base',icon: BookOpen },
         { to: '/my-appraisals',  label: 'My Appraisals', icon: LineChart },
+        { to: '/my-goals',       label: 'My Goals',      icon: CheckSquare },
       ],
     },
   ];

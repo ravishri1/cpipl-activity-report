@@ -4,7 +4,7 @@
  * Finds active employees whose birthday or work anniversary falls on today,
  * then emails all active admins / team leads with a celebratory digest.
  */
-const { sendBirthdayAnniversaryAlert } = require('./emailService');
+const { sendBirthdayAnniversaryAlert, sendEmail } = require('./emailService');
 
 /**
  * Returns today's "MM-DD" suffix used to match stored "YYYY-MM-DD" strings.
@@ -106,7 +106,37 @@ async function runBirthdayAnniversaryCheck(prisma) {
     await sendBirthdayAnniversaryAlert(admin.email, admin.name, birthdays, anniversaries);
   }
 
-  console.log(`[BIRTHDAY_ALERT] Alerted ${admins.length} admin(s).`);
+  // ── Personal emails to each birthday / anniversary employee ───────────────
+  for (const u of birthdays) {
+    if (!u.email) continue;
+    const html = `<div style="font-family:sans-serif;max-width:520px;margin:auto;padding:28px;background:#fffbeb;border-radius:12px;border:1px solid #fde68a">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">🎂</div>
+      <h2 style="color:#92400e;text-align:center;margin:0 0 8px">Happy Birthday, ${u.name}!</h2>
+      <p style="color:#78350f;text-align:center;font-size:15px;margin:0 0 20px">
+        Wishing you a wonderful birthday filled with joy and happiness.<br/>
+        The entire team at Color Papers is thinking of you today!
+      </p>
+      <p style="color:#a16207;text-align:center;font-size:13px;margin:0">— CPIPL HR Team</p>
+    </div>`;
+    await sendEmail(u.email, `Happy Birthday, ${u.name}! 🎂`, html);
+  }
+
+  for (const u of anniversaries) {
+    if (!u.email) continue;
+    const yrs = u.years;
+    const html = `<div style="font-family:sans-serif;max-width:520px;margin:auto;padding:28px;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">🏆</div>
+      <h2 style="color:#1e40af;text-align:center;margin:0 0 8px">Happy Work Anniversary, ${u.name}!</h2>
+      <p style="color:#1e3a8a;text-align:center;font-size:15px;margin:0 0 12px">
+        Congratulations on completing <strong>${yrs} year${yrs > 1 ? 's' : ''}</strong> with Color Papers!<br/>
+        Your dedication and hard work are truly valued. Thank you for being such an important part of our team.
+      </p>
+      <p style="color:#2563eb;text-align:center;font-size:13px;margin:0">— CPIPL HR Team</p>
+    </div>`;
+    await sendEmail(u.email, `Happy Work Anniversary, ${u.name}! 🏆 ${yrs} Year${yrs > 1 ? 's' : ''}`, html);
+  }
+
+  console.log(`[BIRTHDAY_ALERT] Alerted ${admins.length} admin(s) + ${birthdays.length} birthday + ${anniversaries.length} anniversary personal emails.`);
   return birthdays.length + anniversaries.length;
 }
 

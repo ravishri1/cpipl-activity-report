@@ -36,6 +36,8 @@ import {
   PlayCircle,
   Calculator,
   Banknote,
+  Shield,
+  FileDown,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -655,6 +657,121 @@ const StopSalaryCard = ({ stoppedCount, onRefresh }) => {
   );
 };
 
+// ── Statutory Report Component ─────────────────────────────────────────────────
+const StatutoryReport = ({ month }) => {
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [downloading, setDownloading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!month) return;
+    setLoading(true); setError('');
+    api.get(`/payroll/statutory?month=${month}`)
+      .then(r => setData(r.data))
+      .catch(e => setError(e?.response?.data?.error || 'Failed to load statutory data.'))
+      .finally(() => setLoading(false));
+  }, [month]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/payroll/statutory-export?month=${month}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a'); a.href = url; a.download = `statutory_${month}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert('Download failed.'); }
+    setDownloading(false);
+  };
+
+  if (loading) return <div className="py-12 text-center text-slate-400">Loading statutory data…</div>;
+  if (error)   return <div className="py-8 text-center text-red-500">{error}</div>;
+  if (!data)   return null;
+
+  const t = data.totals || {};
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-700">Statutory Compliance — {month}</h3>
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-2 bg-green-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-50"
+        >
+          <FileDown className="w-4 h-4" />
+          {downloading ? 'Downloading…' : 'Export Excel'}
+        </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total PF (Emp + Employer)', value: formatCurrency(t.totalPf), color: 'bg-blue-50 text-blue-700' },
+          { label: 'Total ESI (Emp + Employer)', value: formatCurrency(t.totalEsi), color: 'bg-teal-50 text-teal-700' },
+          { label: 'Total TDS', value: formatCurrency(t.tds), color: 'bg-amber-50 text-amber-700' },
+          { label: 'Total Prof. Tax', value: formatCurrency(t.professionalTax), color: 'bg-purple-50 text-purple-700' },
+        ].map(c => (
+          <div key={c.label} className={`${c.color} rounded-xl p-4`}>
+            <p className="text-xs text-slate-500 mb-1">{c.label}</p>
+            <p className="text-xl font-bold">{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase">Gross</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-blue-600 uppercase">Emp PF</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-blue-500 uppercase">Er PF</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-teal-600 uppercase">Emp ESI</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-teal-500 uppercase">Er ESI</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-amber-600 uppercase">TDS</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-purple-600 uppercase">P.Tax</th>
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-green-600 uppercase">Net Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.rows || []).map(r => (
+                <tr key={r.userId} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="px-3 py-2">
+                    <div className="font-medium text-slate-800">{r.name}</div>
+                    <div className="text-xs text-slate-400">{r.employeeId} · {r.department}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-600">{formatCurrency(r.grossEarnings)}</td>
+                  <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(r.employeePf)}</td>
+                  <td className="px-3 py-2 text-right text-blue-500">{formatCurrency(r.employerPf)}</td>
+                  <td className="px-3 py-2 text-right text-teal-600">{formatCurrency(r.employeeEsi)}</td>
+                  <td className="px-3 py-2 text-right text-teal-500">{formatCurrency(r.employerEsi)}</td>
+                  <td className="px-3 py-2 text-right text-amber-600">{formatCurrency(r.tds)}</td>
+                  <td className="px-3 py-2 text-right text-purple-600">{formatCurrency(r.professionalTax)}</td>
+                  <td className="px-3 py-2 text-right font-bold text-green-600">{formatCurrency(r.netPay)}</td>
+                </tr>
+              ))}
+              {/* Totals row */}
+              <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold">
+                <td className="px-3 py-2.5 text-slate-700">TOTAL ({data.headcount})</td>
+                <td className="px-3 py-2.5 text-right text-slate-600">{formatCurrency(t.grossEarnings)}</td>
+                <td className="px-3 py-2.5 text-right text-blue-600">{formatCurrency(t.employeePf)}</td>
+                <td className="px-3 py-2.5 text-right text-blue-500">{formatCurrency(t.employerPf)}</td>
+                <td className="px-3 py-2.5 text-right text-teal-600">{formatCurrency(t.employeeEsi)}</td>
+                <td className="px-3 py-2.5 text-right text-teal-500">{formatCurrency(t.employerEsi)}</td>
+                <td className="px-3 py-2.5 text-right text-amber-600">{formatCurrency(t.tds)}</td>
+                <td className="px-3 py-2.5 text-right text-purple-600">{formatCurrency(t.professionalTax)}</td>
+                <td className="px-3 py-2.5 text-right text-green-600">{formatCurrency(t.netPay)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function PayrollDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [activeTab, setActiveTab] = useState('overview');
@@ -976,6 +1093,19 @@ export default function PayrollDashboard() {
             <div className="flex items-center gap-2">
               <Calculator className="w-4 h-4" />
               Arrears
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('statutory')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'statutory'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Statutory
             </div>
           </button>
         </nav>
@@ -1358,6 +1488,21 @@ export default function PayrollDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Bulk Excel Export */}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await api.get(`/payroll/export?month=${selectedMonth}`, { responseType: 'blob' });
+                    const url = URL.createObjectURL(res.data);
+                    const a = document.createElement('a'); a.href = url; a.download = `payroll_${selectedMonth}.xlsx`; a.click();
+                    URL.revokeObjectURL(url);
+                  } catch { alert('Export failed. Make sure payslips exist for this month.'); }
+                }}
+                className="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-2 text-sm font-medium transition-colors border border-slate-200"
+              >
+                <FileDown className="w-4 h-4" />
+                Export Excel
+              </button>
               {hasUnpublished && (
                 <button
                   onClick={handlePublishAll}
@@ -1630,6 +1775,9 @@ export default function PayrollDashboard() {
 
       {/* Arrears Tab */}
       {activeTab === 'arrears' && <ArrearsManager month={selectedMonth} />}
+
+      {/* Statutory Tab */}
+      {activeTab === 'statutory' && <StatutoryReport month={selectedMonth} />}
     </div>
   );
 }

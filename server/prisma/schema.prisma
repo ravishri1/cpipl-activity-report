@@ -225,6 +225,8 @@ model User {
   appraisalCyclesCreated    AppraisalCycle[]     @relation("AppraisalCycleCreator")
   appraisalReviews          AppraisalReview[]    @relation("AppraisalEmployee")
   appraisalReviewsGiven     AppraisalReview[]    @relation("AppraisalReviewer")
+  goalsOwned                Goal[]               @relation("GoalOwner")
+  goalCheckIns              GoalCheckIn[]        @relation("GoalCheckInUser")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -2784,4 +2786,43 @@ model AppraisalReview {
   @@index([employeeId])
   @@index([cycleId])
   @@index([status])
+}
+
+// ── Goal Tracking (OKR-lite) ───────────────────────────────────────────────────
+
+model Goal {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  title       String
+  description String?
+  category    String   @default("personal")  // personal | team | company
+  quarter     String                          // "2026-Q1", "2026-Q2" etc.
+  targetDate  String?                         // YYYY-MM-DD
+  progress    Int      @default(0)            // 0-100
+  status      String   @default("active")    // active | completed | cancelled | on_hold
+  keyResults  String?                         // JSON: [{id, description, progress}]
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User         @relation("GoalOwner", fields: [userId], references: [id])
+  checkIns    GoalCheckIn[]
+
+  @@index([userId])
+  @@index([quarter])
+  @@index([status])
+}
+
+model GoalCheckIn {
+  id        Int      @id @default(autoincrement())
+  goalId    Int
+  userId    Int
+  progress  Int                     // 0-100 snapshot at check-in time
+  note      String?
+  createdAt DateTime @default(now())
+
+  goal      Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user      User @relation("GoalCheckInUser", fields: [userId], references: [id])
+
+  @@index([goalId])
 }
