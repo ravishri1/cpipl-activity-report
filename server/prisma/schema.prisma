@@ -227,6 +227,12 @@ model User {
   appraisalReviewsGiven     AppraisalReview[]    @relation("AppraisalReviewer")
   goalsOwned                Goal[]               @relation("GoalOwner")
   goalCheckIns              GoalCheckIn[]        @relation("GoalCheckInUser")
+  loans                     EmployeeLoan[]       @relation("EmployeeLoanUser")
+  loansApproved             EmployeeLoan[]       @relation("EmployeeLoanApprover")
+  wfhRequests               WFHRequest[]         @relation("WFHRequestUser")
+  wfhReviewed               WFHRequest[]         @relation("WFHRequestReviewer")
+  exitInterviews            ExitInterview[]      @relation("ExitInterviewEmployee")
+  exitInterviewsConducted   ExitInterview[]      @relation("ExitInterviewConductor")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -1187,6 +1193,7 @@ model Separation {
 
   user               User     @relation(fields: [userId], references: [id])
   processor          User?    @relation("SeparationHandler", fields: [processedBy], references: [id])
+  exitInterview      ExitInterview?
 }
 
 // ═══════════════════════════════════════════════
@@ -2825,4 +2832,98 @@ model GoalCheckIn {
   user      User @relation("GoalCheckInUser", fields: [userId], references: [id])
 
   @@index([goalId])
+}
+
+// ── Employee Loan / Salary Advance ────────────────────────────────────────────
+
+model EmployeeLoan {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  amount          Float                           // total loan / advance amount
+  purpose         String?
+  emiAmount       Float                           // monthly deduction
+  totalEmi        Int                             // total number of EMIs
+  paidEmi         Int       @default(0)
+  remainingAmount Float                           // updated after each deduction
+  status          String    @default("pending")  // pending | approved | active | completed | rejected
+  approvedBy      Int?
+  approvedAt      DateTime?
+  startMonth      String?                         // "YYYY-MM"
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation("EmployeeLoanUser",     fields: [userId],     references: [id])
+  approver        User?     @relation("EmployeeLoanApprover", fields: [approvedBy], references: [id])
+  repayments      LoanRepayment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model LoanRepayment {
+  id        Int      @id @default(autoincrement())
+  loanId    Int
+  month     String                   // "YYYY-MM"
+  amount    Float
+  payslipId Int?
+  createdAt DateTime @default(now())
+
+  loan      EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, month])
+  @@index([loanId])
+}
+
+// ── WFH (Work From Home) Requests ─────────────────────────────────────────────
+
+model WFHRequest {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  date        String                              // "YYYY-MM-DD"
+  reason      String?
+  status      String    @default("pending")      // pending | approved | rejected | cancelled
+  reviewedBy  Int?
+  reviewedAt  DateTime?
+  reviewNote  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation("WFHRequestUser",     fields: [userId],     references: [id])
+  reviewer    User?     @relation("WFHRequestReviewer", fields: [reviewedBy], references: [id])
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@index([status])
+}
+
+// ── Exit Interview ─────────────────────────────────────────────────────────────
+
+model ExitInterview {
+  id                    Int       @id @default(autoincrement())
+  separationId          Int       @unique
+  userId                Int
+  overallExperience     Int?                      // 1-5
+  managementRating      Int?                      // 1-5
+  workEnvironmentRating Int?                      // 1-5
+  compensationRating    Int?                      // 1-5
+  growthRating          Int?                      // 1-5
+  reasonForLeaving      String?
+  bestAspect            String?
+  improvementSuggestion String?
+  wouldRejoin           Boolean?
+  additionalComments    String?
+  conductedBy           Int?
+  status                String    @default("pending")   // pending | completed
+  submittedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  separation            Separation    @relation(fields: [separationId], references: [id], onDelete: Cascade)
+  employee              User          @relation("ExitInterviewEmployee",  fields: [userId],       references: [id])
+  conductor             User?         @relation("ExitInterviewConductor", fields: [conductedBy],  references: [id])
+
+  @@index([userId])
+  @@index([status])
 }

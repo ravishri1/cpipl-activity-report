@@ -54,6 +54,8 @@ import {
   LayoutGrid,
   Calendar,
   KeyRound,
+  Home,
+  ClipboardSignature,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -183,6 +185,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/leave',                       label: 'Leave',                 icon: CalendarOff },
         { to: '/my-comp-off',                 label: 'Comp-Off',              icon: AlarmClock },
         { to: '/attendance-regularization',   label: 'Regularization',        icon: ClipboardEdit },
+        { to: '/my-wfh',                      label: 'Work From Home',        icon: Home },
       ],
     },
     {
@@ -192,6 +195,7 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { to: '/payslips',        label: 'Payslips',               icon: IndianRupee },
         { to: '/expenses',        label: 'Expenses',               icon: Wallet },
+        { to: '/my-loans',        label: 'Loans & Advances',       icon: Banknote },
       ],
     },
     {
@@ -199,12 +203,13 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Support & Policies',
       icon: ShieldCheck,
       items: [
-        { to: '/my-compliance',  label: 'Compliance',    icon: ShieldCheck },
-        { to: '/surveys',        label: 'Surveys',       icon: ClipboardList },
-        { to: '/my-support',     label: 'My Support',    icon: LifeBuoy },
-        { to: '/wiki',           label: 'Knowledge Base',icon: BookOpen },
-        { to: '/my-appraisals',  label: 'My Appraisals', icon: LineChart },
-        { to: '/my-goals',       label: 'My Goals',      icon: CheckSquare },
+        { to: '/my-compliance',       label: 'Compliance',         icon: ShieldCheck },
+        { to: '/surveys',             label: 'Surveys',            icon: ClipboardList },
+        { to: '/my-support',          label: 'My Support',         icon: LifeBuoy },
+        { to: '/wiki',                label: 'Knowledge Base',     icon: BookOpen },
+        { to: '/my-appraisals',       label: 'My Appraisals',      icon: LineChart },
+        { to: '/my-goals',            label: 'My Goals',           icon: CheckSquare },
+        { to: '/my-exit-interview',   label: 'Exit Interview',     icon: ClipboardSignature },
       ],
     },
   ];
@@ -242,10 +247,11 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Hiring & Lifecycle',
       icon: Briefcase,
       items: [
-        { to: '/admin/recruitment',    label: 'Recruitment',      icon: Briefcase },
-        { to: '/admin/confirmations',  label: 'Confirmations',    icon: BadgeCheck },
-        { to: '/admin/onboarding',     label: 'Onboarding',       icon: UserPlus },
-        { to: '/admin/separations',    label: 'Separations',      icon: UserMinus },
+        { to: '/admin/recruitment',       label: 'Recruitment',        icon: Briefcase },
+        { to: '/admin/confirmations',     label: 'Confirmations',      icon: BadgeCheck },
+        { to: '/admin/onboarding',        label: 'Onboarding',         icon: UserPlus },
+        { to: '/admin/separations',       label: 'Separations',        icon: UserMinus },
+        { to: '/admin/exit-interviews',   label: 'Exit Interviews',    icon: ClipboardSignature },
       ],
     },
     {
@@ -273,6 +279,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/shift-roster',   label: 'Shift Roster',      icon: Calendar },
         { to: '/admin/comp-off',       label: 'Comp-Off Manager',  icon: AlarmClock },
         { to: '/admin/regularization', label: 'Regularization',    icon: ClipboardEdit },
+        { to: '/admin/wfh',            label: 'WFH Manager',       icon: Home },
       ],
     },
     {
@@ -294,6 +301,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/payroll',        label: 'Payroll',          icon: CreditCard },
         { to: '/admin/salary-setup',   label: 'Salary Setup',     icon: Banknote },
         { to: '/admin/expense-claims', label: 'Expense Claims',   icon: Receipt },
+        { to: '/admin/loans',          label: 'Loans & Advances', icon: Banknote },
       ],
     },
   ];
