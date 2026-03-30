@@ -36,5 +36,39 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/internal/cron?job=reminders",
+      "schedule": "30 15 * * 1-6"
+    },
+    {
+      "path": "/api/internal/cron?job=escalation",
+      "schedule": "30 5 * * 1-6"
+    },
+    {
+      "path": "/api/internal/cron?job=morning-alerts",
+      "schedule": "30 2 * * 1-6"
+    },
+    {
+      "path": "/api/internal/cron?job=email-activity",
+      "schedule": "30 0 * * 1-6"
+    },
+    {
+      "path": "/api/internal/cron?job=maintenance",
+      "schedule": "30 18 * * *"
+    },
+    {
+      "path": "/api/internal/cron?job=weekly",
+      "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/internal/cron?job=automation",
+      "schedule": "30 17 * * 0"
+    },
+    {
+      "path": "/api/internal/cron?job=fy-rollover",
+      "schedule": "25 18 31 3 *"
+    }
   ]
 }

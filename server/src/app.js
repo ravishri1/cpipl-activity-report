@@ -2,8 +2,11 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 const { initializeOllama } = require('./services/ollama/init');
+const { withCache, getCacheStats } = require('./middleware/cache');
+const { getAllBreakerStatus } = require('./utils/circuitBreaker');
 
 const authRoutes = require('./routes/auth');
 const reportRoutes = require('./routes/reports');
@@ -166,6 +169,36 @@ app.use(compression({
   level: 6, // Balance between CPU and compression ratio
 }));
 
+// ═══ Observability: Request ID injection ═══
+// Each request gets a unique X-Request-ID header (passed through from upstream
+// load-balancer if present, otherwise generated). This enables log correlation
+// across distributed Vercel function instances without a central trace store.
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
+  req.requestId = requestId;
+  res.setHeader('X-Request-ID', requestId);
+  next();
+});
+
+// ═══ Fault Tolerance: Request timeout — 30 seconds hard ceiling ═══
+// Prevents runaway DB queries or external service calls from holding a
+// serverless function open indefinitely (and burning Vercel compute credits).
+// Self-healing: after 30 s the response is forcibly closed; the next
+// identical request gets a fresh function invocation with a clean state.
+app.use((req, res, next) => {
+  const timer = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`[TIMEOUT] ${req.method} ${req.originalUrl} exceeded 30 s (requestId: ${req.requestId})`);
+      res.status(503).json({ error: 'Request timed out. Please try again.' });
+    }
+  }, 30_000);
+  // Clear on both normal finish and premature client disconnect
+  const cleanup = () => clearTimeout(timer);
+  res.on('finish', cleanup);
+  res.on('close', cleanup);
+  next();
+});
+
 // Make prisma available to routes
 app.use((req, res, next) => {
   req.prisma = prisma;
@@ -269,6 +302,15 @@ app.post('/api/agent/sync-single', asyncHandler(async (req, res) => {
   res.json({ received: punches.length, ...result });
 }));
 
+// ═══ Performance: TTL cache for stable read-heavy endpoints ═══
+// Pattern: per-instance Map cache with TTL expiry (see middleware/cache.js).
+// Branches and holidays are fetched on every page load but change very rarely.
+// This eliminates redundant DB round-trips for warm Vercel function containers.
+// Cache is busted automatically by TTL; also invalidated via invalidateCache()
+// in write handlers (branches route calls invalidateCache('/api/branches')).
+app.use('/api/holidays', withCache(3600));   // 1-hour TTL — holidays change at most once a year
+app.use('/api/branches', withCache(600));    // 10-min TTL — branches rarely change
+
 // Public contract signing routes (no auth — token-based access)
 const signingLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Too many requests.' } });
 app.use('/api/contract-signing', signingLimiter, contractSigningRoutes);
@@ -321,36 +363,63 @@ app.use('/api/internal', internalRoutes);
 app.use('/api/credentials', credentialRoutes);
 app.use('/api/departments', departmentRoutes);
 
-// Global error handler (must be after all routes)
-app.use(errorHandler);
+// ═══ Health check — real DB ping + circuit breaker status ═══
+// Pattern: Active health probe that distinguishes "process is up" from
+// "system is actually functional". Includes DB latency and circuit breaker
+// states so monitoring dashboards can detect partial degradation early.
+// Self-healing signal: if DB latency > 500 ms or breaker is OPEN, the
+// overall status becomes "degraded" — allowing load balancers / uptime
+// monitors to route traffic away or page on-call.
+app.get('/api/health', asyncHandler(async (req, res) => {
+  const startMs = Date.now();
+  let dbStatus = 'ok', dbLatencyMs = null, dbError = null;
 
-// Health check
-app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbLatencyMs = Date.now() - startMs;
+  } catch (err) {
+    dbStatus = 'error';
+    dbError = err.message;
+  }
+
+  let ollamaAvailable = false;
   try {
     const ollama = require('./services/ollama');
-    const ollamaAvailable = await ollama.ollamaClient.isAvailable();
-    
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
+    ollamaAvailable = await ollama.ollamaClient.isAvailable();
+  } catch { /* non-critical */ }
+
+  const circuitBreakers = getAllBreakerStatus();
+  const anyBreakerOpen = Object.values(circuitBreakers).some(b => b.state === 'OPEN');
+  const overallStatus = dbStatus === 'error' ? 'error'
+    : dbLatencyMs > 500 || anyBreakerOpen ? 'degraded'
+    : 'ok';
+
+  const mem = process.memoryUsage();
+
+  res.status(overallStatus === 'error' ? 503 : 200).json({
+    status: overallStatus,
+    timestamp: new Date().toISOString(),
+    requestId: req.requestId,
+    uptime: Math.round(process.uptime()),
+    db: { status: dbStatus, latencyMs: dbLatencyMs, ...(dbError && { error: dbError }) },
+    circuitBreakers,
+    cache: getCacheStats(),
+    memory: {
+      heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+      heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+      rssMB: Math.round(mem.rss / 1024 / 1024),
+    },
+    env: {
       clerkConfigured: !!process.env.CLERK_SECRET_KEY,
       dbConfigured: !!process.env.DATABASE_URL,
       ollamaConfigured: process.env.OLLAMA_ENABLED !== 'false',
       ollamaAvailable,
-    });
-  } catch (error) {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      clerkConfigured: !!process.env.CLERK_SECRET_KEY,
-      dbConfigured: !!process.env.DATABASE_URL,
-      ollamaConfigured: process.env.OLLAMA_ENABLED !== 'false',
-      ollamaAvailable: false,
-      ollamaError: error.message,
-    });
-  }
-});
+    },
+  });
+}));
 
+// Global error handler (must be after all routes)
+app.use(errorHandler);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

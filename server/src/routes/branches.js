@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, conflict } = require('../utils/httpErrors');
 const { requireFields, parseId } = require('../utils/validate');
+const { invalidateCache } = require('../middleware/cache');
 
 const router = express.Router();
 router.use(authenticate);
@@ -49,6 +50,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
       _count: { select: { users: true } },
     },
   });
+  invalidateCache('/api/branches');
   res.status(201).json(branch);
 }));
 
@@ -74,6 +76,7 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
       _count: { select: { users: true } },
     },
   });
+  invalidateCache('/api/branches');
   res.json(branch);
 }));
 
@@ -90,6 +93,7 @@ router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
     where: { id },
     data: { isActive: false },
   });
+  invalidateCache('/api/branches');
   res.json(branch);
 }));
 
