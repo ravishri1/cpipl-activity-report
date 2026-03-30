@@ -210,6 +210,8 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/my-appraisals',       label: 'My Appraisals',      icon: LineChart },
         { to: '/my-goals',            label: 'My Goals',           icon: CheckSquare },
         { to: '/my-exit-interview',   label: 'Exit Interview',     icon: ClipboardSignature },
+        { to: '/my-grievances',       label: 'My Grievances',      icon: MessageSquare },
+        { to: '/weekly-pulse',        label: 'Weekly Pulse',       icon: HeartPulse },
       ],
     },
   ];
@@ -217,6 +219,7 @@ export default function Sidebar({ isOpen, onClose }) {
   const myWorkspaceItems = [
     { to: '/my-workspace',       label: 'My Assets',      icon: Package },
     { to: '/my-asset-requests',  label: 'Asset Requests', icon: Briefcase },
+    { to: '/my-skills',          label: 'My Skills',      icon: BadgeCheck },
     { to: '/my-files',           label: 'My Files',       icon: FolderOpen },
   ];
 
@@ -263,6 +266,9 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/surveys',        label: 'Survey Manager',   icon: ClipboardList },
         { to: '/admin/suggestions',    label: 'Suggestions',      icon: MessageSquare },
         { to: '/admin/appraisals',     label: 'Appraisals',       icon: LineChart },
+        { to: '/admin/grievances',     label: 'Grievances',       icon: ScrollText },
+        { to: '/admin/pulse',          label: 'Pulse Dashboard',  icon: HeartPulse },
+        { to: '/admin/skills-matrix',  label: 'Skills Matrix',    icon: BadgeCheck },
       ],
     },
   ];

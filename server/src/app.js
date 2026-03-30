@@ -59,6 +59,9 @@ const wfhRoutes = require('./routes/wfh');
 const exitInterviewRoutes = require('./routes/exitInterviews');
 const assetRequestRoutes = require('./routes/assetRequests');
 const visitorRoutes = require('./routes/visitors');
+const grievanceRoutes = require('./routes/grievances');
+const skillRoutes = require('./routes/skills');
+const pulseRoutes = require('./routes/pulse');
 const internalRoutes = require('./routes/internal');
 const credentialRoutes = require('./routes/credentials');
 const departmentRoutes = require('./routes/departments');
@@ -378,6 +381,9 @@ app.use('/api/wfh', wfhRoutes);
 app.use('/api/exit-interviews', exitInterviewRoutes);
 app.use('/api/asset-requests', assetRequestRoutes);
 app.use('/api/visitors', visitorRoutes);
+app.use('/api/grievances', grievanceRoutes);
+app.use('/api/skills', skillRoutes);
+app.use('/api/pulse', pulseRoutes);
 
 // ═══ Health check — real DB ping + circuit breaker status ═══
 // Pattern: Active health probe that distinguishes "process is up" from

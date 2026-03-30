@@ -94,6 +94,12 @@ const HRCalendar = lazy(() => import('./components/admin/HRCalendar'));
 const AssetRequestManager = lazy(() => import('./components/admin/AssetRequestManager'));
 const MyAssetRequests = lazy(() => import('./components/workspace/MyAssetRequests'));
 const VisitorRegister = lazy(() => import('./components/admin/VisitorRegister'));
+const GrievanceManager = lazy(() => import('./components/admin/GrievanceManager'));
+const MyGrievances = lazy(() => import('./components/workspace/MyGrievances'));
+const MySkills = lazy(() => import('./components/workspace/MySkills'));
+const WeeklyPulse = lazy(() => import('./components/workspace/WeeklyPulse'));
+const PulseDashboard = lazy(() => import('./components/admin/PulseDashboard'));
+const SkillsMatrix = lazy(() => import('./components/admin/SkillsMatrix'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -264,6 +270,12 @@ function AppRoutes() {
                   <Route path="/admin/asset-requests" element={<SeparatedRoute><AdminRoute><AssetRequestManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/my-asset-requests" element={<SeparatedRoute><MyAssetRequests /></SeparatedRoute>} />
                   <Route path="/admin/visitors" element={<SeparatedRoute><AdminRoute><VisitorRegister /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/grievances" element={<SeparatedRoute><AdminRoute><GrievanceManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/pulse" element={<SeparatedRoute><AdminRoute><PulseDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/skills-matrix" element={<SeparatedRoute><AdminRoute><SkillsMatrix /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/my-grievances" element={<SeparatedRoute><MyGrievances /></SeparatedRoute>} />
+                  <Route path="/my-skills" element={<SeparatedRoute><MySkills /></SeparatedRoute>} />
+                  <Route path="/weekly-pulse" element={<SeparatedRoute><WeeklyPulse /></SeparatedRoute>} />
 
                   {/* Fallback — separated users go to payslips, others to dashboard */}
                   <Route path="*" element={<SeparatedFallback />} />

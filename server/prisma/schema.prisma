@@ -236,6 +236,12 @@ model User {
   assetRequests             AssetRequest[]       @relation("AssetRequests")
   assetRequestsReviewed     AssetRequest[]       @relation("AssetRequestReviewed")
   visitorsHosted            Visitor[]            @relation("VisitorHost")
+  grievances                Grievance[]          @relation("GrievanceUser")
+  grievancesAssigned        Grievance[]          @relation("GrievanceAssignee")
+  grievanceComments         GrievanceComment[]   @relation("GrievanceComments")
+  skills                    EmployeeSkill[]      @relation("EmployeeSkillUser")
+  skillsAdded               EmployeeSkill[]      @relation("EmployeeSkillAdder")
+  pulseResponses            PulseResponse[]      @relation("PulseResponses")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -2977,5 +2983,84 @@ model Visitor {
 
   @@index([hostUserId])
   @@index([checkIn])
+}
+
+// ── Grievance Management ──────────────────────────────────────────────────────
+
+model Grievance {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  subject     String
+  description String
+  category    String    @default("other")    // workplace | harassment | compensation | management | policy | other
+  priority    String    @default("normal")   // low | normal | high
+  status      String    @default("open")     // open | under_review | resolved | closed
+  isAnonymous Boolean   @default(false)
+  assignedTo  Int?
+  resolution  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation("GrievanceUser",     fields: [userId],     references: [id])
+  assignee    User?     @relation("GrievanceAssignee", fields: [assignedTo], references: [id])
+  comments    GrievanceComment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model GrievanceComment {
+  id          Int       @id @default(autoincrement())
+  grievanceId Int
+  userId      Int
+  comment     String
+  isInternal  Boolean   @default(false)   // true = HR-only note, not shown to employee
+  createdAt   DateTime  @default(now())
+
+  grievance   Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
+  user        User      @relation("GrievanceComments", fields: [userId], references: [id])
+
+  @@index([grievanceId])
+}
+
+// ── Employee Skills & Certifications ─────────────────────────────────────────
+
+model EmployeeSkill {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  skill       String
+  category    String   @default("technical")      // technical | soft | language | certification
+  level       String   @default("intermediate")   // beginner | intermediate | advanced | expert
+  certifiedBy String?                             // certifying body
+  certDate    String?                             // "YYYY-MM-DD"
+  expiryDate  String?                             // "YYYY-MM-DD" — null if no expiry
+  notes       String?
+  addedBy     Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User @relation("EmployeeSkillUser",   fields: [userId],   references: [id])
+  addedByUser User @relation("EmployeeSkillAdder",  fields: [addedBy],  references: [id])
+
+  @@unique([userId, skill, category])
+  @@index([userId])
+  @@index([skill])
+}
+
+// ── Weekly Pulse Survey ───────────────────────────────────────────────────────
+
+model PulseResponse {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  week      String                              // "YYYY-WNN" e.g. "2026-W13"
+  score     Int                                 // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user      User @relation("PulseResponses", fields: [userId], references: [id])
+
+  @@unique([userId, week])
+  @@index([week])
 }
 
