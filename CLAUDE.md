@@ -25,11 +25,13 @@ server/src/middleware/errorHandler.js ← Central error handler
 server/src/utils/asyncHandler.js ← Wraps async handlers (eliminates try-catch)
 server/src/utils/httpErrors.js   ← badRequest, notFound, forbidden, conflict
 server/src/utils/validate.js     ← requireFields, requireEnum, parseId
-server/src/services/cronJobs.js  ← node-cron scheduler
+server/src/services/cronJobs.js  ← node-cron scheduler (LOCAL DEV ONLY — doesn't run on Vercel)
 server/src/services/emailService.js ← Nodemailer (Gmail SMTP)
 server/src/services/google/     ← Google Drive, Calendar, Chat, Workspace integrations
+server/src/middleware/cache.js   ← TTL in-process cache; withCache(ttl), invalidateCache(prefix)
+server/src/utils/circuitBreaker.js ← Circuit breaker for external services; getBreaker(name)
 api/index.js                    ← Vercel serverless entry point (wraps Express)
-vercel.json                     ← Vercel build/deploy config, rewrites, security headers
+vercel.json                     ← Vercel build/deploy config, rewrites, security headers, cron jobs
 client/src/hooks/               ← useApi, useFetch, useForm
 client/src/utils/formatters.js   ← formatDate, formatINR, capitalize
 client/src/utils/constants.js    ← Shared color maps (status badges)
@@ -413,7 +415,9 @@ GitHub (main branch)
 Database:  Neon PostgreSQL (pooled + direct connections)
 Storage:   Google Drive (service account at me@colorpapers.in workspace)
 Email:     Gmail SMTP via Nodemailer
-Scheduler: node-cron (runs on backend process)
+Scheduler: Vercel Cron (production) + node-cron (local dev only)
+           8 jobs in vercel.json → GET /api/internal/cron?job=<name> (auth: CRON_SECRET)
+           Jobs: reminders, escalation, morning-alerts, email-activity, maintenance, weekly, automation, fy-rollover
 ```
 
 **Production URLs:**
@@ -453,8 +457,42 @@ Scheduler: node-cron (runs on backend process)
 | `GOOGLE_SERVICE_ACCOUNT_KEY` / `_PATH` | Service account for Drive/Workspace | `_PATH` local, `_KEY` (JSON string) Vercel |
 | `GOOGLE_ADMIN_EMAIL` | Service account delegation email | `.env` + Vercel |
 | `GOOGLE_WORKSPACE_DOMAIN` | Workspace domain | `.env` + Vercel |
+| `CRON_SECRET` | Vercel Cron auth token (Bearer) for `/api/internal/cron` | `.env` + Vercel |
+| `BIOMETRIC_AGENT_KEY` | Shared secret for local eSSL biometric sync agent | `.env` + Vercel |
 
 **When adding new env vars:** Always set in BOTH local `.env` AND Vercel dashboard. Use `vercel env add VARNAME production` for CLI, or Vercel Dashboard → Settings → Environment Variables.
+
+## Architecture Utilities (use these — don't reinvent)
+
+### TTL Cache (`server/src/middleware/cache.js`)
+For read-heavy endpoints that return stable data. Applied per-route BEFORE the route registration in `app.js`.
+```js
+const { withCache, invalidateCache } = require('../middleware/cache');
+// In app.js — before app.use('/api/holidays', holidayRoutes):
+app.use('/api/holidays', withCache(3600)); // 1-hour TTL
+// In write route handlers (POST/PUT/DELETE) — after DB mutation:
+invalidateCache('/api/holidays'); // busts all /api/holidays/* entries
+```
+Currently applied to: `/api/holidays` (1h), `/api/branches` (10min).
+
+### Circuit Breaker (`server/src/utils/circuitBreaker.js`)
+Wrap ALL calls to external services (Google Drive, Gmail, SMTP, Clerk). Pre-registered: `google-drive`, `google-gmail`, `google-workspace`, `email-smtp`, `clerk-api`.
+```js
+const { getBreaker } = require('../utils/circuitBreaker');
+const result = await getBreaker('google-drive').call(() => driveService.upload(...));
+// Throws immediately with clear message if service is OPEN (down)
+// Auto-recovers: OPEN → HALF_OPEN → CLOSED after cooldown + 2 successes
+```
+
+### Vercel Cron (adding new scheduled jobs)
+1. Add a `job=yourjob` case in `server/src/routes/internal.js` `GET /cron` handler
+2. Add entry to `vercel.json` `"crons"` array with UTC schedule
+3. UTC = IST − 5:30 (e.g. 9 PM IST = 15:30 UTC = `30 15 * * *`)
+4. Requires `CRON_SECRET` env var set in both `.env` and Vercel dashboard
+
+### Request Correlation
+Every request gets `X-Request-ID` header (auto-generated UUID or passed from upstream).
+Available as `req.requestId` in all route handlers — include in error logs for tracing.
 
 ## AI Architecture (aiRouter)
 
