@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Search, X, LayoutDashboard, ClipboardEdit, Clock, CalendarOff, AlarmClock,
-  IndianRupee, Wallet, ShieldCheck, ClipboardList, LifeBuoy, BookOpen,
+  IndianRupee, Wallet, ShieldCheck, ShieldAlert, ClipboardList, LifeBuoy, BookOpen,
   Package, FolderOpen, Users, Trophy, UsersRound, CheckSquare, ClipboardCheck,
   Receipt, Upload, Briefcase, BadgeCheck, UserPlus, UserMinus, MessageSquare,
   BarChart3, CreditCard, Banknote, Fingerprint, Calendar, LayoutGrid,
@@ -107,6 +107,7 @@ const ALL_ROUTES = [
   { label: 'Company Master',     path: '/admin/company-master',            section: 'Organization',       group: 'Setup',                   icon: Building2,       keywords: 'gstin company registration branch bank account legal entity' },
   { label: 'Credential Manager', path: '/admin/credentials',              section: 'Organization',       group: 'Setup',                   icon: KeyRound,        keywords: 'portal login password credential amazon flipkart' },
   { label: 'Departments',        path: '/admin/departments',               section: 'Organization',       group: 'Setup',                   icon: Building2,       keywords: 'department create manage' },
+  { label: 'Security Audit',     path: '/admin/security-audit',            section: 'Organization',       group: 'Setup',                   icon: ShieldAlert,     keywords: 'security audit env api vulnerability scan check rate limit cors' },
   { label: 'Settings',           path: '/admin/settings',                  section: 'Organization',       group: 'Setup',                   icon: Settings,        keywords: 'configuration ai key smtp google' },
 ];
 
