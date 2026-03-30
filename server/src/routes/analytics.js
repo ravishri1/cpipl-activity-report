@@ -266,4 +266,145 @@ router.get('/birthday-calendar', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /payroll-summary?months=6 — Monthly payroll cost trend + current month breakdown
+router.get('/payroll-summary', asyncHandler(async (req, res) => {
+  const months = Math.min(parseInt(req.query.months) || 6, 12);
+  const now = new Date();
+
+  // Monthly trend for last N months
+  const trend = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'short', year: 'numeric' });
+    const payslips = await req.prisma.payslip.findMany({
+      where: { month },
+      select: { grossEarnings: true, totalDeductions: true, netPay: true, employerPf: true, employerEsi: true },
+    });
+    const gross = payslips.reduce((s, p) => s + (p.grossEarnings || 0), 0);
+    const deductions = payslips.reduce((s, p) => s + (p.totalDeductions || 0), 0);
+    const net = payslips.reduce((s, p) => s + (p.netPay || 0), 0);
+    const empPf = payslips.reduce((s, p) => s + (p.employerPf || 0), 0);
+    const empEsi = payslips.reduce((s, p) => s + (p.employerEsi || 0), 0);
+    trend.push({ month, label, headcount: payslips.length, gross, deductions, net, totalCost: gross + empPf + empEsi });
+  }
+
+  // Current month dept breakdown
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentPayslips = await req.prisma.payslip.findMany({
+    where: { month: currentMonth },
+    include: { user: { select: { department: true } } },
+    select: { grossEarnings: true, netPay: true, totalDeductions: true, user: { select: { department: true } } },
+  });
+
+  const deptMap = {};
+  currentPayslips.forEach(p => {
+    const dept = p.user?.department || 'Unassigned';
+    if (!deptMap[dept]) deptMap[dept] = { department: dept, count: 0, gross: 0, net: 0, deductions: 0 };
+    deptMap[dept].count++;
+    deptMap[dept].gross += p.grossEarnings || 0;
+    deptMap[dept].net += p.netPay || 0;
+    deptMap[dept].deductions += p.totalDeductions || 0;
+  });
+
+  // Active salary structures total CTC
+  const salaries = await req.prisma.salaryStructure.findMany({
+    where: { user: { isActive: true } },
+    select: { ctcAnnual: true, ctcMonthly: true },
+  });
+  const totalCTCAnnual  = salaries.reduce((s, sal) => s + (sal.ctcAnnual  || 0), 0);
+  const totalCTCMonthly = salaries.reduce((s, sal) => s + (sal.ctcMonthly || 0), 0);
+
+  res.json({
+    trend,
+    currentMonth,
+    byDepartment: Object.values(deptMap).sort((a, b) => b.gross - a.gross),
+    ctc: { totalCTCAnnual, totalCTCMonthly, employeeCount: salaries.length },
+  });
+}));
+
+// GET /productivity?month=YYYY-MM — EOD report submission rate + hours by dept
+router.get('/productivity', asyncHandler(async (req, res) => {
+  const month = req.query.month || new Date().toISOString().substring(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw badRequest('Month must be YYYY-MM format.');
+
+  // Active employees
+  const activeUsers = await req.prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, department: true },
+  });
+  const totalEmployees = activeUsers.length;
+
+  // Reports for this month
+  const reports = await req.prisma.dailyReport.findMany({
+    where: { reportDate: { startsWith: month } },
+    include: {
+      user: { select: { department: true } },
+      tasks: { select: { hours: true } },
+    },
+    select: {
+      userId: true, reportDate: true, totalHours: true,
+      user: { select: { department: true } },
+      tasks: { select: { hours: true } },
+    },
+  });
+
+  // Working days in month (Mon-Fri, rough estimate)
+  const [yr, mo] = month.split('-').map(Number);
+  let workingDays = 0;
+  const daysInMonth = new Date(yr, mo, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(yr, mo - 1, d).getDay();
+    if (dow !== 0 && dow !== 6) workingDays++;
+  }
+
+  // Unique reporters
+  const uniqueReporters = new Set(reports.map(r => r.userId)).size;
+  const totalReports = reports.length;
+  const totalHours = reports.reduce((s, r) => s + (r.totalHours || 0), 0);
+  const submissionRate = totalEmployees > 0
+    ? Math.round((uniqueReporters / totalEmployees) * 10000) / 100
+    : 0;
+
+  // By department
+  const deptMap = {};
+  reports.forEach(r => {
+    const dept = r.user?.department || 'Unassigned';
+    if (!deptMap[dept]) deptMap[dept] = { department: dept, reports: 0, hours: 0, reporters: new Set() };
+    deptMap[dept].reports++;
+    deptMap[dept].hours += r.totalHours || 0;
+    deptMap[dept].reporters.add(r.userId);
+  });
+
+  // Active reporters per dept
+  const deptBreakdown = Object.values(deptMap).map(d => ({
+    department: d.department,
+    reports: d.reports,
+    hours: Math.round(d.hours * 10) / 10,
+    reporters: d.reporters.size,
+    avgHoursPerReport: d.reports > 0 ? Math.round((d.hours / d.reports) * 10) / 10 : 0,
+  })).sort((a, b) => b.reports - a.reports);
+
+  // Top 10 by hours
+  const userHours = {};
+  reports.forEach(r => {
+    if (!userHours[r.userId]) userHours[r.userId] = { userId: r.userId, reports: 0, hours: 0 };
+    userHours[r.userId].reports++;
+    userHours[r.userId].hours += r.totalHours || 0;
+  });
+  const userMap = Object.fromEntries(activeUsers.map(u => [u.id, u]));
+  const topContributors = Object.values(userHours)
+    .map(u => ({ ...u, hours: Math.round(u.hours * 10) / 10, name: userMap[u.userId]?.name || '—', department: userMap[u.userId]?.department || '—' }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 10);
+
+  res.json({
+    month, totalEmployees, workingDays, totalReports, uniqueReporters, submissionRate,
+    totalHours: Math.round(totalHours * 10) / 10,
+    avgHoursPerReport: totalReports > 0 ? Math.round((totalHours / totalReports) * 10) / 10 : 0,
+    byDepartment: deptBreakdown,
+    topContributors,
+  });
+}));
+
 module.exports = router;
