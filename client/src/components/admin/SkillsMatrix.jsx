@@ -25,7 +25,7 @@ export default function SkillsMatrix() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
-  const { data: matrix, loading, error } = useFetch('/api/skills/matrix', []);
+  const { data: matrix, loading, error } = useFetch('/skills/matrix', []);
 
   const filtered = matrix.filter(entry => {
     const matchSearch   = !search || entry.skill.toLowerCase().includes(search.toLowerCase());

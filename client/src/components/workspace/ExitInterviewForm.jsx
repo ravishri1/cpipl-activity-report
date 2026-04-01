@@ -29,7 +29,7 @@ function StarRating({ value, onChange, disabled }) {
 }
 
 export default function ExitInterviewForm() {
-  const { data: interview, loading, error: fetchErr, refetch } = useFetch('/api/exit-interviews/my', null);
+  const { data: interview, loading, error: fetchErr, refetch } = useFetch('/exit-interviews/my', null);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const [form, setForm] = useState({

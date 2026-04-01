@@ -10,7 +10,7 @@ const SCORE_LABELS = ['', 'Rough week', 'Below average', 'Average', 'Good week',
 const SCORE_COLORS = ['', 'bg-red-100 text-red-600', 'bg-orange-100 text-orange-600', 'bg-amber-100 text-amber-600', 'bg-green-100 text-green-600', 'bg-emerald-100 text-emerald-700'];
 
 export default function WeeklyPulse() {
-  const { data, loading, error: fetchErr, refetch } = useFetch('/api/pulse/my', null);
+  const { data, loading, error: fetchErr, refetch } = useFetch('/pulse/my', null);
   const { execute, loading: saving, error: saveErr, success } = useApi();
   const [score, setScore] = useState(0);
   const [comment, setComment] = useState('');
@@ -22,7 +22,7 @@ export default function WeeklyPulse() {
   const handleSubmit = async () => {
     if (!score) return;
     try {
-      await execute(() => api.post('/api/pulse', { score, comment: comment || undefined }), "Thanks for sharing! 🙌");
+      await execute(() => api.post('/pulse', { score, comment: comment || undefined }), "Thanks for sharing! 🙌");
       setSubmitted(true);
       refetch();
     } catch {}

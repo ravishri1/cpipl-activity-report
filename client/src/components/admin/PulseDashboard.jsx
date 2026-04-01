@@ -12,8 +12,8 @@ const BAR_COLORS    = ['', 'bg-red-400', 'bg-orange-400', 'bg-amber-400', 'bg-gr
 export default function PulseDashboard() {
   const [tab, setTab] = useState('trends');
 
-  const { data: trends, loading: tLoading, error: tErr } = useFetch('/api/pulse/trends', []);
-  const { data: current, loading: cLoading, error: cErr } = useFetch('/api/pulse/current', null);
+  const { data: trends, loading: tLoading, error: tErr } = useFetch('/pulse/trends', []);
+  const { data: current, loading: cLoading, error: cErr } = useFetch('/pulse/current', null);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

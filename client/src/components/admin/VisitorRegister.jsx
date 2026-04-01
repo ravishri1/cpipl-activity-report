@@ -29,7 +29,7 @@ function CheckInModal({ employees, onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/visitors', form), 'Visitor checked in!');
+      await execute(() => api.post('/visitors', form), 'Visitor checked in!');
       onDone();
       onClose();
     } catch {}
@@ -95,10 +95,10 @@ export default function VisitorRegister() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const today = new Date().toISOString().slice(0, 10);
-  const { data: active,    loading: activeLoading,    error: activeErr,    refetch: refetchActive }    = useFetch('/api/visitors/active', []);
-  const { data: visitors,  loading: visitorsLoading,  error: visitorsErr,  refetch: refetchVisitors }  = useFetch(`/api/visitors?date=${date}`, []);
-  const { data: stats,     loading: statsLoading,     error: statsErr }    = useFetch('/api/visitors/stats', null);
-  const { data: employees }  = useFetch('/api/users/active', []);
+  const { data: active,    loading: activeLoading,    error: activeErr,    refetch: refetchActive }    = useFetch('/visitors/active', []);
+  const { data: visitors,  loading: visitorsLoading,  error: visitorsErr,  refetch: refetchVisitors }  = useFetch(`/visitors?date=${date}`, []);
+  const { data: stats,     loading: statsLoading,     error: statsErr }    = useFetch('/visitors/stats', null);
+  const { data: employees }  = useFetch('/users/active', []);
   const { execute: checkout, loading: checkingOut } = useApi();
 
   const handleCheckout = async (id, name) => {

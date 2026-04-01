@@ -31,7 +31,7 @@ function NewGrievanceModal({ onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/grievances', form), 'Grievance submitted.');
+      await execute(() => api.post('/grievances', form), 'Grievance submitted.');
       onDone();
       onClose();
     } catch {}
@@ -91,7 +91,7 @@ function CommentBox({ grievanceId, onDone }) {
   const handleSubmit = async () => {
     if (!text.trim()) return;
     try {
-      await execute(() => api.post(`/api/grievances/${grievanceId}/comments`, { comment: text }), 'Comment added.');
+      await execute(() => api.post(`/grievances/${grievanceId}/comments`, { comment: text }), 'Comment added.');
       setText('');
       onDone();
     } catch {}
@@ -111,7 +111,7 @@ function CommentBox({ grievanceId, onDone }) {
 export default function MyGrievances() {
   const [showModal, setShowModal] = useState(false);
   const [expanded, setExpanded] = useState(null);
-  const { data: grievances, loading, error: fetchErr, refetch } = useFetch('/api/grievances/my', []);
+  const { data: grievances, loading, error: fetchErr, refetch } = useFetch('/grievances/my', []);
 
   if (loading) return <LoadingSpinner />;
 

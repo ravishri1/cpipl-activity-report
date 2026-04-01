@@ -38,9 +38,9 @@ function SkillModal({ skill, onClose, onDone }) {
   const handleSubmit = async () => {
     try {
       if (isEdit) {
-        await execute(() => api.put(`/api/skills/${skill.id}`, form), 'Skill updated!');
+        await execute(() => api.put(`/skills/${skill.id}`, form), 'Skill updated!');
       } else {
-        await execute(() => api.post('/api/skills', form), 'Skill added!');
+        await execute(() => api.post('/skills', form), 'Skill added!');
       }
       onDone();
       onClose();
@@ -106,13 +106,13 @@ function SkillModal({ skill, onClose, onDone }) {
 
 export default function MySkills() {
   const [modal, setModal] = useState(null); // null | 'new' | skill-object
-  const { data: skills, loading, error: fetchErr, refetch } = useFetch('/api/skills/my', []);
+  const { data: skills, loading, error: fetchErr, refetch } = useFetch('/skills/my', []);
   const { execute, loading: deleting, error: deleteErr } = useApi();
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Delete "${name}"?`)) return;
     try {
-      await execute(() => api.delete(`/api/skills/${id}`), 'Skill deleted.');
+      await execute(() => api.delete(`/skills/${id}`), 'Skill deleted.');
       refetch();
     } catch {}
   };

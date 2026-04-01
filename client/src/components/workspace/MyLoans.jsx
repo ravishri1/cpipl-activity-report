@@ -25,7 +25,7 @@ function RequestModal({ onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/loans', form), 'Loan request submitted!');
+      await execute(() => api.post('/loans', form), 'Loan request submitted!');
       onDone();
       onClose();
     } catch {}
@@ -86,7 +86,7 @@ function RequestModal({ onClose, onDone }) {
 export default function MyLoans() {
   const [showModal, setShowModal] = useState(false);
   const [expanded, setExpanded] = useState(null);
-  const { data: loans, loading, error: fetchErr, refetch } = useFetch('/api/loans/my', []);
+  const { data: loans, loading, error: fetchErr, refetch } = useFetch('/loans/my', []);
   const { execute, loading: cancelling, error: cancelErr } = useApi();
 
   const hasActive = loans.some(l => ['pending','active','approved'].includes(l.status));

@@ -116,12 +116,12 @@ function DetailModal({ id, onClose }) {
 
 function InitiateModal({ onClose, onDone }) {
   const { execute, loading, error } = useApi();
-  const { data: separations } = useFetch('/api/lifecycle/separations?status=approved', []);
+  const { data: separations } = useFetch('/lifecycle/separations?status=approved', []);
   const [separationId, setSeparationId] = useState('');
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/exit-interviews', { separationId }), 'Exit interview created!');
+      await execute(() => api.post('/exit-interviews', { separationId }), 'Exit interview created!');
       onDone();
       onClose();
     } catch {}
@@ -165,8 +165,8 @@ export default function ExitInterviewAdmin() {
 
   const params = new URLSearchParams();
   if (statusFilter) params.set('status', statusFilter);
-  const { data: interviews, loading, error: fetchErr, refetch } = useFetch(`/api/exit-interviews?${params}`, []);
-  const { data: stats, error: statsErr } = useFetch('/api/exit-interviews/stats/summary', null);
+  const { data: interviews, loading, error: fetchErr, refetch } = useFetch(`/exit-interviews?${params}`, []);
+  const { data: stats, error: statsErr } = useFetch('/exit-interviews/stats/summary', null);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

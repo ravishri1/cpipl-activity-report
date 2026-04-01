@@ -22,7 +22,7 @@ function RequestModal({ onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/wfh', { date, reason: reason || undefined }), 'WFH request submitted!');
+      await execute(() => api.post('/wfh', { date, reason: reason || undefined }), 'WFH request submitted!');
       onDone();
       onClose();
     } catch {}

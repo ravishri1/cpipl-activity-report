@@ -128,9 +128,9 @@ export default function GrievanceManager() {
   const params = new URLSearchParams();
   if (statusFilter) params.set('status', statusFilter);
 
-  const { data: grievances, loading, error: fetchErr, refetch } = useFetch(`/api/grievances?${params}`, []);
-  const { data: hrUsers } = useFetch('/api/users/active', []);
-  const { data: stats } = useFetch('/api/grievances/stats/summary', null);
+  const { data: grievances, loading, error: fetchErr, refetch } = useFetch(`/grievances?${params}`, []);
+  const { data: hrUsers } = useFetch('/users/active', []);
+  const { data: stats } = useFetch('/grievances/stats/summary', null);
 
   const adminUsers = Array.isArray(hrUsers) ? hrUsers.filter(u => ['admin','sub_admin'].includes(u.role)) : [];
 

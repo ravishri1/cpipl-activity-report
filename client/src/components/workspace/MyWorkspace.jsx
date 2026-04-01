@@ -16,10 +16,10 @@ const TABS = [
 ];
 
 function MySummary() {
-  const { data: leaveBalances, loading: lbLoading, error: lbErr } = useFetch('/api/leave/my-balance', []);
-  const { data: leaveRequests, loading: lrLoading, error: lrErr } = useFetch('/api/leave/my-requests', []);
-  const { data: expenses, loading: exLoading, error: exErr } = useFetch('/api/expenses/my', []);
-  const { data: payslips, loading: psLoading, error: psErr } = useFetch('/api/payroll/my-payslips', []);
+  const { data: leaveBalances, loading: lbLoading, error: lbErr } = useFetch('/leave/my-balance', []);
+  const { data: leaveRequests, loading: lrLoading, error: lrErr } = useFetch('/leave/my-requests', []);
+  const { data: expenses, loading: exLoading, error: exErr } = useFetch('/expenses/my', []);
+  const { data: payslips, loading: psLoading, error: psErr } = useFetch('/payroll/my-payslips', []);
 
   const loading = lbLoading || lrLoading || exLoading || psLoading;
   if (loading) return <LoadingSpinner />;

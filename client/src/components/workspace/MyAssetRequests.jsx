@@ -32,7 +32,7 @@ function RequestModal({ onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.post('/api/asset-requests', form), 'Request submitted!');
+      await execute(() => api.post('/asset-requests', form), 'Request submitted!');
       onDone();
       onClose();
     } catch {}
@@ -84,7 +84,7 @@ function RequestModal({ onClose, onDone }) {
 
 export default function MyAssetRequests() {
   const [showModal, setShowModal] = useState(false);
-  const { data: requests, loading, error: fetchErr, refetch } = useFetch('/api/asset-requests/my', []);
+  const { data: requests, loading, error: fetchErr, refetch } = useFetch('/asset-requests/my', []);
   const { execute, loading: cancelling, error: cancelErr } = useApi();
 
   const handleCancel = async (id) => {
