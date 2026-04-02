@@ -3,6 +3,7 @@ const { authenticate, requireAdmin, requireActiveEmployee } = require('../middle
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { suspendWorkspaceUser, setupEmailForwarding } = require('../services/google/googleWorkspace');
 
 const router = express.Router();
 
@@ -177,7 +178,7 @@ router.get('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
   const separation = await req.prisma.separation.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true, department: true, designation: true, employeeId: true, dateOfJoining: true, phone: true, personalEmail: true, profilePhotoUrl: true } },
+      user: { select: { id: true, name: true, email: true, department: true, designation: true, employeeId: true, dateOfJoining: true, phone: true, personalEmail: true, profilePhotoUrl: true, reportingManager: { select: { id: true, name: true, email: true } } } },
       processor: { select: { id: true, name: true, email: true } },
     },
   });
@@ -197,7 +198,7 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
   const existing = await req.prisma.separation.findUnique({ where: { id } });
   if (!existing) throw notFound('Separation record');
 
-  const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason } = req.body;
+  const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason, workspaceBackupEmail } = req.body;
 
   if (status) requireEnum(status, VALID_SEP_STATUSES, 'status');
 
@@ -220,6 +221,7 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
   if (fnfHoldReason !== undefined) updateData.fnfHoldReason = fnfHoldReason;
   if (fnfAmount !== undefined) updateData.fnfAmount = fnfAmount;
   if (fnfPaidOn !== undefined) updateData.fnfPaidOn = fnfPaidOn;
+  if (workspaceBackupEmail !== undefined) updateData.workspaceBackupEmail = workspaceBackupEmail || null;
 
   const updated = await req.prisma.separation.update({ where: { id }, data: updateData });
 
@@ -247,17 +249,45 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
       await req.prisma.user.update({ where: { id: existing.userId }, data: userUpdate });
     }
 
-    // ── Google Workspace: flag account for HR to manually suspend on FnF completion ──
+    // ── Google Workspace: auto-suspend + email forwarding on FnF completion ──
     if (status === 'completed') {
       const separatedUser = await req.prisma.user.findUnique({
         where: { id: existing.userId },
         select: { email: true },
       });
       if (separatedUser && isWorkspaceEmail(separatedUser.email)) {
-        await req.prisma.user.update({
-          where: { id: existing.userId },
-          data: { workspaceSuspendPending: true },
-        });
+        const backupEmail = workspaceBackupEmail || updated.workspaceBackupEmail;
+        let wsAction = null;
+        try {
+          await suspendWorkspaceUser(separatedUser.email);
+          wsAction = 'suspended';
+          // Set up email forwarding if backup email provided
+          if (backupEmail) {
+            try {
+              await setupEmailForwarding(separatedUser.email, backupEmail);
+              wsAction = 'suspended_forwarding';
+            } catch (fwdErr) {
+              console.error(`Email forwarding setup failed for ${separatedUser.email}:`, fwdErr.message);
+              // Suspension succeeded, forwarding failed — still better than nothing
+            }
+          }
+          // Clear the manual-suspend flag since we auto-suspended
+          await req.prisma.user.update({
+            where: { id: existing.userId },
+            data: { workspaceSuspendPending: false },
+          });
+        } catch (wsErr) {
+          console.error(`Workspace suspension failed for ${separatedUser.email}:`, wsErr.message);
+          wsAction = 'failed';
+          // Fall back to manual flag
+          await req.prisma.user.update({
+            where: { id: existing.userId },
+            data: { workspaceSuspendPending: true },
+          });
+        }
+        if (wsAction) {
+          await req.prisma.separation.update({ where: { id }, data: { workspaceAction: wsAction } });
+        }
       }
     }
   }

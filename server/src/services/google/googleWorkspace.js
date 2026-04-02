@@ -211,6 +211,38 @@ async function fetchAndStoreEmailActivity(prisma, date) {
 }
 
 // ─────────────────────────────────────────────
+// Set up Gmail auto-forwarding for a departing employee → backup recipient
+// Requires 'gmail.settings.sharing' scope in domain-wide delegation
+// ─────────────────────────────────────────────
+async function setupEmailForwarding(fromEmail, toEmail) {
+  const authClient = await getServiceAccountClient(fromEmail, [
+    'https://www.googleapis.com/auth/gmail.settings.sharing',
+  ]);
+  const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+  // Add the forwarding address (409 = already exists, that's OK)
+  try {
+    await gmail.users.settings.forwardingAddresses.create({
+      userId: 'me',
+      requestBody: { forwardingEmail: toEmail },
+    });
+  } catch (err) {
+    const status = err.code || err.status || err.response?.status;
+    if (status !== 409) throw err;
+  }
+
+  // Enable auto-forwarding
+  await gmail.users.settings.updateAutoForwarding({
+    userId: 'me',
+    requestBody: {
+      enabled: true,
+      emailAddress: toEmail,
+      disposition: 'leaveInInbox',
+    },
+  });
+}
+
+// ─────────────────────────────────────────────
 // Generate unique Workspace email: firstname.lastinitial@domain
 // Falls back to firstname.lastinitial1, ..., firstname.lastinitial9
 // ─────────────────────────────────────────────
@@ -321,4 +353,5 @@ module.exports = {
   updateWorkspaceUser,
   updateWorkspacePhoto,
   syncFromWorkspace,
+  setupEmailForwarding,
 };

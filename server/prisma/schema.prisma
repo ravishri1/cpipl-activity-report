@@ -1195,10 +1195,12 @@ model Separation {
   exitInterviewNotes String?
   allAssetsReturned  Boolean   @default(false)           // must be true before FnF
   assetReturnNotes   String?                             // JSON: details of pending/returned assets
-  fnfAmount          Float?
-  fnfHoldReason      String?                             // "pending_asset_return" etc.
-  fnfPaidOn          String?                             // "YYYY-MM-DD"
-  processedBy        Int?
+  fnfAmount             Float?
+  fnfHoldReason         String?                          // "pending_asset_return" etc.
+  fnfPaidOn             String?                          // "YYYY-MM-DD"
+  workspaceBackupEmail  String?                          // Email to forward departing user's mail to
+  workspaceAction       String?                          // 'suspended', 'suspended_forwarding', 'failed', null
+  processedBy           Int?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
