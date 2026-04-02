@@ -72,52 +72,43 @@ export default function AdminFundRequests() {
   const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
 
-  // Petty Cash / Opening Balance for fund holder (HR & Admin head)
-  const [showBalanceModal, setShowBalanceModal] = useState(false);
-  const [fundHolderBalance, setFundHolderBalance] = useState(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
-  const [editingBalance, setEditingBalance] = useState(false);
-  const [editBalanceVal, setEditBalanceVal] = useState('');
-  const [editBalanceNotes, setEditBalanceNotes] = useState('');
+  // Petty Cash — Opening Balance (inline, no modal)
+  const [showBalanceEditor, setShowBalanceEditor] = useState(false);
+  const [balanceVal, setBalanceVal] = useState('');
+  const [balanceNotes, setBalanceNotes] = useState('');
+  const [fundHolderId, setFundHolderId] = useState(null);
+  const [currentBalance, setCurrentBalance] = useState(null);
 
-  const loadFundHolderBalance = async () => {
-    setBalanceLoading(true);
+  const loadAndShowBalance = async () => {
+    // Find the fund holder: first employee with fund balance, or first in request list
+    const empList = Array.isArray(employees) ? employees : (employees?.users || []);
+    // Check who has fund requests — that's the fund holder
+    const topRequester = requests?.[0]?.requestedBy || requests?.[0]?.userId;
+    const holderId = topRequester || empList[0]?.id;
+    if (!holderId) return;
+    setFundHolderId(holderId);
     try {
-      // Find fund holders — employees who have a fund balance set OR have fund requests
-      const empList = Array.isArray(employees) ? employees : (employees?.users || []);
-      const holders = [];
-      for (const emp of empList) {
-        try {
-          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
-          if (res.data && (res.data.openingBalance || res.data.totalDisbursed || res.data.totalSpent)) {
-            holders.push({ ...emp, balance: res.data });
-          }
-        } catch { /* no balance */ }
-      }
-      // If no holders found yet, show all employees so admin can set the first one
-      setFundHolderBalance(holders.length > 0 ? holders : empList.map(e => ({ ...e, balance: null })));
-    } catch { /* ignore */ }
-    setBalanceLoading(false);
+      const res = await api.get(`/expenses/fund-balances/${holderId}`);
+      setCurrentBalance(res.data);
+      setBalanceVal(String(res.data?.openingBalance || 0));
+    } catch {
+      setCurrentBalance({ openingBalance: 0, currentBalance: 0 });
+      setBalanceVal('0');
+    }
+    setShowBalanceEditor(true);
   };
 
-  const handleOpenBalanceModal = () => {
-    setShowBalanceModal(true);
-    loadFundHolderBalance();
-  };
-
-  const handleSaveBalance = async (userId) => {
+  const handleSaveBalance = async () => {
+    if (!fundHolderId) return;
     try {
       await execute(
-        () => api.put(`/expenses/fund-balances/${userId}`, {
-          openingBalance: parseFloat(editBalanceVal) || 0,
-          notes: editBalanceNotes || null,
+        () => api.put(`/expenses/fund-balances/${fundHolderId}`, {
+          openingBalance: parseFloat(balanceVal) || 0,
+          notes: balanceNotes || null,
         }),
         'Opening balance saved!'
       );
-      setEditingBalance(false);
-      setEditBalanceVal('');
-      setEditBalanceNotes('');
-      loadFundHolderBalance();
+      setShowBalanceEditor(false);
     } catch {
       // Error displayed by useApi
     }
@@ -330,9 +321,9 @@ export default function AdminFundRequests() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Fund Requests</h2>
         <div className="flex items-center gap-2">
-          <button onClick={handleOpenBalanceModal}
+          <button onClick={loadAndShowBalance}
             className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm">
-            <Wallet className="w-4 h-4" /> Opening Balances
+            <Wallet className="w-4 h-4" /> Opening Balance
           </button>
           <button onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 shadow-sm">
@@ -832,103 +823,37 @@ export default function AdminFundRequests() {
         </Modal>
       )}
 
-      {/* Opening Balance Modal — for petty cash fund holder */}
-      {showBalanceModal && (
-        <Modal title="Petty Cash — Opening Balance" onClose={() => { setShowBalanceModal(false); setEditingBalance(false); }}>
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-blue-800">
-                Set the starting balance for the fund holder (e.g., HR & Admin head who manages petty cash).
-                This is the leftover amount from last month before the portal was set up.
-                Monthly carry-forward happens automatically via the Ledger.
-              </p>
-            </div>
-
-            {balanceLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-violet-500" /></div>
-            ) : (
-              <>
-                {/* Select employee */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Fund Holder (Employee)</label>
-                  <select
-                    value={editingBalance ? editingBalance : ''}
-                    onChange={e => {
-                      const uid = parseInt(e.target.value);
-                      setEditingBalance(uid || false);
-                      const holder = fundHolderBalance?.find(h => h.id === uid);
-                      setEditBalanceVal(String(holder?.balance?.openingBalance || 0));
-                      setEditBalanceNotes('');
-                    }}
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                  >
-                    <option value="">Select employee...</option>
-                    {fundHolderBalance?.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.name}{emp.balance?.openingBalance ? ` — ₹${emp.balance.openingBalance}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Balance details + editor */}
-                {editingBalance && (() => {
-                  const holder = fundHolderBalance?.find(h => h.id === editingBalance);
-                  const bal = holder?.balance;
-                  return (
-                    <div className="space-y-3">
-                      {/* Current summary */}
-                      {bal && (bal.openingBalance || bal.totalDisbursed || bal.totalSpent) ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                            <p className="text-xs text-green-600">Opening Balance</p>
-                            <p className="text-lg font-bold text-green-700">{formatINR(bal.openingBalance || 0)}</p>
-                          </div>
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                            <p className="text-xs text-blue-600">Current Balance</p>
-                            <p className="text-lg font-bold text-blue-700">{formatINR(bal.currentBalance || 0)}</p>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {/* Edit form */}
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Opening Balance (₹)</label>
-                        <input
-                          type="number"
-                          value={editBalanceVal}
-                          onChange={e => setEditBalanceVal(e.target.value)}
-                          className="w-full border rounded-lg px-3 py-2 text-sm"
-                          placeholder="Enter amount carried forward from last month..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
-                        <input
-                          type="text"
-                          value={editBalanceNotes}
-                          onChange={e => setEditBalanceNotes(e.target.value)}
-                          className="w-full border rounded-lg px-3 py-2 text-sm"
-                          placeholder="e.g., Balance as of March 2026"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => { setShowBalanceModal(false); setEditingBalance(false); }}
-                          className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
-                        <button onClick={() => handleSaveBalance(editingBalance)} disabled={saving}
-                          className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
-                          <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Balance'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </>
-            )}
-            {saveErr && <AlertMessage type="error" message={saveErr} />}
-            {success && <AlertMessage type="success" message={success} />}
+      {/* Opening Balance — inline editor (no modal, no dropdown) */}
+      {showBalanceEditor && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+              <Wallet className="w-4 h-4" /> Petty Cash — Opening Balance
+            </h3>
+            <button onClick={() => setShowBalanceEditor(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
           </div>
-        </Modal>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-xs text-slate-600 mb-1">Amount (₹)</label>
+              <input type="number" value={balanceVal} onChange={e => setBalanceVal(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Enter opening balance..." />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-xs text-slate-600 mb-1">Note (optional)</label>
+              <input type="text" value={balanceNotes} onChange={e => setBalanceNotes(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., Balance as of March 2026" />
+            </div>
+            <button onClick={handleSaveBalance} disabled={saving}
+              className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0">
+              <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {currentBalance && (currentBalance.openingBalance || currentBalance.currentBalance) ? (
+            <p className="text-xs text-emerald-700 mt-2">
+              Current: Opening {formatINR(currentBalance.openingBalance || 0)} | Balance {formatINR(currentBalance.currentBalance || 0)}
+            </p>
+          ) : null}
+        </div>
       )}
 
       {/* Settle / Pay Modal */}
