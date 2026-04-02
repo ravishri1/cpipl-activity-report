@@ -750,7 +750,7 @@ router.get('/fund-balances/my', asyncHandler(async (req, res) => {
     select: { amount: true },
   });
   const expenses = await req.prisma.expenseClaim.findMany({
-    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    where: { userId: uid, status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
 
@@ -788,7 +788,7 @@ router.get('/fund-balances/:userId(\\d+)', asyncHandler(async (req, res) => {
     select: { amount: true },
   });
   const expenses = await req.prisma.expenseClaim.findMany({
-    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    where: { userId: uid, status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
 
@@ -828,8 +828,9 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
     where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
+  // Count ALL approved/paid expenses for fund holder (petty cash = all spending counts)
   const expenses = await req.prisma.expenseClaim.findMany({
-    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    where: { userId: uid, status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
   const totalDisbursed = advances.reduce((s, a) => s + (a.disbursedAmount || 0), 0);
