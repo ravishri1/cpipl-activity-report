@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ScrollText, Download, Eye, X, Calendar } from 'lucide-react';
-import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { formatDate } from '../../utils/formatters';
 import LoadingSpinner from '../shared/LoadingSpinner';
@@ -76,7 +75,7 @@ export default function MyLetters() {
             >
               <div className="flex items-start gap-3 min-w-0">
                 <div className="shrink-0 w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <ScrollText className="w-4.5 h-4.5 text-purple-600" />
+                  <ScrollText className="w-4 h-4 text-purple-600" />
                 </div>
                 <div className="min-w-0">
                   <div className="font-medium text-slate-800 text-sm">

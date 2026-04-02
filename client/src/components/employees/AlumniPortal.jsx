@@ -82,7 +82,7 @@ export default function AlumniPortal() {
             className={`flex items-start gap-3 p-4 rounded-xl border transition-all hover:shadow-sm hover:-translate-y-0.5 ${color}`}
           >
             <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
-              <Icon className="w-4.5 h-4.5" />
+              <Icon className="w-4 h-4" />
             </div>
             <div>
               <div className="font-semibold text-sm">{title}</div>
