@@ -237,10 +237,26 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
   const userWhere = { isActive: true };
   if (department) userWhere.department = department;
 
-  // Fetch holidays in range
+  // Fetch holidays in range (location-based)
   const holidays = await prisma.holiday.findMany({
     where: { date: { gte: startDate, lte: endDate } },
   });
+  // Build per-location holiday sets for location-aware checking
+  const allHolidaySet = new Set(holidays.filter(h => h.location === 'All').map(h => h.date));
+  const locationHolidayMap = {};
+  holidays.forEach(h => {
+    if (h.location && h.location !== 'All') {
+      if (!locationHolidayMap[h.location]) locationHolidayMap[h.location] = new Set();
+      locationHolidayMap[h.location].add(h.date);
+    }
+  });
+  // Helper: check if a date is a holiday for a user's location
+  const isHolidayForUser = (date, userLocation) => {
+    if (allHolidaySet.has(date)) return true;
+    if (userLocation && locationHolidayMap[userLocation]?.has(date)) return true;
+    return false;
+  };
+  // Legacy: flat set for backward compat (union of all locations)
   const holidaySet = new Set(holidays.map(h => h.date));
 
   const [users, attendances, leaves] = await Promise.all([

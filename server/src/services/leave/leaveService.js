@@ -183,6 +183,16 @@ function calculateAvailableWithProbation(balance, leaveType, fyYear, user) {
  * @param {number} [userId] - optional, to look up per-user weekly off pattern
  */
 async function calculateLeaveDays(startDate, endDate, session, prisma, userId, { sandwichLeave = false } = {}) {
+  // Resolve user's location for location-based holidays
+  let userLocation = null;
+  if (userId) {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { location: true } });
+    userLocation = u?.location || null;
+  }
+  const holidayLocationFilter = userLocation
+    ? { OR: [{ location: userLocation }, { location: 'All' }] }
+    : {};
+
   // Resolve user's weekly off days (or default Sat+Sun)
   const baseOffDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
 
@@ -200,7 +210,7 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId, {
     const d = new Date(startDate);
     const offDays = getOffDaysForDate(startDate);
     if (offDays.includes(d.getDay())) return 0;
-    const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate } });
+    const isHoliday = await prisma.holiday.findFirst({ where: { date: startDate, ...holidayLocationFilter } });
     if (isHoliday) return 0;
     return 0.5;
   }
@@ -216,7 +226,7 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId, {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const holidays = await prisma.holiday.findMany({
-    where: { date: { gte: startDate, lte: endDate } },
+    where: { date: { gte: startDate, lte: endDate }, ...holidayLocationFilter },
     select: { date: true },
   });
   const holidayDates = new Set(holidays.map((h) => h.date));
