@@ -538,10 +538,23 @@ export default function AdminFundRequests() {
                               <p><span className="text-slate-500">Review Note:</span> {detail.reviewNote}</p>
                             )}
                             {detail.disbursedAmount > 0 && (
-                              <div className="flex gap-4 text-xs">
-                                <span>Mode: <strong className="capitalize">{detail.paymentMode?.replace(/_/g, ' ')}</strong></span>
-                                {detail.paymentRef && <span>Ref: <strong>{detail.paymentRef}</strong></span>}
-                                <span>Disbursed: <strong>{formatDate(detail.disbursedOn)}</strong></span>
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                                <p className="text-xs font-semibold text-blue-700 uppercase">Payment Details</p>
+                                <div className="flex flex-wrap gap-4 text-xs">
+                                  <span>Mode: <strong className="capitalize">{detail.paymentMode?.replace(/_/g, ' ') || 'N/A'}</strong></span>
+                                  {detail.paymentRef && <span>Ref: <strong>{detail.paymentRef}</strong></span>}
+                                  <span>Disbursed: <strong>{formatDate(detail.disbursedOn)}</strong></span>
+                                  <span>Amount: <strong className="text-green-700">{formatINR(detail.disbursedAmount)}</strong></span>
+                                </div>
+                                {detail.paymentReceiptUrl && (
+                                  <a href={detail.paymentReceiptUrl} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700">
+                                    <Upload className="w-3.5 h-3.5 rotate-180" /> Download Payment Proof
+                                  </a>
+                                )}
+                                {!detail.paymentReceiptUrl && (
+                                  <p className="text-xs text-slate-400 italic">No payment proof uploaded</p>
+                                )}
                               </div>
                             )}
 
