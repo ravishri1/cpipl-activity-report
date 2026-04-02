@@ -8,7 +8,7 @@ const { normalizeEmail, normalizeName } = require('../utils/normalize');
 const { maskUserName, maskUserNames, canSeeFullNames } = require('../utils/namePrivacy');
 const { processProfilePhoto } = require('../services/photoProcessor');
 const {
-  createWorkspaceUser, unsuspendWorkspaceUser,
+  createWorkspaceUser, suspendWorkspaceUser, unsuspendWorkspaceUser,
   generateWorkspaceEmail, updateWorkspaceUser, updateWorkspacePhoto,
 } = require('../services/google/googleWorkspace');
 const { sendEmail } = require('../services/notifications/emailService');
@@ -663,6 +663,26 @@ router.put('/:id/workspace-done', authenticate, requireAdmin, asyncHandler(async
     data: { workspaceSuspendPending: false, workspaceSuspendDoneAt: today },
   });
   res.json({ message: 'Workspace account marked as suspended.' });
+}));
+
+// POST /api/users/:id/workspace-suspend-now — Auto-suspend Workspace account immediately
+router.post('/:id/workspace-suspend-now', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const user = await req.prisma.user.findUnique({
+    where: { id },
+    select: { email: true },
+  });
+  if (!user) throw notFound('User');
+  if (!isWorkspaceEmail(user.email)) throw badRequest('User does not have a Workspace email.');
+
+  await suspendWorkspaceUser(user.email);
+
+  const today = new Date().toISOString().slice(0, 10);
+  await req.prisma.user.update({
+    where: { id },
+    data: { workspaceSuspendPending: false, workspaceSuspendDoneAt: today },
+  });
+  res.json({ message: `Workspace account ${user.email} suspended successfully.` });
 }));
 
 // ═══════════════════════════════════════════════

@@ -47,6 +47,19 @@ export default function WorkspacePendingAlerts() {
     finally { setMarkingId(null); }
   };
 
+  const handleAutoSuspend = async (userId, email) => {
+    if (!window.confirm(`Auto-suspend ${email} in Google Workspace now?`)) return;
+    setMarkingId(userId);
+    try {
+      await execute(
+        () => api.post(`/users/${userId}/workspace-suspend-now`),
+        `${email} suspended successfully.`
+      );
+      refetch();
+    } catch { /* error displayed by useApi */ }
+    finally { setMarkingId(null); }
+  };
+
   return (
     <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 shadow-sm overflow-hidden">
       {/* Header row — always visible */}
@@ -130,24 +143,36 @@ export default function WorkspacePendingAlerts() {
                     )}
                   </td>
 
-                  {/* Mark done */}
+                  {/* Actions */}
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleMarkDone(emp.id)}
-                      disabled={marking && markingId === emp.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
-                        bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed
-                        transition-colors"
-                    >
-                      {marking && markingId === emp.id ? (
-                        <span className="animate-pulse">Saving…</span>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Mark Done
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleAutoSuspend(emp.id, emp.email)}
+                        disabled={marking && markingId === emp.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
+                          bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Automatically suspend this account in Google Workspace"
+                      >
+                        {marking && markingId === emp.id ? (
+                          <span className="animate-pulse">Working…</span>
+                        ) : (
+                          <>
+                            <Mail className="w-3.5 h-3.5" />
+                            Auto-Suspend
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleMarkDone(emp.id)}
+                        disabled={marking && markingId === emp.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
+                          bg-slate-200 text-slate-700 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Mark as already done manually"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Done
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -156,16 +181,11 @@ export default function WorkspacePendingAlerts() {
 
           {/* Footer hint */}
           <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-xs text-amber-700">
-            <strong>How to suspend:</strong> Go to{' '}
-            <a
-              href="https://admin.google.com/ac/users"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-amber-900"
-            >
-              admin.google.com → Users
-            </a>
-            {' '}, find the employee, and click <em>Suspend user</em>. Then click "Mark Done" above.
+            <strong>Auto-Suspend</strong> suspends the account directly via Google Workspace API.
+            Use <strong>Done</strong> if you've already handled it manually in{' '}
+            <a href="https://admin.google.com/ac/users" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+              admin.google.com
+            </a>.
           </div>
         </div>
       )}

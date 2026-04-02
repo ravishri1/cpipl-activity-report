@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   UserMinus, UserX, Clock, CheckCircle, XCircle, AlertTriangle,
   IndianRupee, Calendar, FileText, MessageSquare, Plus, Search,
-  ChevronDown, Loader2, X, ArrowRight, Eye, Edit3,
+  ChevronDown, Loader2, X, ArrowRight, Eye, Edit3, ShieldOff, Mail,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -127,6 +127,9 @@ export default function SeparationManager() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [cancelConfirmId, setCancelConfirmId] = useState(null);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [workspaceBackupEmail, setWorkspaceBackupEmail] = useState('');
+  const [pendingCompleteId, setPendingCompleteId] = useState(null);
 
   const [initiateForm, setInitiateForm] = useState({
     userId: '', type: 'resignation',
@@ -263,16 +266,38 @@ export default function SeparationManager() {
 
   const handleStatusAdvance = async (newStatus) => {
     if (!selectedSeparation) return;
+    // If completing and user has @colorpapers.in email → show workspace action modal
+    if (newStatus === 'completed' && selectedSeparation.user?.email?.endsWith('@colorpapers.in')) {
+      fetchActiveUsers();
+      // Pre-fill with reporting manager if available
+      setWorkspaceBackupEmail(selectedSeparation.user?.reportingManager?.email || '');
+      setPendingCompleteId(selectedSeparation.id);
+      setShowWorkspaceModal(true);
+      return;
+    }
+    await doStatusAdvance(newStatus, selectedSeparation.id, null);
+  };
+
+  const doStatusAdvance = async (newStatus, sepId, backupEmail) => {
     try {
       setSaving(true);
-      await api.put(`/lifecycle/separation/${selectedSeparation.id}`, { status: newStatus });
+      await api.put(`/lifecycle/separation/${sepId}`, {
+        status: newStatus,
+        workspaceBackupEmail: backupEmail || undefined,
+      });
       setDetailEdits((prev) => ({ ...prev, status: newStatus }));
       fetchSeparations();
-      const refreshed = await api.get(`/lifecycle/separation/${selectedSeparation.id}`);
+      const refreshed = await api.get(`/lifecycle/separation/${sepId}`);
       setSelectedSeparation(refreshed.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update status.');
     } finally { setSaving(false); }
+  };
+
+  const handleWorkspaceConfirm = async () => {
+    setShowWorkspaceModal(false);
+    await doStatusAdvance('completed', pendingCompleteId, workspaceBackupEmail);
+    setPendingCompleteId(null);
   };
 
   const handleCancelSeparation = async (id) => {
@@ -740,6 +765,73 @@ export default function SeparationManager() {
                   Save Changes
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Workspace Exit Action Modal ── */}
+      {showWorkspaceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
+                <ShieldOff className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800">Google Workspace Exit Action</h3>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Account <strong>{selectedSeparation?.user?.email}</strong> will be <strong>automatically suspended</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-lg p-4 mb-4">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1.5">
+                <Mail className="w-4 h-4 text-slate-400" />
+                Forward future emails to
+              </label>
+              <select
+                value={workspaceBackupEmail}
+                onChange={(e) => setWorkspaceBackupEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— No forwarding —</option>
+                {selectedSeparation?.user?.reportingManager && (
+                  <option value={selectedSeparation.user.reportingManager.email}>
+                    {selectedSeparation.user.reportingManager.name} (Reporting Manager)
+                  </option>
+                )}
+                {activeUsers
+                  .filter((u) => u.id !== selectedSeparation?.user?.id)
+                  .filter((u) => !selectedSeparation?.user?.reportingManager || u.id !== selectedSeparation.user.reportingManager.id)
+                  .map((u) => (
+                    <option key={u.id} value={u.email}>{u.name} — {u.email}</option>
+                  ))
+                }
+              </select>
+              {workspaceBackupEmail && (
+                <p className="text-xs text-blue-600 mt-1.5">
+                  Emails to {selectedSeparation?.user?.email} → forwarded to {workspaceBackupEmail}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowWorkspaceModal(false); setPendingCompleteId(null); }}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWorkspaceConfirm}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldOff className="w-4 h-4" />}
+                Suspend & Complete FnF
+              </button>
             </div>
           </div>
         </div>
