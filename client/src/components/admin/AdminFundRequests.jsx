@@ -72,35 +72,37 @@ export default function AdminFundRequests() {
   const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
 
-  // Opening Balance state
+  // Petty Cash / Opening Balance for fund holder (HR & Admin head)
   const [showBalanceModal, setShowBalanceModal] = useState(false);
-  const [balances, setBalances] = useState([]);
+  const [fundHolderBalance, setFundHolderBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
-  const [editBalanceId, setEditBalanceId] = useState(null);
+  const [editingBalance, setEditingBalance] = useState(false);
   const [editBalanceVal, setEditBalanceVal] = useState('');
   const [editBalanceNotes, setEditBalanceNotes] = useState('');
 
-  const loadBalances = async () => {
+  const loadFundHolderBalance = async () => {
     setBalanceLoading(true);
     try {
+      // Find fund holders — employees who have a fund balance set OR have fund requests
       const empList = Array.isArray(employees) ? employees : (employees?.users || []);
-      const results = [];
+      const holders = [];
       for (const emp of empList) {
         try {
           const res = await api.get(`/expenses/fund-balances/${emp.id}`);
-          results.push({ ...emp, balance: res.data });
-        } catch {
-          results.push({ ...emp, balance: { openingBalance: 0, currentBalance: 0 } });
-        }
+          if (res.data && (res.data.openingBalance || res.data.totalDisbursed || res.data.totalSpent)) {
+            holders.push({ ...emp, balance: res.data });
+          }
+        } catch { /* no balance */ }
       }
-      setBalances(results);
+      // If no holders found yet, show all employees so admin can set the first one
+      setFundHolderBalance(holders.length > 0 ? holders : empList.map(e => ({ ...e, balance: null })));
     } catch { /* ignore */ }
     setBalanceLoading(false);
   };
 
   const handleOpenBalanceModal = () => {
     setShowBalanceModal(true);
-    loadBalances();
+    loadFundHolderBalance();
   };
 
   const handleSaveBalance = async (userId) => {
@@ -112,10 +114,10 @@ export default function AdminFundRequests() {
         }),
         'Opening balance saved!'
       );
-      setEditBalanceId(null);
+      setEditingBalance(false);
       setEditBalanceVal('');
       setEditBalanceNotes('');
-      loadBalances();
+      loadFundHolderBalance();
     } catch {
       // Error displayed by useApi
     }
@@ -830,83 +832,98 @@ export default function AdminFundRequests() {
         </Modal>
       )}
 
-      {/* Opening Balance Modal */}
+      {/* Opening Balance Modal — for petty cash fund holder */}
       {showBalanceModal && (
-        <Modal title="Employee Opening Balances" onClose={() => setShowBalanceModal(false)}>
-          <div className="space-y-3">
-            <p className="text-xs text-slate-500">
-              Set the starting balance for each employee. This is the amount carried forward from before the portal was set up.
-              Monthly carry-forward happens automatically via the Ledger.
-            </p>
+        <Modal title="Petty Cash — Opening Balance" onClose={() => { setShowBalanceModal(false); setEditingBalance(false); }}>
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-800">
+                Set the starting balance for the fund holder (e.g., HR & Admin head who manages petty cash).
+                This is the leftover amount from last month before the portal was set up.
+                Monthly carry-forward happens automatically via the Ledger.
+              </p>
+            </div>
+
             {balanceLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-violet-500" /></div>
             ) : (
-              <div className="max-h-96 overflow-y-auto border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-medium text-slate-600">Employee</th>
-                      <th className="text-right px-3 py-2 font-medium text-slate-600">Opening Balance</th>
-                      <th className="text-right px-3 py-2 font-medium text-slate-600">Current Balance</th>
-                      <th className="text-center px-3 py-2 font-medium text-slate-600">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {balances.map(emp => (
-                      <tr key={emp.id} className="hover:bg-slate-50">
-                        <td className="px-3 py-2 text-slate-700">{emp.name}</td>
-                        <td className="px-3 py-2 text-right">
-                          {editBalanceId === emp.id ? (
-                            <input
-                              type="number"
-                              value={editBalanceVal}
-                              onChange={e => setEditBalanceVal(e.target.value)}
-                              className="w-24 text-right border rounded px-2 py-1 text-sm"
-                              autoFocus
-                            />
-                          ) : (
-                            <span className={`font-mono ${(emp.balance?.openingBalance || 0) > 0 ? 'text-green-700' : 'text-slate-500'}`}>
-                              {formatINR(emp.balance?.openingBalance || 0)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-slate-600">
-                          {formatINR(emp.balance?.currentBalance || 0)}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {editBalanceId === emp.id ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <input
-                                type="text"
-                                value={editBalanceNotes}
-                                onChange={e => setEditBalanceNotes(e.target.value)}
-                                placeholder="Note..."
-                                className="w-20 border rounded px-1.5 py-1 text-xs"
-                              />
-                              <button onClick={() => handleSaveBalance(emp.id)} disabled={saving}
-                                className="p-1 text-green-600 hover:bg-green-50 rounded">
-                                <Save className="w-4 h-4" />
-                              </button>
-                              <button onClick={() => setEditBalanceId(null)}
-                                className="p-1 text-slate-400 hover:bg-slate-100 rounded">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <button onClick={() => {
-                              setEditBalanceId(emp.id);
-                              setEditBalanceVal(String(emp.balance?.openingBalance || 0));
-                              setEditBalanceNotes('');
-                            }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+              <>
+                {/* Select employee */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Fund Holder (Employee)</label>
+                  <select
+                    value={editingBalance ? editingBalance : ''}
+                    onChange={e => {
+                      const uid = parseInt(e.target.value);
+                      setEditingBalance(uid || false);
+                      const holder = fundHolderBalance?.find(h => h.id === uid);
+                      setEditBalanceVal(String(holder?.balance?.openingBalance || 0));
+                      setEditBalanceNotes('');
+                    }}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Select employee...</option>
+                    {fundHolderBalance?.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name}{emp.balance?.openingBalance ? ` — ₹${emp.balance.openingBalance}` : ''}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </select>
+                </div>
+
+                {/* Balance details + editor */}
+                {editingBalance && (() => {
+                  const holder = fundHolderBalance?.find(h => h.id === editingBalance);
+                  const bal = holder?.balance;
+                  return (
+                    <div className="space-y-3">
+                      {/* Current summary */}
+                      {bal && (bal.openingBalance || bal.totalDisbursed || bal.totalSpent) ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                            <p className="text-xs text-green-600">Opening Balance</p>
+                            <p className="text-lg font-bold text-green-700">{formatINR(bal.openingBalance || 0)}</p>
+                          </div>
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                            <p className="text-xs text-blue-600">Current Balance</p>
+                            <p className="text-lg font-bold text-blue-700">{formatINR(bal.currentBalance || 0)}</p>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Edit form */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Opening Balance (₹)</label>
+                        <input
+                          type="number"
+                          value={editBalanceVal}
+                          onChange={e => setEditBalanceVal(e.target.value)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          placeholder="Enter amount carried forward from last month..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
+                        <input
+                          type="text"
+                          value={editBalanceNotes}
+                          onChange={e => setEditBalanceNotes(e.target.value)}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          placeholder="e.g., Balance as of March 2026"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => { setShowBalanceModal(false); setEditingBalance(false); }}
+                          className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Cancel</button>
+                        <button onClick={() => handleSaveBalance(editingBalance)} disabled={saving}
+                          className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+                          <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Balance'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
             {saveErr && <AlertMessage type="error" message={saveErr} />}
             {success && <AlertMessage type="success" message={success} />}
