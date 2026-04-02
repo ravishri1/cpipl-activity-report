@@ -36,23 +36,31 @@ function generateTempPassword() {
  * Create a new Google Workspace user account.
  * Called when a new employee is added to the system.
  *
- * @param {string} fullName  Employee full name (e.g. "Rahul Sharma")
- * @param {string} email     Primary Workspace email (must be on the domain)
- * @returns {string}         The generated temporary password (show to admin once)
+ * @param {string} fullName       Employee full name (e.g. "Rahul Sharma")
+ * @param {string} email          Primary Workspace email (must be on the domain)
+ * @param {object} [opts]         Optional: recoveryEmail, recoveryPhone
+ * @returns {string}              The generated temporary password (show to admin once)
  */
-async function createWorkspaceUser(fullName, email) {
+async function createWorkspaceUser(fullName, email, opts = {}) {
   const admin = await getAdminWriteClient();
   const { givenName, familyName } = splitName(fullName);
   const tempPassword = generateTempPassword();
 
-  await admin.users.insert({
-    requestBody: {
-      primaryEmail: email,
-      name: { givenName, familyName },
-      password: tempPassword,
-      changePasswordAtNextLogin: true, // employee must reset on first login
-    },
-  });
+  const requestBody = {
+    primaryEmail: email,
+    name: { givenName, familyName },
+    password: tempPassword,
+    changePasswordAtNextLogin: true,
+  };
+
+  if (opts.recoveryEmail) requestBody.recoveryEmail = opts.recoveryEmail;
+  if (opts.recoveryPhone) {
+    // Workspace requires E.164 format: +91XXXXXXXXXX
+    const phone = String(opts.recoveryPhone).replace(/\D/g, '');
+    requestBody.recoveryPhone = phone.startsWith('91') ? `+${phone}` : `+91${phone}`;
+  }
+
+  await admin.users.insert({ requestBody });
 
   return tempPassword;
 }
@@ -202,6 +210,106 @@ async function fetchAndStoreEmailActivity(prisma, date) {
   }
 }
 
+// ─────────────────────────────────────────────
+// Generate unique Workspace email: firstname.lastinitial@domain
+// Falls back to firstname.lastinitial1, ..., firstname.lastinitial9
+// ─────────────────────────────────────────────
+async function generateWorkspaceEmail(fullName, domain, prisma) {
+  const parts = fullName.trim().split(/\s+/);
+  const first = parts[0].toLowerCase().replace(/[^a-z]/g, '');
+  const lastInit = parts.length > 1
+    ? parts[parts.length - 1][0].toLowerCase().replace(/[^a-z]/g, '')
+    : '';
+  const base = lastInit ? `${first}.${lastInit}` : first;
+  if (!base) throw new Error(`Cannot derive email from name "${fullName}" — only special characters`);
+
+  const candidates = [base, ...Array.from({ length: 9 }, (_, i) => `${base}${i + 1}`)];
+
+  for (const username of candidates) {
+    const email = `${username}@${domain}`;
+    // Check EOD DB first
+    const inDB = await prisma.user.findUnique({ where: { email } });
+    if (inDB) continue;
+    // Check Workspace
+    try {
+      const admin = await getAdminWriteClient();
+      await admin.users.get({ userKey: email });
+      continue; // user exists in Workspace — taken
+    } catch (err) {
+      const status = err.code || err.status || err.response?.status;
+      if (status === 404) return email; // not found → available
+      throw err; // unexpected error
+    }
+  }
+  throw new Error(`Cannot generate unique email for "${fullName}" — all variants (${base}@${domain} .. ${base}9@${domain}) already taken`);
+}
+
+// ─────────────────────────────────────────────
+// Push EOD profile fields → Google Workspace
+// Only sends fields that are passed (undefined = skip)
+// ─────────────────────────────────────────────
+async function updateWorkspaceUser(email, { name, department, employeeId, managerEmail } = {}) {
+  const admin = await getAdminWriteClient();
+  const requestBody = {};
+
+  if (name !== undefined) {
+    const { givenName, familyName } = splitName(name);
+    requestBody.name = { givenName, familyName };
+  }
+  if (department !== undefined) {
+    requestBody.organizations = [{ department: department || '', primary: true }];
+  }
+  if (employeeId !== undefined) {
+    requestBody.externalIds = employeeId
+      ? [{ value: String(employeeId), type: 'organization' }]
+      : [];
+  }
+  if (managerEmail !== undefined) {
+    requestBody.relations = managerEmail
+      ? [{ value: managerEmail, type: 'manager' }]
+      : [];
+  }
+  if (Object.keys(requestBody).length === 0) return;
+  await admin.users.update({ userKey: email, requestBody });
+}
+
+// ─────────────────────────────────────────────
+// Push photo buffer → Google Workspace profile photo
+// ─────────────────────────────────────────────
+async function updateWorkspacePhoto(userEmail, imageBuffer) {
+  const admin = await getAdminWriteClient();
+  // Workspace API requires URL-safe base64 without padding
+  const photoData = imageBuffer.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  await admin.users.photos.update({
+    userKey: userEmail,
+    requestBody: { photoData, mimeType: 'image/jpeg', width: 96, height: 96 },
+  });
+}
+
+// ─────────────────────────────────────────────
+// Pull name, department, phone, employeeId, manager from Workspace
+// ─────────────────────────────────────────────
+async function syncFromWorkspace(userEmail) {
+  const adminEmail = process.env.GOOGLE_ADMIN_EMAIL?.trim();
+  if (!adminEmail) throw new Error('GOOGLE_ADMIN_EMAIL not configured');
+  const authClient = await getServiceAccountClient(adminEmail);
+  const admin = google.admin({ version: 'directory_v1', auth: authClient });
+
+  const res = await admin.users.get({ userKey: userEmail, projection: 'full' });
+  const u = res.data;
+  return {
+    name: u.name?.fullName || `${u.name?.givenName || ''} ${u.name?.familyName || ''}`.trim() || null,
+    department: u.organizations?.[0]?.department || null,
+    phone: u.phones?.[0]?.value || null,
+    photo: u.thumbnailPhotoUrl || null,
+    employeeId: u.externalIds?.find((e) => e.type === 'organization')?.value || null,
+    managerEmail: u.relations?.find((r) => r.type === 'manager')?.value || null,
+  };
+}
+
 module.exports = {
   fetchGoogleWorkspaceUsers,
   fetchEmailActivity,
@@ -209,4 +317,8 @@ module.exports = {
   createWorkspaceUser,
   suspendWorkspaceUser,
   unsuspendWorkspaceUser,
+  generateWorkspaceEmail,
+  updateWorkspaceUser,
+  updateWorkspacePhoto,
+  syncFromWorkspace,
 };

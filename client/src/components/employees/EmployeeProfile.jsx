@@ -11,7 +11,7 @@ import {
   GraduationCap, Users, FileText, ChevronRight, Plus, Pencil,
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
   Camera, Loader2, History, ChevronLeft, FolderOpen, Upload,
-  Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck, KeyRound, Eye, EyeOff,
+  Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck, KeyRound, Eye, EyeOff, RefreshCw,
 } from 'lucide-react';
 
 const TABS = [
@@ -37,6 +37,8 @@ export default function EmployeeProfile() {
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [completionScore, setCompletionScore] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   const isSelf = currentUser?.id === parseInt(id);
   const canEdit = isAdmin && (currentUser?.role === 'admin' || currentUser?.role === 'sub_admin');
@@ -113,6 +115,24 @@ export default function EmployeeProfile() {
 
   const updateField = (field, value) => setForm({ ...form, [field]: value });
 
+  const handleSyncFromGoogle = async () => {
+    if (!window.confirm('Sync this profile from Google Workspace? This will overwrite name, department, phone, and employee ID with Workspace data.')) return;
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await api.post(`/google/sync-from-workspace/${id}`);
+      setSyncMsg(res.data.message);
+      // Reload profile to show updated fields
+      const profileRes = await api.get(`/users/${id}/profile`);
+      setProfile(profileRes.data);
+      setForm(profileRes.data);
+    } catch (err) {
+      setSyncMsg(err.response?.data?.error || 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -137,12 +157,28 @@ export default function EmployeeProfile() {
         <ArrowLeft className="w-4 h-4" /> Back to Directory
       </Link>
 
+      {/* Sync result message */}
+      {syncMsg && (
+        <div className={`px-4 py-3 rounded-lg text-sm flex items-center justify-between ${syncMsg.includes('failed') || syncMsg.includes('error') || syncMsg.includes('does not') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+          <span>{syncMsg}</span>
+          <button onClick={() => setSyncMsg('')} className="ml-3 text-current opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
       {/* ─── Header Card ─── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Gradient banner — edit button sits inside it */}
         <div className="h-28 bg-gradient-to-r from-blue-600 to-indigo-700 relative">
           {(canEdit || isSelf) && (
-            <div className="absolute top-3 right-4">
+            <div className="absolute top-3 right-4 flex items-center gap-2">
+              {/* Sync from Workspace — admin only, for @colorpapers.in accounts */}
+              {canEdit && profile?.email?.endsWith('@colorpapers.in') && !editing && (
+                <button onClick={handleSyncFromGoogle} disabled={syncing}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/20 text-white rounded-lg text-xs font-medium hover:bg-white/30 border border-white/30 disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync from Google'}
+                </button>
+              )}
               {editing ? (
                 <div className="flex items-center gap-2">
                   <button onClick={handleSave} disabled={saving}
