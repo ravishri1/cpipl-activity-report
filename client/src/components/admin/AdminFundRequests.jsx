@@ -72,8 +72,11 @@ export default function AdminFundRequests() {
   const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
 
-  // Petty Cash — single API call to get fund holder balance
-  const { data: fundHolderData, refetch: refetchBalance } = useFetch('/expenses/fund-balances/holder', null);
+  // Petty Cash — fund holder balance (month-aware when filter is set)
+  const holderUrl = monthFilter
+    ? `/expenses/fund-balances/holder?month=${monthFilter}`
+    : '/expenses/fund-balances/holder';
+  const { data: fundHolderData, refetch: refetchBalance } = useFetch(holderUrl, null, [monthFilter]);
   const [showBalanceEditor, setShowBalanceEditor] = useState(false);
   const [balanceVal, setBalanceVal] = useState('');
   const [balanceNotes, setBalanceNotes] = useState('');
@@ -307,7 +310,10 @@ export default function AdminFundRequests() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-xs text-emerald-600 font-medium">Petty Cash — {fundHolderData.holderName || 'Fund Holder'}</p>
+                <p className="text-xs text-emerald-600 font-medium">
+            Petty Cash — {fundHolderData.holderName || 'Fund Holder'}
+            {fundHolderData.month && <span className="ml-2 text-emerald-500">({new Date(fundHolderData.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })})</span>}
+          </p>
                 <div className="flex items-center gap-6 mt-1">
                   <div>
                     <span className="text-xs text-slate-500">Opening</span>
@@ -322,7 +328,7 @@ export default function AdminFundRequests() {
                     <p className="text-lg font-bold text-red-600">{formatINR(fundHolderData.totalSpent || 0)}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-slate-500">Current Balance</span>
+                    <span className="text-xs text-slate-500">{fundHolderData.month ? 'Closing' : 'Current Balance'}</span>
                     <p className="text-lg font-bold text-emerald-800">{formatINR(fundHolderData.currentBalance || 0)}</p>
                   </div>
                 </div>

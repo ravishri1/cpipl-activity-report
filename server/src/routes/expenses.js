@@ -809,7 +809,7 @@ router.get('/fund-balances/:userId(\\d+)', asyncHandler(async (req, res) => {
   });
 }));
 
-// GET /fund-balances/holder — Get the fund holder (employee with opening balance set)
+// GET /fund-balances/holder — Get the fund holder balance (supports ?month=YYYY-MM for month-wise)
 router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) => {
   const holder = await req.prisma.employeeFundBalance.findFirst({
     where: { openingBalance: { not: 0 } },
@@ -818,9 +818,73 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
   });
   if (!holder) return res.json(null);
 
-  // Calculate running balance
   const uid = holder.userId;
-  // Money In: advances (disbursed/acknowledged/settled) + income (acknowledged only)
+  const { month } = req.query; // e.g., "2025-12"
+
+  if (month) {
+    // Month-wise: opening = previous month's ledger closing OR base opening balance
+    const [year, mon] = month.split('-').map(Number);
+    const prevMonth = mon === 1 ? `${year - 1}-12` : `${year}-${String(mon - 1).padStart(2, '0')}`;
+    const monthStart = `${month}-01`;
+    const monthEnd = mon === 12 ? `${year + 1}-01-01` : `${month.slice(0, 5)}${String(mon + 1).padStart(2, '0')}-01`;
+
+    // Opening: previous month's ledger closing, or base opening balance
+    let opening = holder.openingBalance || 0;
+    const prevLedger = await req.prisma.monthlyLedger.findUnique({
+      where: { userId_month: { userId: uid, month: prevMonth } },
+    });
+    if (prevLedger) {
+      opening = prevLedger.closingBalance;
+    } else {
+      // Calculate all previous months' totals to get opening
+      const prevAdvances = await req.prisma.fundRequest.findMany({
+        where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] }, type: 'advance', date: { lt: monthStart } },
+        select: { disbursedAmount: true },
+      });
+      const prevIncome = await req.prisma.fundRequest.findMany({
+        where: { requestedBy: uid, status: 'acknowledged', type: 'income', date: { lt: monthStart } },
+        select: { amount: true },
+      });
+      const prevExpenses = await req.prisma.expenseClaim.findMany({
+        where: { userId: uid, status: { in: ['approved', 'paid'] }, date: { lt: monthStart } },
+        select: { amount: true },
+      });
+      const prevIn = prevAdvances.reduce((s, a) => s + (a.disbursedAmount || 0), 0) + prevIncome.reduce((s, i) => s + (i.amount || 0), 0);
+      const prevOut = prevExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+      opening = (holder.openingBalance || 0) + prevIn - prevOut;
+    }
+
+    // This month's money in
+    const advances = await req.prisma.fundRequest.findMany({
+      where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] }, type: 'advance', date: { gte: monthStart, lt: monthEnd } },
+      select: { disbursedAmount: true },
+    });
+    const income = await req.prisma.fundRequest.findMany({
+      where: { requestedBy: uid, status: 'acknowledged', type: 'income', date: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true },
+    });
+    const totalIn = advances.reduce((s, a) => s + (a.disbursedAmount || 0), 0) + income.reduce((s, i) => s + (i.amount || 0), 0);
+
+    // This month's money out
+    const expenses = await req.prisma.expenseClaim.findMany({
+      where: { userId: uid, status: { in: ['approved', 'paid'] }, date: { gte: monthStart, lt: monthEnd } },
+      select: { amount: true },
+    });
+    const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const closing = opening + totalIn - totalSpent;
+
+    return res.json({
+      userId: uid,
+      holderName: holder.user?.name || 'Unknown',
+      month,
+      openingBalance: opening,
+      totalIn,
+      totalSpent,
+      currentBalance: closing,
+    });
+  }
+
+  // No month filter: all-time totals
   const advances = await req.prisma.fundRequest.findMany({
     where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] }, type: 'advance' },
     select: { disbursedAmount: true },
@@ -829,13 +893,11 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
     where: { requestedBy: uid, status: 'acknowledged', type: 'income' },
     select: { amount: true },
   });
-  const moneyIn = [...advances.map(a => ({ amt: a.disbursedAmount || 0 })), ...income.map(i => ({ amt: i.amount || 0 }))];
-  // Money Out: ALL approved/paid expenses
   const expenses = await req.prisma.expenseClaim.findMany({
     where: { userId: uid, status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
-  const totalIn = moneyIn.reduce((s, r) => s + (r.amt || 0), 0);
+  const totalIn = advances.reduce((s, a) => s + (a.disbursedAmount || 0), 0) + income.reduce((s, i) => s + (i.amount || 0), 0);
   const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const currentBalance = (holder.openingBalance || 0) + totalIn - totalSpent;
 
@@ -846,8 +908,6 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
     totalIn,
     totalSpent,
     currentBalance,
-    notes: holder.notes,
-    setDate: holder.setDate,
   });
 }));
 
