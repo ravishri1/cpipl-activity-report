@@ -828,15 +828,9 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
     const monthStart = `${month}-01`;
     const monthEnd = mon === 12 ? `${year + 1}-01-01` : `${month.slice(0, 5)}${String(mon + 1).padStart(2, '0')}-01`;
 
-    // Opening: previous month's ledger closing, or base opening balance
+    // Opening: always calculate from all transactions before this month (source of truth)
     let opening = holder.openingBalance || 0;
-    const prevLedger = await req.prisma.monthlyLedger.findUnique({
-      where: { userId_month: { userId: uid, month: prevMonth } },
-    });
-    if (prevLedger) {
-      opening = prevLedger.closingBalance;
-    } else {
-      // Calculate all previous months' totals to get opening
+    {
       const prevAdvances = await req.prisma.fundRequest.findMany({
         where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] }, type: 'advance', date: { lt: monthStart } },
         select: { disbursedAmount: true },
