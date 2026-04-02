@@ -771,71 +771,89 @@ export default function SeparationManager() {
       )}
 
       {/* ── Workspace Exit Action Modal ── */}
-      {showWorkspaceModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
-                <ShieldOff className="w-5 h-5 text-red-600" />
+      {showWorkspaceModal && (() => {
+        const isForcedExit = selectedSeparation?.type === 'termination' || selectedSeparation?.type === 'absconding';
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className={`w-10 h-10 ${isForcedExit ? 'bg-red-100' : 'bg-blue-100'} rounded-lg flex items-center justify-center shrink-0`}>
+                  <ShieldOff className={`w-5 h-5 ${isForcedExit ? 'text-red-600' : 'text-blue-600'}`} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800">Google Workspace Exit Action</h3>
+                  {isForcedExit ? (
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      Account <strong>{selectedSeparation?.user?.email}</strong> will be <strong>immediately suspended</strong>.
+                      Employee will lose all access.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      Account <strong>{selectedSeparation?.user?.email}</strong> will remain <strong>active</strong> so the
+                      employee can access their alumni portal. You can suspend it manually later.
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-slate-800">Google Workspace Exit Action</h3>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Account <strong>{selectedSeparation?.user?.email}</strong> will be <strong>automatically suspended</strong>.
-                </p>
-              </div>
-            </div>
 
-            <div className="bg-slate-50 rounded-lg p-4 mb-4">
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1.5">
-                <Mail className="w-4 h-4 text-slate-400" />
-                Forward future emails to
-              </label>
-              <select
-                value={workspaceBackupEmail}
-                onChange={(e) => setWorkspaceBackupEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">— No forwarding —</option>
-                {selectedSeparation?.user?.reportingManager && (
-                  <option value={selectedSeparation.user.reportingManager.email}>
-                    {selectedSeparation.user.reportingManager.name} (Reporting Manager)
-                  </option>
+              <div className="bg-slate-50 rounded-lg p-4 mb-4">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1.5">
+                  <Mail className="w-4 h-4 text-slate-400" />
+                  Forward future emails to (optional)
+                </label>
+                <select
+                  value={workspaceBackupEmail}
+                  onChange={(e) => setWorkspaceBackupEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— No forwarding —</option>
+                  {selectedSeparation?.user?.reportingManager && (
+                    <option value={selectedSeparation.user.reportingManager.email}>
+                      {selectedSeparation.user.reportingManager.name} (Reporting Manager)
+                    </option>
+                  )}
+                  {activeUsers
+                    .filter((u) => u.id !== selectedSeparation?.user?.id)
+                    .filter((u) => !selectedSeparation?.user?.reportingManager || u.id !== selectedSeparation.user.reportingManager.id)
+                    .map((u) => (
+                      <option key={u.id} value={u.email}>{u.name} — {u.email}</option>
+                    ))
+                  }
+                </select>
+                {workspaceBackupEmail && (
+                  <p className="text-xs text-blue-600 mt-1.5">
+                    Emails to {selectedSeparation?.user?.email} → forwarded to {workspaceBackupEmail}
+                  </p>
                 )}
-                {activeUsers
-                  .filter((u) => u.id !== selectedSeparation?.user?.id)
-                  .filter((u) => !selectedSeparation?.user?.reportingManager || u.id !== selectedSeparation.user.reportingManager.id)
-                  .map((u) => (
-                    <option key={u.id} value={u.email}>{u.name} — {u.email}</option>
-                  ))
-                }
-              </select>
-              {workspaceBackupEmail && (
-                <p className="text-xs text-blue-600 mt-1.5">
-                  Emails to {selectedSeparation?.user?.email} → forwarded to {workspaceBackupEmail}
-                </p>
-              )}
-            </div>
+              </div>
 
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => { setShowWorkspaceModal(false); setPendingCompleteId(null); }}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleWorkspaceConfirm}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldOff className="w-4 h-4" />}
-                Suspend & Complete FnF
-              </button>
+              {!isForcedExit && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-4 text-xs text-blue-700">
+                  After FnF, the employee can log in with their Google account to access payslips,
+                  letters, and files. The Workspace Pending Alerts section will remind you to suspend the account when ready.
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => { setShowWorkspaceModal(false); setPendingCompleteId(null); }}
+                  className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWorkspaceConfirm}
+                  disabled={saving}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 ${isForcedExit ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldOff className="w-4 h-4" />}
+                  {isForcedExit ? 'Suspend & Complete FnF' : 'Complete FnF'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

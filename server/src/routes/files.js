@@ -25,10 +25,10 @@ const ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'applica
 
 const router = express.Router();
 router.use(authenticate);
-router.use(requireActiveEmployee);
+// requireActiveEmployee applied per-route — separated employees can read their own files
 
 // ─── 1. POST /api/files/upload — Upload file for self ───
-router.post('/upload', upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/upload', requireActiveEmployee, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw badRequest('No file provided.');
 
   const user = await req.prisma.user.findUnique({
@@ -129,7 +129,7 @@ router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // ─── 5. DELETE /api/files/:fileId — Delete own file (or admin) ───
-router.delete('/:fileId', asyncHandler(async (req, res) => {
+router.delete('/:fileId', requireActiveEmployee, asyncHandler(async (req, res) => {
   const fileId = parseId(req.params.fileId);
 
   const driveFile = await req.prisma.driveFile.findUnique({ where: { id: fileId } });
@@ -154,7 +154,7 @@ router.delete('/:fileId', asyncHandler(async (req, res) => {
 }));
 
 // ─── 6. POST /api/files/extract-receipt — Extract single receipt ───
-router.post('/extract-receipt', receiptUpload.single('receipt'), asyncHandler(async (req, res) => {
+router.post('/extract-receipt', requireActiveEmployee, receiptUpload.single('receipt'), asyncHandler(async (req, res) => {
   if (!req.file) throw badRequest('No receipt file provided.');
   if (!ALLOWED_RECEIPT_TYPES.includes(req.file.mimetype)) {
     throw badRequest('Only images (JPEG, PNG, WebP) and PDFs are supported.');
@@ -195,7 +195,7 @@ router.post('/extract-receipt', receiptUpload.single('receipt'), asyncHandler(as
 }));
 
 // ─── 7. POST /api/files/extract-receipts — Batch extract up to 3 receipts ───
-router.post('/extract-receipts', receiptUpload.array('receipts', 3), asyncHandler(async (req, res) => {
+router.post('/extract-receipts', requireActiveEmployee, receiptUpload.array('receipts', 3), asyncHandler(async (req, res) => {
   if (!req.files || req.files.length === 0) throw badRequest('No receipt files provided.');
   if (req.files.length > 3) throw badRequest('Maximum 3 receipts allowed per batch.');
 
@@ -357,7 +357,7 @@ router.post('/bulk-photos', requireAdmin, upload.single('zip'), asyncHandler(asy
 }));
 
 // ─── 9. POST /api/files/upload-profile-photo — Upload single profile photo ───
-router.post('/upload-profile-photo', upload.single('photo'), asyncHandler(async (req, res) => {
+router.post('/upload-profile-photo', requireActiveEmployee, upload.single('photo'), asyncHandler(async (req, res) => {
   if (!req.file) throw badRequest('No photo provided.');
   if (!req.file.mimetype.startsWith('image/')) throw badRequest('Only image files are allowed.');
 

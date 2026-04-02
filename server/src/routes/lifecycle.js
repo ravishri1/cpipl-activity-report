@@ -249,7 +249,7 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
       await req.prisma.user.update({ where: { id: existing.userId }, data: userUpdate });
     }
 
-    // ── Google Workspace: auto-suspend + email forwarding on FnF completion ──
+    // ── Google Workspace: handle account on FnF completion ──
     if (status === 'completed') {
       const separatedUser = await req.prisma.user.findUnique({
         where: { id: existing.userId },
@@ -257,34 +257,53 @@ router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
       });
       if (separatedUser && isWorkspaceEmail(separatedUser.email)) {
         const backupEmail = workspaceBackupEmail || updated.workspaceBackupEmail;
+        const isForcedExit = existing.type === 'termination' || existing.type === 'absconding';
         let wsAction = null;
-        try {
-          await suspendWorkspaceUser(separatedUser.email);
-          wsAction = 'suspended';
-          // Set up email forwarding if backup email provided
+
+        if (isForcedExit) {
+          // Termination / Absconding — immediately suspend; employee loses portal access
+          try {
+            await suspendWorkspaceUser(separatedUser.email);
+            wsAction = 'suspended';
+            if (backupEmail) {
+              try {
+                await setupEmailForwarding(separatedUser.email, backupEmail);
+                wsAction = 'suspended_forwarding';
+              } catch (fwdErr) {
+                console.error(`Email forwarding setup failed for ${separatedUser.email}:`, fwdErr.message);
+              }
+            }
+            await req.prisma.user.update({
+              where: { id: existing.userId },
+              data: { workspaceSuspendPending: false },
+            });
+          } catch (wsErr) {
+            console.error(`Workspace suspension failed for ${separatedUser.email}:`, wsErr.message);
+            wsAction = 'failed';
+            await req.prisma.user.update({
+              where: { id: existing.userId },
+              data: { workspaceSuspendPending: true },
+            });
+          }
+        } else {
+          // Resignation / Retirement — keep account active so employee can still use limited portal
+          // Only set up email forwarding; manual suspension can be done later from WorkspacePendingAlerts
+          wsAction = 'active_limited';
           if (backupEmail) {
             try {
               await setupEmailForwarding(separatedUser.email, backupEmail);
-              wsAction = 'suspended_forwarding';
+              wsAction = 'forwarding_only';
             } catch (fwdErr) {
               console.error(`Email forwarding setup failed for ${separatedUser.email}:`, fwdErr.message);
-              // Suspension succeeded, forwarding failed — still better than nothing
             }
           }
-          // Clear the manual-suspend flag since we auto-suspended
-          await req.prisma.user.update({
-            where: { id: existing.userId },
-            data: { workspaceSuspendPending: false },
-          });
-        } catch (wsErr) {
-          console.error(`Workspace suspension failed for ${separatedUser.email}:`, wsErr.message);
-          wsAction = 'failed';
-          // Fall back to manual flag
+          // Mark as pending so admin knows to eventually suspend the account
           await req.prisma.user.update({
             where: { id: existing.userId },
             data: { workspaceSuspendPending: true },
           });
         }
+
         if (wsAction) {
           await req.prisma.separation.update({ where: { id }, data: { workspaceAction: wsAction } });
         }
