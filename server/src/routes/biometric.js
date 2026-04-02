@@ -520,20 +520,28 @@ router.post('/punches/:id/assign', authenticate, requireAdmin, asyncHandler(asyn
     }
   }
 
-  await req.prisma.biometricPunch.update({
-    where: { id },
-    data: {
-      userId:      userId,
-      matchStatus: 'matched',
-      matchNote:   'Manually assigned by admin',
-      processStatus: 'pending',
-    },
+  // Get the punch to find its enrollNumber
+  const punch = await req.prisma.biometricPunch.findUnique({ where: { id } });
+  if (!punch) throw notFound('Punch');
+
+  // Match ALL unmatched punches with the same enrollNumber (not just this one)
+  const allUnmatched = await req.prisma.biometricPunch.findMany({
+    where: { enrollNumber: punch.enrollNumber, matchStatus: 'unmatched' },
+    select: { id: true },
   });
 
-  const fresh = await req.prisma.biometricPunch.findUnique({ where: { id } });
-  await processPunch(fresh, req.prisma);
+  let matched = 0;
+  for (const p of allUnmatched) {
+    await req.prisma.biometricPunch.update({
+      where: { id: p.id },
+      data: { userId, matchStatus: 'matched', matchNote: 'Manually assigned by admin', processStatus: 'pending' },
+    });
+    const fresh = await req.prisma.biometricPunch.findUnique({ where: { id: p.id } });
+    await processPunch(fresh, req.prisma);
+    matched++;
+  }
 
-  res.json({ message: `Punch assigned to ${employee.name}` });
+  res.json({ message: `${matched} punch(es) assigned to ${employee.name}` });
 }));
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -551,6 +559,7 @@ router.get('/mappings', authenticate, requireAdmin, asyncHandler(async (req, res
 }));
 
 // PUT /api/biometric/mappings/:userId — set bioDeviceId for employee
+// Also auto-rematches ALL unmatched punches for that enroll number
 router.put('/mappings/:userId', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
   const { bioDeviceId } = req.body;
@@ -560,7 +569,26 @@ router.put('/mappings/:userId', authenticate, requireAdmin, asyncHandler(async (
     data: { bioDeviceId: bioDeviceId || null },
     select: { id: true, name: true, employeeId: true, bioDeviceId: true },
   });
-  res.json(user);
+
+  // Auto-rematch ALL unmatched punches for this enroll number
+  let rematched = 0;
+  if (bioDeviceId) {
+    const unmatched = await req.prisma.biometricPunch.findMany({
+      where: { enrollNumber: bioDeviceId, matchStatus: 'unmatched' },
+      select: { id: true },
+    });
+    for (const punch of unmatched) {
+      await req.prisma.biometricPunch.update({
+        where: { id: punch.id },
+        data: { userId, matchStatus: 'matched', matchNote: 'Auto-matched on mapping save', processStatus: 'pending' },
+      });
+      const fresh = await req.prisma.biometricPunch.findUnique({ where: { id: punch.id } });
+      await processPunch(fresh, req.prisma);
+      rematched++;
+    }
+  }
+
+  res.json({ ...user, rematched });
 }));
 
 // POST /api/biometric/rematch — re-run matching on all unmatched punches
