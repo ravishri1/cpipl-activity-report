@@ -815,7 +815,7 @@ function DevicesTab() {
 // ─── Tab: Employee Mappings ───────────────────────────────────────────────────
 function MappingsTab() {
   const { data: employees, loading, error, refetch } = useFetch('/biometric/mappings', []);
-  const { execute, loading: saving } = useApi();
+  const { execute, loading: saving, error: saveErr, success } = useApi();
   const [search, setSearch] = useState('');
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState('');
@@ -860,6 +860,8 @@ function MappingsTab() {
 
       {loading && <LoadingSpinner />}
       {error   && <AlertMessage type="error" message={error} />}
+      {saveErr && <AlertMessage type="error" message={saveErr} />}
+      {success && <AlertMessage type="success" message={success} />}
 
       {!loading && !error && (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
