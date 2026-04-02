@@ -195,7 +195,6 @@ export default function Sidebar({ isOpen, onClose }) {
       items: [
         { to: '/payslips',        label: 'Payslips',               icon: IndianRupee },
         { to: '/expenses',        label: 'Expenses',               icon: Wallet },
-        { to: '/my-loans',        label: 'Loans & Advances',       icon: Banknote },
       ],
     },
     {
