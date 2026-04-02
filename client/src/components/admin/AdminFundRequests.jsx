@@ -10,7 +10,7 @@ import StatusBadge from '../shared/StatusBadge';
 import {
   Check, X, ChevronDown, ChevronUp, CreditCard, Clock,
   IndianRupee, AlertCircle, Users, CheckCircle2, Plus, Upload, Loader2,
-  RotateCcw,
+  RotateCcw, Wallet, Edit3, Save,
 } from 'lucide-react';
 
 const FUND_STATUS_STYLES = {
@@ -71,6 +71,55 @@ export default function AdminFundRequests() {
   const [billFileName, setBillFileName] = useState('');
   const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
+
+  // Opening Balance state
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [balances, setBalances] = useState([]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [editBalanceId, setEditBalanceId] = useState(null);
+  const [editBalanceVal, setEditBalanceVal] = useState('');
+  const [editBalanceNotes, setEditBalanceNotes] = useState('');
+
+  const loadBalances = async () => {
+    setBalanceLoading(true);
+    try {
+      const empList = Array.isArray(employees) ? employees : (employees?.users || []);
+      const results = [];
+      for (const emp of empList) {
+        try {
+          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
+          results.push({ ...emp, balance: res.data });
+        } catch {
+          results.push({ ...emp, balance: { openingBalance: 0, currentBalance: 0 } });
+        }
+      }
+      setBalances(results);
+    } catch { /* ignore */ }
+    setBalanceLoading(false);
+  };
+
+  const handleOpenBalanceModal = () => {
+    setShowBalanceModal(true);
+    loadBalances();
+  };
+
+  const handleSaveBalance = async (userId) => {
+    try {
+      await execute(
+        () => api.put(`/expenses/fund-balances/${userId}`, {
+          openingBalance: parseFloat(editBalanceVal) || 0,
+          notes: editBalanceNotes || null,
+        }),
+        'Opening balance saved!'
+      );
+      setEditBalanceId(null);
+      setEditBalanceVal('');
+      setEditBalanceNotes('');
+      loadBalances();
+    } catch {
+      // Error displayed by useApi
+    }
+  };
 
   // Client-side user name search
   const filteredRequests = userSearch
@@ -278,10 +327,16 @@ export default function AdminFundRequests() {
       {/* Action bar */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800">Fund Requests</h2>
-        <button onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 shadow-sm">
-          <Plus className="w-4 h-4" /> Request Fund
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleOpenBalanceModal}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm">
+            <Wallet className="w-4 h-4" /> Opening Balances
+          </button>
+          <button onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 shadow-sm">
+            <Plus className="w-4 h-4" /> Request Fund
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -771,6 +826,90 @@ export default function AdminFundRequests() {
                 {saving ? 'Creating...' : createForm.type === 'income' ? 'Record Income' : 'Submit Request'}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Opening Balance Modal */}
+      {showBalanceModal && (
+        <Modal title="Employee Opening Balances" onClose={() => setShowBalanceModal(false)}>
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">
+              Set the starting balance for each employee. This is the amount carried forward from before the portal was set up.
+              Monthly carry-forward happens automatically via the Ledger.
+            </p>
+            {balanceLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-violet-500" /></div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium text-slate-600">Employee</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">Opening Balance</th>
+                      <th className="text-right px-3 py-2 font-medium text-slate-600">Current Balance</th>
+                      <th className="text-center px-3 py-2 font-medium text-slate-600">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {balances.map(emp => (
+                      <tr key={emp.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 text-slate-700">{emp.name}</td>
+                        <td className="px-3 py-2 text-right">
+                          {editBalanceId === emp.id ? (
+                            <input
+                              type="number"
+                              value={editBalanceVal}
+                              onChange={e => setEditBalanceVal(e.target.value)}
+                              className="w-24 text-right border rounded px-2 py-1 text-sm"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className={`font-mono ${(emp.balance?.openingBalance || 0) > 0 ? 'text-green-700' : 'text-slate-500'}`}>
+                              {formatINR(emp.balance?.openingBalance || 0)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-slate-600">
+                          {formatINR(emp.balance?.currentBalance || 0)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {editBalanceId === emp.id ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="text"
+                                value={editBalanceNotes}
+                                onChange={e => setEditBalanceNotes(e.target.value)}
+                                placeholder="Note..."
+                                className="w-20 border rounded px-1.5 py-1 text-xs"
+                              />
+                              <button onClick={() => handleSaveBalance(emp.id)} disabled={saving}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded">
+                                <Save className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => setEditBalanceId(null)}
+                                className="p-1 text-slate-400 hover:bg-slate-100 rounded">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={() => {
+                              setEditBalanceId(emp.id);
+                              setEditBalanceVal(String(emp.balance?.openingBalance || 0));
+                              setEditBalanceNotes('');
+                            }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {saveErr && <AlertMessage type="error" message={saveErr} />}
+            {success && <AlertMessage type="success" message={success} />}
           </div>
         </Modal>
       )}
