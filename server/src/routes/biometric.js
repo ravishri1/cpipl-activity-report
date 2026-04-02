@@ -16,7 +16,7 @@ const router = express.Router();
 router.get('/devices', asyncHandler(async (req, res, next) => {
   // Allow local sync agent to fetch device list via agent key
   const agentKey = req.headers['x-agent-key'];
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   if (agentKey === expectedKey) {
     const devices = await req.prisma.biometricDevice.findMany({
       where: { isActive: true },
@@ -100,7 +100,7 @@ router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (re
 // Body: { agentKey: "...", deviceSerial: "CUB7240300491", punches: [...] }
 router.post('/sync', asyncHandler(async (req, res) => {
   // Simple shared-secret auth for the local agent
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   const { agentKey: bodyKey, deviceSerial, punches } = req.body || {};
   // Also accept key from x-agent-key header as fallback
   const agentKey = bodyKey || req.headers['x-agent-key'];
@@ -222,7 +222,7 @@ router.post('/test-connection/:id', authenticate, requireAdmin, asyncHandler(asy
 // POST /api/biometric/agent-sync — local agent pushes ALL devices data in one call
 // The multi-device agent fetches from all eSSL devices locally and pushes everything here
 router.post('/agent-sync', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   const agentKey = req.body.agentKey || req.headers['x-agent-key'];
   if (agentKey !== expectedKey) return res.status(401).json({ error: 'Invalid agent key' });
 
@@ -292,7 +292,7 @@ router.get('/punches', authenticate, requireAdmin, asyncHandler(async (req, res)
     const tunnelUrl = await getTunnelUrl(req.prisma);
     if (!tunnelUrl) return res.status(503).json({ error: 'Tunnel not connected. cpserver may be offline.' });
 
-    const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+    const agentKey = process.env.BIOMETRIC_AGENT_KEY;
     try {
       const data = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${date || new Date().toISOString().slice(0,10)}`, agentKey);
 
@@ -459,7 +459,7 @@ router.get('/status', authenticate, requireAdmin, asyncHandler(async (req, res) 
   try {
     const tunnelUrl = await getTunnelUrl(req.prisma);
     if (tunnelUrl) {
-      const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+      const agentKey = process.env.BIOMETRIC_AGENT_KEY;
       tunnelStats = await fetchFromTunnel(tunnelUrl, '/api/stats', agentKey);
     }
   } catch (e) { /* tunnel may be offline */ }
@@ -469,7 +469,7 @@ router.get('/status', authenticate, requireAdmin, asyncHandler(async (req, res) 
   try {
     const tunnelUrl = await getTunnelUrl(req.prisma);
     if (tunnelUrl) {
-      const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+      const agentKey = process.env.BIOMETRIC_AGENT_KEY;
       const todayData = await fetchFromTunnel(tunnelUrl, `/api/punches?date=${today}`, agentKey);
       tunnelTodayCount = todayData?.count || 0;
     }
@@ -629,7 +629,7 @@ router.post('/recalculate', authenticate, requireAdmin, asyncHandler(async (req,
 router.post('/recalculate-all', asyncHandler(async (req, res) => {
   // Auth: admin login OR agent key
   const agentKey = req.headers['x-agent-key'] || req.body?.agentKey;
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   const isAgent = agentKey === expectedKey;
 
   if (!isAgent) {
@@ -706,7 +706,7 @@ const { getTunnelUrl, setTunnelUrl, fetchFromTunnel } = require('../services/bio
 // POST /api/biometric/register-tunnel — cpserver registers its tunnel URL on startup
 router.post('/register-tunnel', asyncHandler(async (req, res) => {
   const agentKey = req.headers['x-agent-key'] || req.body.agentKey;
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   if (agentKey !== expectedKey) return res.status(401).json({ error: 'Invalid agent key' });
 
   const { tunnelUrl } = req.body;
@@ -723,7 +723,7 @@ router.get('/tunnel-status', authenticate, requireAdmin, asyncHandler(async (req
   if (!tunnelUrl) return res.json({ connected: false, message: 'No tunnel URL registered' });
 
   try {
-    const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+    const agentKey = process.env.BIOMETRIC_AGENT_KEY;
     const health = await fetchFromTunnel(tunnelUrl, '/health', agentKey);
     res.json({ connected: true, tunnelUrl, serverTime: health.time });
   } catch (err) {
@@ -736,7 +736,7 @@ router.get('/tunnel-punches', authenticate, requireAdmin, asyncHandler(async (re
   const tunnelUrl = await getTunnelUrl(req.prisma);
   if (!tunnelUrl) return res.status(503).json({ error: 'Tunnel not connected. cpserver may be offline.' });
 
-  const agentKey = process.env.BIOMETRIC_AGENT_KEY || 'cpipl-bio-sync-2026-xK9mP4qR7v2';
+  const agentKey = process.env.BIOMETRIC_AGENT_KEY;
   const { date, start, end } = req.query;
 
   try {

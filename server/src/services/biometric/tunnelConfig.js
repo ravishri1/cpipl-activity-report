@@ -1,8 +1,11 @@
 // Tunnel URL management for cpserver biometric API
-// The cpserver registers its tunnel URL with us on startup
-// We store it in Settings and use it to proxy queries
+// The cpserver registers its dynamic tunnel URL on startup.
+// Tunnel URL is stored in DB (it changes per session — NOT a credential).
+// Agent key comes from env var only (BIOMETRIC_AGENT_KEY).
 
 async function getTunnelUrl(prisma) {
+  // Env var override for fixed tunnel URLs
+  if (process.env.BIOMETRIC_TUNNEL_URL) return process.env.BIOMETRIC_TUNNEL_URL;
   const setting = await prisma.setting.findFirst({ where: { key: 'biometric_tunnel_url' } });
   return setting?.value || null;
 }

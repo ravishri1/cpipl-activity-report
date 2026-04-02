@@ -10,8 +10,7 @@ export default function Settings() {
     reminder_time: '21:00',
     escalation_time: '11:00',
     team_lead_email: '',
-    gemini_api_key: '',
-    requesty_api_key: '',
+    // AI API keys now managed via Vercel env vars (REQUESTY_API_KEY, GEMINI_API_KEY)
     photo_ai_model: '',
     photo_ai_prompt: '',
     photo_ai_prompt_male_extra: '',
@@ -180,90 +179,14 @@ export default function Settings() {
           Requesty AI is the primary gateway (cost-ordered model routing). Gemini is the direct fallback.
         </p>
 
-        {/* Requesty API Key (primary) */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Requesty AI API Key
-            <span className="ml-1.5 text-xs font-normal text-purple-500">(primary gateway)</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showRequestyKey ? 'text' : 'password'}
-              value={settings.requesty_api_key}
-              onChange={(e) => setSettings({ ...settings, requesty_api_key: e.target.value })}
-              className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
-              placeholder="sk-..."
-            />
-            <button
-              type="button"
-              onClick={() => setShowRequestyKey(!showRequestyKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-            >
-              {showRequestyKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Get your key from{' '}
-            <a href="https://app.requesty.ai" target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">
-              Requesty.ai
-            </a>
-            {' '}— routes to 433+ models with automatic cost optimization.
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <p className="text-sm text-emerald-800">
+            AI API keys are managed securely via <strong>Vercel environment variables</strong>.
+          </p>
+          <p className="text-xs text-emerald-600 mt-1">
+            Set <code>REQUESTY_API_KEY</code> and <code>GEMINI_API_KEY</code> in Vercel Dashboard → Settings → Environment Variables.
           </p>
         </div>
-
-        {/* Gemini API Key (fallback) */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Gemini API Key
-            <span className="ml-1.5 text-xs font-normal text-slate-400">(direct fallback)</span>
-          </label>
-          <div className="relative">
-            <input
-              type={showApiKey ? 'text' : 'password'}
-              value={settings.gemini_api_key}
-              onChange={(e) => setSettings({ ...settings, gemini_api_key: e.target.value })}
-              className="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-mono text-sm"
-              placeholder="AIzaSy..."
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-            >
-              {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Get your key from{' '}
-            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">
-              Google AI Studio
-            </a>
-            {' '}— used when Requesty is unavailable.
-          </p>
-        </div>
-
-        <button
-          onClick={async () => {
-            setLoading(true);
-            try {
-              await api.put('/settings', {
-                requesty_api_key: settings.requesty_api_key,
-                gemini_api_key: settings.gemini_api_key,
-              });
-              setSuccess('AI keys saved!');
-              setTimeout(() => setSuccess(''), 3000);
-            } catch (err) {
-              console.error(err);
-            } finally {
-              setLoading(false);
-            }
-          }}
-          disabled={loading}
-          className="mt-3 bg-purple-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-        >
-          <Save className="w-4 h-4" />
-          Save AI Keys
-        </button>
       </div>
 
       {/* ═══ Profile Photo AI Settings ═══ */}

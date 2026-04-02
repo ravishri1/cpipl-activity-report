@@ -141,18 +141,10 @@ const TASK_MODELS = {
   ],
 };
 
-// ─── Requesty API key resolver ────────────────────────────────────────────────
-//
-// Priority: Settings DB (`requesty_api_key`) → process.env.REQUESTY_API_KEY
-// This lets admins manage the key from the UI without redeploying.
+// ─── API key resolvers ───────────────────────────────────────────────────────
+// All credentials come from Vercel env vars only (never from DB).
 
-async function getRequestyKey(prisma) {
-  if (prisma) {
-    try {
-      const setting = await prisma.setting.findUnique({ where: { key: 'requesty_api_key' } });
-      if (setting?.value) return setting.value;
-    } catch { /* fall through to env var */ }
-  }
+function getRequestyKey() {
   return process.env.REQUESTY_API_KEY || '';
 }
 
@@ -212,17 +204,17 @@ function messagesToGeminiParts(messages) {
   return parts;
 }
 
-async function callGeminiDirect(messages, prisma) {
-  const setting = await prisma.setting.findUnique({ where: { key: 'gemini_api_key' } });
-  if (!setting?.value) {
+async function callGeminiDirect(messages) {
+  const geminiKey = process.env.GEMINI_API_KEY || '';
+  if (!geminiKey) {
     throw new Error(
       'No AI provider configured. ' +
-      'Add REQUESTY_API_KEY to .env or set gemini_api_key in Admin → Settings.'
+      'Add REQUESTY_API_KEY or GEMINI_API_KEY to Vercel env vars.'
     );
   }
 
   const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genAI  = new GoogleGenerativeAI(setting.value);
+  const genAI  = new GoogleGenerativeAI(geminiKey);
   const model  = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   const parts  = messagesToGeminiParts(messages);
 
@@ -308,7 +300,7 @@ async function callAI(taskType, messages, { prisma, silent } = {}) {
   }
 
   // ── Provider 1: Requesty.ai (cost-ordered, auto-fallback) ────────────────
-  const apiKey = await getRequestyKey(prisma);
+  const apiKey = await getRequestyKey();
   if (apiKey) {
     let lastError;
     for (const model of models) {
@@ -330,14 +322,14 @@ async function callAI(taskType, messages, { prisma, silent } = {}) {
 
   // ── Provider 2: Gemini direct SDK (last resort) ───────────────────────────
   if (prisma) {
-    const result = await callGeminiDirect(messages, prisma);
+    const result = await callGeminiDirect(messages);
     if (!silent) console.log(`[aiRouter] ✓ ${taskType} → gemini-direct (fallback)`);
     return result;
   }
 
   throw new Error(
     'No AI provider available. ' +
-    'Add REQUESTY_API_KEY to .env or set gemini_api_key in Admin → Settings.'
+    'Add REQUESTY_API_KEY or GEMINI_API_KEY to Vercel env vars.'
   );
 }
 
@@ -372,7 +364,7 @@ async function callAIWithModel(taskType, messages, { prisma, silent } = {}) {
   }
 
   // ── Provider 1: Requesty.ai (cost-ordered, auto-fallback) ────────────────
-  const apiKey = await getRequestyKey(prisma);
+  const apiKey = await getRequestyKey();
   if (apiKey) {
     let lastError;
     for (const model of models) {
@@ -393,14 +385,14 @@ async function callAIWithModel(taskType, messages, { prisma, silent } = {}) {
 
   // ── Provider 2: Gemini direct SDK (last resort) ───────────────────────────
   if (prisma) {
-    const text = await callGeminiDirect(messages, prisma);
+    const text = await callGeminiDirect(messages);
     if (!silent) console.log(`[aiRouter] ✓ ${taskType} → gemini-direct (fallback)`);
     return { text, model: 'gemini-direct' };
   }
 
   throw new Error(
     'No AI provider available. ' +
-    'Add REQUESTY_API_KEY to .env or set gemini_api_key in Admin → Settings.'
+    'Add REQUESTY_API_KEY or GEMINI_API_KEY to Vercel env vars.'
   );
 }
 
@@ -455,7 +447,7 @@ async function callAIVision(prompt, buffer, mimeType, opts = {}) {
  * @throws {Error} if no model returned an image (caller should fall back)
  */
 async function callAIImageEdit(prompt, buffer, mimeType, { prisma, silent, model: preferredModel } = {}) {
-  const apiKey = await getRequestyKey(prisma);
+  const apiKey = await getRequestyKey();
   if (!apiKey) {
     throw new Error('REQUESTY_API_KEY required for AI image editing.');
   }

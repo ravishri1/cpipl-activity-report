@@ -3,7 +3,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-const INTERNAL_KEY = 'cpdesk-eod-sync-2026';
+const INTERNAL_KEY = process.env.INTERNAL_API_KEY || 'cpdesk-eod-sync-2026';
 
 // ─── Cron auth helper ──────────────────────────────────────────────────────
 // Vercel Cron sends:  Authorization: Bearer <CRON_SECRET>
