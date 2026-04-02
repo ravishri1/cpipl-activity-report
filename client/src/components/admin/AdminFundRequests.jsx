@@ -40,7 +40,7 @@ const EMPTY_CREATE = {
 
 export default function AdminFundRequests() {
   const [statusFilter, setStatusFilter] = useState('');
-  const [monthFilter, setMonthFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState(() => new Date().toISOString().slice(0, 7)); // default: current month
   const [userSearch, setUserSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
