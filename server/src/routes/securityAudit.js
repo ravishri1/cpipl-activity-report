@@ -123,7 +123,7 @@ router.get('/run', requireAdmin, asyncHandler(async (req, res) => {
 
   // BIOMETRIC_AGENT_KEY
   const bioKey = process.env.BIOMETRIC_AGENT_KEY || '';
-  if (bioKey === 'cpipl-bio-sync-2026-xK9mP4qR7v2') {
+  if (bioKey.startsWith('cpipl-bio-sync-') || bioKey.length < 20) {
     check('EnvSecurity_BiometricKey', 'Environment Security', 'BIOMETRIC_AGENT_KEY is still the default',
       'Medium', 'Warn',
       'The biometric agent key matches the default value committed to the codebase. Anyone with repo read access can impersonate the biometric sync agent.',
