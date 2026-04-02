@@ -80,21 +80,35 @@ export default function AdminFundRequests() {
   const [currentBalance, setCurrentBalance] = useState(null);
 
   const loadAndShowBalance = async () => {
-    // Find the fund holder: first employee with fund balance, or first in request list
+    // Auto-detect fund holder: employee with existing fund balance, or from fund requests
     const empList = Array.isArray(employees) ? employees : (employees?.users || []);
-    // Check who has fund requests — that's the fund holder
     const topRequester = requests?.[0]?.requestedBy || requests?.[0]?.userId;
-    const holderId = topRequester || empList[0]?.id;
-    if (!holderId) return;
-    setFundHolderId(holderId);
-    try {
-      const res = await api.get(`/expenses/fund-balances/${holderId}`);
-      setCurrentBalance(res.data);
-      setBalanceVal(String(res.data?.openingBalance || 0));
-    } catch {
-      setCurrentBalance({ openingBalance: 0, currentBalance: 0 });
-      setBalanceVal('0');
+
+    // Check if any employee already has a fund balance set
+    let holderId = null;
+    if (topRequester) {
+      holderId = topRequester;
+    } else {
+      for (const emp of empList) {
+        try {
+          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
+          if (res.data?.openingBalance) { holderId = emp.id; break; }
+        } catch { /* skip */ }
+      }
     }
+
+    if (holderId) {
+      setFundHolderId(holderId);
+      try {
+        const res = await api.get(`/expenses/fund-balances/${holderId}`);
+        setCurrentBalance(res.data);
+        setBalanceVal(String(res.data?.openingBalance || 0));
+      } catch {
+        setCurrentBalance({ openingBalance: 0, currentBalance: 0 });
+        setBalanceVal('0');
+      }
+    }
+    // If no holder found, fundHolderId stays null → UI shows employee picker
     setShowBalanceEditor(true);
   };
 
@@ -832,22 +846,37 @@ export default function AdminFundRequests() {
             </h3>
             <button onClick={() => setShowBalanceEditor(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
           </div>
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-xs text-slate-600 mb-1">Amount (₹)</label>
-              <input type="number" value={balanceVal} onChange={e => setBalanceVal(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Enter opening balance..." />
+          {/* Employee picker — only shown first time when no fund holder detected */}
+          {!fundHolderId && (
+            <div className="mb-3">
+              <label className="block text-xs text-slate-600 mb-1">Fund Holder (who manages petty cash?)</label>
+              <select value="" onChange={e => { setFundHolderId(parseInt(e.target.value)); setBalanceVal('0'); }}
+                className="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="">Select employee...</option>
+                {(Array.isArray(employees) ? employees : (employees?.users || [])).map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="flex-1 min-w-[150px]">
-              <label className="block text-xs text-slate-600 mb-1">Note (optional)</label>
-              <input type="text" value={balanceNotes} onChange={e => setBalanceNotes(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., Balance as of March 2026" />
+          )}
+          {fundHolderId && (
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-xs text-slate-600 mb-1">Amount (₹)</label>
+                <input type="number" value={balanceVal} onChange={e => setBalanceVal(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Enter opening balance..." />
+              </div>
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-xs text-slate-600 mb-1">Note (optional)</label>
+                <input type="text" value={balanceNotes} onChange={e => setBalanceNotes(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g., Balance as of March 2026" />
+              </div>
+              <button onClick={handleSaveBalance} disabled={saving}
+                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0">
+                <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save'}
+              </button>
             </div>
-            <button onClick={handleSaveBalance} disabled={saving}
-              className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0">
-              <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
+          )}
           {currentBalance && (currentBalance.openingBalance || currentBalance.currentBalance) ? (
             <p className="text-xs text-emerald-700 mt-2">
               Current: Opening {formatINR(currentBalance.openingBalance || 0)} | Balance {formatINR(currentBalance.currentBalance || 0)}
