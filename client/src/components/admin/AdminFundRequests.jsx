@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -123,10 +123,31 @@ export default function AdminFundRequests() {
         'Opening balance saved!'
       );
       setShowBalanceEditor(false);
+      refetchBalance();
     } catch {
       // Error displayed by useApi
     }
   };
+
+  // Auto-detect fund holder on mount (find employee with existing balance)
+  useEffect(() => {
+    if (fundHolderId) return; // already set
+    const empList = Array.isArray(employees) ? employees : (employees?.users || []);
+    if (empList.length === 0) return;
+    (async () => {
+      for (const emp of empList) {
+        try {
+          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
+          if (res.data?.openingBalance) { setFundHolderId(emp.id); return; }
+        } catch { /* skip */ }
+      }
+    })();
+  }, [employees, fundHolderId]);
+
+  // Fund holder balance — always visible on page
+  const { data: fundHolderData, refetch: refetchBalance } = useFetch(
+    fundHolderId ? `/expenses/fund-balances/${fundHolderId}` : null, null, [fundHolderId]
+  );
 
   // Client-side user name search
   const filteredRequests = userSearch
@@ -322,6 +343,38 @@ export default function AdminFundRequests() {
       {summaryErr && <AlertMessage type="error" message={summaryErr} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
+
+      {/* Fund Holder Balance — always visible */}
+      {fundHolderData && fundHolderData.openingBalance ? (
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-xs text-emerald-600 font-medium">Petty Cash — {fundHolderData.holderName || 'Fund Holder'}</p>
+                <div className="flex items-center gap-6 mt-1">
+                  <div>
+                    <span className="text-xs text-slate-500">Opening</span>
+                    <p className="text-lg font-bold text-emerald-700">{formatINR(fundHolderData.openingBalance || 0)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500">Disbursed</span>
+                    <p className="text-lg font-bold text-blue-600">{formatINR(fundHolderData.totalDisbursed || 0)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500">Spent</span>
+                    <p className="text-lg font-bold text-red-600">{formatINR(fundHolderData.totalSpent || 0)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500">Current Balance</span>
+                    <p className="text-lg font-bold text-emerald-800">{formatINR(fundHolderData.currentBalance || 0)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button onClick={loadAndShowBalance} className="text-xs text-emerald-600 hover:text-emerald-800 underline">Edit</button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
