@@ -161,22 +161,6 @@ export const COMP_OFF_STATUS_STYLES = {
 
 export const COMP_OFF_TYPES = ['earn', 'redeem'];
 
-// ─── Loans ─────────────────────────────────────────────────────────────────
-export const LOAN_STATUS_STYLES = {
-  pending:    'bg-amber-100 text-amber-700 border-amber-200',
-  approved:   'bg-blue-100 text-blue-700 border-blue-200',
-  disbursed:  'bg-indigo-100 text-indigo-700 border-indigo-200',
-  active:     'bg-green-100 text-green-700 border-green-200',
-  closed:     'bg-slate-100 text-slate-600 border-slate-200',
-  rejected:   'bg-red-100 text-red-700 border-red-200',
-};
-
-export const REPAYMENT_STATUS_STYLES = {
-  pending: 'bg-amber-100 text-amber-700 border-amber-200',
-  paid:    'bg-green-100 text-green-700 border-green-200',
-  overdue: 'bg-red-100 text-red-700 border-red-200',
-};
-
 // ─── Investment Declarations ────────────────────────────────────────────────
 export const DECLARATION_STATUS_STYLES = {
   draft:     'bg-slate-100 text-slate-600 border-slate-200',

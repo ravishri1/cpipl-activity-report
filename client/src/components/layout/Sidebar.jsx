@@ -307,7 +307,6 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/payroll',        label: 'Payroll',          icon: CreditCard },
         { to: '/admin/salary-setup',   label: 'Salary Setup',     icon: Banknote },
         { to: '/admin/expense-claims', label: 'Expense Claims',   icon: Receipt },
-        { to: '/admin/loans',          label: 'Loans & Advances', icon: Banknote },
       ],
     },
   ];

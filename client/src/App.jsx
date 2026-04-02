@@ -83,8 +83,6 @@ const MyCredentials = lazy(() => import('./components/credentials/MyCredentials'
 const AppraisalManager = lazy(() => import('./components/admin/AppraisalManager'));
 const MyAppraisals = lazy(() => import('./components/workspace/MyAppraisals'));
 const MyGoals = lazy(() => import('./components/workspace/MyGoals'));
-const LoanManager = lazy(() => import('./components/admin/LoanManager'));
-const MyLoans = lazy(() => import('./components/workspace/MyLoans'));
 const WFHManager = lazy(() => import('./components/admin/WFHManager'));
 const MyWFH = lazy(() => import('./components/workspace/MyWFH'));
 const ExitInterviewForm = lazy(() => import('./components/workspace/ExitInterviewForm'));
@@ -259,8 +257,6 @@ function AppRoutes() {
                   <Route path="/admin/appraisals" element={<SeparatedRoute><AdminRoute><AppraisalManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/my-appraisals" element={<SeparatedRoute><MyAppraisals /></SeparatedRoute>} />
                   <Route path="/my-goals" element={<SeparatedRoute><MyGoals /></SeparatedRoute>} />
-                  <Route path="/admin/loans" element={<SeparatedRoute><AdminRoute><LoanManager /></AdminRoute></SeparatedRoute>} />
-                  <Route path="/my-loans" element={<SeparatedRoute><MyLoans /></SeparatedRoute>} />
                   <Route path="/admin/wfh" element={<SeparatedRoute><AdminRoute><WFHManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/my-wfh" element={<SeparatedRoute><MyWFH /></SeparatedRoute>} />
                   <Route path="/my-exit-interview" element={<ExitInterviewForm />} />
