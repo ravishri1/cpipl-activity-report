@@ -2,10 +2,11 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
-const { badRequest, forbidden } = require('../utils/httpErrors');
+const { badRequest, forbidden, notFound } = require('../utils/httpErrors');
+const { parseId } = require('../utils/validate');
 const { normalizeName } = require('../utils/normalize');
 const { generateAuthUrl, exchangeCodeForTokens, storeTokens } = require('../services/google/googleAuth');
-const { fetchGoogleWorkspaceUsers } = require('../services/google/googleWorkspace');
+const { fetchGoogleWorkspaceUsers, syncFromWorkspace } = require('../services/google/googleWorkspace');
 const { fetchTodayCalendarEvents, fetchTodayTasks, upsertGoogleTask } = require('../services/google/googleCalendar');
 const { buildEmailSummary, filterHandledThreads } = require('../services/google/googleGmail');
 const { getAuthedClientForUser } = require('../services/google/googleAuth');
@@ -257,6 +258,42 @@ router.post('/push-to-tasks', authenticate, requireActiveEmployee, asyncHandler(
   }
 
   res.json({ created, updated, failed });
+}));
+
+// ─── Sync from Google Workspace → EOD profile ───
+
+// POST /api/google/sync-from-workspace/:userId — Admin only
+router.post('/sync-from-workspace/:userId', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const user = await req.prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, name: true },
+  });
+  if (!user) throw notFound('User');
+
+  const domain = process.env.GOOGLE_WORKSPACE_DOMAIN?.trim();
+  if (!domain || !user.email.toLowerCase().endsWith(`@${domain.toLowerCase()}`)) {
+    throw badRequest('This user does not have a Workspace (@colorpapers.in) email.');
+  }
+
+  const ws = await syncFromWorkspace(user.email);
+
+  const updateData = {};
+  if (ws.name && ws.name !== user.name) updateData.name = ws.name;
+  if (ws.department) updateData.department = ws.department;
+  if (ws.phone) updateData.phone = ws.phone;
+  if (ws.employeeId) updateData.employeeId = ws.employeeId;
+  if (ws.managerEmail) {
+    const mgr = await req.prisma.user.findUnique({ where: { email: ws.managerEmail }, select: { id: true } });
+    if (mgr) updateData.reportingManagerId = mgr.id;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return res.json({ message: 'Already in sync — no changes needed.', synced: {} });
+  }
+
+  await req.prisma.user.update({ where: { id: userId }, data: updateData });
+  res.json({ message: 'Profile synced from Google Workspace.', synced: updateData });
 }));
 
 module.exports = router;

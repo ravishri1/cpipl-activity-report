@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
-import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe, Moon, RefreshCw } from 'lucide-react';
+import { UserPlus, Edit3, UserX, UserCheck, X, Download, Building2, Globe, Moon, RefreshCw, Mail, CheckCircle } from 'lucide-react';
 import GoogleImportModal from '../google/GoogleImportModal';
 import { useAuth } from '../../context/AuthContext';
+
+// Preview what email will be generated (client-side hint — server may add a digit if taken)
+function previewWorkspaceEmail(name) {
+  if (!name?.trim()) return '';
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0].toLowerCase().replace(/[^a-z]/g, '');
+  const lastInit = parts.length > 1 ? parts[parts.length - 1][0].toLowerCase().replace(/[^a-z]/g, '') : '';
+  const base = lastInit ? `${first}.${lastInit}` : first;
+  return base ? `${base}@colorpapers.in` : '';
+}
 
 export default function TeamManagement() {
   const { user: currentUser } = useAuth();
@@ -10,9 +20,10 @@ export default function TeamManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+  const [form, setForm] = useState({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [workspaceResult, setWorkspaceResult] = useState(null);
   const [branches, setBranches] = useState([]);
   const [companies, setCompanies] = useState([]);
 
@@ -32,32 +43,48 @@ export default function TeamManagement() {
   }, []);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+    setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
     setEditUser(null);
     setShowForm(false);
     setError('');
+    setWorkspaceResult(null);
   };
+
+  const isInternalType = (type) => type === 'internal' || type === 'intern';
 
   const isInternal = (email) => email?.endsWith('@colorpapers.in');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setWorkspaceResult(null);
     setLoading(true);
     try {
       const payload = {
         ...form,
+        // For internal employees, omit email so backend auto-generates it
+        email: isInternalType(form.employeeType) && !editUser ? undefined : form.email,
         branchId: form.branchId ? parseInt(form.branchId) : null,
         costCenterId: form.costCenterId ? parseInt(form.costCenterId) : null,
       };
       if (editUser) {
         await api.put(`/users/${editUser.id}`, payload);
+        fetchUsers();
+        resetForm();
       } else {
-        // No password needed — Google login only
-        await api.post('/users', { ...payload, password: 'google-auth-only' });
+        const res = await api.post('/users', { ...payload, password: 'google-auth-only' });
+        fetchUsers();
+        // Show workspace result before closing form
+        if (res.data.workspaceAccount?.attempted) {
+          setWorkspaceResult({ ...res.data.workspaceAccount, userName: res.data.name });
+          setShowForm(false);
+          setEditUser(null);
+          setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+          setError('');
+        } else {
+          resetForm();
+        }
       }
-      fetchUsers();
-      resetForm();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save user.');
     } finally {
@@ -67,7 +94,8 @@ export default function TeamManagement() {
 
   const handleEdit = (user) => {
     setEditUser(user);
-    setForm({ name: user.name, email: user.email, role: user.role, department: user.department, employeeType: user.employeeType || 'internal', branchId: user.branchId || '', costCenterId: user.costCenterId || '' });
+    setWorkspaceResult(null);
+    setForm({ name: user.name, email: user.email, personalEmail: '', phone: '', role: user.role, department: user.department, employeeType: user.employeeType || 'internal', branchId: user.branchId || '', costCenterId: user.costCenterId || '' });
     setShowForm(true);
   };
 
@@ -123,46 +151,76 @@ export default function TeamManagement() {
         </div>
       </div>
 
+      {/* Workspace Onboarding Result Banner */}
+      {workspaceResult && (
+        <div className={`rounded-xl border p-5 mb-6 ${workspaceResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              {workspaceResult.success
+                ? <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                : <X className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+              }
+              <div>
+                <p className="font-semibold text-slate-800 text-sm">
+                  {workspaceResult.success
+                    ? `${workspaceResult.userName} has been onboarded successfully!`
+                    : `Employee added, but Workspace account creation failed`
+                  }
+                </p>
+                {workspaceResult.success && (
+                  <div className="mt-2 space-y-1 text-sm">
+                    <p><span className="text-slate-500">Work Email:</span> <strong>{workspaceResult.email}</strong></p>
+                    <p><span className="text-slate-500">Temp Password:</span> <code className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700">{workspaceResult.tempPassword}</code></p>
+                    {workspaceResult.welcomeEmailSent && (
+                      <p className="flex items-center gap-1 text-green-700">
+                        <Mail className="w-3.5 h-3.5" />
+                        Welcome email sent to <strong>{workspaceResult.welcomeEmailTo}</strong>
+                      </p>
+                    )}
+                    {workspaceResult.welcomeEmailSent === false && (
+                      <p className="text-amber-600 text-xs">Welcome email could not be sent — share credentials manually.</p>
+                    )}
+                  </div>
+                )}
+                {!workspaceResult.success && (
+                  <p className="text-red-700 text-xs mt-1">{workspaceResult.error}</p>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setWorkspaceResult(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Form Modal */}
       {showForm && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-lg">
-              {editUser ? 'Edit Employee' : 'Add External Employee'}
+              {editUser ? 'Edit Employee' : (isInternalType(form.employeeType) ? 'Add Internal Employee' : 'Add External Employee')}
             </h2>
             <button onClick={resetForm} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
           </div>
-          {!editUser && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
-              <Globe className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-800">
-                Add external employees (non-@colorpapers.in) who need access. They'll sign in with their Google account.
-                Internal @colorpapers.in employees are auto-registered on first Google login.
-              </p>
+          {!editUser && isInternalType(form.employeeType) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+              <Mail className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs text-blue-800 font-medium">Work email will be auto-generated</p>
+                {form.name && (
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    Preview: <strong>{previewWorkspaceEmail(form.name)}</strong>
+                    <span className="text-blue-400 ml-1">(may get a digit added if taken)</span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
           {error && <div className="bg-red-50 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">{error}</div>}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
               <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Google Email</label>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="user@gmail.com" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="member">Member</option>
-                <option value="team_lead">Team Lead</option>
-                <option value="sub_admin">Sub Admin</option>
-                <option value="admin">Admin</option>
-              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Employee Type</label>
@@ -171,6 +229,50 @@ export default function TeamManagement() {
                 <option value="internal">Internal (Permanent)</option>
                 <option value="intern">Intern</option>
                 <option value="external">External / Contractor</option>
+              </select>
+            </div>
+            {/* Show email field only for external employees or when editing */}
+            {(!isInternalType(form.employeeType) || editUser) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {isInternalType(form.employeeType) ? 'Work Email' : 'Google Email'}
+                </label>
+                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={isInternalType(form.employeeType) ? 'name@colorpapers.in' : 'user@gmail.com'}
+                  required={!isInternalType(form.employeeType)} readOnly={!!editUser && isInternalType(form.employeeType)} />
+              </div>
+            )}
+            {/* Personal email — for welcome email + Workspace recovery */}
+            {!editUser && isInternalType(form.employeeType) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Personal Email <span className="text-slate-400 font-normal">(for welcome email & password recovery)</span>
+                </label>
+                <input type="email" value={form.personalEmail} onChange={(e) => setForm({ ...form, personalEmail: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="personal@gmail.com" />
+              </div>
+            )}
+            {/* Mobile number — for Workspace recovery */}
+            {!editUser && isInternalType(form.employeeType) && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Mobile Number <span className="text-slate-400 font-normal">(for password recovery)</span>
+                </label>
+                <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="9876543210" />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="member">Member</option>
+                <option value="team_lead">Team Lead</option>
+                <option value="sub_admin">Sub Admin</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
             <div>
