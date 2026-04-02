@@ -314,8 +314,8 @@ export default function AdminFundRequests() {
                     <p className="text-lg font-bold text-emerald-700">{formatINR(fundHolderData.openingBalance || 0)}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-slate-500">Disbursed</span>
-                    <p className="text-lg font-bold text-blue-600">{formatINR(fundHolderData.totalDisbursed || 0)}</p>
+                    <span className="text-xs text-slate-500">Total In</span>
+                    <p className="text-lg font-bold text-blue-600">{formatINR(fundHolderData.totalIn || 0)}</p>
                   </div>
                   <div>
                     <span className="text-xs text-slate-500">Spent</span>

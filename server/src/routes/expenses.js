@@ -820,30 +820,25 @@ router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) 
 
   // Calculate running balance
   const uid = holder.userId;
-  const advances = await req.prisma.fundRequest.findMany({
-    where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] } },
-    select: { disbursedAmount: true },
+  // Money In: advances + income (both add to the fund pool)
+  const moneyIn = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] }, type: { in: ['advance', 'income'] } },
+    select: { disbursedAmount: true, amount: true, type: true },
   });
-  const reimbursements = await req.prisma.fundRequest.findMany({
-    where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'paid'] } },
-    select: { amount: true },
-  });
-  // Count ALL approved/paid expenses for fund holder (petty cash = all spending counts)
+  // Money Out: ALL approved/paid expenses
   const expenses = await req.prisma.expenseClaim.findMany({
     where: { userId: uid, status: { in: ['approved', 'paid'] } },
     select: { amount: true },
   });
-  const totalDisbursed = advances.reduce((s, a) => s + (a.disbursedAmount || 0), 0);
-  const totalReimbursed = reimbursements.reduce((s, r) => s + (r.amount || 0), 0);
+  const totalIn = moneyIn.reduce((s, r) => s + (r.disbursedAmount || r.amount || 0), 0);
   const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const currentBalance = (holder.openingBalance || 0) + totalDisbursed + totalReimbursed - totalSpent;
+  const currentBalance = (holder.openingBalance || 0) + totalIn - totalSpent;
 
   res.json({
     userId: uid,
     holderName: holder.user?.name || 'Unknown',
     openingBalance: holder.openingBalance,
-    totalDisbursed,
-    totalReimbursed,
+    totalIn,
     totalSpent,
     currentBalance,
     notes: holder.notes,
