@@ -92,12 +92,15 @@ function TunnelStatusCard() {
 
   if (loading || !tunnel) return null;
 
+  // Don't show scary red error when tunnel was never configured — agent push works fine without it
+  if (!tunnel.connected && !tunnel.tunnelUrl) return null;
+
   return (
-    <div className={`rounded-xl border p-4 text-sm ${tunnel.connected ? 'bg-indigo-50 border-indigo-200' : 'bg-red-50 border-red-200'}`}>
+    <div className={`rounded-xl border p-4 text-sm ${tunnel.connected ? 'bg-indigo-50 border-indigo-200' : 'bg-amber-50 border-amber-200'}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="font-medium mb-1">
-            {tunnel.connected ? '📡 Tunnel Connected — cpserver SQL Live' : '🔴 Tunnel Disconnected'}
+            {tunnel.connected ? '📡 Tunnel Connected — cpserver SQL Live' : '⚠️ Tunnel Disconnected'}
           </p>
           {tunnel.connected ? (
             <div className="text-xs text-indigo-600 space-y-0.5">
@@ -106,12 +109,12 @@ function TunnelStatusCard() {
               <p className="text-indigo-400">All historical biometric data available via tunnel (unlimited, from cpserver SQL Server)</p>
             </div>
           ) : (
-            <p className="text-xs text-red-600">
-              {tunnel.error || 'cpserver may be offline. Check BiometricService on cpserver.'}
+            <p className="text-xs text-amber-700">
+              Tunnel URL was registered but cpserver is currently offline. Punch data still flows via agent push.
             </p>
           )}
         </div>
-        <span className={`text-2xl ${tunnel.connected ? 'text-green-500' : 'text-red-400'}`}>
+        <span className={`text-2xl ${tunnel.connected ? 'text-green-500' : 'text-amber-400'}`}>
           {tunnel.connected ? '●' : '○'}
         </span>
       </div>
