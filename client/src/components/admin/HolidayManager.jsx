@@ -376,7 +376,7 @@ function WeeklyOffTab() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
         <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-blue-700">
-          <span className="font-semibold">Weekly Off Patterns</span> define which days of the week are off for each employee. Employees not assigned to any pattern use the default <span className="font-medium">Sat + Sun</span> off.
+          <span className="font-semibold">Weekly Off Patterns</span> define which days of the week are off for each employee. Assign a pattern to each employee from their profile or using the + Assign button below.
           These affect attendance, leave calculations, muster, and roster views.
         </div>
       </div>
@@ -397,21 +397,6 @@ function WeeklyOffTab() {
       {/* Default pattern info card */}
       <div className="bg-white rounded-lg border border-slate-200 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              {DAY_NAMES.map((dn, i) => (
-                <span key={i} className={`text-xs font-medium px-2 py-1 rounded ${[0, 6].includes(i) ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-slate-50 text-slate-400'}`}>{dn}</span>
-              ))}
-            </div>
-            <span className="text-sm font-medium text-slate-700">Default (Sat + Sun)</span>
-            <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">System default</span>
-          </div>
-          <span className="text-sm text-slate-500">
-            <Users className="w-4 h-4 inline mr-1" />{unassigned.length} employee{unassigned.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-      </div>
-
       {/* Pattern Cards */}
       {patterns.map(p => (
         <div key={p.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
