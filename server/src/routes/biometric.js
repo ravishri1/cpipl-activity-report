@@ -748,7 +748,7 @@ router.post('/register-tunnel', asyncHandler(async (req, res) => {
 // GET /api/biometric/tunnel-status — check if tunnel is reachable
 router.get('/tunnel-status', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const tunnelUrl = await getTunnelUrl(req.prisma);
-  if (!tunnelUrl) return res.json({ connected: false, message: 'No tunnel URL registered' });
+  if (!tunnelUrl) return res.json({ configured: false, connected: false });
 
   try {
     const agentKey = process.env.BIOMETRIC_AGENT_KEY;

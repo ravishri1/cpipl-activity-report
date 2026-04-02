@@ -87,30 +87,31 @@ function StatCard({ icon: Icon, label, value, color = 'blue', sub }) {
 }
 
 // ─── Tunnel Status Card ──────────────────────────────────────────────────────
+// Only shown when tunnel is configured. Hidden entirely when not set up.
 function TunnelStatusCard() {
   const { data: tunnel, loading } = useFetch('/biometric/tunnel-status', null);
 
   if (loading || !tunnel) return null;
 
-  // Don't show scary red error when tunnel was never configured — agent push works fine without it
-  if (!tunnel.connected && !tunnel.tunnelUrl) return null;
+  // Tunnel not configured — don't show anything (agent push is the primary path)
+  if (!tunnel.configured) return null;
 
   return (
     <div className={`rounded-xl border p-4 text-sm ${tunnel.connected ? 'bg-indigo-50 border-indigo-200' : 'bg-amber-50 border-amber-200'}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="font-medium mb-1">
-            {tunnel.connected ? '📡 Tunnel Connected — cpserver SQL Live' : '⚠️ Tunnel Disconnected'}
+            {tunnel.connected ? '📡 Tunnel Connected — cpserver SQL Live' : '⚠️ Tunnel Temporarily Offline'}
           </p>
           {tunnel.connected ? (
             <div className="text-xs text-indigo-600 space-y-0.5">
               <p><span className="font-medium">Tunnel URL:</span> {tunnel.tunnelUrl}</p>
               <p><span className="font-medium">cpserver Time:</span> {new Date(tunnel.serverTime).toLocaleString()}</p>
-              <p className="text-indigo-400">All historical biometric data available via tunnel (unlimited, from cpserver SQL Server)</p>
+              <p className="text-indigo-400">Historical biometric data available via tunnel (from cpserver SQL Server)</p>
             </div>
           ) : (
             <p className="text-xs text-amber-700">
-              Tunnel URL was registered but cpserver is currently offline. Punch data still flows via agent push.
+              cpserver tunnel was registered but is currently offline. Punch data still flows via agent push.
             </p>
           )}
         </div>
