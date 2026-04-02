@@ -394,9 +394,6 @@ function WeeklyOffTab() {
         </button>
       </div>
 
-      {/* Default pattern info card */}
-      <div className="bg-white rounded-lg border border-slate-200 p-4">
-        <div className="flex items-center justify-between">
       {/* Pattern Cards */}
       {patterns.map(p => (
         <div key={p.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
