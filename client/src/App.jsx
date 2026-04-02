@@ -98,6 +98,8 @@ const MySkills = lazy(() => import('./components/workspace/MySkills'));
 const WeeklyPulse = lazy(() => import('./components/workspace/WeeklyPulse'));
 const PulseDashboard = lazy(() => import('./components/admin/PulseDashboard'));
 const SkillsMatrix = lazy(() => import('./components/admin/SkillsMatrix'));
+const AlumniPortal = lazy(() => import('./components/employees/AlumniPortal'));
+const MyLetters = lazy(() => import('./components/letters/MyLetters'));
 
 // ── Loading spinner for lazy components ──────────────────────────────
 function PageLoader() {
@@ -122,13 +124,13 @@ function AdminRoute({ children }) {
 
 function SeparatedRoute({ children }) {
   const { isSeparated } = useAuth();
-  if (isSeparated) return <Navigate to="/payslips" replace />;
+  if (isSeparated) return <Navigate to="/alumni" replace />;
   return children;
 }
 
 function SeparatedFallback() {
   const { isSeparated } = useAuth();
-  return <Navigate to={isSeparated ? '/payslips' : '/dashboard'} replace />;
+  return <Navigate to={isSeparated ? '/alumni' : '/dashboard'} replace />;
 }
 
 function AppRoutes() {
@@ -193,7 +195,9 @@ function AppRoutes() {
                   <Route path="/my-support" element={<MySupport />} />
 
                   {/* Allowed for separated employees */}
+                  <Route path="/alumni" element={<AlumniPortal />} />
                   <Route path="/payslips" element={<MyPayslips />} />
+                  <Route path="/my-letters" element={<MyLetters />} />
                   <Route path="/my-tickets" element={<MyTickets />} />
                   <Route path="/suggestions" element={<SuggestionBox />} />
                   <Route path="/my-files" element={<MyFiles />} />
@@ -203,7 +207,7 @@ function AppRoutes() {
 
                   {/* Team — restricted for separated employees */}
                   <Route path="/directory" element={<SeparatedRoute><EmployeeDirectory /></SeparatedRoute>} />
-                  <Route path="/employee/:id" element={<SeparatedRoute><EmployeeProfile /></SeparatedRoute>} />
+                  <Route path="/employee/:id" element={<EmployeeProfile />} />
                   <Route path="/leaderboard" element={<SeparatedRoute><Leaderboard /></SeparatedRoute>} />
 
                   {/* Admin / Team Lead shared routes */}

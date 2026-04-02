@@ -6,13 +6,14 @@ const { requireFields, requireEnum, parseId } = require('../utils/validate');
 
 const router = express.Router();
 router.use(authenticate);
-router.use(requireActiveEmployee);
+// Note: requireActiveEmployee is applied per-route for write ops only.
+// Separated employees (resigned/retired) can still view their own letters (experience, relieving, etc.)
 
 const LETTER_TYPES = ['offer', 'appointment', 'salary_revision', 'experience', 'relieving', 'custom'];
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 // GET /templates — List active letter templates (admin only)
-router.get('/templates', requireAdmin, asyncHandler(async (req, res) => {
+router.get('/templates', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const templates = await req.prisma.letterTemplate.findMany({
     orderBy: { createdAt: 'desc' },
   });
@@ -20,7 +21,7 @@ router.get('/templates', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /templates — Create letter template (admin only)
-router.post('/templates', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/templates', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'name', 'type', 'content');
   const { name, type, content } = req.body;
   requireEnum(type, LETTER_TYPES, 'type');
@@ -29,7 +30,7 @@ router.post('/templates', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // PUT /templates/:id — Update letter template (admin only)
-router.put('/templates/:id', requireAdmin, asyncHandler(async (req, res) => {
+router.put('/templates/:id', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const templateId = parseId(req.params.id);
   const existing = await req.prisma.letterTemplate.findUnique({ where: { id: templateId } });
   if (!existing) throw notFound('Letter template');
@@ -48,7 +49,7 @@ router.put('/templates/:id', requireAdmin, asyncHandler(async (req, res) => {
 }));
 
 // POST /generate — Generate letter for employee (admin only)
-router.post('/generate', requireAdmin, asyncHandler(async (req, res) => {
+router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'templateId');
   const { userId, templateId } = req.body;
 

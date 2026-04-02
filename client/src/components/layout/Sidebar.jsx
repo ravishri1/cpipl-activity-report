@@ -114,8 +114,15 @@ export default function Sidebar({ isOpen, onClose }) {
     if (window.innerWidth < 1024) onClose?.();
   };
 
-  // ── Separated employee: minimal menu only ───────────────────────
+  // ── Separated employee: limited portal menu ─────────────────────
   if (isSeparated) {
+    const separatedItems = [
+      { to: `/employee/${user?.id}`, label: 'My Profile', icon: Users },
+      { to: '/payslips', label: 'My Payslips', icon: IndianRupee },
+      { to: '/my-letters', label: 'My Letters', icon: ScrollText },
+      { to: '/my-files', label: 'My Files', icon: FolderOpen },
+      { to: '/my-support', label: 'Contact HR', icon: LifeBuoy },
+    ];
     return (
       <>
         {isOpen && (
@@ -138,30 +145,27 @@ export default function Sidebar({ isOpen, onClose }) {
             </div>
             <div className="leading-tight">
               <span className="font-bold text-slate-800 text-[13px] block">CPIPL HR</span>
-              <span className="text-[10px] text-slate-400 font-medium">Limited Access</span>
+              <span className="text-[10px] text-slate-400 font-medium">Alumni Portal</span>
             </div>
           </div>
           <nav className="flex-1 overflow-y-auto py-2 px-2">
-            <div className="mx-1 mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
-                Your employment has ended. You have limited access to payslips and support.
+            <div className="mx-1 mb-3 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                Alumni access — payslips, letters &amp; documents available.
               </p>
             </div>
             <div className="mb-1">
               <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Available
+                My Records
               </div>
               <div className="space-y-0.5">
-                {[
-                  { to: '/payslips', label: 'My Payslips', icon: IndianRupee },
-                  { to: '/my-support', label: 'My Support', icon: LifeBuoy },
-                ].map((item) => (
+                {separatedItems.map((item) => (
                   <NavItem key={item.to} item={item} isActive={isActive(item.to)} onClick={handleLinkClick} />
                 ))}
               </div>
             </div>
           </nav>
-          <UserFooter user={user} label="Separated" labelClass="text-amber-600" />
+          <UserFooter user={user} label="Alumni" labelClass="text-blue-600" />
         </aside>
       </>
     );
