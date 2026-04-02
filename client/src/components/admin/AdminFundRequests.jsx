@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
@@ -72,82 +72,39 @@ export default function AdminFundRequests() {
   const billInputRef = useRef(null);
   const { data: employees } = useFetch('/users?active=true', []);
 
-  // Petty Cash — Opening Balance (inline, no modal)
+  // Petty Cash — single API call to get fund holder balance
+  const { data: fundHolderData, refetch: refetchBalance } = useFetch('/expenses/fund-balances/holder', null);
   const [showBalanceEditor, setShowBalanceEditor] = useState(false);
   const [balanceVal, setBalanceVal] = useState('');
   const [balanceNotes, setBalanceNotes] = useState('');
-  const [fundHolderId, setFundHolderId] = useState(null);
-  const [currentBalance, setCurrentBalance] = useState(null);
+  const [newHolderId, setNewHolderId] = useState(null); // only for first-time picker
 
-  const loadAndShowBalance = async () => {
-    // Auto-detect fund holder: employee with existing fund balance, or from fund requests
-    const empList = Array.isArray(employees) ? employees : (employees?.users || []);
-    const topRequester = requests?.[0]?.requestedBy || requests?.[0]?.userId;
-
-    // Check if any employee already has a fund balance set
-    let holderId = null;
-    if (topRequester) {
-      holderId = topRequester;
-    } else {
-      for (const emp of empList) {
-        try {
-          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
-          if (res.data?.openingBalance) { holderId = emp.id; break; }
-        } catch { /* skip */ }
-      }
+  const loadAndShowBalance = () => {
+    if (fundHolderData?.userId) {
+      setBalanceVal(String(fundHolderData.openingBalance || 0));
+      setBalanceNotes('');
     }
-
-    if (holderId) {
-      setFundHolderId(holderId);
-      try {
-        const res = await api.get(`/expenses/fund-balances/${holderId}`);
-        setCurrentBalance(res.data);
-        setBalanceVal(String(res.data?.openingBalance || 0));
-      } catch {
-        setCurrentBalance({ openingBalance: 0, currentBalance: 0 });
-        setBalanceVal('0');
-      }
-    }
-    // If no holder found, fundHolderId stays null → UI shows employee picker
     setShowBalanceEditor(true);
   };
 
   const handleSaveBalance = async () => {
-    if (!fundHolderId) return;
+    const uid = fundHolderData?.userId || newHolderId;
+    if (!uid) return;
     try {
       await execute(
-        () => api.put(`/expenses/fund-balances/${fundHolderId}`, {
+        () => api.put(`/expenses/fund-balances/${uid}`, {
           openingBalance: parseFloat(balanceVal) || 0,
           notes: balanceNotes || null,
         }),
         'Opening balance saved!'
       );
       setShowBalanceEditor(false);
+      setNewHolderId(null);
       refetchBalance();
     } catch {
       // Error displayed by useApi
     }
   };
-
-  // Auto-detect fund holder on mount (find employee with existing balance)
-  useEffect(() => {
-    if (fundHolderId) return; // already set
-    const empList = Array.isArray(employees) ? employees : (employees?.users || []);
-    if (empList.length === 0) return;
-    (async () => {
-      for (const emp of empList) {
-        try {
-          const res = await api.get(`/expenses/fund-balances/${emp.id}`);
-          if (res.data?.openingBalance) { setFundHolderId(emp.id); return; }
-        } catch { /* skip */ }
-      }
-    })();
-  }, [employees, fundHolderId]);
-
-  // Fund holder balance — always visible on page
-  const { data: fundHolderData, refetch: refetchBalance } = useFetch(
-    fundHolderId ? `/expenses/fund-balances/${fundHolderId}` : null, null, [fundHolderId]
-  );
 
   // Client-side user name search
   const filteredRequests = userSearch
@@ -899,11 +856,11 @@ export default function AdminFundRequests() {
             </h3>
             <button onClick={() => setShowBalanceEditor(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
           </div>
-          {/* Employee picker — only shown first time when no fund holder detected */}
-          {!fundHolderId && (
+          {/* Employee picker — only shown first time when no fund holder exists */}
+          {!fundHolderData?.userId && !newHolderId && (
             <div className="mb-3">
               <label className="block text-xs text-slate-600 mb-1">Fund Holder (who manages petty cash?)</label>
-              <select value="" onChange={e => { setFundHolderId(parseInt(e.target.value)); setBalanceVal('0'); }}
+              <select value="" onChange={e => { setNewHolderId(parseInt(e.target.value)); setBalanceVal('0'); }}
                 className="w-full border rounded-lg px-3 py-2 text-sm">
                 <option value="">Select employee...</option>
                 {(Array.isArray(employees) ? employees : (employees?.users || [])).map(emp => (
@@ -912,7 +869,7 @@ export default function AdminFundRequests() {
               </select>
             </div>
           )}
-          {fundHolderId && (
+          {(fundHolderData?.userId || newHolderId) && (
             <div className="flex items-end gap-3 flex-wrap">
               <div className="flex-1 min-w-[150px]">
                 <label className="block text-xs text-slate-600 mb-1">Amount (₹)</label>

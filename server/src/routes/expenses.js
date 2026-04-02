@@ -809,6 +809,47 @@ router.get('/fund-balances/:userId(\\d+)', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /fund-balances/holder — Get the fund holder (employee with opening balance set)
+router.get('/fund-balances/holder', requireAdmin, asyncHandler(async (req, res) => {
+  const holder = await req.prisma.employeeFundBalance.findFirst({
+    where: { openingBalance: { not: 0 } },
+    include: { user: { select: { id: true, name: true, employeeId: true, department: true } } },
+    orderBy: { updatedAt: 'desc' },
+  });
+  if (!holder) return res.json(null);
+
+  // Calculate running balance
+  const uid = holder.userId;
+  const advances = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, status: { in: ['disbursed', 'acknowledged', 'settled'] } },
+    select: { disbursedAmount: true },
+  });
+  const reimbursements = await req.prisma.fundRequest.findMany({
+    where: { requestedBy: uid, type: 'reimbursement', status: { in: ['approved', 'paid'] } },
+    select: { amount: true },
+  });
+  const expenses = await req.prisma.expenseClaim.findMany({
+    where: { userId: uid, fundRequestId: { not: null }, status: { not: 'rejected' } },
+    select: { amount: true },
+  });
+  const totalDisbursed = advances.reduce((s, a) => s + (a.disbursedAmount || 0), 0);
+  const totalReimbursed = reimbursements.reduce((s, r) => s + (r.amount || 0), 0);
+  const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const currentBalance = (holder.openingBalance || 0) + totalDisbursed + totalReimbursed - totalSpent;
+
+  res.json({
+    userId: uid,
+    holderName: holder.user?.name || 'Unknown',
+    openingBalance: holder.openingBalance,
+    totalDisbursed,
+    totalReimbursed,
+    totalSpent,
+    currentBalance,
+    notes: holder.notes,
+    setDate: holder.setDate,
+  });
+}));
+
 // PUT /fund-balances/:userId — Set/update opening balance (admin)
 router.put('/fund-balances/:userId(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const uid = parseId(req.params.userId);
