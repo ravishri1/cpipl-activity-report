@@ -90,7 +90,7 @@ export default function MyAssetRequests() {
   const handleCancel = async (id) => {
     if (!window.confirm('Cancel this request?')) return;
     try {
-      await execute(() => api.put(`/api/asset-requests/${id}/cancel`), 'Request cancelled.');
+      await execute(() => api.put(`/asset-requests/${id}/cancel`), 'Request cancelled.');
       refetch();
     } catch {}
   };

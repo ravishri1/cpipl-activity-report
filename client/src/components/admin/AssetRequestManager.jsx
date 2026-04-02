@@ -30,7 +30,7 @@ function ReviewModal({ req, onClose, onDone }) {
 
   const handleSubmit = async () => {
     try {
-      await execute(() => api.put(`/api/asset-requests/${req.id}/review`, { status, reviewNote: reviewNote || undefined }), `Request ${status}!`);
+      await execute(() => api.put(`/asset-requests/${req.id}/review`, { status, reviewNote: reviewNote || undefined }), `Request ${status}!`);
       onDone();
       onClose();
     } catch {}
@@ -88,12 +88,12 @@ export default function AssetRequestManager() {
   if (statusFilter) params.set('status', statusFilter);
   if (priorityFilter) params.set('priority', priorityFilter);
 
-  const { data: requests, loading, error: fetchErr, refetch } = useFetch(`/api/asset-requests?${params}`, []);
+  const { data: requests, loading, error: fetchErr, refetch } = useFetch(`/asset-requests?${params}`, []);
 
   const handleFulfill = async (id) => {
     if (!window.confirm('Mark this request as fulfilled (asset delivered)?')) return;
     try {
-      await fulfill(() => api.put(`/api/asset-requests/${id}/fulfill`), 'Marked as fulfilled!');
+      await fulfill(() => api.put(`/asset-requests/${id}/fulfill`), 'Marked as fulfilled!');
       refetch();
     } catch {}
   };
