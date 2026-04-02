@@ -418,7 +418,9 @@ export default function AdminFundRequests() {
               {filteredRequests.map(req => {
                 const isReimb = req.type === 'reimbursement';
                 const isIncome = req.type === 'income';
-                const balance = (req.disbursedAmount || 0) - (req.spent || 0);
+                const balance = isIncome
+                  ? (req.disbursedAmount || req.amount || 0)
+                  : (req.disbursedAmount || 0) - (req.spent || 0);
                 return (
                   <TableRowGroup key={req.id}>
                     <tr className="hover:bg-slate-50">
@@ -433,7 +435,7 @@ export default function AdminFundRequests() {
                       <td className="px-4 py-3 text-right">{req.disbursedAmount ? formatINR(req.disbursedAmount) : '-'}</td>
                       <td className="px-4 py-3 text-right">{req.spent ? formatINR(req.spent) : '-'}</td>
                       <td className="px-4 py-3 text-right font-medium">
-                        {(isReimb || isIncome) ? '-' : (req.disbursedAmount ? formatINR(balance) : '-')}
+                        {isReimb ? '-' : (balance ? formatINR(balance) : '-')}
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={req.status} styleMap={FUND_STATUS_STYLES} /></td>
                       <td className="px-4 py-3">
