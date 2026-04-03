@@ -96,7 +96,7 @@ router.get('/registrations', asyncHandler(async (req, res) => {
       _count: { select: { users: true, assets: true, certificates: true } },
       locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
     },
-    orderBy: [{ legalEntityId: 'asc' }, { abbr: 'asc' }],
+    orderBy: [{ legalEntityId: 'asc' }, { isPrimary: 'desc' }, { abbr: 'asc' }],
   });
   res.json(regs);
 }));
