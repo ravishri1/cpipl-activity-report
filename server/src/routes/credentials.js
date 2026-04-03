@@ -23,8 +23,8 @@ function normalizeSharedWith(raw) {
   }
 }
 
-// Auto-generate displayName from portal hierarchy: Entity-CityCode-Platform-Label
-async function generateDisplayName(prisma, portalId, label) {
+// Auto-generate displayName: Entity-CityCode-Platform-Label-SEQ (e.g. CPIPL-LKO-Amazon-User-02)
+async function generateDisplayName(prisma, portalId, label, excludeCredId) {
   const portal = await prisma.companyPortal.findUnique({
     where: { id: portalId },
     include: {
@@ -42,8 +42,15 @@ async function generateDisplayName(prisma, portalId, label) {
   let platform = portal.name;
   platform = platform.replace(/^(CPIPL|CP)\s*(MH|LKO|THN|BLR|HYD|KOL|CCU)?\s*/i, '').trim();
   platform = platform.replace(/\s*Server$/i, '').trim();
-  const parts = [entity, cityCode, platform, label].filter(Boolean);
-  return parts.join('-');
+  const prefix = [entity, cityCode, platform, label].filter(Boolean).join('-');
+  // Find next sequence number: count existing credentials in same portal with same prefix
+  const existing = await prisma.portalCredential.findMany({
+    where: { portalId, ...(excludeCredId ? { id: { not: excludeCredId } } : {}) },
+    select: { displayName: true },
+  });
+  const samePrefix = existing.filter(c => c.displayName && c.displayName.startsWith(prefix));
+  const seq = String(samePrefix.length + 1).padStart(2, '0');
+  return `${prefix}-${seq}`;
 }
 
 // Tracked fields for history diff
@@ -646,12 +653,18 @@ router.get('/credentials/:id/history', requireAdmin, asyncHandler(async (req, re
   res.json(history);
 }));
 
-// POST /api/credentials/backfill-display-names — one-time backfill for all existing credentials
+// POST /api/credentials/backfill-display-names — systematic backfill grouped by portal
 router.post('/backfill-display-names', requireAdmin, asyncHandler(async (req, res) => {
-  const all = await req.prisma.portalCredential.findMany({ select: { id: true, portalId: true, label: true } });
+  // Clear all existing displayNames first for clean sequential numbering
+  await req.prisma.portalCredential.updateMany({ data: { displayName: null } });
+  // Group credentials by portal, ordered by label then id for consistent sequencing
+  const all = await req.prisma.portalCredential.findMany({
+    select: { id: true, portalId: true, label: true },
+    orderBy: [{ portalId: 'asc' }, { label: 'asc' }, { id: 'asc' }],
+  });
   let updated = 0;
   for (const cred of all) {
-    const dn = await generateDisplayName(req.prisma, cred.portalId, cred.label);
+    const dn = await generateDisplayName(req.prisma, cred.portalId, cred.label, cred.id);
     if (dn) {
       await req.prisma.portalCredential.update({ where: { id: cred.id }, data: { displayName: dn } });
       updated++;
