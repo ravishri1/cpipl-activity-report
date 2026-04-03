@@ -1455,6 +1455,7 @@ function OrgRow({ children }) {
 
 function CredOrgNode({ cred }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
   const statusBadge = cred.status === 'active' ? '● active' : cred.status === 'revoked' ? '✕ revoked' : '⊘ expired';
   const employees = [
@@ -1479,6 +1480,7 @@ function CredOrgNode({ cred }) {
         <OrgRow>
           {employees.map(e => (
             <OrgBox key={e.id} label={e.label} sublabel={e.sub} colorClass={e.color} icon={e.icon}
+              onClick={e.userId ? () => navigate(`/employee/${e.userId}`) : undefined}
               links={e.userId ? [{ url: `/employee/${e.userId}`, text: 'Profile' }] : []}
             />
           ))}
