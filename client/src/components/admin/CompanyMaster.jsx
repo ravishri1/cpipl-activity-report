@@ -1456,12 +1456,11 @@ function OrgRow({ children }) {
 function CredOrgNode({ cred }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
+  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length;
   const statusBadge = cred.status === 'active' ? '● active' : cred.status === 'revoked' ? '✕ revoked' : '⊘ expired';
   const employees = [
     cred.assignee && { id: 'a', label: cred.assignee.name, sub: `${cred.assignee.employeeId} · assigned`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: User, userId: cred.assignee.id },
     ...cred.sharedWithUsers.map(u => ({ id: u.id, label: u.name, sub: `${u.employeeId} · shared`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: Users, userId: u.id })),
-    cred.department && { id: 'dept', label: cred.department, sub: 'dept access', color: 'bg-orange-50 border-orange-300 text-orange-900', icon: Building2 },
   ].filter(Boolean);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
