@@ -2027,7 +2027,7 @@ export default function CompanyMaster() {
             <div className="flex-1 overflow-y-auto">
               {entities.map(entity => {
                 const isSelected = entity.id === effectiveId;
-                const regCount = registrations.filter(r => r.legalEntityId === entity.id).length;
+                const regCount = registrations.filter(r => r.legalEntityId === entity.id && (r.placeType || '').includes('Principal')).length;
                 return (
                   <button key={entity.id}
                     onClick={() => { setSelectedEntityId(entity.id); setSelectedRegId(null); }}
