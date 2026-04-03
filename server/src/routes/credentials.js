@@ -276,6 +276,31 @@ router.get('/tree', requireAdmin, asyncHandler(async (req, res) => {
     users.forEach(u => { usersMap[u.id] = u; });
   }
 
+  // Collect all unique department names from credentials, resolve to employees
+  const allDepts = new Set();
+  const collectDepts = (portals) => {
+    for (const portal of portals) {
+      for (const cred of portal.credentials) {
+        if (cred.department) allDepts.add(cred.department);
+      }
+    }
+  };
+  for (const entity of entities) {
+    collectDepts(entity.portals);
+    for (const reg of entity.registrations) collectDepts(reg.portals);
+  }
+  const deptUsersMap = {};
+  if (allDepts.size > 0) {
+    const deptUsers = await req.prisma.user.findMany({
+      where: { department: { in: [...allDepts] }, isActive: true },
+      select: { id: true, name: true, employeeId: true, department: true },
+    });
+    for (const u of deptUsers) {
+      if (!deptUsersMap[u.department]) deptUsersMap[u.department] = [];
+      deptUsersMap[u.department].push({ id: u.id, name: u.name, employeeId: u.employeeId });
+    }
+  }
+
   // Build response — strip password, resolve sharedWith to user objects
   const mapPortal = (portal) => ({
     id: portal.id,
@@ -295,6 +320,7 @@ router.get('/tree', requireAdmin, asyncHandler(async (req, res) => {
         id: cred.id, username: cred.username, label: cred.label, type: cred.type,
         status: cred.status, department: cred.department, purpose: cred.purpose,
         assignee: cred.assignee, sharedWithUsers,
+        departmentUsers: cred.department ? (deptUsersMap[cred.department] || []) : [],
       };
     }),
   });

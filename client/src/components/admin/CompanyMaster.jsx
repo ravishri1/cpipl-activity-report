@@ -1456,11 +1456,15 @@ function OrgRow({ children }) {
 function CredOrgNode({ cred }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length;
+  // Deduplicate: department users that aren't already assignee or shared
+  const existingIds = new Set([cred.assignee?.id, ...cred.sharedWithUsers.map(u => u.id)].filter(Boolean));
+  const deptUsers = (cred.departmentUsers || []).filter(u => !existingIds.has(u.id));
+  const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + deptUsers.length;
   const statusBadge = cred.status === 'active' ? '● active' : cred.status === 'revoked' ? '✕ revoked' : '⊘ expired';
   const employees = [
     cred.assignee && { id: 'a', label: cred.assignee.name, sub: `${cred.assignee.employeeId} · assigned`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: User, userId: cred.assignee.id },
     ...cred.sharedWithUsers.map(u => ({ id: u.id, label: u.name, sub: `${u.employeeId} · shared`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: Users, userId: u.id })),
+    ...deptUsers.map(u => ({ id: `dept-${u.id}`, label: u.name, sub: `${u.employeeId} · ${cred.department}`, color: 'bg-blue-50 border-blue-300 text-blue-900', icon: Users, userId: u.id })),
   ].filter(Boolean);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
