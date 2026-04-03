@@ -1408,8 +1408,12 @@ const OCT_CSS = `
 .oct-gap{height:28px}
 `;
 
-function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon: Icon, manageUrl }) {
+function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon: Icon, manageUrl, links }) {
   const navigate = useNavigate();
+  const allLinks = [
+    ...(manageUrl ? [{ url: manageUrl, text: 'Credential Manager' }] : []),
+    ...(links || []),
+  ];
   return (
     <div
       onClick={onClick}
@@ -1423,13 +1427,13 @@ function OrgBox({ label, sublabel, badge, colorClass, onClick, open, count, icon
       {count !== undefined && count > 0 && !open && (
         <div className="text-[9px] opacity-40 mt-0.5">▼ {count} below</div>
       )}
-      {manageUrl && (
-        <div
-          onClick={e => { e.stopPropagation(); navigate(manageUrl); }}
-          className="mt-1.5 text-[9px] flex items-center justify-center gap-0.5 opacity-40 hover:opacity-90 cursor-pointer font-medium underline underline-offset-1">
-          <ExternalLink className="w-2.5 h-2.5" /> Credential Manager
+      {allLinks.map((link, i) => (
+        <div key={i}
+          onClick={e => { e.stopPropagation(); navigate(link.url); }}
+          className="mt-1 text-[9px] flex items-center justify-center gap-0.5 opacity-40 hover:opacity-90 cursor-pointer font-medium underline underline-offset-1">
+          <ExternalLink className="w-2.5 h-2.5" /> {link.text}
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -1454,8 +1458,8 @@ function CredOrgNode({ cred }) {
   const totalUsers = (cred.assignee ? 1 : 0) + cred.sharedWithUsers.length + (cred.department ? 1 : 0);
   const statusBadge = cred.status === 'active' ? '● active' : cred.status === 'revoked' ? '✕ revoked' : '⊘ expired';
   const employees = [
-    cred.assignee && { id: 'a', label: cred.assignee.name, sub: `${cred.assignee.employeeId} · assigned`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: User },
-    ...cred.sharedWithUsers.map(u => ({ id: u.id, label: u.name, sub: `${u.employeeId} · shared`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: Users })),
+    cred.assignee && { id: 'a', label: cred.assignee.name, sub: `${cred.assignee.employeeId} · assigned`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: User, userId: cred.assignee.id },
+    ...cred.sharedWithUsers.map(u => ({ id: u.id, label: u.name, sub: `${u.employeeId} · shared`, color: 'bg-teal-50 border-teal-300 text-teal-900', icon: Users, userId: u.id })),
     cred.department && { id: 'dept', label: cred.department, sub: 'dept access', color: 'bg-orange-50 border-orange-300 text-orange-900', icon: Building2 },
   ].filter(Boolean);
   return (
@@ -1469,11 +1473,14 @@ function CredOrgNode({ cred }) {
         open={open}
         count={totalUsers}
         icon={Key}
+        links={[{ url: '/admin/credentials', text: 'Credentials' }]}
       />
       {open && employees.length > 0 && (
         <OrgRow>
           {employees.map(e => (
-            <OrgBox key={e.id} label={e.label} sublabel={e.sub} colorClass={e.color} icon={e.icon} />
+            <OrgBox key={e.id} label={e.label} sublabel={e.sub} colorClass={e.color} icon={e.icon}
+              links={e.userId ? [{ url: `/employee/${e.userId}`, text: 'Profile' }] : []}
+            />
           ))}
         </OrgRow>
       )}
