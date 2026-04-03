@@ -38,10 +38,13 @@ async function generateDisplayName(prisma, portalId, label, excludeCredId) {
   const abbr = portal.companyRegistration?.abbr || '';
   const cityMatch = abbr.match(/^[^-]+-([^/]+)/);
   const cityCode = cityMatch ? cityMatch[1] : '';
-  // Simplify portal name: strip entity prefix, location codes, "Server" suffix
+  // Simplify portal name: strip entity prefix, location codes, parentheticals, suffixes
   let platform = portal.name;
   platform = platform.replace(/^(CPIPL|CP)\s*(MH|LKO|THN|BLR|HYD|KOL|CCU)?\s*/i, '').trim();
   platform = platform.replace(/\s*Server$/i, '').trim();
+  platform = platform.replace(/\s*\/\s*Portal$/i, '').trim();       // "Gmail / Portal" → "Gmail"
+  platform = platform.replace(/\s*\([^)]*\)\s*/g, '').trim();       // "Gmail (AutoPrice)" → "Gmail", "Meesho (Prime Day)" → "Meesho"
+  platform = platform.replace(/\.(com|in|co\.in)$/i, '').trim();    // "Amazon.com" → "Amazon", "Bombinoexp.com" → "Bombinoexp"
   const prefix = [entity, cityCode, platform, label].filter(Boolean).join('-');
   // Find next sequence number: count existing credentials in same portal with same prefix
   const existing = await prisma.portalCredential.findMany({
