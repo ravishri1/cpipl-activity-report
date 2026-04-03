@@ -23,23 +23,26 @@ function normalizeSharedWith(raw) {
   }
 }
 
-// Auto-generate displayName from portal hierarchy: Entity-City-Platform-Label
+// Auto-generate displayName from portal hierarchy: Entity-CityCode-Platform-Label
 async function generateDisplayName(prisma, portalId, label) {
   const portal = await prisma.companyPortal.findUnique({
     where: { id: portalId },
     include: {
       legalEntity: { select: { shortName: true, legalName: true } },
-      companyRegistration: { select: { officeCity: true } },
+      companyRegistration: { select: { abbr: true } },
     },
   });
   if (!portal) return null;
   const entity = portal.legalEntity?.shortName || portal.legalEntity?.legalName || '';
-  const city = portal.companyRegistration?.officeCity || '';
+  // Extract city code from registration abbr (e.g. "CPIPL-LKO/09-R1" → "LKO")
+  const abbr = portal.companyRegistration?.abbr || '';
+  const cityMatch = abbr.match(/^[^-]+-([^/]+)/);
+  const cityCode = cityMatch ? cityMatch[1] : '';
   // Simplify portal name: strip entity prefix, location codes, "Server" suffix
   let platform = portal.name;
   platform = platform.replace(/^(CPIPL|CP)\s*(MH|LKO|THN|BLR|HYD|KOL|CCU)?\s*/i, '').trim();
   platform = platform.replace(/\s*Server$/i, '').trim();
-  const parts = [entity, city, platform, label].filter(Boolean);
+  const parts = [entity, cityCode, platform, label].filter(Boolean);
   return parts.join('-');
 }
 
