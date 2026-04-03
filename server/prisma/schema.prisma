@@ -2279,6 +2279,7 @@ model PortalCredential {
   username     String   // email or login ID
   password     String?  // stored as-is (admin-only access)
   label        String?  // friendly name: "Main Admin", "Accounts Login"
+  displayName  String?  // auto-generated: "CPIPL-Lucknow-Amazon-Main"
   assignedTo   Int?     // userId for individual, null for shared
   sharedWith   String?  // JSON array of userIds for shared credentials
   notes        String?

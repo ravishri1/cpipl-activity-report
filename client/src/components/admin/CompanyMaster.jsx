@@ -1469,8 +1469,8 @@ function CredOrgNode({ cred }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <OrgBox
-        label={cred.username}
-        sublabel={cred.label || cred.type}
+        label={cred.displayName || cred.username}
+        sublabel={cred.displayName ? cred.username : (cred.label || cred.type)}
         badge={statusBadge}
         colorClass="bg-amber-50 border-amber-300 text-amber-900"
         onClick={totalUsers ? () => setOpen(o => !o) : undefined}

@@ -23,6 +23,26 @@ function normalizeSharedWith(raw) {
   }
 }
 
+// Auto-generate displayName from portal hierarchy: Entity-City-Platform-Label
+async function generateDisplayName(prisma, portalId, label) {
+  const portal = await prisma.companyPortal.findUnique({
+    where: { id: portalId },
+    include: {
+      legalEntity: { select: { shortName: true, legalName: true } },
+      companyRegistration: { select: { officeCity: true } },
+    },
+  });
+  if (!portal) return null;
+  const entity = portal.legalEntity?.shortName || portal.legalEntity?.legalName || '';
+  const city = portal.companyRegistration?.officeCity || '';
+  // Simplify portal name: strip entity prefix, location codes, "Server" suffix
+  let platform = portal.name;
+  platform = platform.replace(/^(CPIPL|CP)\s*(MH|LKO|THN|BLR|HYD|KOL|CCU)?\s*/i, '').trim();
+  platform = platform.replace(/\s*Server$/i, '').trim();
+  const parts = [entity, city, platform, label].filter(Boolean);
+  return parts.join('-');
+}
+
 // Tracked fields for history diff
 const TRACKED_FIELDS = ['type', 'username', 'password', 'label', 'assignedTo', 'sharedWith',
   'notes', 'phoneNumber', 'department', 'purpose', 'status', 'lastRotated'];
@@ -317,7 +337,7 @@ router.get('/tree', requireAdmin, asyncHandler(async (req, res) => {
         } catch {}
       }
       return {
-        id: cred.id, username: cred.username, label: cred.label, type: cred.type,
+        id: cred.id, username: cred.username, label: cred.label, displayName: cred.displayName, type: cred.type,
         status: cred.status, department: cred.department, purpose: cred.purpose,
         assignee: cred.assignee, sharedWithUsers,
         departmentUsers: cred.department ? (deptUsersMap[cred.department] || []) : [],
@@ -498,6 +518,9 @@ router.post('/credentials', requireAdmin, asyncHandler(async (req, res) => {
   const portal = await req.prisma.companyPortal.findUnique({ where: { id: portalId } });
   if (!portal) throw notFound('Portal');
 
+  // Auto-generate displayName from company hierarchy
+  const displayName = await generateDisplayName(req.prisma, portalId, req.body.label || null);
+
   const credential = await req.prisma.portalCredential.create({
     data: {
       portalId,
@@ -505,6 +528,7 @@ router.post('/credentials', requireAdmin, asyncHandler(async (req, res) => {
       username: req.body.username,
       password: req.body.password || null,
       label: req.body.label || null,
+      displayName,
       assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null,
       sharedWith: normalizeSharedWith(req.body.sharedWith),
       notes: req.body.notes || null,
@@ -543,6 +567,13 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
   const before = await req.prisma.portalCredential.findUnique({ where: { id } });
   if (!before) throw notFound('Credential');
 
+  // Regenerate displayName if label changed
+  let displayNameUpdate = {};
+  if (req.body.label !== undefined && req.body.label !== before.label) {
+    const newDisplayName = await generateDisplayName(req.prisma, before.portalId, req.body.label || null);
+    if (newDisplayName) displayNameUpdate = { displayName: newDisplayName };
+  }
+
   const credential = await req.prisma.portalCredential.update({
     where: { id },
     data: {
@@ -550,6 +581,7 @@ router.put('/credentials/:id', requireAdmin, asyncHandler(async (req, res) => {
       ...(req.body.username !== undefined && { username: req.body.username }),
       ...(req.body.password !== undefined && { password: req.body.password || null }),
       ...(req.body.label !== undefined && { label: req.body.label || null }),
+      ...displayNameUpdate,
       ...(req.body.assignedTo !== undefined && { assignedTo: req.body.assignedTo ? parseInt(req.body.assignedTo) : null }),
       ...(req.body.sharedWith !== undefined && { sharedWith: normalizeSharedWith(req.body.sharedWith) }),
       ...(req.body.notes !== undefined && { notes: req.body.notes || null }),
@@ -609,6 +641,20 @@ router.get('/credentials/:id/history', requireAdmin, asyncHandler(async (req, re
     orderBy: [{ changedAt: 'desc' }],
   });
   res.json(history);
+}));
+
+// POST /api/credentials/backfill-display-names — one-time backfill for all existing credentials
+router.post('/backfill-display-names', requireAdmin, asyncHandler(async (req, res) => {
+  const all = await req.prisma.portalCredential.findMany({ select: { id: true, portalId: true, label: true } });
+  let updated = 0;
+  for (const cred of all) {
+    const dn = await generateDisplayName(req.prisma, cred.portalId, cred.label);
+    if (dn) {
+      await req.prisma.portalCredential.update({ where: { id: cred.id }, data: { displayName: dn } });
+      updated++;
+    }
+  }
+  res.json({ message: `Backfilled ${updated}/${all.length} credentials` });
 }));
 
 module.exports = router;
