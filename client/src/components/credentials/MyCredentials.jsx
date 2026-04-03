@@ -57,7 +57,10 @@ function CredentialCard({ cred, badge }) {
             <CategoryBadge category={portal.category || 'other'} />
             {badge}
           </div>
-          {cred.label && (
+          {cred.displayName && (
+            <div className="text-sm font-semibold text-blue-700 mt-0.5">{cred.displayName}</div>
+          )}
+          {cred.label && !cred.displayName && (
             <div className="text-xs text-slate-500 mt-0.5">{cred.label}</div>
           )}
         </div>

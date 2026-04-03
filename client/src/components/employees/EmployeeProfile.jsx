@@ -1794,7 +1794,8 @@ function CredentialCard({ cred, showPwd, togglePwd }) {
               {cred.status}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">{cred.username}</p>
+          {cred.displayName && <p className="text-sm font-semibold text-blue-700 mt-1">{cred.displayName}</p>}
+          <p className="text-xs text-slate-500 font-mono mt-0.5">{cred.username}</p>
           {cred.password && (
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs font-mono text-slate-600">

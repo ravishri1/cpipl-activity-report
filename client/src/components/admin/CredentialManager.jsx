@@ -754,8 +754,8 @@ function PortalCard({ portal, users, onEdit, onAddCredential, onRefresh, selecte
                         {cred.status === 'active' ? 'Active' : 'Closed'}
                       </button>
                     </div>
-                    {cred.displayName && <div className="text-xs font-medium text-blue-600 mb-0.5">{cred.displayName}</div>}
-                    <div className="text-sm text-slate-600 font-mono">{cred.username}</div>
+                    <div className="text-sm font-semibold text-blue-700">{cred.displayName || cred.username}</div>
+                    {cred.displayName && <div className="text-xs text-slate-500 font-mono">{cred.username}</div>}
                     <div className="flex items-center gap-1 text-xs text-slate-500">
                       <span className="font-medium text-slate-600">Password:</span>
                       <MaskedPassword password={cred.password} />
@@ -996,8 +996,8 @@ export default function CredentialManager() {
                         {cred.status === 'active' ? 'Active' : 'Closed'}
                       </span>
                     </div>
-                    {cred.displayName && <div className="text-xs font-medium text-blue-600 mb-0.5">{cred.displayName}</div>}
-                    <div className="text-sm text-slate-700 font-mono">{cred.username}</div>
+                    <div className="text-sm font-semibold text-blue-700">{cred.displayName || cred.username}</div>
+                    {cred.displayName && <div className="text-xs text-slate-500 font-mono">{cred.username}</div>}
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
                       {cred.department && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">🏢 {cred.department}</span>}
                       {cred.purpose && <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-medium">🎯 {cred.purpose}</span>}
