@@ -18,7 +18,8 @@ async function generateDisplayName(portalId, label, excludeCredId) {
   const cityMatch = abbr.match(/^[^-]+-([^/]+)/);
   const cityCode = cityMatch ? cityMatch[1] : '';
   let platform = portal.name;
-  platform = platform.replace(/^(CPIPL|CP)\s*(MH|LKO|THN|BLR|HYD|KOL|CCU)?\s*/i, '').trim();
+  platform = platform.replace(/^(CPIPL|CP)[-\s]*/i, '').trim();
+  platform = platform.replace(/^(MH|LKO|THN|BLR|HYD|KOL|CCU|BWD|PCL|PNE)[-\s]*/i, '').trim();
   platform = platform.replace(/\s*Server$/i, '').trim();
   platform = platform.replace(/\s*\/\s*Portal$/i, '').trim();
   platform = platform.replace(/\s*\([^)]*\)\s*/g, '').trim();
