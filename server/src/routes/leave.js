@@ -708,6 +708,13 @@ router.get('/admin/dashboard', requireAdmin, asyncHandler(async (req, res) => {
 
     // Summary counts
     const approved = empRequests.filter(r => r.status === 'approved');
+
+    // COF used = sum of approved COF leave requests in this FY (not hardcoded import value)
+    const cofUsed = approved
+      .filter(r => r.leaveType?.code === 'COF')
+      .reduce((sum, r) => sum + r.days, 0);
+    const cofEarned = compOff.earned;
+    const cofBalance = Math.max(0, cofEarned - cofUsed);
     const pending = empRequests.filter(r => r.status === 'pending');
     const totalApprovedDays = approved.reduce((sum, r) => sum + r.days, 0);
 
@@ -716,9 +723,9 @@ router.get('/admin/dashboard', requireAdmin, asyncHandler(async (req, res) => {
       balances: empBalances,
       requests: empRequests,
       compOff: {
-        earned: compOff.earned,
-        used: compOff.used,
-        balance: compOff.balance,
+        earned: cofEarned,
+        used: cofUsed,
+        balance: cofBalance,
         history: compOffHistory.map(c => ({
           id: c.id,
           type: c.type,
