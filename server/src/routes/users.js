@@ -191,9 +191,16 @@ router.get('/export', authenticate, requireActiveEmployee, requireAdmin, asyncHa
   res.json(employees);
 }));
 
-// GET /api/users/directory — Employee directory (all active users, public fields)
+// GET /api/users/directory — Employee directory
+// ?status=all|active|notice_period|separated|terminated (admin only; default 'active' for non-admin)
 router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
-  const where = { isActive: true };
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'team_lead';
+  const statusFilter = req.query.status || (isAdmin ? 'all' : 'active');
+  const where = {};
+  if (!isAdmin || statusFilter !== 'all') {
+    where.employmentStatus = statusFilter !== 'all' ? statusFilter : undefined;
+    if (!isAdmin) where.isActive = true;
+  }
   if (req.query.department && req.query.department !== 'all') where.department = req.query.department;
   if (req.query.company && req.query.company !== 'all') where.companyId = parseInt(req.query.company);
   if (req.query.search) {
@@ -210,6 +217,7 @@ router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async
     select: {
       id: true, name: true, email: true, department: true, designation: true, employeeId: true,
       profilePhotoUrl: true, driveProfilePhotoUrl: true, phone: true, dateOfJoining: true, role: true, location: true,
+      employmentStatus: true, isActive: true,
       reportingManagerId: true, companyId: true,
       reportingManager: { select: { id: true, name: true, employeeId: true } },
       company: { select: { id: true, name: true, shortName: true } },

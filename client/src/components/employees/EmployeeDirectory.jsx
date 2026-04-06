@@ -532,11 +532,14 @@ export default function EmployeeDirectory() {
   const [showImport, setShowImport] = useState(false);
   const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'notice_period' | 'separated' | 'terminated'
 
   const fetchData = useCallback(async () => {
     try {
+      const params = { search, department, company };
+      if (isAdmin) params.status = statusFilter;
       const [empRes, deptRes] = await Promise.all([
-        api.get('/users/directory', { params: { search, department, company } }),
+        api.get('/users/directory', { params }),
         api.get('/users/departments'),
       ]);
       setEmployees(empRes.data.users || empRes.data);
@@ -546,7 +549,7 @@ export default function EmployeeDirectory() {
     } finally {
       setLoading(false);
     }
-  }, [search, department, company]);
+  }, [search, department, company, isAdmin, statusFilter]);
 
   useEffect(() => {
     api.get('/companies').then((r) => setCompanies(r.data)).catch(() => {});
@@ -581,12 +584,22 @@ export default function EmployeeDirectory() {
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Users className="w-6 h-6 text-blue-600" />
           Employee Directory
-          <span className="text-sm font-normal text-slate-400 ml-1">({employees.length})</span>
+          <span className="text-sm font-normal text-slate-400 ml-1">({employees.length}{isAdmin && statusFilter !== 'all' ? ` · ${statusFilter.replace('_', ' ')}` : ''})</span>
         </h1>
 
         {/* Admin Actions */}
         {isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="all">All Employees</option>
+              <option value="active">Active</option>
+              <option value="notice_period">Notice Period</option>
+              <option value="separated">Separated</option>
+              <option value="terminated">Terminated</option>
+            </select>
             <button onClick={handleExport} disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
               {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -689,11 +702,21 @@ export default function EmployeeDirectory() {
                     )}
                   </div>
                 </div>
-                {emp.employeeId && (
-                  <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
-                    {emp.employeeId}
-                  </span>
-                )}
+                <div className="flex flex-col items-end gap-1">
+                  {emp.employeeId && (
+                    <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                      {emp.employeeId}
+                    </span>
+                  )}
+                  {emp.employmentStatus && emp.employmentStatus !== 'active' && (
+                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${
+                      emp.employmentStatus === 'separated' ? 'bg-red-100 text-red-600' :
+                      emp.employmentStatus === 'terminated' ? 'bg-red-200 text-red-800' :
+                      emp.employmentStatus === 'notice_period' ? 'bg-amber-100 text-amber-700' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>{emp.employmentStatus.replace('_', ' ')}</span>
+                  )}
+                </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
                 <div className="flex items-center gap-4">
@@ -743,6 +766,14 @@ export default function EmployeeDirectory() {
                           : emp.name?.charAt(0)?.toUpperCase()}
                       </div>
                       <span className="font-medium text-slate-800">{emp.name}</span>
+                      {emp.employmentStatus && emp.employmentStatus !== 'active' && (
+                        <span className={`ml-1.5 text-[9px] font-medium px-1.5 py-0.5 rounded ${
+                          emp.employmentStatus === 'separated' ? 'bg-red-100 text-red-600' :
+                          emp.employmentStatus === 'terminated' ? 'bg-red-200 text-red-800' :
+                          emp.employmentStatus === 'notice_period' ? 'bg-amber-100 text-amber-700' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>{emp.employmentStatus.replace('_', ' ')}</span>
+                      )}
                     </Link>
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{emp.employeeId || '—'}</td>
