@@ -320,6 +320,8 @@ export default function LeaveApproval() {
   const [tab, setTab] = useState('pending');
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [statusFilter, setStatusFilter] = useState('all');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [reviewNote, setReviewNote] = useState({});
   const [showOnBehalf, setShowOnBehalf] = useState(false);
 
@@ -349,6 +351,26 @@ export default function LeaveApproval() {
       // Error handled by useApi
     }
   };
+
+  const filteredRequests = useMemo(() => {
+    let list = allRequests;
+    if (employeeSearch.trim()) {
+      const q = employeeSearch.toLowerCase();
+      list = list.filter(r =>
+        r.user?.name?.toLowerCase().includes(q) ||
+        r.user?.employeeId?.toLowerCase().includes(q) ||
+        r.user?.department?.toLowerCase().includes(q)
+      );
+    }
+    if (monthFilter) {
+      const m = parseInt(monthFilter);
+      list = list.filter(r => {
+        const d = new Date(r.startDate);
+        return (d.getMonth() + 1) === m;
+      });
+    }
+    return list;
+  }, [allRequests, employeeSearch, monthFilter]);
 
   const tabs = [
     { key: 'pending', label: 'Pending', count: pending.length },
@@ -552,6 +574,35 @@ export default function LeaveApproval() {
               <option value="rejected">Rejected</option>
               <option value="cancelled">Cancelled</option>
             </select>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-white"
+            >
+              <option value="">All Months</option>
+              {['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'].map((m, i) => {
+                const monthNum = ((i + 3) % 12) + 1;
+                return <option key={m} value={monthNum}>{m}</option>;
+              })}
+            </select>
+            <input
+              type="text"
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              placeholder="Search employee..."
+              className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 bg-white w-44 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            {(employeeSearch || monthFilter) && (
+              <button
+                onClick={() => { setEmployeeSearch(''); setMonthFilter(''); }}
+                className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Clear
+              </button>
+            )}
+            <span className="text-xs text-slate-400 ml-auto">
+              {filteredRequests.length} record{filteredRequests.length !== 1 ? 's' : ''}
+            </span>
           </div>
 
           {allLoading ? <LoadingSpinner /> : (
@@ -570,7 +621,7 @@ export default function LeaveApproval() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {allRequests.length > 0 ? allRequests.map(r => (
+                  {filteredRequests.length > 0 ? filteredRequests.map(r => (
                     <tr key={r.id} className="hover:bg-slate-50">
                       <td className="px-4 py-2.5">
                         <p className="text-sm font-medium text-slate-700">{r.user?.name}</p>
@@ -614,7 +665,7 @@ export default function LeaveApproval() {
                   )) : (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
-                        No requests found for {getFYLabel(fyYear)}
+                        {employeeSearch || monthFilter ? 'No records match the current filters' : `No requests found for ${getFYLabel(fyYear)}`}
                       </td>
                     </tr>
                   )}
