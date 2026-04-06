@@ -353,6 +353,39 @@ router.put('/admin/types/:id', requireAdmin, asyncHandler(async (req, res) => {
 
 // ─── Leave Granter (Admin) ─────────────────────────────
 
+// GET /api/leave/admin/grants-overview?year=2025 — Table overview: all employees × all leave types
+router.get('/admin/grants-overview', requireAdmin, asyncHandler(async (req, res) => {
+  const fyYear = parseInt(req.query.year) || getFinancialYear();
+
+  const [leaveTypes, allUsers, grants, balances] = await Promise.all([
+    req.prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, defaultBalance: true } }),
+    req.prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, employeeId: true, department: true, confirmationDate: true, dateOfJoining: true, employmentStatus: true },
+      orderBy: { name: 'asc' },
+    }),
+    req.prisma.leaveGranter.findMany({
+      where: { fyYear },
+      select: { id: true, userId: true, leaveTypeId: true, totalGranted: true, probationAllowance: true, isLocked: true, notes: true, joiningMonth: true },
+    }),
+    req.prisma.leaveBalance.findMany({
+      where: { year: fyYear },
+      select: { userId: true, leaveTypeId: true, opening: true, total: true, used: true, balance: true },
+    }),
+  ]);
+
+  const grantMap = {};
+  grants.forEach(g => { if (!grantMap[g.userId]) grantMap[g.userId] = {}; grantMap[g.userId][g.leaveTypeId] = g; });
+  const balMap = {};
+  balances.forEach(b => { if (!balMap[b.userId]) balMap[b.userId] = {}; balMap[b.userId][b.leaveTypeId] = b; });
+
+  res.json({
+    leaveTypes,
+    employees: allUsers.map(u => ({ ...u, grants: grantMap[u.id] || {}, balances: balMap[u.id] || {} })),
+    fyYear,
+  });
+}));
+
 // GET /api/leave/admin/grants?year=2025 — List all leave grants
 router.get('/admin/grants', requireAdmin, asyncHandler(async (req, res) => {
   const fyYear = parseInt(req.query.year) || getFinancialYear();
