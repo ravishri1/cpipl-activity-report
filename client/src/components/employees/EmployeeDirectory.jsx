@@ -591,25 +591,6 @@ export default function EmployeeDirectory() {
         {/* Admin Actions */}
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="all">All Status</option>
-              <option value="active">Current</option>
-              <option value="notice_period">Notice Period</option>
-              <option value="separated">Resigned</option>
-              <option value="terminated">Terminated</option>
-              <option value="absconding">Left (No Intimation)</option>
-            </select>
-            <select
-              value={confirmationFilter}
-              onChange={e => setConfirmationFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="all">All Confirmation</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="probation">On Probation</option>
-            </select>
             <button onClick={handleExport} disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
               {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -659,6 +640,29 @@ export default function EmployeeDirectory() {
             <option key={d} value={d}>{d}</option>
           ))}
         </select>
+        {isAdmin && (
+          <>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700">
+              <option value="all">All Status</option>
+              <option value="active">Current</option>
+              <option value="notice_period">Notice Period</option>
+              <option value="separated">Resigned</option>
+              <option value="terminated">Terminated</option>
+              <option value="absconding">Left (No Intimation)</option>
+            </select>
+            <select
+              value={confirmationFilter}
+              onChange={e => setConfirmationFilter(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-700">
+              <option value="all">All Confirmation</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="probation">On Probation</option>
+            </select>
+          </>
+        )}
         <div className="flex items-center bg-white border border-slate-200 rounded-lg overflow-hidden">
           <button
             onClick={() => setViewMode('grid')}
