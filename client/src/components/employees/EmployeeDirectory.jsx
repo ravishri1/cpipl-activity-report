@@ -532,12 +532,13 @@ export default function EmployeeDirectory() {
   const [showImport, setShowImport] = useState(false);
   const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'notice_period' | 'separated' | 'terminated'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'notice_period' | 'separated' | 'terminated' | 'absconding'
+  const [confirmationFilter, setConfirmationFilter] = useState('all'); // 'all' | 'confirmed' | 'probation'
 
   const fetchData = useCallback(async () => {
     try {
       const params = { search, department, company };
-      if (isAdmin) params.status = statusFilter;
+      if (isAdmin) { params.status = statusFilter; params.confirmation = confirmationFilter; }
       const [empRes, deptRes] = await Promise.all([
         api.get('/users/directory', { params }),
         api.get('/users/departments'),
@@ -549,7 +550,7 @@ export default function EmployeeDirectory() {
     } finally {
       setLoading(false);
     }
-  }, [search, department, company, isAdmin, statusFilter]);
+  }, [search, department, company, isAdmin, statusFilter, confirmationFilter]);
 
   useEffect(() => {
     api.get('/companies').then((r) => setCompanies(r.data)).catch(() => {});
@@ -584,7 +585,7 @@ export default function EmployeeDirectory() {
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Users className="w-6 h-6 text-blue-600" />
           Employee Directory
-          <span className="text-sm font-normal text-slate-400 ml-1">({employees.length}{isAdmin && statusFilter !== 'all' ? ` · ${statusFilter.replace('_', ' ')}` : ''})</span>
+          <span className="text-sm font-normal text-slate-400 ml-1">({employees.length}{isAdmin && statusFilter !== 'all' ? ` · ${{ active: 'Current', notice_period: 'Notice Period', separated: 'Resigned', terminated: 'Terminated', absconding: 'Left' }[statusFilter] || statusFilter}` : ''}{isAdmin && confirmationFilter !== 'all' ? ` · ${confirmationFilter === 'probation' ? 'Probation' : 'Confirmed'}` : ''})</span>
         </h1>
 
         {/* Admin Actions */}
@@ -594,11 +595,20 @@ export default function EmployeeDirectory() {
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-              <option value="all">All Employees</option>
-              <option value="active">Active</option>
+              <option value="all">All Status</option>
+              <option value="active">Current</option>
               <option value="notice_period">Notice Period</option>
-              <option value="separated">Separated</option>
+              <option value="separated">Resigned</option>
               <option value="terminated">Terminated</option>
+              <option value="absconding">Left (No Intimation)</option>
+            </select>
+            <select
+              value={confirmationFilter}
+              onChange={e => setConfirmationFilter(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <option value="all">All Confirmation</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="probation">On Probation</option>
             </select>
             <button onClick={handleExport} disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">

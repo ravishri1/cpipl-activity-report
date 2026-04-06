@@ -44,6 +44,17 @@ function calendarToFYMonth(calMonth, calYear, fyYear) {
 }
 
 /**
+ * Get the calendar date when a grant becomes valid (joiningMonth start)
+ * joiningMonth: 1=Apr, 7=Oct, 12=Mar
+ */
+function getGrantStartDate(fyYear, joiningMonth) {
+  if (!joiningMonth || joiningMonth <= 1) return `${fyYear}-04-01`;
+  const calMonth = joiningMonth <= 9 ? joiningMonth + 3 : joiningMonth - 9;
+  const calYear = joiningMonth <= 9 ? fyYear : fyYear + 1;
+  return `${calYear}-${String(calMonth).padStart(2, '0')}-01`;
+}
+
+/**
  * Calculate months elapsed in a financial year (for monthly accrual)
  * April = month 1, March = month 12
  * If joiningMonth is provided, only count from joining month onwards
@@ -442,6 +453,20 @@ async function applyLeave(userId, data, prisma) {
   const actualUsed = await reconcileUsed(balance, prisma);
 
   const joiningMonth = balance.joiningMonth || null;
+
+  // Bucket validation: monthly-accrual leaves can only be used from the grant start month
+  // e.g. an October joiner cannot apply PL for July–September of the same FY
+  if (joiningMonth && joiningMonth > 1 && leaveType.accrualType === 'monthly') {
+    const grantStart = getGrantStartDate(fyYear, joiningMonth);
+    if (startDate < grantStart) {
+      const monthName = new Date(grantStart).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+      throw new Error(
+        `${leaveType.name} leave can only be applied from ${monthName} onwards (your grant start date). ` +
+        `Retroactive applications before the joining month are not allowed.`
+      );
+    }
+  }
+
   // For comp-off (accrualType 'none' with defaultBalance 0), credits come from
   // approved CompOffRequests which directly update LeaveBalance.total.
   // Use stored total instead of recalculating from accrual formula.
