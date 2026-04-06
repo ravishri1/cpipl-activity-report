@@ -655,10 +655,9 @@ router.get('/admin/dashboard', requireAdmin, asyncHandler(async (req, res) => {
     requestsByUser[r.userId].push(r);
   }
 
-  // 4. Get comp-off balances + requests for the calendar year
-  const calYear = new Date().getFullYear();
+  // 4. Get comp-off balances + requests for the financial year
   const compOffBalances = await req.prisma.compOffBalance.findMany({
-    where: { userId: { in: employeeIds }, year: calYear },
+    where: { userId: { in: employeeIds }, year: fyYear },
   });
   const compOffBalByUser = {};
   for (const c of compOffBalances) {
