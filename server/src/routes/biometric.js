@@ -592,9 +592,21 @@ router.put('/mappings/:userId', authenticate, requireAdmin, asyncHandler(async (
 }));
 
 // POST /api/biometric/rematch — re-run matching on all unmatched punches
-router.post('/rematch', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+router.post('/rematch', asyncHandler(async (req, res) => {
+  const agentKey = req.headers['x-agent-key'] || req.body?.agentKey;
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
+  if (agentKey !== expectedKey) {
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'team_lead')) {
+      return res.status(401).json({ error: 'Agent key or admin login required' });
+    }
+  }
+
+  const { enrollNumber } = req.body; // optional — limit to one enrollment number
+  const where = { matchStatus: 'unmatched' };
+  if (enrollNumber) where.enrollNumber = String(enrollNumber);
+
   const unmatched = await req.prisma.biometricPunch.findMany({
-    where: { matchStatus: 'unmatched' },
+    where,
     select: { id: true, enrollNumber: true },
   });
 
