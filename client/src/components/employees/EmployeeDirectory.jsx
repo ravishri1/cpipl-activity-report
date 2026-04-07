@@ -524,9 +524,11 @@ export default function EmployeeDirectory() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('all');
   const [company, setCompany] = useState('all');
+  const [location, setLocation] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
@@ -538,19 +540,22 @@ export default function EmployeeDirectory() {
   const fetchData = useCallback(async () => {
     try {
       const params = { search, department, company };
+      if (location !== 'all') params.location = location;
       if (isAdmin) { params.status = statusFilter; params.confirmation = confirmationFilter; }
-      const [empRes, deptRes] = await Promise.all([
+      const [empRes, deptRes, locRes] = await Promise.all([
         api.get('/users/directory', { params }),
         api.get('/users/departments'),
+        api.get('/users/locations'),
       ]);
       setEmployees(empRes.data.users || empRes.data);
       setDepartments(deptRes.data);
+      setLocations(locRes.data);
     } catch (err) {
       console.error('Directory error:', err);
     } finally {
       setLoading(false);
     }
-  }, [search, department, company, isAdmin, statusFilter, confirmationFilter]);
+  }, [search, department, company, location, isAdmin, statusFilter, confirmationFilter]);
 
   useEffect(() => {
     api.get('/companies').then((r) => setCompanies(r.data)).catch(() => {});
@@ -638,6 +643,16 @@ export default function EmployeeDirectory() {
           <option value="all">All Departments</option>
           {departments.map((d) => (
             <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+        <select
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          <option value="all">All Locations</option>
+          {locations.map((l) => (
+            <option key={l} value={l}>{l}</option>
           ))}
         </select>
         {isAdmin && (

@@ -210,6 +210,7 @@ router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async
   }
   if (req.query.department && req.query.department !== 'all') where.department = req.query.department;
   if (req.query.company && req.query.company !== 'all') where.companyId = parseInt(req.query.company);
+  if (req.query.location && req.query.location !== 'all') where.location = req.query.location;
   if (req.query.search) {
     where.OR = [
       { name: { contains: req.query.search } },
@@ -237,12 +238,22 @@ router.get('/directory', authenticate, requireActiveEmployee, asyncHandler(async
   res.json({ users: result });
 }));
 
-// GET /api/users/departments — List unique departments
+// GET /api/users/departments — List unique departments (excludes 'General' placeholder)
 router.get('/departments', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
   const departments = await req.prisma.user.findMany({
-    where: { isActive: true }, select: { department: true }, distinct: ['department'], orderBy: { department: 'asc' },
+    where: { isActive: true, department: { not: 'General' } },
+    select: { department: true }, distinct: ['department'], orderBy: { department: 'asc' },
   });
   res.json(departments.map((d) => d.department));
+}));
+
+// GET /api/users/locations — List unique office locations
+router.get('/locations', authenticate, requireActiveEmployee, asyncHandler(async (req, res) => {
+  const rows = await req.prisma.user.findMany({
+    where: { isActive: true, location: { not: null } },
+    select: { location: true }, distinct: ['location'], orderBy: { location: 'asc' },
+  });
+  res.json(rows.map((r) => r.location).filter(Boolean));
 }));
 
 // GET /api/users/org-chart — Org chart data (reporting hierarchy)
