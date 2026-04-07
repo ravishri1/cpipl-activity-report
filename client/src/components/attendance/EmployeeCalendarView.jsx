@@ -682,6 +682,29 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
                                   </td>
                                   <td className="py-2 text-slate-500">{selectedDay.notes || '-'}</td>
                                 </tr>
+                                {selectedDay.workType && (
+                                  <tr className="border-t border-slate-50">
+                                    <td className="py-2 text-slate-400">Work Mode</td>
+                                    <td className="py-2">
+                                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                        selectedDay.workType === 'wfh'          ? 'bg-blue-100 text-blue-700' :
+                                        selectedDay.workType === 'field_work'   ? 'bg-amber-100 text-amber-700' :
+                                        selectedDay.workType === 'client_visit' ? 'bg-purple-100 text-purple-700' :
+                                        selectedDay.workType === 'on_duty'      ? 'bg-teal-100 text-teal-700' :
+                                        'bg-slate-100 text-slate-700'
+                                      }`}>
+                                        {{office:'In Office', wfh:'WFH', field_work:'Field Work', client_visit:'Client Visit', on_duty:'On Duty'}[selectedDay.workType] || selectedDay.workType}
+                                      </span>
+                                      {selectedDay.workLocation && <span className="ml-1 text-slate-500">· {selectedDay.workLocation}</span>}
+                                    </td>
+                                  </tr>
+                                )}
+                                {selectedDay.checkInSource === 'portal' && (
+                                  <tr className="border-t border-slate-50">
+                                    <td className="py-2 text-slate-400">Check-in Source</td>
+                                    <td className="py-2 text-slate-500">Portal (self-reported)</td>
+                                  </tr>
+                                )}
                               </tbody>
                             </table>
                           </div>

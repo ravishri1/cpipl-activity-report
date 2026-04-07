@@ -593,6 +593,9 @@ async function getEmployeeCalendar(userId, month, prisma) {
       workHours: att?.workHours || null,
       totalWorkHrsRaw,          // First In to Last Out (simple diff, no rules)
       notes: att?.notes || null,
+      checkInSource: att?.checkInSource || null,
+      workType: att?.workType || null,
+      workLocation: att?.workLocation || null,
       lateIn,
       lateInMinutes,            // raw minutes late from shift start
       earlyOut,
