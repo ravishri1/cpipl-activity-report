@@ -667,16 +667,18 @@ router.post('/recalculate-all', asyncHandler(async (req, res) => {
     }
   }
 
-  const { month } = req.body; // "YYYY-MM"
+  const { month, startDay, endDay } = req.body; // "YYYY-MM", optional day range
   if (!month || !/^\d{4}-\d{2}$/.test(month)) throw badRequest('month required in YYYY-MM format');
 
   const [year, mon] = month.split('-').map(Number);
   const lastDay = new Date(year, mon, 0).getDate();
+  const fromDay = startDay ? Math.max(1, parseInt(startDay)) : 1;
+  const toDay = endDay ? Math.min(lastDay, parseInt(endDay)) : lastDay;
 
   let totalRecalculated = 0;
   const dailyResults = [];
 
-  for (let day = 1; day <= lastDay; day++) {
+  for (let day = fromDay; day <= toDay; day++) {
     const date = `${month}-${String(day).padStart(2, '0')}`;
 
     const userIds = await req.prisma.biometricPunch.findMany({
