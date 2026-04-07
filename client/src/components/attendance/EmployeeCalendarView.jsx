@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../../utils/api';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
@@ -33,7 +33,69 @@ const statusConfig = {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function EmployeeCalendarView({ userId, employeeName: employeeNameProp, onBack, selfView = false }) {
+function EmployeeSelector({ employees, currentUserId, onEmployeeChange }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const current = employees.find(e => e.id === currentUserId);
+
+  const filtered = query.trim()
+    ? employees.filter(e =>
+        e.name?.toLowerCase().includes(query.toLowerCase()) ||
+        e.employeeId?.toLowerCase().includes(query.toLowerCase()) ||
+        e.department?.toLowerCase().includes(query.toLowerCase())
+      )
+    : employees;
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => { setOpen(o => !o); setQuery(''); }}
+        className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm min-w-[200px] max-w-[280px]"
+      >
+        <span className="flex-1 text-left truncate">{current?.name || 'Select Employee'}</span>
+        <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-72">
+          <div className="p-2 border-b border-slate-100">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search name, ID, department..."
+              className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <ul className="max-h-64 overflow-y-auto py-1">
+            {filtered.length === 0 && <li className="px-4 py-2 text-sm text-slate-400">No results</li>}
+            {filtered.map(emp => (
+              <li key={emp.id}>
+                <button
+                  onClick={() => { onEmployeeChange(emp.id); setOpen(false); }}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 flex items-center gap-2 ${emp.id === currentUserId ? 'bg-blue-50 font-medium text-blue-700' : 'text-slate-700'}`}
+                >
+                  <span className="flex-1">{emp.name}</span>
+                  {emp.employeeId && <span className="text-xs text-slate-400">{emp.employeeId}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function EmployeeCalendarView({ userId, employeeName: employeeNameProp, onBack, selfView = false, employees = [], onEmployeeChange }) {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -232,14 +294,18 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
     <div className="space-y-4">
       {/* Header — hide for self view (already inside My Attendance tabs) */}
       {!selfView && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 border border-slate-200 bg-white" title="Back to team view">
             <ArrowLeft className="w-4 h-4 text-slate-600" />
           </button>
-          <div className="flex-1">
+          <div>
             <h2 className="text-lg font-bold text-slate-800">Attendance Info</h2>
-            <p className="text-sm text-slate-500">{employeeNameProp || data?.employeeName || 'Employee'}</p>
           </div>
+          {employees.length > 0 && onEmployeeChange ? (
+            <EmployeeSelector employees={employees} currentUserId={userId} onEmployeeChange={onEmployeeChange} />
+          ) : (
+            <p className="text-sm text-slate-500">{employeeNameProp || data?.employeeName || 'Employee'}</p>
+          )}
         </div>
       )}
 
