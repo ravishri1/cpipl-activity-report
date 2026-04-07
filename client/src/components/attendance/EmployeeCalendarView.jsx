@@ -226,15 +226,15 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
 
   const shiftCode = data?.shift?.name ? getShiftCode(data.shift.name) : '';
 
-  // Cell background — only penalty dates (complete groups of 3 late marks) get yellow
+  // Cell background
   const getCellBg = (cell) => {
     if (!cell) return '';
     // Regularization approved → blue
     if (cell.regularizationStatus === 'approved') return 'bg-blue-50';
-    // Regularization pending → light amber
-    if (cell.regularizationStatus === 'pending') return 'bg-amber-50/60';
-    // Penalty date (part of a complete group of 3 unregularized late marks) → light yellow
-    if (penaltyDates.has(cell.date)) return 'bg-amber-50';
+    // Regularization pending → amber
+    if (cell.regularizationStatus === 'pending') return 'bg-amber-100';
+    // Any day needing regularization (late/short hours, no approved reg) → light yellow
+    if (cell.needsRegularization) return 'bg-yellow-50';
     // Today = white background (day still in progress)
     if (cell.date === today) return 'bg-white';
     return (statusConfig[cell.status] || statusConfig.future).bg;
@@ -244,8 +244,8 @@ export default function EmployeeCalendarView({ userId, employeeName: employeeNam
   const getCellBorder = (cell) => {
     if (!cell) return '';
     if (cell.regularizationStatus === 'approved') return 'border-l-[3px] border-l-blue-400';
-    if (cell.regularizationStatus === 'pending') return 'border-l-[3px] border-l-amber-400';
-    // Only penalty dates (complete group of 3) get amber border
+    if (cell.regularizationStatus === 'pending') return 'border-l-[3px] border-l-amber-500';
+    if (cell.needsRegularization) return 'border-l-[3px] border-l-yellow-400';
     if (penaltyDates.has(cell.date)) return 'border-l-[3px] border-l-amber-400';
     return '';
   };
