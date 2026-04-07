@@ -20,7 +20,7 @@ export default function TeamManagement() {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+  const [form, setForm] = useState({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: '', employeeType: 'internal', branchId: '', costCenterId: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [workspaceResult, setWorkspaceResult] = useState(null);
@@ -43,7 +43,7 @@ export default function TeamManagement() {
   }, []);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+    setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: '', employeeType: 'internal', branchId: '', costCenterId: '' });
     setEditUser(null);
     setShowForm(false);
     setError('');
@@ -79,7 +79,7 @@ export default function TeamManagement() {
           setWorkspaceResult({ ...res.data.workspaceAccount, userName: res.data.name });
           setShowForm(false);
           setEditUser(null);
-          setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: 'General', employeeType: 'internal', branchId: '', costCenterId: '' });
+          setForm({ name: '', email: '', personalEmail: '', phone: '', role: 'member', department: '', employeeType: 'internal', branchId: '', costCenterId: '' });
           setError('');
         } else {
           resetForm();

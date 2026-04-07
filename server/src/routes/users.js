@@ -518,7 +518,7 @@ router.post('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler
 
   const createData = {
     name: normalizeName(name), email: normalizedEmail, password: hashedPassword,
-    role: role || 'member', department: department || 'General',
+    role: role || 'member', department: department || '',
     companyId: companyId ? parseInt(companyId) : null,
     employeeType,
   };

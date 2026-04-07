@@ -500,7 +500,7 @@ export default function ShiftRoster() {
                           {emp.name}
                         </div>
                         <div className="text-gray-500 text-[9px] truncate max-w-[170px]">
-                          {emp.designation || ''}{emp.department && emp.department !== 'General' ? ` · ${emp.department}` : ''}{emp.branch ? ` · ${emp.branch}` : ''}
+                          {emp.designation || ''}{emp.department ? ` · ${emp.department}` : ''}{emp.branch ? ` · ${emp.branch}` : ''}
                         </div>
                       </td>
                       {/* WO count */}

@@ -108,7 +108,7 @@ router.post('/import-users', authenticate, requireActiveEmployee, requireAdmin, 
     const newUser = await req.prisma.user.create({
       data: {
         name: normalizeName(u.name), email: u.email, password: hashedPassword,
-        role: 'member', department: u.department || 'General',
+        role: 'member', department: u.department || '',
         googleId: u.googleId || null, importedFromGoogle: true,
       },
     });

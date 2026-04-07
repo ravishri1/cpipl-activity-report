@@ -120,7 +120,7 @@ async function fetchGoogleWorkspaceUsers(domain) {
       googleId: u.id,
       name: u.name?.fullName || `${u.name?.givenName || ''} ${u.name?.familyName || ''}`.trim(),
       email: u.primaryEmail,
-      department: u.orgUnitPath?.replace(/^\//, '') || 'General',
+      department: u.orgUnitPath?.replace(/^\//, '') || '',
       isActive: !u.suspended,
       photo: u.thumbnailPhotoUrl || null,
     }));

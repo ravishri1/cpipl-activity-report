@@ -246,7 +246,7 @@ router.post('/execute', authenticate, requireAdmin, asyncHandler(async (req, res
         const bcrypt = require('bcryptjs');
         const defaultPass = await bcrypt.hash('Welcome@123', 10);
         const newUser = await req.prisma.user.create({
-          data: { ...data, password: defaultPass, role: data.role || 'member', department: data.department || 'General', companyId: companyId ? parseInt(companyId) : null },
+          data: { ...data, password: defaultPass, role: data.role || 'member', department: data.department || '', companyId: companyId ? parseInt(companyId) : null },
         });
         emailMap[newUser.email.toLowerCase()] = newUser;
         if (newUser.name) nameMap[newUser.name.toLowerCase().trim()] = newUser;

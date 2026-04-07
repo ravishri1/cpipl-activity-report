@@ -105,7 +105,7 @@ router.post('/clerk-sync', authenticate, asyncHandler(async (req, res) => {
         email,
         password: '',
         role: 'member',
-        department: isInternal ? 'General' : 'External',
+        department: isInternal ? '' : 'External',
         googleId: clerkId,
         importedFromGoogle: isInternal,
         isActive: true,

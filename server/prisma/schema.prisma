@@ -14,7 +14,7 @@ model User {
   email              String   @unique
   password           String
   role               String   @default("member") // admin, team_lead, member
-  department         String   @default("General")
+  department         String   @default("")
   isActive           Boolean  @default(true)
   employmentStatus   String   @default("active") // active, notice_period, separated, terminated, absconding
   isHibernated              Boolean  @default(false)
