@@ -532,7 +532,7 @@ export default function EmployeeDirectory() {
   const [showImport, setShowImport] = useState(false);
   const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'notice_period' | 'separated' | 'terminated' | 'absconding'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'notice_period' | 'separated' | 'terminated' | 'absconding'
   const [confirmationFilter, setConfirmationFilter] = useState('all'); // 'all' | 'confirmed' | 'probation'
 
   const fetchData = useCallback(async () => {
