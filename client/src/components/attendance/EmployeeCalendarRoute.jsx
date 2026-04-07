@@ -5,7 +5,7 @@ import EmployeeCalendarView from './EmployeeCalendarView';
 export default function EmployeeCalendarRoute() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { data: employees } = useFetch('/api/users', []);
+  const { data: employees } = useFetch('/users', []);
 
   return (
     <EmployeeCalendarView
