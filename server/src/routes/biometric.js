@@ -703,6 +703,49 @@ router.post('/recalculate-all', asyncHandler(async (req, res) => {
   res.json({ month, totalRecalculated, days: dailyResults.length, details: dailyResults });
 }));
 
+// GET /api/biometric/attendance-coverage?month=YYYY-MM — check how many employees have attendance data
+router.get('/attendance-coverage', asyncHandler(async (req, res) => {
+  const agentKey = req.headers['x-agent-key'];
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
+  if (agentKey !== expectedKey) {
+    if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'team_lead')) {
+      return res.status(401).json({ error: 'Agent key or admin login required' });
+    }
+  }
+
+  const { month } = req.query;
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) throw badRequest('month required in YYYY-MM format');
+
+  const employees = await req.prisma.user.findMany({
+    where: { status: { in: ['active', 'on_notice'] } },
+    select: { id: true, name: true, employeeId: true },
+  });
+
+  const records = await req.prisma.attendance.findMany({
+    where: { date: { startsWith: month } },
+    select: { userId: true, date: true, checkIn: true, status: true },
+  });
+
+  const byUser = {};
+  records.forEach(r => {
+    if (!byUser[r.userId]) byUser[r.userId] = { present: 0, withCheckIn: 0, total: 0 };
+    byUser[r.userId].total++;
+    if (r.status === 'present' || r.status === 'half_day' || r.status === 'late') byUser[r.userId].present++;
+    if (r.checkIn) byUser[r.userId].withCheckIn++;
+  });
+
+  const summary = employees.map(e => ({
+    employeeId: e.employeeId,
+    name: e.name,
+    present: byUser[e.id]?.present || 0,
+    withCheckIn: byUser[e.id]?.withCheckIn || 0,
+    totalRecords: byUser[e.id]?.total || 0,
+  }));
+
+  const withData = summary.filter(e => e.present > 0).length;
+  res.json({ month, totalEmployees: employees.length, withPresent: withData, noData: employees.length - withData, employees: summary });
+}));
+
 // POST /api/biometric/purge-neon — delete all old BiometricPunch from Neon (admin only)
 // Data is safe in cpserver SQL. This just frees Neon space.
 router.post('/purge-neon', authenticate, requireAdmin, asyncHandler(async (req, res) => {
