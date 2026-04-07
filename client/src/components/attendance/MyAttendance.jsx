@@ -17,7 +17,186 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
+  Building2,
+  Home,
+  MapPin,
+  Briefcase,
+  ClipboardList,
+  X,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
+
+const WORK_TYPES = [
+  { value: 'office',       label: 'In Office',      icon: Building2,    desc: 'Working from the office' },
+  { value: 'wfh',          label: 'Work from Home', icon: Home,         desc: 'Requires approved WFH request' },
+  { value: 'field_work',   label: 'Field Work',     icon: MapPin,       desc: 'Working outside office — location required' },
+  { value: 'client_visit', label: 'Client Visit',   icon: Briefcase,    desc: 'At a client location — location required' },
+  { value: 'on_duty',      label: 'On Duty',        icon: ClipboardList, desc: 'Official duty travel or assignment' },
+];
+
+const WORK_TYPE_BADGES = {
+  office:       { bg: 'bg-slate-100',  text: 'text-slate-700',  label: 'In Office' },
+  wfh:          { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'WFH' },
+  field_work:   { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Field Work' },
+  client_visit: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Client Visit' },
+  on_duty:      { bg: 'bg-teal-100',   text: 'text-teal-700',   label: 'On Duty' },
+};
+
+function CheckInModal({ onClose, onSuccess }) {
+  const [workType, setWorkType] = useState('office');
+  const [workLocation, setWorkLocation] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [wfhStatus, setWfhStatus] = useState(null); // null | {approved, request}
+  const [wfhChecking, setWfhChecking] = useState(false);
+
+  const needsLocation = workType === 'field_work' || workType === 'client_visit';
+  const needsNotes = workType === 'on_duty';
+
+  // Check WFH approval when user selects WFH
+  useEffect(() => {
+    if (workType !== 'wfh') { setWfhStatus(null); return; }
+    setWfhChecking(true);
+    api.get('/wfh/check-today')
+      .then(r => setWfhStatus(r.data))
+      .catch(() => setWfhStatus({ approved: false, request: null }))
+      .finally(() => setWfhChecking(false));
+  }, [workType]);
+
+  const handleSubmit = async () => {
+    if (workType === 'wfh' && !wfhStatus?.approved) return;
+    if (needsLocation && !workLocation.trim()) { setError('Location is required.'); return; }
+    if (needsNotes && !notes.trim()) { setError('Please describe your on-duty work.'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.post('/attendance/check-in', { workType, workLocation: workLocation.trim() || undefined, notes: notes.trim() || undefined });
+      onSuccess();
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Check-in failed.';
+      if (msg === 'NO_WFH_APPROVAL') {
+        setError('You do not have an approved WFH request for today. Please apply through the WFH Requests section.');
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-base font-semibold text-slate-800">How are you working today?</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+
+        {/* Work Type Options */}
+        <div className="px-5 py-4 space-y-2">
+          {WORK_TYPES.map(({ value, label, icon: Icon, desc }) => (
+            <button
+              key={value}
+              onClick={() => { setWorkType(value); setError(null); setWorkLocation(''); setNotes(''); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                workType === value ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-slate-200 bg-white'
+              }`}
+            >
+              <Icon className={`w-5 h-5 shrink-0 ${workType === value ? 'text-blue-600' : 'text-slate-400'}`} />
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${workType === value ? 'text-blue-800' : 'text-slate-700'}`}>{label}</p>
+                <p className="text-xs text-slate-400 truncate">{desc}</p>
+              </div>
+              <div className={`w-4 h-4 rounded-full border-2 shrink-0 ${workType === value ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                {workType === value && <div className="w-full h-full rounded-full bg-white scale-50" />}
+              </div>
+            </button>
+          ))}
+
+          {/* WFH Approval Status */}
+          {workType === 'wfh' && (
+            <div className={`mt-2 px-4 py-3 rounded-xl text-sm ${wfhChecking ? 'bg-slate-50' : wfhStatus?.approved ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+              {wfhChecking && <span className="text-slate-500">Checking approval...</span>}
+              {!wfhChecking && wfhStatus?.approved && (
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>WFH approved{wfhStatus.request?.reviewer?.name ? ` by ${wfhStatus.request.reviewer.name}` : ''}. You can check in.</span>
+                </div>
+              )}
+              {!wfhChecking && !wfhStatus?.approved && (
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2 text-red-700">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      {wfhStatus?.request ? 'Your WFH request is pending approval.' : 'No WFH request found for today.'}
+                      {' '}You cannot check in as WFH without approval.
+                    </span>
+                  </div>
+                  <a href="/attendance-regularization" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium">
+                    <ExternalLink className="w-3 h-3" /> Apply for WFH Request
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Location input for Field Work / Client Visit */}
+          {needsLocation && (
+            <div className="mt-1">
+              <label className="text-xs font-medium text-slate-600 mb-1 block">
+                {workType === 'client_visit' ? 'Client Name & Location *' : 'Work Location *'}
+              </label>
+              <input
+                type="text"
+                value={workLocation}
+                onChange={e => { setWorkLocation(e.target.value); setError(null); }}
+                placeholder={workType === 'client_visit' ? 'e.g. ABC Corp, MG Road, Lucknow' : 'e.g. Warehouse, Gomti Nagar'}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          )}
+
+          {/* Reason for On Duty */}
+          {needsNotes && (
+            <div className="mt-1">
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Duty Description *</label>
+              <textarea
+                value={notes}
+                onChange={e => { setNotes(e.target.value); setError(null); }}
+                placeholder="e.g. Visit to Delhi branch for stock audit"
+                rows={2}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-2 px-5 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading || (workType === 'wfh' && (!wfhStatus?.approved || wfhChecking))}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <LogIn className="w-4 h-4" />
+            {loading ? 'Checking in...' : 'Check In'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const statusConfig = {
   present: { color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2, label: 'Present' },
@@ -37,6 +216,7 @@ export default function MyAttendance() {
   const [actionLoading, setActionLoading] = useState(false);
   const [elapsed, setElapsed] = useState(null);
   const [view, setView] = useState('calendar'); // 'list' or 'calendar'
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
   const timerRef = useRef(null);
 
   const fetchData = async () => {
@@ -83,16 +263,9 @@ export default function MyAttendance() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleCheckIn = async () => {
-    setActionLoading(true);
-    try {
-      await api.post('/attendance/check-in');
-      await fetchData();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Check-in failed.');
-    } finally {
-      setActionLoading(false);
-    }
+  const handleCheckInSuccess = async () => {
+    setShowCheckInModal(false);
+    await fetchData();
   };
 
   const handleCheckOut = async () => {
@@ -135,6 +308,10 @@ export default function MyAttendance() {
 
   return (
     <div className="space-y-6">
+      {showCheckInModal && (
+        <CheckInModal onClose={() => setShowCheckInModal(false)} onSuccess={handleCheckInSuccess} />
+      )}
+
       <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
         <Clock className="w-6 h-6 text-blue-600" />
         My Attendance
@@ -178,15 +355,21 @@ export default function MyAttendance() {
           </div>
 
           {/* Action button */}
-          <div>
+          <div className="flex flex-col items-end gap-2">
+            {/* Work type badge (shown after check-in) */}
+            {today?.workType && WORK_TYPE_BADGES[today.workType] && (
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${WORK_TYPE_BADGES[today.workType].bg} ${WORK_TYPE_BADGES[today.workType].text}`}>
+                {WORK_TYPE_BADGES[today.workType].label}
+                {today.workLocation && ` · ${today.workLocation}`}
+              </span>
+            )}
             {notCheckedIn && (
               <button
-                onClick={handleCheckIn}
-                disabled={actionLoading}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+                onClick={() => setShowCheckInModal(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-colors shadow-sm"
               >
                 <LogIn className="w-5 h-5" />
-                {actionLoading ? 'Checking in...' : 'Check In'}
+                Check In
               </button>
             )}
             {isCheckedIn && (

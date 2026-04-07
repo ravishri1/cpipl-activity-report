@@ -10,6 +10,20 @@ router.use(requireActiveEmployee);
 
 function isAdminRole(u) { return ['admin', 'sub_admin', 'team_lead'].includes(u.role); }
 
+// ── Employee: Check today's WFH approval status ───────────────────────────────
+router.get('/check-today', asyncHandler(async (req, res) => {
+  const todayStr = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+  const wfh = await req.prisma.wFHRequest.findUnique({
+    where: { userId_date: { userId: req.user.id, date: todayStr } },
+    include: { reviewer: { select: { name: true } } },
+  });
+  res.json({
+    date: todayStr,
+    approved: wfh?.status === 'approved',
+    request: wfh || null,
+  });
+}));
+
 // ── Employee: Request WFH ─────────────────────────────────────────────────────
 router.post('/', asyncHandler(async (req, res) => {
   const { date, reason } = req.body;

@@ -444,6 +444,9 @@ model Attendance {
   workHours Float?                              // auto-calc from checkIn/checkOut
   ipAddress String?
   notes     String?
+  checkInSource  String?                            // "biometric" | "portal"
+  workType       String?                            // "office" | "wfh" | "field_work" | "client_visit" | "on_duty"
+  workLocation   String?                            // for field_work / client_visit
   session1       String?                            // "P", "A", "L" — First session status (admin override)
   session2       String?                            // "P", "A", "L" — Second session status (admin override)
   adminOverride  Boolean   @default(false)          // Whether admin manually set this status

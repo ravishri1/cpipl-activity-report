@@ -16,9 +16,30 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireActiveEmployee);
 
-// POST /api/attendance/check-in — Record check-in
+// POST /api/attendance/check-in — Record check-in (portal)
 router.post('/check-in', authenticate, asyncHandler(async (req, res) => {
-  const record = await checkIn(req.user.id, req.ip, req.body.notes, req.prisma);
+  const { workType, workLocation, notes } = req.body;
+
+  const VALID_TYPES = ['office', 'wfh', 'field_work', 'client_visit', 'on_duty'];
+  if (workType && !VALID_TYPES.includes(workType)) throw badRequest('Invalid work type.');
+
+  // WFH requires approved WFH request for today
+  if (workType === 'wfh') {
+    const todayStr = new Date(Date.now() + 330 * 60 * 1000).toISOString().split('T')[0];
+    const wfhReq = await req.prisma.wFHRequest.findUnique({
+      where: { userId_date: { userId: req.user.id, date: todayStr } },
+    });
+    if (!wfhReq || wfhReq.status !== 'approved') {
+      throw badRequest('NO_WFH_APPROVAL');
+    }
+  }
+
+  // Field work and client visits require a location
+  if ((workType === 'field_work' || workType === 'client_visit') && !workLocation?.trim()) {
+    throw badRequest('Location is required for field work and client visits.');
+  }
+
+  const record = await checkIn(req.user.id, req.ip, notes, workType, workLocation?.trim() || null, 'portal', req.prisma);
   res.json(record);
 }));
 

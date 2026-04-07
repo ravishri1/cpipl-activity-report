@@ -11,7 +11,7 @@ function getTodayDate() {
 /**
  * Check-in for a user — creates an Attendance record for today
  */
-async function checkIn(userId, ipAddress, notes, prisma) {
+async function checkIn(userId, ipAddress, notes, workType, workLocation, source, prisma) {
   const today = getTodayDate();
 
   // Check if already checked in today
@@ -19,10 +19,8 @@ async function checkIn(userId, ipAddress, notes, prisma) {
     where: { userId_date: { userId, date: today } },
   });
 
-  if (existing) {
-    if (existing.checkIn) {
-      throw new Error('Already checked in today.');
-    }
+  if (existing && existing.checkIn) {
+    throw new Error('Already checked in today.');
   }
 
   const record = await prisma.attendance.upsert({
@@ -32,6 +30,9 @@ async function checkIn(userId, ipAddress, notes, prisma) {
       status: 'present',
       ipAddress: ipAddress || null,
       notes: notes || null,
+      checkInSource: source || null,
+      workType: workType || null,
+      workLocation: workLocation || null,
     },
     create: {
       userId,
@@ -40,6 +41,9 @@ async function checkIn(userId, ipAddress, notes, prisma) {
       status: 'present',
       ipAddress: ipAddress || null,
       notes: notes || null,
+      checkInSource: source || null,
+      workType: workType || null,
+      workLocation: workLocation || null,
     },
   });
 
