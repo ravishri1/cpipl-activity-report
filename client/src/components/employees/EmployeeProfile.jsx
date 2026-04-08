@@ -12,6 +12,7 @@ import {
   Globe, UserCheck, Clock, BadgeCheck, Landmark, Hash, BookOpen,
   Camera, Loader2, History, ChevronLeft, FolderOpen, Upload,
   Trash2, ExternalLink, Image as ImageIcon, File, ShieldCheck, KeyRound, Eye, EyeOff, RefreshCw,
+  IndianRupee,
 } from 'lucide-react';
 
 const TABS = [
@@ -687,6 +688,30 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
           )}
         </Section>
       </div>
+
+      {/* Salary Quick-Link (admin only) */}
+      {canEdit && !isSelf && (
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <IndianRupee className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">Salary Configuration</p>
+              <p className="text-xs text-emerald-600">Set CTC, components, and revision history for this employee</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/admin/salary-setup" className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors">
+              <IndianRupee className="w-3.5 h-3.5" />
+              Manage Salary
+            </Link>
+            <Link to="/admin/payroll" className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors">
+              Payroll
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Previous Employment Section */}
       <Section title="Previous Employment" icon={Briefcase}>

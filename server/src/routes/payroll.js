@@ -144,7 +144,7 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
     where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd } },
   });
   const separations = await req.prisma.separation.count({
-    where: { lastWorkingDay: { gte: monthStart, lte: monthEnd } },
+    where: { lastWorkingDate: { gte: monthStart, lte: monthEnd } },
   });
   const exclusions = await req.prisma.user.count({
     where: { isActive: true, salaryStructure: null },
@@ -158,11 +158,11 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const published = payslips.filter(p => p.status === 'published').length;
   const draft = payslips.filter(p => p.status === 'draft').length;
 
-  // Settled employees (separated in this month with last working day)
+  // Settled employees (separated in this month with last working date)
   const settledEmployees = await req.prisma.separation.findMany({
-    where: { lastWorkingDay: { gte: monthStart, lte: monthEnd } },
+    where: { lastWorkingDate: { gte: monthStart, lte: monthEnd } },
     include: { user: { select: { id: true, name: true, employeeId: true, driveProfilePhotoUrl: true } } },
-    orderBy: { lastWorkingDay: 'desc' },
+    orderBy: { lastWorkingDate: 'desc' },
   });
 
   // Negative salary payslips (netPay < 0)
@@ -199,7 +199,7 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       negativeSalary: negativeSalaryUsers,
       settledEmployees: settledEmployees.map(s => ({
         id: s.user?.id, name: s.user?.name, employeeId: s.user?.employeeId,
-        photo: s.user?.driveProfilePhotoUrl, lastWorkingDay: s.lastWorkingDay,
+        photo: s.user?.driveProfilePhotoUrl, lastWorkingDay: s.lastWorkingDate,
       })),
       payoutPending,
     },
@@ -279,13 +279,72 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const attendances = await req.prisma.attendance.findMany({
       where: { userId: sal.userId, date: { startsWith: month } },
     });
-    let presentDays = 0, lopDays = 0;
-    for (const att of attendances) {
-      if (att.status === 'present' || att.status === 'half_day') {
-        presentDays += att.status === 'half_day' ? 0.5 : 1;
-      } else if (att.status === 'absent') { lopDays++; }
+
+    // Fetch approved leaves for this month (prevent them from becoming LOP)
+    const approvedLeaves = await req.prisma.leaveRequest.findMany({
+      where: {
+        userId: sal.userId, status: 'approved',
+        startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
+        endDate: { gte: `${month}-01` },
+      },
+      select: { startDate: true, endDate: true },
+    });
+    const leaveDatesSet = new Set();
+    for (const lr of approvedLeaves) {
+      const cur = new Date(lr.startDate + 'T00:00:00');
+      const end = new Date(lr.endDate + 'T00:00:00');
+      while (cur <= end) {
+        const ds = cur.toISOString().slice(0, 10);
+        if (ds.startsWith(month)) leaveDatesSet.add(ds);
+        cur.setDate(cur.getDate() + 1);
+      }
     }
-    if (attendances.length === 0) { presentDays = workingDays; lopDays = 0; }
+
+    // Check if employee was separated mid-month (pro-rata)
+    const separation = await req.prisma.separation.findFirst({
+      where: { userId: sal.userId, lastWorkingDate: { startsWith: month } },
+      select: { lastWorkingDate: true },
+    });
+
+    let presentDays = 0, lopDays = 0;
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (attendances.length === 0 && leaveDatesSet.size === 0 && !separation) {
+      // No data at all → assume full attendance (fallback for missing biometric)
+      presentDays = workingDays;
+      lopDays = 0;
+    } else {
+      const attMap = {};
+      for (const att of attendances) { attMap[att.date] = att.status; }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+        const dow = new Date(year, monthNum - 1, d).getDay();
+        // Skip weekends, holidays, future dates
+        if (dow === 0 || mergedHolidays.has(dateStr) || dateStr > today) continue;
+        // Skip days after last working date (pro-rata separation)
+        if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
+          lopDays++;
+          continue;
+        }
+        const status = attMap[dateStr];
+        if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
+          presentDays += 1; // Approved leave = paid day
+        } else if (status === 'present') {
+          presentDays += 1;
+        } else if (status === 'half_day') {
+          presentDays += 0.5; lopDays += 0.5;
+        } else if (status === 'absent') {
+          lopDays += 1;
+        } else if (!status && attendances.length > 0) {
+          // Working day with no record (and biometric data exists) = LOP
+          lopDays += 1;
+        } else if (!status) {
+          // No records at all for this employee yet = treat as present
+          presentDays += 1;
+        }
+      }
+    }
 
     const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
