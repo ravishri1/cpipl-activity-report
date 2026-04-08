@@ -779,6 +779,11 @@ model SalaryStructure {
   notes                String?
   components           Json?                          // [{componentId,code,name,type,amount,label?}] — flexible per-employee structure
 
+  // Lock (prevent edits until admin unlocks)
+  isLocked             Boolean  @default(false)
+  lockedBy             Int?
+  lockedAt             DateTime?
+
   // Stop Salary Processing
   stopSalaryProcessing Boolean  @default(false)
   stopSalaryReason     String?

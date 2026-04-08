@@ -152,6 +152,7 @@ export default function SalaryStructure() {
   const [revisions, setRevisions] = useState([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
   const [salaryCache, setSalaryCache] = useState({});
+  const [lockCache, setLockCache] = useState({});   // { [userId]: boolean }
   const [pendingSalary, setPendingSalary] = useState([]);
 
   // ─── Revise salary state ───
@@ -203,16 +204,19 @@ export default function SalaryStructure() {
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
-  // Pre-populate salary cache from backend on mount
+  // Pre-populate salary + lock cache from backend on mount
   useEffect(() => {
     api.get('/payroll/salary-list').then(res => {
-      const cache = {};
+      const ctcMap = {};
+      const lockMap = {};
       (res.data || []).forEach(emp => {
         if (emp.salaryStructure?.ctcAnnual) {
-          cache[emp.id] = emp.salaryStructure.ctcAnnual;
+          ctcMap[emp.id] = emp.salaryStructure.ctcAnnual;
+          lockMap[emp.id] = emp.salaryStructure.isLocked ?? false;
         }
       });
-      setSalaryCache(prev => ({ ...prev, ...cache }));
+      setSalaryCache(prev => ({ ...prev, ...ctcMap }));
+      setLockCache(prev => ({ ...prev, ...lockMap }));
     }).catch(() => {});
   }, []);
 
@@ -868,6 +872,8 @@ export default function SalaryStructure() {
           <tbody className="divide-y divide-slate-100">
             {filteredEmployees.map((emp) => {
               const cachedCtc = salaryCache[emp.id];
+              const isLocked = lockCache[emp.id] ?? false;
+              const hasCtc = cachedCtc !== undefined;
               return (
                 <tr
                   key={emp.id}
@@ -883,38 +889,58 @@ export default function SalaryStructure() {
                   <td className="py-3 px-4 text-slate-600">{emp.department || '—'}</td>
                   <td className="py-3 px-4 text-slate-600">{emp.designation || '—'}</td>
                   <td className="py-3 px-4">
-                    {cachedCtc !== undefined ? (
-                      <span className="text-emerald-700 font-medium">
-                        {formatCurrency(cachedCtc)}
-                        <span className="text-slate-400 font-normal text-xs"> /yr</span>
-                      </span>
+                    {hasCtc ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-emerald-700 font-medium">
+                          {formatCurrency(cachedCtc)}
+                          <span className="text-slate-400 font-normal text-xs"> /yr</span>
+                        </span>
+                        {isLocked && <Lock className="w-3 h-3 text-amber-500" title="Salary locked" />}
+                      </div>
                     ) : (
                       <span className="text-slate-400 text-xs">—</span>
                     )}
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="inline-flex items-center gap-2">
-                      <button
-                        onClick={() => openSalaryModal(emp)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 ${
-                          cachedCtc !== undefined
-                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
-                      >
-                        {cachedCtc !== undefined ? (
-                          <>
-                            <Edit3 className="w-3.5 h-3.5" />
-                            Edit CTC
-                          </>
-                        ) : (
-                          <>
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            Set CTC
-                          </>
-                        )}
-                      </button>
-                      {cachedCtc !== undefined && (
+                      {/* Lock/Unlock toggle — only when salary exists */}
+                      {hasCtc && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await api.put(`/payroll/salary/${emp.id}/lock`);
+                              setLockCache(prev => ({ ...prev, [emp.id]: res.data.isLocked }));
+                            } catch {}
+                          }}
+                          title={isLocked ? 'Unlock salary (allow editing)' : 'Lock salary (prevent editing)'}
+                          className={`p-1.5 rounded-lg transition-colors duration-150 ${
+                            isLocked
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200'
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-400 border border-slate-200'
+                          }`}
+                        >
+                          {isLocked ? <Lock className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                      {/* Edit CTC — hidden when locked */}
+                      {!isLocked && (
+                        <button
+                          onClick={() => openSalaryModal(emp)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 ${
+                            hasCtc
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                        >
+                          {hasCtc ? (
+                            <><Edit3 className="w-3.5 h-3.5" />Edit CTC</>
+                          ) : (
+                            <><PlusCircle className="w-3.5 h-3.5" />Set CTC</>
+                          )}
+                        </button>
+                      )}
+                      {/* Revise — hidden when locked */}
+                      {hasCtc && !isLocked && (
                         <button
                           onClick={() => setReviseEmployee({ ...emp, salaryStructure: { ctcAnnual: cachedCtc } })}
                           title="Increment / Decrement salary"
@@ -923,6 +949,10 @@ export default function SalaryStructure() {
                           <TrendingUp className="w-3.5 h-3.5" />
                           Revise
                         </button>
+                      )}
+                      {/* Locked state label */}
+                      {isLocked && hasCtc && (
+                        <span className="text-xs text-amber-600 font-medium">Locked</span>
                       )}
                     </div>
                   </td>

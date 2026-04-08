@@ -74,7 +74,7 @@ router.get('/salary-list', requireAdmin, asyncHandler(async (req, res) => {
           otherAllowance: true, otherAllowanceLabel: true,
           employerPf: true, employerEsi: true, employeePf: true, employeeEsi: true,
           professionalTax: true, tds: true, netPayMonthly: true,
-          effectiveFrom: true, stopSalaryProcessing: true, notes: true,
+          effectiveFrom: true, stopSalaryProcessing: true, isLocked: true, notes: true,
         },
       },
       salaryRevisions: {
@@ -172,6 +172,24 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
     });
   }
   res.json(salary);
+}));
+
+// PUT /salary/:userId/lock — Toggle salary lock (admin only)
+router.put('/salary/:userId/lock', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const existing = await req.prisma.salaryStructure.findUnique({ where: { userId }, select: { isLocked: true } });
+  if (!existing) throw notFound('Salary structure');
+  const nowLocked = !existing.isLocked;
+  const updated = await req.prisma.salaryStructure.update({
+    where: { userId },
+    data: {
+      isLocked: nowLocked,
+      lockedBy: nowLocked ? req.user.id : null,
+      lockedAt: nowLocked ? new Date() : null,
+    },
+    select: { isLocked: true },
+  });
+  res.json({ isLocked: updated.isLocked });
 }));
 
 // GET /salary/:userId/revisions — Revision history (admin or self)
