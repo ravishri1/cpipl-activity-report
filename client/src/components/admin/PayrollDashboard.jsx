@@ -1031,19 +1031,6 @@ export default function PayrollDashboard() {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('salaries')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'salaries'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <IndianRupee className="w-4 h-4" />
-              Salaries
-            </div>
-          </button>
-          <button
             onClick={() => setActiveTab('payslips')}
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'payslips'
@@ -1792,8 +1779,6 @@ export default function PayrollDashboard() {
       {/* Statutory Tab */}
       {activeTab === 'statutory' && <StatutoryReport month={selectedMonth} />}
 
-      {/* Salaries Tab */}
-      {activeTab === 'salaries' && <SalaryManager showToast={showToast} />}
     </div>
   );
 }
