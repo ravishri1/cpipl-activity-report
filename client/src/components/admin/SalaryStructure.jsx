@@ -292,19 +292,23 @@ export default function SalaryStructure() {
     );
   }, [employees, assignSearch]);
 
-  // ─── Calculations (derived from selectedComponents) ───
+  // ─── Calculations (earnings from components; deductions auto-calculated) ───
   const calculations = useMemo(() => {
     const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const ctcMonthly = ctcAnnual / 12;
+    const basic = parseFloat(selectedComponents.find(c => c.code === 'BASIC')?.amount) || 0;
     const grossEarnings = selectedComponents
       .filter(c => c.type === 'earning')
       .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-    const totalDeductions = selectedComponents
-      .filter(c => c.type === 'deduction')
-      .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    // Auto-calculated statutory deductions — not manually entered by HR
+    const employeePf = basic > 0 ? Math.min(Math.round(basic * 0.12), 1800) : 0;
+    const employeeEsi = grossEarnings > 0 && grossEarnings <= 21000 ? Math.round(grossEarnings * 0.0075) : 0;
+    const professionalTax = grossEarnings > 10000 ? 200 : grossEarnings >= 7500 ? 75 : 0;
+    const tds = parseFloat(salaryForm.tds) || 0;
+    const totalDeductions = employeePf + employeeEsi + professionalTax + tds;
     const netPayMonthly = grossEarnings - totalDeductions;
-    return { ctcAnnual, ctcMonthly, grossEarnings, totalDeductions, netPayMonthly };
-  }, [salaryForm.ctcAnnual, selectedComponents]);
+    return { ctcAnnual, ctcMonthly, grossEarnings, employeePf, employeeEsi, professionalTax, tds, totalDeductions, netPayMonthly };
+  }, [salaryForm.ctcAnnual, salaryForm.tds, selectedComponents]);
 
   // Template form calculations
   const templateCalcs = useMemo(() => {
@@ -355,17 +359,17 @@ export default function SalaryStructure() {
         const d = res.data;
         setSalaryForm({
           ctcAnnual: d.ctcAnnual ?? '',
+          tds: d.tds ?? '',
           effectiveFrom: d.effectiveFrom
             ? new Date(d.effectiveFrom).toISOString().split('T')[0]
             : new Date().toISOString().split('T')[0],
           notes: d.notes ?? '',
         });
-        // Use flexible components if saved, else convert hardcoded fields
-        if (Array.isArray(d.components) && d.components.length > 0) {
-          setSelectedComponents(d.components);
-        } else {
-          setSelectedComponents(convertHardcodedToComponents(d));
-        }
+        // Only load earning components — deductions are auto-calculated
+        const allComps = Array.isArray(d.components) && d.components.length > 0
+          ? d.components
+          : convertHardcodedToComponents(d);
+        setSelectedComponents(allComps.filter(c => c.type === 'earning'));
         setIsExisting(true);
       }
     } catch (err) {
@@ -420,17 +424,13 @@ export default function SalaryStructure() {
     const basic = Math.round(monthly * 0.4);
     const hra = Math.round(basic * 0.5);
     const pf = Math.min(Math.round(basic * 0.12), 1800);
-    const esi = monthly < 21000 ? Math.round(monthly * 0.0075) : 0;
-    const pt = 200;
     const special = Math.max(0, Math.round(monthly - basic - hra - pf));
 
+    // Only earnings — deductions are auto-calculated
     const suggestions = [
       { code: 'BASIC', name: 'Basic Salary', type: 'earning', amount: basic },
       { code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'earning', amount: hra },
       { code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'earning', amount: special },
-      { code: 'EMP_PF', name: 'Employee PF (12%)', type: 'deduction', amount: pf },
-      ...(esi > 0 ? [{ code: 'EMP_ESI', name: 'Employee ESI (0.75%)', type: 'deduction', amount: esi }] : []),
-      { code: 'PT', name: 'Professional Tax', type: 'deduction', amount: pt },
     ];
 
     setSelectedComponents(prev => {
@@ -461,9 +461,15 @@ export default function SalaryStructure() {
     const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const payload = {
       ctcAnnual,
+      // Auto-calculated deductions stored for payslip generation
+      employeePf: calculations.employeePf,
+      employeeEsi: calculations.employeeEsi,
+      professionalTax: calculations.professionalTax,
+      tds: parseFloat(salaryForm.tds) || 0,
       effectiveFrom: salaryForm.effectiveFrom,
       notes: salaryForm.notes || '',
-      components: selectedComponents.map(c => ({
+      // Only earnings in components — deductions are system-calculated
+      components: selectedComponents.filter(c => c.type === 'earning').map(c => ({
         componentId: c.componentId || null,
         code: c.code, name: c.name, type: c.type,
         amount: parseFloat(c.amount) || 0,
@@ -975,15 +981,13 @@ export default function SalaryStructure() {
                 </button>
               </div>
 
-              {/* Flexible Component Sections */}
-              {(['earning', 'deduction', 'employer']).map(sectionType => {
+              {/* Flexible Component Sections — Earnings only; deductions are auto-calculated */}
+              {(['earning']).map(sectionType => {
                 const sectionItems = selectedComponents.filter(c => c.type === sectionType);
                 const available = components.filter(c => c.type === sectionType && !selectedComponents.find(s => s.code === c.code));
                 const isOpen = addDropdownType === sectionType;
                 const sectionConfig = {
-                  earning:  { label: 'Earnings', color: 'emerald', totalLabel: 'Gross Earnings', total: calculations.grossEarnings },
-                  deduction:{ label: 'Deductions', color: 'red',     totalLabel: 'Total Deductions', total: calculations.totalDeductions },
-                  employer: { label: 'Employer Contributions', color: 'slate', totalLabel: 'Total Contributions', total: selectedComponents.filter(c=>c.type==='employer').reduce((s,c)=>s+(parseFloat(c.amount)||0),0) },
+                  earning: { label: 'Earnings', color: 'emerald', totalLabel: 'Gross Earnings', total: calculations.grossEarnings },
                 }[sectionType];
                 const colorsMap = {
                   emerald: { bg: 'bg-emerald-50/50', border: 'border-emerald-100', title: 'text-emerald-800', divider: 'border-emerald-200', total: 'text-emerald-700', addBtn: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' },
@@ -1102,6 +1106,48 @@ export default function SalaryStructure() {
               {addDropdownType && (
                 <div className="fixed inset-0 z-10" onClick={() => setAddDropdownType(null)} />
               )}
+
+              {/* Auto-calculated Deductions (read-only) */}
+              <div className="bg-red-50/50 rounded-xl border border-red-100 p-4">
+                <h3 className="text-sm font-bold text-red-800 mb-3 flex items-center gap-1.5">
+                  <ChevronDown className="w-4 h-4" />
+                  Deductions (Monthly) — Auto-Calculated
+                </h3>
+                <div className="space-y-2">
+                  {[
+                    { label: 'Employee PF', value: calculations.employeePf, note: calculations.employeePf === 1800 ? 'Capped @ ₹15K ceiling' : '12% of Basic' },
+                    { label: 'Employee ESI', value: calculations.employeeEsi, note: calculations.employeeEsi === 0 ? 'N/A (Gross > ₹21K)' : '0.75% of Gross' },
+                    { label: 'Professional Tax', value: calculations.professionalTax, note: 'Maharashtra slab' },
+                  ].map(({ label, value, note }) => (
+                    <div key={label} className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
+                      <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="text-xs font-medium text-slate-700 flex-1">{label}</span>
+                      <span className="text-sm font-semibold text-red-700">{formatCurrency(value)}</span>
+                      <span className="text-xs text-slate-400">{note}</span>
+                    </div>
+                  ))}
+
+                  {/* TDS — editable since it depends on employee's tax declaration */}
+                  <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
+                    <span className="text-xs font-medium text-slate-700 flex-1">TDS / Income Tax</span>
+                    <div className="relative w-32">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                      <input
+                        type="number" min="0" step="any" name="tds"
+                        value={salaryForm.tds} onChange={handleChange}
+                        placeholder="0"
+                        className="w-full pl-6 pr-2 py-1.5 text-sm font-medium text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400">Manual</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-red-200 flex justify-between items-center">
+                    <span className="text-xs font-semibold text-red-800">Total Deductions</span>
+                    <span className="text-sm font-bold text-red-600">{formatCurrencyDetailed(calculations.totalDeductions)}</span>
+                  </div>
+                </div>
+              </div>
 
               {/* Net Pay Summary */}
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
