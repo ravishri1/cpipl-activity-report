@@ -12,7 +12,7 @@ function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_
 // Default system salary components — auto-seeded on first use
 const DEFAULT_COMPONENTS = [
   { name: 'Basic Salary', code: 'BASIC', type: 'earning', taxable: true, mandatory: true, calculationType: 'fixed', sortOrder: 1, isSystem: true, isActive: true },
-  { name: 'House Rent Allowance (HRA)', code: 'HRA', type: 'earning', taxable: true, mandatory: false, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 50, sortOrder: 2, isSystem: true, isActive: true },
+  { name: 'House Rent Allowance (HRA)', code: 'HRA', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 2, isSystem: true, isActive: true },
   { name: 'Dearness Allowance (DA)', code: 'DA', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 3, isSystem: true, isActive: true },
   { name: 'Special Allowance', code: 'SPECIAL_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 4, isSystem: true, isActive: true },
   { name: 'Medical Allowance', code: 'MEDICAL_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 5, isSystem: true, isActive: true, complianceNote: 'Non-taxable up to ₹15,000/yr' },
@@ -22,7 +22,7 @@ const DEFAULT_COMPONENTS = [
   { name: 'Internet Allowance', code: 'INTERNET_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 9, isSystem: true, isActive: true },
   { name: 'Performance Bonus', code: 'BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 10, isSystem: true, isActive: true },
   // GreytHR-compatible components (Color Papers India structure)
-  { name: 'Statutory Bonus', code: 'STATUTORY_BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 8.33, sortOrder: 11, isSystem: true, isActive: true, complianceNote: 'Payment of Bonus Act — 8.33% of basic' },
+  { name: 'Statutory Bonus', code: 'STATUTORY_BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 11, isSystem: true, isActive: true, complianceNote: 'Payment of Bonus Act — 8.33% of basic' },
   { name: 'Other Allowance', code: 'OTHER_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 12, isSystem: true, isActive: true },
   { name: 'Leave Allowance', code: 'LEAVE_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 13, isSystem: true, isActive: true },
   { name: 'Sunday/Weekly Off Allowance', code: 'SUNDAY_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 14, isSystem: true, isActive: true },
