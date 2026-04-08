@@ -415,28 +415,36 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
-    // Use flexible components if configured, else fall back to hardcoded fields
+    // Build earnings from flexible components (only earnings type) or hardcoded fields
     const comps = Array.isArray(sal.components) ? sal.components : [];
     let salaryFields;
     if (comps.length > 0) {
       salaryFields = mapComponentsToFields(comps);
     } else {
-      const ge = sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
-      const td = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
+      const ge = (sal.basic || 0) + (sal.hra || 0) + (sal.da || 0) + (sal.specialAllowance || 0) +
+        (sal.medicalAllowance || 0) + (sal.conveyanceAllowance || 0) + (sal.otherAllowance || 0);
       salaryFields = {
-        basic: sal.basic, hra: sal.hra, da: sal.da,
-        specialAllowance: sal.specialAllowance, medicalAllowance: sal.medicalAllowance,
-        conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
+        basic: sal.basic || 0, hra: sal.hra || 0, da: sal.da || 0,
+        specialAllowance: sal.specialAllowance || 0, medicalAllowance: sal.medicalAllowance || 0,
+        conveyanceAllowance: sal.conveyanceAllowance || 0, otherAllowance: sal.otherAllowance || 0,
         otherAllowanceLabel: sal.otherAllowanceLabel,
-        employerPf: sal.employerPf, employerEsi: sal.employerEsi,
-        employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
-        professionalTax: sal.professionalTax, tds: sal.tds,
-        grossEarnings: ge, totalDeductions: td, netPayMonthly: ge - td,
+        grossEarnings: ge,
       };
     }
     const grossEarnings = salaryFields.grossEarnings;
-    const totalDeductions = salaryFields.totalDeductions;
-    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction);
+
+    // Recalculate statutory deductions from actual (post-LOP) earnings
+    // PF is on actual basic after LOP; ESI and PT are on actual gross after LOP
+    const actualBasic = workingDays > 0
+      ? Math.round((salaryFields.basic || 0) * (workingDays - lopDays) / workingDays)
+      : (salaryFields.basic || 0);
+    const actualGross = Math.max(0, grossEarnings - lopDeduction);
+    const employeePf = actualBasic > 0 ? Math.min(Math.round(actualBasic * 0.12), 1800) : 0;
+    const employeeEsi = actualGross > 0 && actualGross <= 21000 ? Math.round(actualGross * 0.0075) : 0;
+    const professionalTax = actualGross > 10000 ? 200 : actualGross >= 7500 ? 75 : 0;
+    const tds = sal.tds || 0;
+    const totalDeductions = employeePf + employeeEsi + professionalTax + tds + lopDeduction;
+    const netPay = Math.round(grossEarnings - totalDeductions);
 
     await req.prisma.payslip.create({
       data: {
@@ -445,10 +453,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         specialAllowance: salaryFields.specialAllowance, medicalAllowance: salaryFields.medicalAllowance,
         conveyanceAllowance: salaryFields.conveyanceAllowance, otherAllowance: salaryFields.otherAllowance,
         otherAllowanceLabel: salaryFields.otherAllowanceLabel, grossEarnings,
-        employerPf: salaryFields.employerPf, employerEsi: salaryFields.employerEsi,
-        employeePf: salaryFields.employeePf, employeeEsi: salaryFields.employeeEsi,
-        professionalTax: salaryFields.professionalTax, tds: salaryFields.tds,
-        otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
+        employerPf: 0, employerEsi: 0,
+        employeePf, employeeEsi, professionalTax, tds,
+        otherDeductions: 0, totalDeductions,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
         companyName: sal.user.company?.name || null,
         status: 'generated', generatedAt: new Date(),
