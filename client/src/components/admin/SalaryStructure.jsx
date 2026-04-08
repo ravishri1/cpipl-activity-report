@@ -72,9 +72,6 @@ const emptySalary = {
   conveyanceAllowance: '',
   otherAllowance: '',
   otherAllowanceLabel: '',
-  employeePf: '',
-  employeeEsi: '',
-  professionalTax: '',
   tds: '',
   ctcAnnual: '',
   effectiveFrom: new Date().toISOString().split('T')[0],
@@ -271,8 +268,9 @@ export default function SalaryStructure() {
     const ctcAnnual = num(salaryForm.ctcAnnual);
     const ctcMonthly = ctcAnnual / 12;
 
+    const basic = num(salaryForm.basic);
     const grossEarnings =
-      num(salaryForm.basic) +
+      basic +
       num(salaryForm.hra) +
       num(salaryForm.da) +
       num(salaryForm.specialAllowance) +
@@ -280,15 +278,16 @@ export default function SalaryStructure() {
       num(salaryForm.conveyanceAllowance) +
       num(salaryForm.otherAllowance);
 
-    const totalDeductions =
-      num(salaryForm.employeePf) +
-      num(salaryForm.employeeEsi) +
-      num(salaryForm.professionalTax) +
-      num(salaryForm.tds);
+    // Auto-calculated statutory deductions (not manually entered)
+    const employeePf = basic > 0 ? Math.min(Math.round(basic * 0.12), 1800) : 0;
+    const employeeEsi = grossEarnings > 0 && grossEarnings <= 21000 ? Math.round(grossEarnings * 0.0075) : 0;
+    const professionalTax = grossEarnings > 10000 ? 200 : grossEarnings >= 7500 ? 75 : 0;
+    const tds = num(salaryForm.tds);
 
+    const totalDeductions = employeePf + employeeEsi + professionalTax + tds;
     const netPayMonthly = grossEarnings - totalDeductions;
 
-    return { ctcAnnual, ctcMonthly, grossEarnings, totalDeductions, netPayMonthly };
+    return { ctcAnnual, ctcMonthly, grossEarnings, employeePf, employeeEsi, professionalTax, tds, totalDeductions, netPayMonthly };
   }, [salaryForm]);
 
   // Template form calculations
@@ -344,9 +343,6 @@ export default function SalaryStructure() {
           conveyanceAllowance: d.conveyanceAllowance ?? '',
           otherAllowance: d.otherAllowance ?? '',
           otherAllowanceLabel: d.otherAllowanceLabel ?? '',
-          employeePf: d.employeePf ?? '',
-          employeeEsi: d.employeeEsi ?? '',
-          professionalTax: d.professionalTax ?? '',
           tds: d.tds ?? '',
           ctcAnnual: d.ctcAnnual ?? '',
           effectiveFrom: d.effectiveFrom
@@ -388,9 +384,6 @@ export default function SalaryStructure() {
     const basic = Math.round(ctcMonthly * 0.4);
     const hra = Math.round(basic * 0.5);
     const pfAmount = Math.min(Math.round(basic * 0.12), 1800);
-    const grossEstimate = ctcMonthly;
-    const esiAmount = grossEstimate < 21000 ? Math.round(grossEstimate * 0.0075) : 0;
-    const pt = 200;
     const specialAllowance = Math.round(ctcMonthly - basic - hra - pfAmount);
 
     setSalaryForm((prev) => ({
@@ -403,10 +396,6 @@ export default function SalaryStructure() {
       conveyanceAllowance: '0',
       otherAllowance: '0',
       otherAllowanceLabel: '',
-      employeePf: pfAmount.toString(),
-      employeeEsi: esiAmount.toString(),
-      professionalTax: pt.toString(),
-      tds: '0',
     }));
     setSaveMessage({ type: 'success', text: 'Quick Fill applied. Review and adjust as needed.' });
   }, [salaryForm.ctcAnnual]);
@@ -425,9 +414,10 @@ export default function SalaryStructure() {
       conveyanceAllowance: parseFloat(salaryForm.conveyanceAllowance) || 0,
       otherAllowance: parseFloat(salaryForm.otherAllowance) || 0,
       otherAllowanceLabel: salaryForm.otherAllowanceLabel || '',
-      employeePf: parseFloat(salaryForm.employeePf) || 0,
-      employeeEsi: parseFloat(salaryForm.employeeEsi) || 0,
-      professionalTax: parseFloat(salaryForm.professionalTax) || 0,
+      // Deductions are auto-calculated from earnings — not manually entered
+      employeePf: calculations.employeePf,
+      employeeEsi: calculations.employeeEsi,
+      professionalTax: calculations.professionalTax,
       tds: parseFloat(salaryForm.tds) || 0,
       ctcAnnual: parseFloat(salaryForm.ctcAnnual) || 0,
       effectiveFrom: salaryForm.effectiveFrom,
@@ -992,10 +982,26 @@ export default function SalaryStructure() {
                     Deductions (Monthly)
                   </h3>
                   <div className="space-y-3">
-                    <InputField label="Employee PF" name="employeePf" value={salaryForm.employeePf} onChange={handleChange} prefix="₹" />
-                    <InputField label="Employee ESI" name="employeeEsi" value={salaryForm.employeeEsi} onChange={handleChange} prefix="₹" />
-                    <InputField label="Professional Tax" name="professionalTax" value={salaryForm.professionalTax} onChange={handleChange} prefix="₹" />
-                    <InputField label="TDS (Income Tax)" name="tds" value={salaryForm.tds} onChange={handleChange} prefix="₹" />
+                    {/* Auto-calculated read-only rows */}
+                    {[
+                      { label: 'Employee PF', value: calculations.employeePf, note: calculations.employeePf === 1800 ? 'Capped @ ₹15K ceiling' : '12% of Basic' },
+                      { label: 'Employee ESI', value: calculations.employeeEsi, note: calculations.employeeEsi === 0 ? 'N/A (Gross > ₹21K)' : '0.75% of Gross' },
+                      { label: 'Professional Tax', value: calculations.professionalTax, note: 'Maharashtra slab' },
+                    ].map(({ label, value, note }) => (
+                      <div key={label}>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                          <span className="text-sm font-semibold text-slate-700">
+                            {value > 0 ? formatCurrency(value) : '₹0'}
+                          </span>
+                          <span className="text-xs text-slate-400 ml-auto">{note}</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* TDS — editable (varies by declaration) */}
+                    <InputField label="TDS / Income Tax" name="tds" value={salaryForm.tds} onChange={handleChange} prefix="₹" />
 
                     {/* Total deductions */}
                     <div className="pt-2 border-t border-red-200 flex justify-between items-center">
