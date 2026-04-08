@@ -512,6 +512,13 @@ async function getEmployeeCalendar(userId, month, prisma) {
       statusLabel = '-';
     }
 
+    // Attendance-exempt: treat all past working days as Present (no biometric required)
+    const isExemptUser = user?.isAttendanceExempt === true;
+    if (isExemptUser && !isFuture && !holiday && !isWeekend && !leave && status === 'absent') {
+      status = 'present';
+      statusLabel = 'P';
+    }
+
     // Calculate late-in / early-out based on shift timing
     let lateIn = null;
     let earlyOut = null;
@@ -545,7 +552,7 @@ async function getEmployeeCalendar(userId, month, prisma) {
 
     // Policy enforcement: late mark detection (15-min grace)
     // Attendance-exempt users bypass ALL policy rules (always Present, no late marks, no regularization)
-    const isExempt = user?.isAttendanceExempt === true;
+    const isExempt = isExemptUser;
     let isLate = false;
     let lateMinutes = 0;
     let shortHours = false;
