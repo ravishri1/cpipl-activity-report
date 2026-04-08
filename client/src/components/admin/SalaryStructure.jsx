@@ -391,6 +391,24 @@ export default function SalaryStructure() {
     setSalaryForm((prev) => ({ ...prev, [name]: value }));
   }, []);
 
+  // Auto-calculate amount when a deduction/employer component is added from dropdown
+  const calcAutoAmount = useCallback((code, currentComps) => {
+    const basic = parseFloat(currentComps.find(c => c.code === 'BASIC')?.amount) || 0;
+    const gross = currentComps.filter(c => c.type === 'earning').reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    if (code === 'EMP_PF' || code === 'EMPLOYER_PF') {
+      return basic > 0 ? Math.min(Math.round(basic * 0.12), 1800) : '';
+    }
+    if (code === 'EMP_ESI') return gross > 0 && gross <= 21000 ? Math.round(gross * 0.0075) : '';
+    if (code === 'EMPLOYER_ESI') return gross > 0 && gross <= 21000 ? Math.round(gross * 0.0325) : '';
+    if (code === 'PT') {
+      if (gross <= 0) return '';
+      if (gross < 7500) return 0;
+      if (gross < 10000) return 75;
+      return 200;
+    }
+    return '';
+  }, []);
+
   const quickFill = useCallback(() => {
     const ctcAnnual = parseFloat(salaryForm.ctcAnnual);
     if (!ctcAnnual || ctcAnnual <= 0) {
@@ -995,7 +1013,10 @@ export default function SalaryStructure() {
                                 <button
                                   key={comp.id}
                                   onClick={() => {
-                                    setSelectedComponents(prev => [...prev, { componentId: comp.id, code: comp.code, name: comp.name, type: comp.type, amount: '', label: '' }]);
+                                    setSelectedComponents(prev => {
+                                      const auto = calcAutoAmount(comp.code, prev);
+                                      return [...prev, { componentId: comp.id, code: comp.code, name: comp.name, type: comp.type, amount: auto, label: '' }];
+                                    });
                                     setAddDropdownType(null);
                                   }}
                                   className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
