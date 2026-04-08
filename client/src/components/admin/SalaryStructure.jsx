@@ -87,7 +87,6 @@ const InputField = ({ label, name, value, onChange, type = 'number', placeholder
 );
 
 const emptySalary = {
-  variablePay: '',
   medicalPremium: '',
   tds: '',
   ctcAnnual: '',
@@ -292,7 +291,6 @@ export default function SalaryStructure() {
       .filter(c => c.type === 'earning')
       .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
     // CTC components (employer-side, not part of employee net pay)
-    const variablePay = parseFloat(salaryForm.variablePay) || 0;
     const medicalPremium = parseFloat(salaryForm.medicalPremium) || 0;
     // Auto-calculated statutory deductions — not manually entered by HR
     const employeePf = basic > 0 ? Math.min(Math.round(basic * 0.12), 1800) : 0;
@@ -302,9 +300,9 @@ export default function SalaryStructure() {
     const tds = parseFloat(salaryForm.tds) || 0;
     const totalDeductions = employeePf + employeeEsi + professionalTax + tds;
     const netPayMonthly = grossEarnings - totalDeductions;
-    const ctcFromComponents = grossEarnings + variablePay + medicalPremium + employerPf;
-    return { ctcAnnual, ctcMonthly, grossEarnings, variablePay, medicalPremium, employeePf, employerPf, employeeEsi, professionalTax, tds, totalDeductions, netPayMonthly, ctcFromComponents };
-  }, [salaryForm.ctcAnnual, salaryForm.tds, salaryForm.variablePay, salaryForm.medicalPremium, selectedComponents]);
+    const ctcFromComponents = grossEarnings + medicalPremium + employerPf;
+    return { ctcAnnual, ctcMonthly, grossEarnings, medicalPremium, employeePf, employerPf, employeeEsi, professionalTax, tds, totalDeductions, netPayMonthly, ctcFromComponents };
+  }, [salaryForm.ctcAnnual, salaryForm.tds, salaryForm.medicalPremium, selectedComponents]);
 
   // Template form calculations
   const templateCalcs = useMemo(() => {
@@ -355,7 +353,6 @@ export default function SalaryStructure() {
         const d = res.data;
         setSalaryForm({
           ctcAnnual: d.ctcAnnual ?? '',
-          variablePay: d.variablePay ?? '',
           medicalPremium: d.medicalPremium ?? '',
           tds: d.tds ?? '',
           effectiveFrom: d.effectiveFrom
@@ -459,7 +456,7 @@ export default function SalaryStructure() {
     const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const payload = {
       ctcAnnual,
-      variablePay: parseFloat(salaryForm.variablePay) || 0,
+      variablePay: 0,
       medicalPremium: parseFloat(salaryForm.medicalPremium) || 0,
       // Auto-calculated deductions stored for payslip generation
       employeePf: calculations.employeePf,
@@ -1154,20 +1151,6 @@ export default function SalaryStructure() {
               <div className="bg-blue-50/50 rounded-xl border border-blue-100 p-4">
                 <h3 className="text-sm font-bold text-blue-800 mb-3">CTC Components (Employer Side)</h3>
                 <div className="space-y-3">
-                  {/* Variable Pay */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Variable / Incentive Pay <span className="text-slate-400">(monthly)</span></label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
-                      <input
-                        type="number" min="0" step="any" name="variablePay"
-                        value={salaryForm.variablePay} onChange={handleChange}
-                        placeholder="0"
-                        className="w-full border border-slate-200 rounded-lg pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">Annual: {formatCurrency((parseFloat(salaryForm.variablePay) || 0) * 12)}</p>
-                  </div>
                   {/* Medical Premium */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Medical Insurance Premium <span className="text-slate-400">(monthly)</span></label>
@@ -1211,7 +1194,7 @@ export default function SalaryStructure() {
                 {calculations.ctcMonthly > 0 && (
                   <div className="pt-2 border-t border-slate-100 space-y-1">
                     <div className="flex justify-between text-xs text-slate-500">
-                      <span>CTC = Gross + Variable + Medical + Employer PF</span>
+                      <span>CTC = Gross + Medical + Employer PF</span>
                       <span className={Math.abs(calculations.ctcFromComponents - calculations.ctcMonthly) > 100 ? 'text-amber-500 font-semibold' : 'font-medium'}>
                         {formatCurrency(calculations.ctcFromComponents)}
                         {Math.abs(calculations.ctcFromComponents - calculations.ctcMonthly) > 100 && ` ⚠ entered: ${formatCurrency(calculations.ctcMonthly)}`}
