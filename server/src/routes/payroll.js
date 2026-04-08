@@ -128,6 +128,7 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
       specialAllowance: d.specialAllowance || 0, medicalAllowance: d.medicalAllowance || 0,
       conveyanceAllowance: d.conveyanceAllowance || 0, otherAllowance: d.otherAllowance || 0,
       otherAllowanceLabel: d.otherAllowanceLabel || null,
+      variablePay: d.variablePay || 0, medicalPremium: d.medicalPremium || 0,
       employerPf: d.employerPf || 0, employerEsi: d.employerEsi || 0,
       employeePf: d.employeePf || 0, employeeEsi: d.employeeEsi || 0,
       professionalTax: d.professionalTax || 0, tds: d.tds || 0,
@@ -135,7 +136,13 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
     };
   }
 
-  const data = { ...fieldData, effectiveFrom: d.effectiveFrom || null, notes: d.notes || null };
+  const data = {
+    ...fieldData,
+    variablePay: d.variablePay || fieldData.variablePay || 0,
+    medicalPremium: d.medicalPremium || fieldData.medicalPremium || 0,
+    effectiveFrom: d.effectiveFrom || null,
+    notes: d.notes || null,
+  };
 
   const existing = await req.prisma.salaryStructure.findUnique({ where: { userId } });
   const salary = await req.prisma.salaryStructure.upsert({
@@ -433,13 +440,17 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
     const grossEarnings = salaryFields.grossEarnings;
 
+    // CTC components (employer-side, not deducted from employee)
+    const variablePay = sal.variablePay || 0;
+    const medicalPremium = sal.medicalPremium || 0;
+
     // Recalculate statutory deductions from actual (post-LOP) earnings
-    // PF is on actual basic after LOP; ESI and PT are on actual gross after LOP
     const actualBasic = workingDays > 0
       ? Math.round((salaryFields.basic || 0) * (workingDays - lopDays) / workingDays)
       : (salaryFields.basic || 0);
     const actualGross = Math.max(0, grossEarnings - lopDeduction);
     const employeePf = actualBasic > 0 ? Math.min(Math.round(actualBasic * 0.12), 1800) : 0;
+    const employerPf = employeePf; // Employer PF = same as employee PF
     const employeeEsi = actualGross > 0 && actualGross <= 21000 ? Math.round(actualGross * 0.0075) : 0;
     const professionalTax = actualGross > 10000 ? 200 : actualGross >= 7500 ? 75 : 0;
     const tds = sal.tds || 0;
@@ -453,7 +464,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         specialAllowance: salaryFields.specialAllowance, medicalAllowance: salaryFields.medicalAllowance,
         conveyanceAllowance: salaryFields.conveyanceAllowance, otherAllowance: salaryFields.otherAllowance,
         otherAllowanceLabel: salaryFields.otherAllowanceLabel, grossEarnings,
-        employerPf: 0, employerEsi: 0,
+        variablePay, medicalPremium,
+        employerPf, employerEsi: 0,
         employeePf, employeeEsi, professionalTax, tds,
         otherDeductions: 0, totalDeductions,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
