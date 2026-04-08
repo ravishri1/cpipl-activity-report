@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   IndianRupee,
   Users,
@@ -119,6 +120,7 @@ const emptyComponentForm = {
 };
 
 export default function SalaryStructure() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('employees');
 
   // ─── Employee Salary tab state (existing) ───
@@ -190,6 +192,20 @@ export default function SalaryStructure() {
       .then((r) => setPendingSalary(r.data || []))
       .catch(() => {});
   }, []);
+
+  // Auto-open employee salary modal from URL param (?employeeId=123)
+  useEffect(() => {
+    const empId = searchParams.get('employeeId');
+    if (!empId || employees.length === 0) return;
+    const emp = employees.find(e => e.id === parseInt(empId));
+    if (emp) {
+      setActiveTab('employees');
+      openSalaryModal(emp);
+      // Clear the param so refresh doesn't reopen the modal
+      searchParams.delete('employeeId');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [employees, searchParams, setSearchParams]);
 
   // ─── Fetch templates ───
   const fetchTemplates = useCallback(async () => {
