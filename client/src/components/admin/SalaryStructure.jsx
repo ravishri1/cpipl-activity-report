@@ -203,6 +203,19 @@ export default function SalaryStructure() {
 
   useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
+  // Pre-populate salary cache from backend on mount
+  useEffect(() => {
+    api.get('/payroll/salary-list').then(res => {
+      const cache = {};
+      (res.data || []).forEach(emp => {
+        if (emp.salaryStructure?.ctcAnnual) {
+          cache[emp.id] = emp.salaryStructure.ctcAnnual;
+        }
+      });
+      setSalaryCache(prev => ({ ...prev, ...cache }));
+    }).catch(() => {});
+  }, []);
+
   // Fetch pending salary
   useEffect(() => {
     api.get('/payroll/pending-salary')
