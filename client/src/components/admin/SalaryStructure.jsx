@@ -187,21 +187,20 @@ export default function SalaryStructure() {
   const [assignSearch, setAssignSearch] = useState('');
 
   // ─── Fetch employees ───
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get('/users');
-        const active = (res.data || []).filter((u) => u.isActive !== false);
-        setEmployees(active);
-      } catch (err) {
-        console.error('Failed to fetch employees:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEmployees();
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/users');
+      const active = (res.data || []).filter((u) => u.isActive !== false);
+      setEmployees(active);
+    } catch (err) {
+      console.error('Failed to fetch employees:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
   // Fetch pending salary
   useEffect(() => {
@@ -478,15 +477,20 @@ export default function SalaryStructure() {
     try {
       await api.put(`/payroll/salary/${selectedEmployee.id}`, payload);
       setIsExisting(true);
-      setSaveMessage({ type: 'success', text: 'Salary structure saved successfully.' });
       setSalaryCache(prev => ({ ...prev, [selectedEmployee.id]: ctcAnnual }));
+      setSaveMessage({ type: 'success', text: 'Salary structure saved successfully.' });
+      // Auto-close modal and refresh list after 1.5s
+      setTimeout(() => {
+        closeModal();
+        fetchEmployees();
+      }, 1500);
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to save salary structure.';
       setSaveMessage({ type: 'error', text: msg });
     } finally {
       setSaving(false);
     }
-  }, [selectedEmployee, salaryForm, selectedComponents]);
+  }, [selectedEmployee, salaryForm, selectedComponents, closeModal, fetchEmployees]);
 
   const toggleRevisions = useCallback(async () => {
     if (showRevisions) {
