@@ -21,6 +21,11 @@ const DEFAULT_COMPONENTS = [
   { name: 'Food / Meal Allowance', code: 'FOOD_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 8, isSystem: true, isActive: true },
   { name: 'Internet Allowance', code: 'INTERNET_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 9, isSystem: true, isActive: true },
   { name: 'Performance Bonus', code: 'BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 10, isSystem: true, isActive: true },
+  // GreytHR-compatible components (Color Papers India structure)
+  { name: 'Statutory Bonus', code: 'STATUTORY_BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 8.33, sortOrder: 11, isSystem: true, isActive: true, complianceNote: 'Payment of Bonus Act — 8.33% of basic' },
+  { name: 'Other Allowance', code: 'OTHER_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 12, isSystem: true, isActive: true },
+  { name: 'Leave Allowance', code: 'LEAVE_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 13, isSystem: true, isActive: true },
+  { name: 'Sunday/Weekly Off Allowance', code: 'SUNDAY_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 14, isSystem: true, isActive: true },
   { name: 'Employee PF (12%)', code: 'EMP_PF', type: 'deduction', taxable: false, mandatory: true, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 12, sortOrder: 20, isSystem: true, isActive: true, complianceNote: 'Mandatory for basic ≤ ₹15,000' },
   { name: 'Employee ESI (0.75%)', code: 'EMP_ESI', type: 'deduction', taxable: false, mandatory: false, calculationType: 'percentage', percentageOf: 'gross', defaultPercentage: 0.75, sortOrder: 21, isSystem: true, isActive: true, complianceNote: 'Applicable for gross ≤ ₹21,000/month' },
   { name: 'Professional Tax', code: 'PT', type: 'deduction', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 22, isSystem: true, isActive: true },
@@ -689,12 +694,9 @@ router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(
 // Salary Components — Configuration master list
 // ═══════════════════════════════════════════════
 
-// GET /components — List all salary components (auto-seeds defaults on first use)
+// GET /components — List all salary components (always upserts defaults so new ones are added)
 router.get('/components', requireAdmin, asyncHandler(async (req, res) => {
-  const count = await req.prisma.salaryComponent.count();
-  if (count === 0) {
-    await req.prisma.salaryComponent.createMany({ data: DEFAULT_COMPONENTS, skipDuplicates: true });
-  }
+  await req.prisma.salaryComponent.createMany({ data: DEFAULT_COMPONENTS, skipDuplicates: true });
   const components = await req.prisma.salaryComponent.findMany({
     where: { isActive: true },
     orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
