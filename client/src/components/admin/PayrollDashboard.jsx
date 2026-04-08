@@ -1031,6 +1031,19 @@ export default function PayrollDashboard() {
             </div>
           </button>
           <button
+            onClick={() => setActiveTab('salaries')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'salaries'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <IndianRupee className="w-4 h-4" />
+              Salaries
+            </div>
+          </button>
+          <button
             onClick={() => setActiveTab('payslips')}
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'payslips'
@@ -1778,6 +1791,9 @@ export default function PayrollDashboard() {
 
       {/* Statutory Tab */}
       {activeTab === 'statutory' && <StatutoryReport month={selectedMonth} />}
+
+      {/* Salaries Tab */}
+      {activeTab === 'salaries' && <SalaryManager showToast={showToast} />}
     </div>
   );
 }
@@ -2259,3 +2275,636 @@ const ArrearsManager = ({ month }) => {
     </div>
   );
 };
+
+// ═══════════════════════════════════════════════
+// SalaryManager — Employee-basis salary setup + increment/decrement
+// ═══════════════════════════════════════════════
+
+const SALARY_FIELDS = [
+  { key: 'basic', label: 'Basic Salary' },
+  { key: 'hra', label: 'HRA' },
+  { key: 'da', label: 'DA' },
+  { key: 'specialAllowance', label: 'Special Allowance' },
+  { key: 'medicalAllowance', label: 'Medical Allowance' },
+  { key: 'conveyanceAllowance', label: 'Conveyance Allowance' },
+  { key: 'otherAllowance', label: 'Other Allowance' },
+];
+const DEDUCTION_FIELDS = [
+  { key: 'employerPf', label: 'Employer PF (12%)' },
+  { key: 'employerEsi', label: 'Employer ESI (3.25%)' },
+  { key: 'employeePf', label: 'Employee PF (12%)' },
+  { key: 'employeeEsi', label: 'Employee ESI (0.75%)' },
+  { key: 'professionalTax', label: 'Professional Tax' },
+  { key: 'tds', label: 'TDS' },
+];
+
+function SalaryManager({ showToast }) {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [editEmp, setEditEmp] = useState(null);
+  const [reviseEmp, setReviseEmp] = useState(null);
+  const [historyEmp, setHistoryEmp] = useState(null);
+
+  const fetchSalaries = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/payroll/salary-list');
+      setEmployees(res.data || []);
+    } catch {
+      showToast('Failed to load salary data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { fetchSalaries(); }, [fetchSalaries]);
+
+  const filtered = employees.filter(e =>
+    !search ||
+    e.name?.toLowerCase().includes(search.toLowerCase()) ||
+    e.employeeId?.toLowerCase().includes(search.toLowerCase()) ||
+    e.department?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const withSalary = filtered.filter(e => e.salaryStructure);
+  const withoutSalary = filtered.filter(e => !e.salaryStructure);
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">Employee Salaries</h3>
+          <p className="text-xs text-slate-500">Set, edit, or revise individual salary for each employee</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search employee..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Total Employees', value: employees.length, color: 'blue' },
+          { label: 'Salary Configured', value: employees.filter(e => e.salaryStructure).length, color: 'green' },
+          { label: 'Pending Setup', value: employees.filter(e => !e.salaryStructure).length, color: 'amber' },
+        ].map(s => (
+          <div key={s.label} className={`bg-${s.color}-50 border border-${s.color}-100 rounded-xl p-4`}>
+            <p className="text-xs text-slate-500">{s.label}</p>
+            <p className={`text-2xl font-bold text-${s.color}-700 mt-1`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
+          <span className="text-slate-500">Loading salaries...</span>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Employees without salary */}
+          {withoutSalary.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <h4 className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {withoutSalary.length} employee(s) without salary setup
+              </h4>
+              <div className="space-y-2">
+                {withoutSalary.map(e => (
+                  <div key={e.id} className="flex items-center justify-between bg-white rounded-lg px-4 py-2.5 border border-amber-100">
+                    <div>
+                      <span className="text-sm font-medium text-slate-800">{e.name}</span>
+                      <span className="text-xs text-slate-400 ml-2">({e.employeeId})</span>
+                      <span className="text-xs text-slate-400 ml-2">• {e.department || 'No dept'}</span>
+                    </div>
+                    <button
+                      onClick={() => setEditEmp(e)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700"
+                    >
+                      <IndianRupee className="w-3 h-3" />
+                      Set Salary
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Employees with salary */}
+          {withSalary.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600">Employee</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600">Department</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-600">CTC Annual</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-600">Net Monthly</th>
+                    <th className="text-center px-4 py-3 font-semibold text-slate-600">Effective From</th>
+                    <th className="text-center px-4 py-3 font-semibold text-slate-600">Last Revision</th>
+                    <th className="text-center px-5 py-3 font-semibold text-slate-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {withSalary.map(e => {
+                    const s = e.salaryStructure;
+                    const lastRev = e.salaryRevisions?.[0];
+                    return (
+                      <tr key={e.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{e.name}</div>
+                          <div className="text-xs text-slate-400">{e.employeeId} • {e.designation || '—'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{e.department || '—'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatCurrency(s.ctcAnnual)}</td>
+                        <td className="px-4 py-3 text-right text-slate-700">{formatCurrency(s.netPayMonthly)}</td>
+                        <td className="px-4 py-3 text-center text-xs text-slate-500">{s.effectiveFrom || '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          {lastRev ? (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              lastRev.revisionType === 'increment' ? 'bg-green-100 text-green-700' :
+                              lastRev.revisionType === 'decrement' ? 'bg-red-100 text-red-700' :
+                              'bg-slate-100 text-slate-600'
+                            }`}>
+                              {lastRev.revisionType === 'increment' ? '↑' : lastRev.revisionType === 'decrement' ? '↓' : '·'}
+                              {new Date(lastRev.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                            </span>
+                          ) : <span className="text-xs text-slate-400">—</span>}
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => setEditEmp(e)}
+                              title="Edit salary"
+                              className="p-1.5 rounded-lg text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                            >
+                              <Briefcase className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setReviseEmp(e)}
+                              title="Increment / Decrement"
+                              className="p-1.5 rounded-lg text-slate-500 hover:bg-green-50 hover:text-green-600 transition-colors"
+                            >
+                              <TrendingUp className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setHistoryEmp(e)}
+                              title="Revision history"
+                              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                            >
+                              <ArrowUpDown className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edit Salary Modal */}
+      {editEmp && (
+        <EditSalaryModal
+          employee={editEmp}
+          onClose={() => setEditEmp(null)}
+          onSaved={() => { setEditEmp(null); fetchSalaries(); showToast('Salary saved successfully', 'success'); }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Revise Salary Modal */}
+      {reviseEmp && (
+        <ReviseSalaryModal
+          employee={reviseEmp}
+          onClose={() => setReviseEmp(null)}
+          onSaved={() => { setReviseEmp(null); fetchSalaries(); showToast('Salary revision applied', 'success'); }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Revision History Modal */}
+      {historyEmp && (
+        <RevisionHistoryModal
+          employee={historyEmp}
+          onClose={() => setHistoryEmp(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Edit Salary Modal (full component breakdown) ──
+function EditSalaryModal({ employee, onClose, onSaved, showToast }) {
+  const s = employee.salaryStructure || {};
+  const [form, setForm] = useState({
+    ctcAnnual: s.ctcAnnual || '',
+    basic: s.basic || '', hra: s.hra || '', da: s.da || '',
+    specialAllowance: s.specialAllowance || '',
+    medicalAllowance: s.medicalAllowance || '',
+    conveyanceAllowance: s.conveyanceAllowance || '',
+    otherAllowance: s.otherAllowance || '',
+    otherAllowanceLabel: s.otherAllowanceLabel || '',
+    employerPf: s.employerPf || '', employerEsi: s.employerEsi || '',
+    employeePf: s.employeePf || '', employeeEsi: s.employeeEsi || '',
+    professionalTax: s.professionalTax || '', tds: s.tds || '',
+    effectiveFrom: s.effectiveFrom || new Date().toISOString().slice(0, 10),
+    notes: s.notes || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const n = (v) => parseFloat(v) || 0;
+  const grossEarnings = n(form.basic) + n(form.hra) + n(form.da) + n(form.specialAllowance) +
+    n(form.medicalAllowance) + n(form.conveyanceAllowance) + n(form.otherAllowance);
+  const totalDeductions = n(form.employeePf) + n(form.employeeEsi) + n(form.professionalTax) + n(form.tds);
+  const netPay = grossEarnings - totalDeductions;
+
+  const handleSave = async () => {
+    if (!form.ctcAnnual) { showToast('CTC Annual is required', 'error'); return; }
+    setSaving(true);
+    try {
+      const payload = {};
+      Object.keys(form).forEach(k => { payload[k] = isNaN(form[k]) || form[k] === '' ? form[k] : parseFloat(form[k]) || 0; });
+      payload.ctcMonthly = n(form.ctcAnnual) / 12;
+      payload.otherAllowanceLabel = form.otherAllowanceLabel || null;
+      payload.notes = form.notes || null;
+      await api.put(`/payroll/salary/${employee.id}`, payload);
+      onSaved();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to save salary', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Edit Salary — {employee.name}</h3>
+            <p className="text-xs text-slate-400">{employee.employeeId} · {employee.department}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6 space-y-5">
+          {/* CTC + Effective From */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Annual CTC (₹) *</label>
+              <input type="number" value={form.ctcAnnual} onChange={e => setForm(p => ({ ...p, ctcAnnual: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Effective From</label>
+              <input type="date" value={form.effectiveFrom} onChange={e => setForm(p => ({ ...p, effectiveFrom: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          {/* Earnings */}
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Earnings</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {SALARY_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    {f.key === 'otherAllowance' && form.otherAllowanceLabel ? form.otherAllowanceLabel : f.label} (₹)
+                  </label>
+                  <input type="number" value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Other Allowance Label</label>
+                <input type="text" value={form.otherAllowanceLabel} onChange={e => setForm(p => ({ ...p, otherAllowanceLabel: e.target.value }))}
+                  placeholder="e.g. Performance Bonus"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Deductions */}
+          <div>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Deductions & Employer Contributions</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {DEDUCTION_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">{f.label} (₹)</label>
+                  <input type="number" value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+
+          {/* Live Summary */}
+          <div className="bg-slate-50 rounded-xl p-4 grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-xs text-slate-500">Gross Earnings</p>
+              <p className="text-base font-bold text-slate-800">{formatCurrency(grossEarnings)}</p>
+              <p className="text-xs text-slate-400">per month</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Total Deductions</p>
+              <p className="text-base font-bold text-red-600">{formatCurrency(totalDeductions)}</p>
+              <p className="text-xs text-slate-400">per month</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Net Pay</p>
+              <p className="text-base font-bold text-green-600">{formatCurrency(netPay)}</p>
+              <p className="text-xs text-slate-400">per month</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {saving ? 'Saving...' : 'Save Salary'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Revise Salary Modal (increment / decrement) ──
+function ReviseSalaryModal({ employee, onClose, onSaved, showToast }) {
+  const currentCtc = employee.salaryStructure?.ctcAnnual || 0;
+  const [mode, setMode] = useState('increment'); // 'increment' | 'decrement'
+  const [valueType, setValueType] = useState('percent'); // 'percent' | 'amount'
+  const [value, setValue] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const numVal = parseFloat(value) || 0;
+  let newCtc = currentCtc;
+  if (numVal > 0) {
+    const signed = mode === 'decrement' ? -numVal : numVal;
+    if (valueType === 'percent') {
+      newCtc = currentCtc * (1 + signed / 100);
+    } else {
+      newCtc = currentCtc + signed;
+    }
+  }
+  const diff = newCtc - currentCtc;
+  const diffPct = currentCtc > 0 ? ((diff / currentCtc) * 100) : 0;
+
+  const handleApply = async () => {
+    if (!value || numVal <= 0) { showToast('Enter a valid value', 'error'); return; }
+    if (!effectiveFrom) { showToast('Effective From date is required', 'error'); return; }
+    if (newCtc <= 0) { showToast('New CTC must be positive', 'error'); return; }
+    setSaving(true);
+    try {
+      const payload = { userId: employee.id, effectiveFrom, reason };
+      if (valueType === 'percent') {
+        payload.changePercent = mode === 'decrement' ? -numVal : numVal;
+      } else {
+        payload.changeAmount = mode === 'decrement' ? -numVal : numVal;
+      }
+      await api.post('/payroll/increment', payload);
+      onSaved();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to apply revision', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Revise Salary — {employee.name}</h3>
+            <p className="text-xs text-slate-400">{employee.employeeId} · Current CTC: {formatCurrency(currentCtc)}/yr</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Mode Toggle */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Revision Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setMode('increment')}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  mode === 'increment' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Increment
+              </button>
+              <button
+                onClick={() => setMode('decrement')}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  mode === 'decrement' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                <TrendingDown className="w-4 h-4" />
+                Decrement
+              </button>
+            </div>
+          </div>
+
+          {/* Value Type */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Change By</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setValueType('percent')}
+                className={`py-2 rounded-lg border text-sm font-medium transition-all ${
+                  valueType === 'percent' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                Percentage (%)
+              </button>
+              <button
+                onClick={() => setValueType('amount')}
+                className={`py-2 rounded-lg border text-sm font-medium transition-all ${
+                  valueType === 'amount' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                Fixed Amount (₹)
+              </button>
+            </div>
+          </div>
+
+          {/* Value Input */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {valueType === 'percent' ? 'Percentage (%)' : 'Amount (₹ Annual)'}
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              placeholder={valueType === 'percent' ? 'e.g. 10' : 'e.g. 60000'}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Live Preview */}
+          {numVal > 0 && (
+            <div className={`rounded-xl p-4 border-2 ${mode === 'increment' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Preview</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Current CTC (Annual)</span>
+                  <span className="font-semibold text-slate-800">{formatCurrency(currentCtc)}</span>
+                </div>
+                <div className={`flex justify-between font-medium ${mode === 'increment' ? 'text-green-700' : 'text-red-700'}`}>
+                  <span>{mode === 'increment' ? '+ Increment' : '− Decrement'}</span>
+                  <span>{mode === 'increment' ? '+' : '−'}{formatCurrency(Math.abs(diff))}</span>
+                </div>
+                <div className="border-t border-slate-200 pt-2 flex justify-between">
+                  <span className="font-semibold text-slate-700">New CTC (Annual)</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(newCtc)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>New Monthly Net (approx)</span>
+                  <span>{formatCurrency(newCtc / 12)}</span>
+                </div>
+                <div className={`text-center text-xs font-semibold mt-1 ${mode === 'increment' ? 'text-green-700' : 'text-red-700'}`}>
+                  {mode === 'increment' ? '+' : ''}{diffPct.toFixed(2)}% change
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Effective From + Reason */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Effective From *</label>
+              <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+              <input type="text" value={reason} onChange={e => setReason(e.target.value)}
+                placeholder="Annual appraisal, correction..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button onClick={handleApply} disabled={saving || numVal <= 0}
+            className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50 ${
+              mode === 'increment' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === 'increment' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            {saving ? 'Applying...' : `Apply ${mode === 'increment' ? 'Increment' : 'Decrement'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Revision History Modal ──
+function RevisionHistoryModal({ employee, onClose }) {
+  const [revisions, setRevisions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/payroll/salary/${employee.id}/revisions`)
+      .then(r => setRevisions(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [employee.id]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Salary History — {employee.name}</h3>
+            <p className="text-xs text-slate-400">{employee.employeeId} · {employee.department}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+            </div>
+          ) : revisions.length === 0 ? (
+            <div className="text-center py-10 text-slate-400">
+              <ArrowUpDown className="w-8 h-8 mx-auto mb-2" />
+              <p className="text-sm">No revision history</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {revisions.map((r, i) => {
+                const diff = r.newCtc - r.oldCtc;
+                const pct = r.oldCtc > 0 ? ((diff / r.oldCtc) * 100) : 0;
+                const isInc = r.revisionType === 'increment';
+                const isDec = r.revisionType === 'decrement';
+                return (
+                  <div key={r.id} className={`rounded-xl border p-4 ${isInc ? 'border-green-200 bg-green-50' : isDec ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            isInc ? 'bg-green-100 text-green-700' : isDec ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {isInc ? '↑ INCREMENT' : isDec ? '↓ DECREMENT' : r.revisionType === 'initial' ? '• INITIAL' : '≡ MANUAL'}
+                          </span>
+                          {i === 0 && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Latest</span>}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-700">
+                          {formatCurrency(r.oldCtc)} → {formatCurrency(r.newCtc)}
+                          <span className={`ml-2 text-xs ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            ({diff >= 0 ? '+' : ''}{formatCurrency(diff)}, {pct.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          Effective: {r.effectiveFrom} · By: {r.revisedByUser?.name || 'Admin'}
+                        </div>
+                        {r.reason && <div className="text-xs text-slate-500 mt-0.5 italic">"{r.reason}"</div>}
+                      </div>
+                      <div className="text-xs text-slate-400 ml-4 text-right whitespace-nowrap">
+                        {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

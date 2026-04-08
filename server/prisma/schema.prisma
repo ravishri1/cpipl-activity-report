@@ -871,6 +871,7 @@ model SalaryRevision {
   newCtc        Float
   reason        String?
   revisedBy     Int                                   // admin userId
+  revisionType  String   @default("manual")          // 'increment' | 'decrement' | 'manual' | 'initial'
   createdAt     DateTime @default(now())
 
   user          User     @relation(fields: [userId], references: [id])

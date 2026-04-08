@@ -9,6 +9,33 @@ router.use(authenticate);
 
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
+// GET /salary-list — All employees with their salary structures (admin)
+router.get('/salary-list', requireAdmin, asyncHandler(async (req, res) => {
+  const employees = await req.prisma.user.findMany({
+    where: { isActive: true },
+    select: {
+      id: true, name: true, employeeId: true, department: true, designation: true,
+      salaryStructure: {
+        select: {
+          ctcAnnual: true, ctcMonthly: true, basic: true, hra: true, da: true,
+          specialAllowance: true, medicalAllowance: true, conveyanceAllowance: true,
+          otherAllowance: true, otherAllowanceLabel: true,
+          employerPf: true, employerEsi: true, employeePf: true, employeeEsi: true,
+          professionalTax: true, tds: true, netPayMonthly: true,
+          effectiveFrom: true, stopSalaryProcessing: true, notes: true,
+        },
+      },
+      salaryRevisions: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { createdAt: true, oldCtc: true, newCtc: true, revisionType: true },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+  res.json(employees);
+}));
+
 // GET /salary/:userId — Get salary structure (admin or self)
 router.get('/salary/:userId', requireActiveEmployee, asyncHandler(async (req, res) => {
   const userId = parseId(req.params.userId);
@@ -52,11 +79,13 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
   });
 
   if (existing && existing.ctcAnnual !== data.ctcAnnual) {
+    const diff = data.ctcAnnual - existing.ctcAnnual;
     await req.prisma.salaryRevision.create({
       data: {
         userId, effectiveFrom: data.effectiveFrom || new Date().toISOString().slice(0, 10),
         oldCtc: existing.ctcAnnual, newCtc: data.ctcAnnual,
         reason: d.revisionReason || 'Salary structure updated', revisedBy: req.user.id,
+        revisionType: diff > 0 ? 'increment' : 'decrement',
       },
     });
   } else if (!existing) {
@@ -65,6 +94,7 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
         userId, effectiveFrom: data.effectiveFrom || new Date().toISOString().slice(0, 10),
         oldCtc: 0, newCtc: data.ctcAnnual,
         reason: 'Initial salary structure created', revisedBy: req.user.id,
+        revisionType: 'initial',
       },
     });
   }
@@ -1104,69 +1134,79 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
   res.send(buffer);
 }));
 
-// ── POST /increment — Propose salary increment (tied to appraisal or standalone) ──
+// ── POST /increment — Apply salary increment OR decrement ──
+// Modes: { newCtcAnnual } | { changePercent } | { changeAmount }
+// changePercent: positive = increment, negative = decrement
+// changeAmount:  positive = increment, negative = decrement
 router.post('/increment', requireAdmin, asyncHandler(async (req, res) => {
-  const { userId, newCtcAnnual, effectiveFrom, reason, appraisalReviewId } = req.body;
-  if (!userId || !newCtcAnnual || !effectiveFrom) throw badRequest('userId, newCtcAnnual, and effectiveFrom are required.');
+  const { userId, newCtcAnnual, changePercent, changeAmount, effectiveFrom, reason, appraisalReviewId } = req.body;
+
+  if (!userId || !effectiveFrom) throw badRequest('userId and effectiveFrom are required.');
+  if (newCtcAnnual == null && changePercent == null && changeAmount == null)
+    throw badRequest('Provide newCtcAnnual, changePercent, or changeAmount.');
 
   const uid = parseInt(userId);
   const existing = await req.prisma.salaryStructure.findUnique({ where: { userId: uid } });
   if (!existing) throw notFound('No salary structure found for this employee. Create one first.');
 
-  const increment = newCtcAnnual - existing.ctcAnnual;
-  if (increment <= 0) throw badRequest('New CTC must be higher than current CTC.');
+  let finalCtc;
+  if (newCtcAnnual != null) {
+    finalCtc = Math.round(parseFloat(newCtcAnnual) * 100) / 100;
+  } else if (changePercent != null) {
+    finalCtc = Math.round(existing.ctcAnnual * (1 + parseFloat(changePercent) / 100) * 100) / 100;
+  } else {
+    finalCtc = Math.round((existing.ctcAnnual + parseFloat(changeAmount)) * 100) / 100;
+  }
 
-  const incrementPct = Math.round((increment / existing.ctcAnnual) * 10000) / 100;
-  const newCtcMonthly = Math.round((newCtcAnnual / 12) * 100) / 100;
+  if (finalCtc <= 0) throw badRequest('New CTC must be positive.');
+  if (finalCtc === existing.ctcAnnual) throw badRequest('New CTC is the same as current CTC. No change.');
 
-  // Proportionally scale all components
-  const scaleFactor = newCtcAnnual / existing.ctcAnnual;
+  const diff = finalCtc - existing.ctcAnnual;
+  const changePct = Math.round((diff / existing.ctcAnnual) * 10000) / 100;
+  const revisionType = diff > 0 ? 'increment' : 'decrement';
+  const newCtcMonthly = Math.round((finalCtc / 12) * 100) / 100;
+
+  const scaleFactor = finalCtc / existing.ctcAnnual;
   const scale = (v) => Math.round((v || 0) * scaleFactor * 100) / 100;
 
   const data = {
-    ctcAnnual: newCtcAnnual,
-    ctcMonthly: newCtcMonthly,
-    basic: scale(existing.basic),
-    hra: scale(existing.hra),
-    da: scale(existing.da),
-    specialAllowance: scale(existing.specialAllowance),
-    medicalAllowance: scale(existing.medicalAllowance),
-    conveyanceAllowance: scale(existing.conveyanceAllowance),
-    otherAllowance: scale(existing.otherAllowance),
-    employerPf: scale(existing.employerPf),
-    employerEsi: scale(existing.employerEsi),
-    employeePf: scale(existing.employeePf),
-    employeeEsi: scale(existing.employeeEsi),
-    professionalTax: existing.professionalTax,
-    tds: scale(existing.tds),
+    ctcAnnual: finalCtc, ctcMonthly: newCtcMonthly,
+    basic: scale(existing.basic), hra: scale(existing.hra), da: scale(existing.da),
+    specialAllowance: scale(existing.specialAllowance), medicalAllowance: scale(existing.medicalAllowance),
+    conveyanceAllowance: scale(existing.conveyanceAllowance), otherAllowance: scale(existing.otherAllowance),
+    employerPf: scale(existing.employerPf), employerEsi: scale(existing.employerEsi),
+    employeePf: scale(existing.employeePf), employeeEsi: scale(existing.employeeEsi),
+    professionalTax: existing.professionalTax, tds: scale(existing.tds),
     effectiveFrom,
   };
-  data.grossEarnings = data.basic + data.hra + data.da + data.specialAllowance + data.medicalAllowance + data.conveyanceAllowance + data.otherAllowance;
-  data.netPayMonthly = data.grossEarnings - data.employeePf - data.employeeEsi - (data.professionalTax || 0) - data.tds;
+  data.netPayMonthly = data.basic + data.hra + data.da + data.specialAllowance + data.medicalAllowance +
+    data.conveyanceAllowance + data.otherAllowance - data.employeePf - data.employeeEsi -
+    (data.professionalTax || 0) - data.tds;
 
   const [updated] = await req.prisma.$transaction([
     req.prisma.salaryStructure.update({ where: { userId: uid }, data }),
     req.prisma.salaryRevision.create({
       data: {
         userId: uid, effectiveFrom,
-        oldCtc: existing.ctcAnnual, newCtc: newCtcAnnual,
-        reason: reason || `Salary increment ${incrementPct}%`,
+        oldCtc: existing.ctcAnnual, newCtc: finalCtc,
+        reason: reason || `Salary ${revisionType} ${Math.abs(changePct)}%`,
         revisedBy: req.user.id,
+        revisionType,
       },
     }),
   ]);
 
-  // Mark appraisal review if linked
   if (appraisalReviewId) {
     await req.prisma.appraisalReview.update({
       where: { id: parseInt(appraisalReviewId) },
-      data: { hrNotes: (await req.prisma.appraisalReview.findUnique({ where: { id: parseInt(appraisalReviewId) }, select: { hrNotes: true } }))?.hrNotes
-        ? undefined
-        : `Increment applied: ₹${existing.ctcAnnual.toLocaleString('en-IN')} → ₹${newCtcAnnual.toLocaleString('en-IN')} (${incrementPct}%) effective ${effectiveFrom}` },
+      data: { hrNotes: `${revisionType === 'increment' ? 'Increment' : 'Decrement'} applied: ₹${existing.ctcAnnual.toLocaleString('en-IN')} → ₹${finalCtc.toLocaleString('en-IN')} (${changePct}%) effective ${effectiveFrom}` },
     }).catch(() => {});
   }
 
-  res.json({ message: `Increment applied. ${incrementPct}% raise effective ${effectiveFrom}.`, incrementPct, oldCtc: existing.ctcAnnual, newCtc: newCtcAnnual, salaryStructure: updated });
+  const label = revisionType === 'increment'
+    ? `${changePct}% raise effective ${effectiveFrom}.`
+    : `${Math.abs(changePct)}% reduction effective ${effectiveFrom}.`;
+  res.json({ message: `Salary ${revisionType} applied. ${label}`, revisionType, changePct, oldCtc: existing.ctcAnnual, newCtc: finalCtc, salaryStructure: updated });
 }));
 
 // ── GET /statutory?month=YYYY-MM — PF/ESI/TDS statutory report ──────────────

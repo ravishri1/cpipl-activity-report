@@ -15,8 +15,10 @@ import {
   User,
   Hash,
   BarChart3,
+  ArrowUpDown,
 } from 'lucide-react';
 import api from '../../utils/api';
+import { useAuth } from '../../context/AuthContext';
 
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-IN', {
@@ -117,6 +119,13 @@ export default function MyPayslips() {
               YTD Summary
             </div>
           </button>
+          <button onClick={() => setActiveTab('revisions')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'revisions' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4" />
+              Salary Revisions
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -153,6 +162,9 @@ export default function MyPayslips() {
 
       {/* YTD Summary Tab */}
       {activeTab === 'ytd' && <YtdSummary />}
+
+      {/* Salary Revisions Tab */}
+      {activeTab === 'revisions' && <SalaryRevisionHistory />}
     </div>
   );
 }
@@ -792,6 +804,149 @@ function EmptyState() {
           Your payslips will appear here once they are generated and published by
           the payroll team. Check back after your first pay cycle.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Salary Revision History ---------- */
+function SalaryRevisionHistory() {
+  const { user } = useAuth();
+  const [revisions, setRevisions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    api.get(`/payroll/salary/${user.id}/revisions`)
+      .then(r => setRevisions(r.data || []))
+      .catch(() => setError('Failed to load revision history.'))
+      .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="w-5 h-5 animate-spin text-emerald-600 mr-2" />
+      <span className="text-slate-500 text-sm">Loading revisions...</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="text-center py-16 text-red-500 text-sm">{error}</div>
+  );
+
+  if (revisions.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+      <ArrowUpDown className="w-10 h-10 mb-3" />
+      <p className="text-base font-medium text-slate-500">No salary revisions yet</p>
+      <p className="text-sm mt-1">Your salary history will appear here when revisions are applied.</p>
+    </div>
+  );
+
+  const latest = revisions[0];
+  const isLatestInc = latest.revisionType === 'increment';
+  const isLatestDec = latest.revisionType === 'decrement';
+  const latestDiff = latest.newCtc - latest.oldCtc;
+  const latestPct = latest.oldCtc > 0 ? ((latestDiff / latest.oldCtc) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Latest Revision Banner */}
+      {(isLatestInc || isLatestDec) && (
+        <div className={`rounded-2xl p-5 border-2 ${isLatestInc ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-3 rounded-xl ${isLatestInc ? 'bg-green-100' : 'bg-amber-100'}`}>
+                {isLatestInc
+                  ? <TrendingUp className="w-6 h-6 text-green-600" />
+                  : <TrendingDown className="w-6 h-6 text-amber-600" />}
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${isLatestInc ? 'text-green-800' : 'text-amber-800'}`}>
+                  {isLatestInc ? 'Salary Increment Applied' : 'Salary Revision Applied'}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Effective from {latest.effectiveFrom} · Updated on {new Date(latest.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+                </p>
+                {latest.reason && <p className="text-xs text-slate-500 italic mt-0.5">"{latest.reason}"</p>}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className={`text-2xl font-bold ${isLatestInc ? 'text-green-700' : 'text-amber-700'}`}>
+                {isLatestInc ? '+' : ''}{latestPct.toFixed(1)}%
+              </p>
+              <p className="text-xs text-slate-500">
+                {isLatestInc ? '+' : ''}{formatCurrency(latestDiff)}/yr
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+            <div className="bg-white rounded-xl p-3 border border-slate-100">
+              <p className="text-xs text-slate-400">Previous CTC</p>
+              <p className="text-sm font-bold text-slate-700">{formatCurrency(latest.oldCtc)}</p>
+              <p className="text-xs text-slate-400">per year</p>
+            </div>
+            <div className={`rounded-xl p-3 border ${isLatestInc ? 'bg-green-100 border-green-200' : 'bg-amber-100 border-amber-200'}`}>
+              <p className="text-xs text-slate-500">New CTC</p>
+              <p className={`text-sm font-bold ${isLatestInc ? 'text-green-800' : 'text-amber-800'}`}>{formatCurrency(latest.newCtc)}</p>
+              <p className="text-xs text-slate-400">per year</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-slate-100">
+              <p className="text-xs text-slate-400">Monthly Approx.</p>
+              <p className="text-sm font-bold text-slate-700">{formatCurrency(latest.newCtc / 12)}</p>
+              <p className="text-xs text-slate-400">per month</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Timeline */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <ArrowUpDown className="w-4 h-4 text-slate-400" />
+          Complete Revision History
+        </h3>
+        <div className="space-y-3">
+          {revisions.map((r, i) => {
+            const diff = r.newCtc - r.oldCtc;
+            const pct = r.oldCtc > 0 ? ((diff / r.oldCtc) * 100) : 0;
+            const isInc = r.revisionType === 'increment';
+            const isDec = r.revisionType === 'decrement';
+            return (
+              <div key={r.id} className={`bg-white rounded-xl border p-4 ${isInc ? 'border-l-4 border-l-green-500' : isDec ? 'border-l-4 border-l-red-400' : 'border-l-4 border-l-slate-300'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        isInc ? 'bg-green-100 text-green-700' : isDec ? 'bg-red-100 text-red-600' : r.revisionType === 'initial' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {isInc ? '↑ INCREMENT' : isDec ? '↓ DECREMENT' : r.revisionType === 'initial' ? '• INITIAL SETUP' : '≡ MANUAL UPDATE'}
+                      </span>
+                      {i === 0 && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Current</span>}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-base font-bold text-slate-800">{formatCurrency(r.newCtc)}</span>
+                      <span className="text-xs text-slate-400">per year</span>
+                      {r.oldCtc > 0 && (
+                        <span className={`text-xs font-semibold ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          ({diff >= 0 ? '+' : ''}{pct.toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {r.oldCtc > 0 && <span>Previously {formatCurrency(r.oldCtc)}/yr · </span>}
+                      Effective {r.effectiveFrom}
+                    </div>
+                    {r.reason && <div className="text-xs text-slate-500 mt-1 italic">"{r.reason}"</div>}
+                  </div>
+                  <div className="text-right text-xs text-slate-400 whitespace-nowrap">
+                    {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
