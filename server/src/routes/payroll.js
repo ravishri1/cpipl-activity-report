@@ -110,10 +110,11 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
   let fieldData;
   if (Array.isArray(d.components) && d.components.length > 0) {
     const mapped = mapComponentsToFields(d.components);
+    const { grossEarnings, totalDeductions, ...mappedFields } = mapped; // strip computed summaries (not in schema)
     fieldData = {
-      ...mapped,
-      ctcAnnual: d.ctcAnnual || mapped.grossEarnings * 12,
-      ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : mapped.grossEarnings),
+      ...mappedFields,
+      ctcAnnual: d.ctcAnnual || grossEarnings * 12,
+      ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : grossEarnings),
       components: d.components,
     };
   } else {
