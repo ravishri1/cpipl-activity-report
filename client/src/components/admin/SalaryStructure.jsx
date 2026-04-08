@@ -41,6 +41,29 @@ const formatCurrencyDetailed = (val) => {
   return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// Convert old hardcoded salary fields to flexible components array (backward compat)
+function convertHardcodedToComponents(d) {
+  const row = (code, name, type, amount, label) => {
+    const a = parseFloat(amount) || 0;
+    return a > 0 ? { componentId: null, code, name, type, amount: a, label: label || '' } : null;
+  };
+  return [
+    row('BASIC', 'Basic Salary', 'earning', d.basic),
+    row('HRA', 'House Rent Allowance (HRA)', 'earning', d.hra),
+    row('DA', 'Dearness Allowance (DA)', 'earning', d.da),
+    row('SPECIAL_ALLOWANCE', 'Special Allowance', 'earning', d.specialAllowance),
+    row('MEDICAL_ALLOWANCE', 'Medical Allowance', 'earning', d.medicalAllowance),
+    row('CONVEYANCE_ALLOWANCE', 'Conveyance Allowance', 'earning', d.conveyanceAllowance),
+    d.otherAllowance > 0 ? row('OTHER', d.otherAllowanceLabel || 'Other Allowance', 'earning', d.otherAllowance, d.otherAllowanceLabel) : null,
+    row('EMP_PF', 'Employee PF (12%)', 'deduction', d.employeePf),
+    row('EMP_ESI', 'Employee ESI (0.75%)', 'deduction', d.employeeEsi),
+    row('PT', 'Professional Tax', 'deduction', d.professionalTax),
+    row('TDS', 'TDS / Income Tax', 'deduction', d.tds),
+    row('EMPLOYER_PF', 'Employer PF (12%)', 'employer', d.employerPf),
+    row('EMPLOYER_ESI', 'Employer ESI (3.25%)', 'employer', d.employerEsi),
+  ].filter(Boolean);
+}
+
 const InputField = ({ label, name, value, onChange, type = 'number', placeholder, prefix, disabled, className = '' }) => (
   <div className={className}>
     <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
@@ -142,6 +165,10 @@ export default function SalaryStructure() {
 
   // ─── Revise salary state ───
   const [reviseEmployee, setReviseEmployee] = useState(null);
+
+  // ─── Flexible component picker state (salary modal) ───
+  const [selectedComponents, setSelectedComponents] = useState([]);
+  const [addDropdownType, setAddDropdownType] = useState(null); // 'earning' | 'deduction' | 'employer' | null
 
   // ─── Templates tab state ───
   const [templates, setTemplates] = useState([]);
@@ -265,31 +292,19 @@ export default function SalaryStructure() {
     );
   }, [employees, assignSearch]);
 
-  // ─── Calculations (used in both salary modal and template modal) ───
+  // ─── Calculations (derived from selectedComponents) ───
   const calculations = useMemo(() => {
-    const num = (v) => parseFloat(v) || 0;
-    const ctcAnnual = num(salaryForm.ctcAnnual);
+    const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const ctcMonthly = ctcAnnual / 12;
-
-    const grossEarnings =
-      num(salaryForm.basic) +
-      num(salaryForm.hra) +
-      num(salaryForm.da) +
-      num(salaryForm.specialAllowance) +
-      num(salaryForm.medicalAllowance) +
-      num(salaryForm.conveyanceAllowance) +
-      num(salaryForm.otherAllowance);
-
-    const totalDeductions =
-      num(salaryForm.employeePf) +
-      num(salaryForm.employeeEsi) +
-      num(salaryForm.professionalTax) +
-      num(salaryForm.tds);
-
+    const grossEarnings = selectedComponents
+      .filter(c => c.type === 'earning')
+      .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const totalDeductions = selectedComponents
+      .filter(c => c.type === 'deduction')
+      .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
     const netPayMonthly = grossEarnings - totalDeductions;
-
     return { ctcAnnual, ctcMonthly, grossEarnings, totalDeductions, netPayMonthly };
-  }, [salaryForm]);
+  }, [salaryForm.ctcAnnual, selectedComponents]);
 
   // Template form calculations
   const templateCalcs = useMemo(() => {
@@ -331,29 +346,26 @@ export default function SalaryStructure() {
     setRevisions([]);
     setSalaryForm({ ...emptySalary });
 
+    setSelectedComponents([]);
+    setAddDropdownType(null);
+
     try {
       const res = await api.get(`/payroll/salary/${employee.id}`);
       if (res.data) {
         const d = res.data;
         setSalaryForm({
-          basic: d.basic ?? '',
-          hra: d.hra ?? '',
-          da: d.da ?? '',
-          specialAllowance: d.specialAllowance ?? '',
-          medicalAllowance: d.medicalAllowance ?? '',
-          conveyanceAllowance: d.conveyanceAllowance ?? '',
-          otherAllowance: d.otherAllowance ?? '',
-          otherAllowanceLabel: d.otherAllowanceLabel ?? '',
-          employeePf: d.employeePf ?? '',
-          employeeEsi: d.employeeEsi ?? '',
-          professionalTax: d.professionalTax ?? '',
-          tds: d.tds ?? '',
           ctcAnnual: d.ctcAnnual ?? '',
           effectiveFrom: d.effectiveFrom
             ? new Date(d.effectiveFrom).toISOString().split('T')[0]
             : new Date().toISOString().split('T')[0],
           notes: d.notes ?? '',
         });
+        // Use flexible components if saved, else convert hardcoded fields
+        if (Array.isArray(d.components) && d.components.length > 0) {
+          setSelectedComponents(d.components);
+        } else {
+          setSelectedComponents(convertHardcodedToComponents(d));
+        }
         setIsExisting(true);
       }
     } catch (err) {
@@ -370,6 +382,8 @@ export default function SalaryStructure() {
     setSelectedEmployee(null);
     setSalaryForm({ ...emptySalary });
     setSaveMessage(null);
+    setSelectedComponents([]);
+    setAddDropdownType(null);
   }, []);
 
   const handleChange = useCallback((e) => {
@@ -384,71 +398,73 @@ export default function SalaryStructure() {
       return;
     }
 
-    const ctcMonthly = ctcAnnual / 12;
-    const basic = Math.round(ctcMonthly * 0.4);
+    const monthly = ctcAnnual / 12;
+    const basic = Math.round(monthly * 0.4);
     const hra = Math.round(basic * 0.5);
-    const pfAmount = Math.min(Math.round(basic * 0.12), 1800);
-    const grossEstimate = ctcMonthly;
-    const esiAmount = grossEstimate < 21000 ? Math.round(grossEstimate * 0.0075) : 0;
+    const pf = Math.min(Math.round(basic * 0.12), 1800);
+    const esi = monthly < 21000 ? Math.round(monthly * 0.0075) : 0;
     const pt = 200;
-    const specialAllowance = Math.round(ctcMonthly - basic - hra - pfAmount);
+    const special = Math.max(0, Math.round(monthly - basic - hra - pf));
 
-    setSalaryForm((prev) => ({
-      ...prev,
-      basic: basic.toString(),
-      hra: hra.toString(),
-      da: '0',
-      specialAllowance: Math.max(0, specialAllowance).toString(),
-      medicalAllowance: '0',
-      conveyanceAllowance: '0',
-      otherAllowance: '0',
-      otherAllowanceLabel: '',
-      employeePf: pfAmount.toString(),
-      employeeEsi: esiAmount.toString(),
-      professionalTax: pt.toString(),
-      tds: '0',
-    }));
+    const suggestions = [
+      { code: 'BASIC', name: 'Basic Salary', type: 'earning', amount: basic },
+      { code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'earning', amount: hra },
+      { code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'earning', amount: special },
+      { code: 'EMP_PF', name: 'Employee PF (12%)', type: 'deduction', amount: pf },
+      ...(esi > 0 ? [{ code: 'EMP_ESI', name: 'Employee ESI (0.75%)', type: 'deduction', amount: esi }] : []),
+      { code: 'PT', name: 'Professional Tax', type: 'deduction', amount: pt },
+    ];
+
+    setSelectedComponents(prev => {
+      const next = [...prev];
+      for (const s of suggestions) {
+        const idx = next.findIndex(c => c.code === s.code);
+        const master = components.find(c => c.code === s.code);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], amount: s.amount };
+        } else {
+          next.push({ componentId: master?.id || null, code: s.code, name: s.name, type: s.type, amount: s.amount, label: '' });
+        }
+      }
+      return next;
+    });
     setSaveMessage({ type: 'success', text: 'Quick Fill applied. Review and adjust as needed.' });
-  }, [salaryForm.ctcAnnual]);
+  }, [salaryForm.ctcAnnual, components]);
 
   const saveSalary = useCallback(async () => {
     if (!selectedEmployee) return;
+    if (selectedComponents.length === 0) {
+      setSaveMessage({ type: 'error', text: 'Add at least one salary component before saving.' });
+      return;
+    }
     setSaving(true);
     setSaveMessage(null);
 
+    const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const payload = {
-      basic: parseFloat(salaryForm.basic) || 0,
-      hra: parseFloat(salaryForm.hra) || 0,
-      da: parseFloat(salaryForm.da) || 0,
-      specialAllowance: parseFloat(salaryForm.specialAllowance) || 0,
-      medicalAllowance: parseFloat(salaryForm.medicalAllowance) || 0,
-      conveyanceAllowance: parseFloat(salaryForm.conveyanceAllowance) || 0,
-      otherAllowance: parseFloat(salaryForm.otherAllowance) || 0,
-      otherAllowanceLabel: salaryForm.otherAllowanceLabel || '',
-      employeePf: parseFloat(salaryForm.employeePf) || 0,
-      employeeEsi: parseFloat(salaryForm.employeeEsi) || 0,
-      professionalTax: parseFloat(salaryForm.professionalTax) || 0,
-      tds: parseFloat(salaryForm.tds) || 0,
-      ctcAnnual: parseFloat(salaryForm.ctcAnnual) || 0,
+      ctcAnnual,
       effectiveFrom: salaryForm.effectiveFrom,
       notes: salaryForm.notes || '',
+      components: selectedComponents.map(c => ({
+        componentId: c.componentId || null,
+        code: c.code, name: c.name, type: c.type,
+        amount: parseFloat(c.amount) || 0,
+        label: c.label || '',
+      })),
     };
 
     try {
       await api.put(`/payroll/salary/${selectedEmployee.id}`, payload);
       setIsExisting(true);
       setSaveMessage({ type: 'success', text: 'Salary structure saved successfully.' });
-      setSalaryCache((prev) => ({
-        ...prev,
-        [selectedEmployee.id]: payload.ctcAnnual,
-      }));
+      setSalaryCache(prev => ({ ...prev, [selectedEmployee.id]: ctcAnnual }));
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to save salary structure.';
       setSaveMessage({ type: 'error', text: msg });
     } finally {
       setSaving(false);
     }
-  }, [selectedEmployee, salaryForm]);
+  }, [selectedEmployee, salaryForm, selectedComponents]);
 
   const toggleRevisions = useCallback(async () => {
     if (showRevisions) {
@@ -918,151 +934,187 @@ export default function SalaryStructure() {
               <span className="text-slate-500">Loading salary data...</span>
             </div>
           ) : (
-            <div className="px-6 py-5 space-y-6">
-              {/* CTC Annual & Quick Fill */}
-              <div className="flex items-end gap-4">
+            <div className="px-6 py-5 space-y-5">
+              {/* CTC Annual + Quick Fill */}
+              <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    CTC Annual
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">CTC Annual</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">₹</span>
                     <input
-                      type="number"
-                      name="ctcAnnual"
-                      value={salaryForm.ctcAnnual}
-                      onChange={handleChange}
-                      placeholder="e.g. 600000"
-                      min="0"
-                      step="any"
+                      type="number" name="ctcAnnual" value={salaryForm.ctcAnnual} onChange={handleChange}
+                      placeholder="e.g. 600000" min="0" step="any"
                       className="w-full border-2 border-blue-200 rounded-lg pl-8 pr-4 py-2.5 text-base font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
-                <div className="text-center px-4 py-2">
+                <div className="text-center px-3 py-2">
                   <div className="text-xs text-slate-400 mb-0.5">Monthly</div>
-                  <div className="text-base font-bold text-slate-700">
-                    {formatCurrency(calculations.ctcMonthly)}
-                  </div>
+                  <div className="text-base font-bold text-slate-700">{formatCurrency(calculations.ctcMonthly)}</div>
                 </div>
-                <button
-                  onClick={quickFill}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium transition-colors"
-                  title="Auto-distribute CTC across components"
-                >
-                  <Zap className="w-4 h-4" />
-                  Quick Fill
+                <button onClick={quickFill} className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium transition-colors" title="Auto-distribute CTC across standard components">
+                  <Zap className="w-4 h-4" /> Quick Fill
                 </button>
               </div>
 
-              {/* Two-column layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left: Earnings */}
-                <div className="bg-emerald-50/50 rounded-xl border border-emerald-100 p-4">
-                  <h3 className="text-sm font-bold text-emerald-800 mb-3 flex items-center gap-1.5">
-                    <ChevronUp className="w-4 h-4" />
-                    Earnings (Monthly)
-                  </h3>
-                  <div className="space-y-3">
-                    <InputField label="Basic Salary" name="basic" value={salaryForm.basic} onChange={handleChange} prefix="₹" />
-                    <InputField label="HRA (House Rent Allowance)" name="hra" value={salaryForm.hra} onChange={handleChange} prefix="₹" />
-                    <InputField label="Dearness Allowance (DA)" name="da" value={salaryForm.da} onChange={handleChange} prefix="₹" />
-                    <InputField label="Special Allowance" name="specialAllowance" value={salaryForm.specialAllowance} onChange={handleChange} prefix="₹" />
-                    <InputField label="Medical Allowance" name="medicalAllowance" value={salaryForm.medicalAllowance} onChange={handleChange} prefix="₹" />
-                    <InputField label="Conveyance Allowance" name="conveyanceAllowance" value={salaryForm.conveyanceAllowance} onChange={handleChange} prefix="₹" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <InputField label="Other Allowance" name="otherAllowance" value={salaryForm.otherAllowance} onChange={handleChange} prefix="₹" />
-                      <InputField label="Other Allowance Label" name="otherAllowanceLabel" value={salaryForm.otherAllowanceLabel} onChange={handleChange} type="text" placeholder="e.g. Food Allowance" />
+              {/* Flexible Component Sections */}
+              {(['earning', 'deduction', 'employer']).map(sectionType => {
+                const sectionItems = selectedComponents.filter(c => c.type === sectionType);
+                const available = components.filter(c => c.type === sectionType && !selectedComponents.find(s => s.code === c.code));
+                const isOpen = addDropdownType === sectionType;
+                const sectionConfig = {
+                  earning:  { label: 'Earnings', color: 'emerald', totalLabel: 'Gross Earnings', total: calculations.grossEarnings },
+                  deduction:{ label: 'Deductions', color: 'red',     totalLabel: 'Total Deductions', total: calculations.totalDeductions },
+                  employer: { label: 'Employer Contributions', color: 'slate', totalLabel: 'Total Contributions', total: selectedComponents.filter(c=>c.type==='employer').reduce((s,c)=>s+(parseFloat(c.amount)||0),0) },
+                }[sectionType];
+                const colorsMap = {
+                  emerald: { bg: 'bg-emerald-50/50', border: 'border-emerald-100', title: 'text-emerald-800', divider: 'border-emerald-200', total: 'text-emerald-700', addBtn: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' },
+                  red:     { bg: 'bg-red-50/50',     border: 'border-red-100',     title: 'text-red-800',     divider: 'border-red-200',     total: 'text-red-600',     addBtn: 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'         },
+                  slate:   { bg: 'bg-slate-50/50',   border: 'border-slate-100',   title: 'text-slate-700',   divider: 'border-slate-200',   total: 'text-slate-600',   addBtn: 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'  },
+                };
+                const col = colorsMap[sectionConfig.color];
+                return (
+                  <div key={sectionType} className={`rounded-xl border ${col.border} ${col.bg} p-4`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className={`text-sm font-bold ${col.title}`}>{sectionConfig.label} (Monthly)</h3>
+                      <div className="relative">
+                        <button
+                          onClick={() => setAddDropdownType(isOpen ? null : sectionType)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${col.addBtn}`}
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          Add {sectionConfig.label.split(' ')[0]}
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {isOpen && (
+                          <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-56 overflow-y-auto">
+                            {available.length === 0 ? (
+                              <p className="px-4 py-3 text-xs text-slate-400">All {sectionConfig.label.toLowerCase()} added</p>
+                            ) : (
+                              available.map(comp => (
+                                <button
+                                  key={comp.id}
+                                  onClick={() => {
+                                    setSelectedComponents(prev => [...prev, { componentId: comp.id, code: comp.code, name: comp.name, type: comp.type, amount: '', label: '' }]);
+                                    setAddDropdownType(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
+                                >
+                                  <div className="text-xs font-medium text-slate-800">{comp.name}</div>
+                                  {comp.defaultPercentage && (
+                                    <div className="text-xs text-slate-400">{comp.defaultPercentage}% of {comp.percentageOf}</div>
+                                  )}
+                                  {comp.complianceNote && (
+                                    <div className="text-xs text-blue-500">{comp.complianceNote}</div>
+                                  )}
+                                </button>
+                              ))
+                            )}
+                            {/* Custom component option */}
+                            <button
+                              onClick={() => {
+                                const label = window.prompt('Custom component name:');
+                                if (!label?.trim()) return;
+                                const code = 'CUSTOM_' + Date.now();
+                                setSelectedComponents(prev => [...prev, { componentId: null, code, name: label.trim(), type: sectionType, amount: '', label: label.trim() }]);
+                                setAddDropdownType(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 transition-colors text-blue-600 font-medium text-xs border-t border-slate-100"
+                            >
+                              + Add custom component...
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Gross total */}
-                    <div className="pt-2 border-t border-emerald-200 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-emerald-800">Gross Earnings</span>
-                      <span className="text-base font-bold text-emerald-700">
-                        {formatCurrencyDetailed(calculations.grossEarnings)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                    {sectionItems.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-2 text-center">No {sectionConfig.label.toLowerCase()} added yet. Click "Add" to choose from the master list.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {sectionItems.map((comp, idx) => {
+                          const globalIdx = selectedComponents.findIndex(c => c.code === comp.code);
+                          return (
+                            <div key={comp.code} className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-slate-700 truncate">{comp.name}</div>
+                                {comp.label && comp.label !== comp.name && (
+                                  <div className="text-xs text-slate-400 truncate">{comp.label}</div>
+                                )}
+                              </div>
+                              <div className="relative w-32 flex-shrink-0">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+                                <input
+                                  type="number" min="0" step="any"
+                                  value={comp.amount}
+                                  placeholder="0"
+                                  onChange={e => {
+                                    setSelectedComponents(prev => prev.map((c, i) => i === globalIdx ? { ...c, amount: e.target.value } : c));
+                                  }}
+                                  className="w-full pl-6 pr-2 py-1.5 text-sm font-medium text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                              </div>
+                              <button
+                                onClick={() => setSelectedComponents(prev => prev.filter((_, i) => i !== globalIdx))}
+                                className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"
+                                title="Remove"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                {/* Right: Deductions */}
-                <div className="bg-red-50/50 rounded-xl border border-red-100 p-4">
-                  <h3 className="text-sm font-bold text-red-800 mb-3 flex items-center gap-1.5">
-                    <ChevronDown className="w-4 h-4" />
-                    Deductions (Monthly)
-                  </h3>
-                  <div className="space-y-3">
-                    <InputField label="Employee PF" name="employeePf" value={salaryForm.employeePf} onChange={handleChange} prefix="₹" />
-                    <InputField label="Employee ESI" name="employeeEsi" value={salaryForm.employeeEsi} onChange={handleChange} prefix="₹" />
-                    <InputField label="Professional Tax" name="professionalTax" value={salaryForm.professionalTax} onChange={handleChange} prefix="₹" />
-                    <InputField label="TDS (Income Tax)" name="tds" value={salaryForm.tds} onChange={handleChange} prefix="₹" />
-
-                    {/* Total deductions */}
-                    <div className="pt-2 border-t border-red-200 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-red-800">Total Deductions</span>
-                      <span className="text-base font-bold text-red-600">
-                        {formatCurrencyDetailed(calculations.totalDeductions)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Net Pay Summary */}
-                  <div className="mt-4 bg-white rounded-lg border border-slate-200 p-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Gross Earnings</span>
-                      <span className="font-medium text-slate-700">
-                        {formatCurrencyDetailed(calculations.grossEarnings)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Total Deductions</span>
-                      <span className="font-medium text-red-600">
-                        - {formatCurrencyDetailed(calculations.totalDeductions)}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-100 flex justify-between">
-                      <span className="text-sm font-bold text-slate-700">Net Pay (Monthly)</span>
-                      <span
-                        className={`text-lg font-bold ${
-                          calculations.netPayMonthly >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        }`}
-                      >
-                        {formatCurrencyDetailed(calculations.netPayMonthly)}
-                      </span>
-                    </div>
-                    {calculations.ctcMonthly > 0 && calculations.grossEarnings > 0 && (
-                      <div className="flex justify-between text-xs text-slate-400 pt-1">
-                        <span>
-                          Earnings vs CTC Monthly: {((calculations.grossEarnings / calculations.ctcMonthly) * 100).toFixed(1)}%
-                        </span>
-                        <span>
-                          Net Annual: {formatCurrency(calculations.netPayMonthly * 12)}
-                        </span>
+                    {sectionItems.length > 0 && (
+                      <div className={`mt-3 pt-2 border-t ${col.divider} flex justify-between items-center`}>
+                        <span className={`text-xs font-semibold ${col.title}`}>{sectionConfig.totalLabel}</span>
+                        <span className={`text-sm font-bold ${col.total}`}>{formatCurrencyDetailed(sectionConfig.total)}</span>
                       </div>
                     )}
                   </div>
+                );
+              })}
+
+              {/* Click outside to close dropdown */}
+              {addDropdownType && (
+                <div className="fixed inset-0 z-10" onClick={() => setAddDropdownType(null)} />
+              )}
+
+              {/* Net Pay Summary */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Gross Earnings</span>
+                  <span className="font-medium text-emerald-700">{formatCurrencyDetailed(calculations.grossEarnings)}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Deductions</span>
+                  <span className="font-medium text-red-600">− {formatCurrencyDetailed(calculations.totalDeductions)}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-700">Net Pay (Monthly)</span>
+                  <span className={`text-lg font-bold ${calculations.netPayMonthly >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrencyDetailed(calculations.netPayMonthly)}
+                  </span>
+                </div>
+                {calculations.ctcMonthly > 0 && (
+                  <div className="flex justify-between text-xs text-slate-400 pt-1">
+                    <span className={Math.abs(calculations.grossEarnings - calculations.ctcMonthly) > 100 ? 'text-amber-500 font-medium' : ''}>
+                      Gross vs CTC/month: {formatCurrency(calculations.grossEarnings)} / {formatCurrency(calculations.ctcMonthly)}
+                      {Math.abs(calculations.grossEarnings - calculations.ctcMonthly) > 100 && ' ⚠ mismatch'}
+                    </span>
+                    <span>Net Annual: {formatCurrency(calculations.netPayMonthly * 12)}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Bottom row: Effective date & notes */}
+              {/* Effective date + notes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <InputField
-                  label="Effective From"
-                  name="effectiveFrom"
-                  value={salaryForm.effectiveFrom}
-                  onChange={handleChange}
-                  type="date"
-                />
+                <InputField label="Effective From" name="effectiveFrom" value={salaryForm.effectiveFrom} onChange={handleChange} type="date" />
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-slate-600 mb-1">Notes / Remarks</label>
-                  <textarea
-                    name="notes"
-                    value={salaryForm.notes}
-                    onChange={handleChange}
-                    rows={2}
-                    placeholder="Optional notes about this salary revision..."
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
+                  <textarea name="notes" value={salaryForm.notes} onChange={handleChange} rows={2} placeholder="Optional notes..." className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
                 </div>
               </div>
 

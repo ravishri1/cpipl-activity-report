@@ -775,6 +775,7 @@ model SalaryStructure {
   netPayMonthly        Float    @default(0)           // Gross - Deductions
   effectiveFrom        String?                        // "YYYY-MM-DD"
   notes                String?
+  components           Json?                          // [{componentId,code,name,type,amount,label?}] — flexible per-employee structure
 
   // Stop Salary Processing
   stopSalaryProcessing Boolean  @default(false)
