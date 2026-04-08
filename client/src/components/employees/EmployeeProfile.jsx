@@ -689,8 +689,8 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
         </Section>
       </div>
 
-      {/* Salary Quick-Link (admin only) */}
-      {canEdit && !isSelf && (
+      {/* Salary Quick-Link (admin/sub_admin only — role-based) */}
+      {canEdit && (
         <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg">
