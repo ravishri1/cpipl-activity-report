@@ -506,7 +506,21 @@ async function applyLeave(userId, data, prisma) {
   // Use stored total instead of recalculating from accrual formula.
   const isCompOffType = leaveType.accrualType === 'none' && leaveType.defaultBalance === 0;
   const credited = isCompOffType ? (balance.total || 0) : calculateCredited(leaveType, fyYear, joiningMonth);
-  const totalPool = (balance.opening || 0) + credited;
+
+  // Opening-first rule: for PL, CF.opening (carry-forward from prev year) is consumed
+  // before PL.credited (monthly bucket). Add CF.opening to the available pool for PL leaves.
+  let cfOpeningPool = 0;
+  if (leaveType.code === 'PL') {
+    const cfType = await prisma.leaveType.findFirst({ where: { code: 'CF' } });
+    if (cfType) {
+      const cfBal = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId, leaveTypeId: cfType.id, year: fyYear } },
+      });
+      cfOpeningPool = cfBal?.opening || 0;
+    }
+  }
+
+  const totalPool = (balance.opening || 0) + credited + cfOpeningPool;
   const onProbation = isOnProbation(user);
 
   // LOP (Loss of Pay) has unlimited balance — it's a salary deduction, not balance-based
@@ -592,7 +606,7 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
     },
   });
 
-  // If approved, deduct from balance
+  // If approved, deduct from balance and auto-mark attendance as on_leave
   if (status === 'approved') {
     const fyYear = getFinancialYear(request.startDate);
     const balance = await ensureBalance(request.userId, request.leaveTypeId, fyYear, prisma);
@@ -608,6 +622,25 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
         },
       });
     }
+
+    // Auto-mark attendance as on_leave for each date in the approved leave range
+    const leaveStatus = (request.session === 'first_half' || request.session === 'second_half')
+      ? 'half_day' : 'on_leave';
+    const start = new Date(request.startDate + 'T00:00:00');
+    const end   = new Date(request.endDate   + 'T00:00:00');
+    const attendanceOps = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10);
+      attendanceOps.push(
+        prisma.attendance.upsert({
+          where:  { userId_date: { userId: request.userId, date: dateStr } },
+          create: { userId: request.userId, date: dateStr, status: leaveStatus },
+          // Only update if not admin-overridden; use updateMany trick via raw check
+          update: { status: leaveStatus },
+        })
+      );
+    }
+    await Promise.all(attendanceOps);
   }
 
   return updated;

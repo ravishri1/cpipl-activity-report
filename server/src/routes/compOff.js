@@ -214,7 +214,7 @@ router.put('/:id/review', requireAdmin, asyncHandler(async (req, res) => {
         },
         update: {
           total: { increment: request.days },
-          balance: { increment: request.days },
+          // balance is recalculated dynamically from opening+total-used; don't store stale value
         },
       });
     }
