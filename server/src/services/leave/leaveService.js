@@ -384,33 +384,38 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     });
   }
 
-  // Overflow adjustment: if PL is over-used beyond its pool,
-  // deduct overflow from CF first, then reflect remainder as additional LOP.
-  const plBal = balances.find(b => b.leaveType.code === 'PL');
-  if (plBal) {
-    const plPool = plBal.opening + plBal.credited;
-    const plOverflow = Math.max(plBal.used - plPool, 0);
-    if (plOverflow > 0) {
-      plBal.overflowDays = plOverflow; // expose to frontend for display note
-      let remaining = plOverflow;
+  // "Opening First" rule:
+  // PL-type leaves consume CF.opening first, then PL credited (monthly bucket).
+  // COF-type leaves consume COF.opening first, then COF credited (grants).
+  // This ensures carry-forward is always drawn before current-year credits.
+  const plBal  = balances.find(b => b.leaveType.code === 'PL');
+  const cfBal  = balances.find(b => b.leaveType.code === 'CF');
+  const cofBal = balances.find(b => b.leaveType.code === 'COF');
+  const lopBal = balances.find(b => b.leaveType.code === 'LOP');
 
-      // Absorb from CF
-      const cfBal = balances.find(b => b.leaveType.code === 'CF');
-      if (cfBal && cfBal.available > 0) {
-        const absorbed = Math.min(remaining, cfBal.available);
-        cfBal.available = +(cfBal.available - absorbed).toFixed(2);
-        cfBal.adjustedUsed = +(absorbed).toFixed(2); // days absorbed from CF for PL overflow
-        remaining = +(remaining - absorbed).toFixed(2);
-      }
+  if (plBal && cfBal) {
+    const totalPLUsed  = plBal.used; // all PL-type leave requests
+    const cfAbsorb     = +Math.min(totalPLUsed, cfBal.opening).toFixed(2);
+    cfBal.used         = cfAbsorb;
+    cfBal.available    = +(cfBal.opening - cfAbsorb).toFixed(2);
 
-      // Remainder becomes effective LOP
-      if (remaining > 0) {
-        const lopBal = balances.find(b => b.leaveType.code === 'LOP');
-        if (lopBal) {
-          lopBal.effectiveLOP = +(remaining).toFixed(2); // days auto-converted to LOP
-        }
-      }
+    const plNetUsed    = +(totalPLUsed - cfAbsorb).toFixed(2);
+    plBal.used         = plNetUsed;
+    plBal.available    = +Math.max(plBal.credited - plNetUsed, 0).toFixed(2);
+
+    // If PL still overflows after CF is exhausted → effective LOP
+    const plOverflow = +Math.max(plNetUsed - plBal.credited, 0).toFixed(2);
+    if (plOverflow > 0 && lopBal) {
+      lopBal.effectiveLOP = plOverflow;
     }
+  }
+
+  if (cofBal) {
+    // COF: opening consumed first, then granted credits
+    const totalCOFUsed = cofBal.used;
+    const cofOpenAbsorb = +Math.min(totalCOFUsed, cofBal.opening).toFixed(2);
+    const cofNetUsed    = +(totalCOFUsed - cofOpenAbsorb).toFixed(2);
+    cofBal.available    = +Math.max(cofBal.opening - cofOpenAbsorb + cofBal.credited - cofNetUsed, 0).toFixed(2);
   }
 
   return balances;
@@ -774,28 +779,32 @@ async function getAllBalances(fyYear, department, prisma) {
     });
   }
 
-  // Overflow adjustment per user: PL over-usage deducts from CF, then becomes effective LOP
+  // "Opening First" rule per user (admin view)
   const userIds = [...new Set(reconciled.map(b => b.userId))];
   for (const uid of userIds) {
     const userBals = reconciled.filter(b => b.userId === uid);
-    const plBal = userBals.find(b => b.leaveType.code === 'PL');
-    if (!plBal) continue;
-    const plPool = (plBal.opening || 0) + plBal.credited;
-    const plOverflow = Math.max(plBal.used - plPool, 0);
-    if (plOverflow > 0) {
-      plBal.overflowDays = plOverflow;
-      let remaining = plOverflow;
-      const cfBal = userBals.find(b => b.leaveType.code === 'CF');
-      if (cfBal && cfBal.available > 0) {
-        const absorbed = Math.min(remaining, cfBal.available);
-        cfBal.available = +(cfBal.available - absorbed).toFixed(2);
-        cfBal.adjustedUsed = +absorbed.toFixed(2);
-        remaining = +(remaining - absorbed).toFixed(2);
-      }
-      if (remaining > 0) {
-        const lopBal = userBals.find(b => b.leaveType.code === 'LOP');
-        if (lopBal) lopBal.effectiveLOP = +remaining.toFixed(2);
-      }
+    const plBal  = userBals.find(b => b.leaveType.code === 'PL');
+    const cfBal  = userBals.find(b => b.leaveType.code === 'CF');
+    const cofBal = userBals.find(b => b.leaveType.code === 'COF');
+    const lopBal = userBals.find(b => b.leaveType.code === 'LOP');
+
+    if (plBal && cfBal) {
+      const totalPLUsed = plBal.used;
+      const cfAbsorb    = +Math.min(totalPLUsed, cfBal.opening).toFixed(2);
+      cfBal.used        = cfAbsorb;
+      cfBal.available   = +(cfBal.opening - cfAbsorb).toFixed(2);
+      const plNetUsed   = +(totalPLUsed - cfAbsorb).toFixed(2);
+      plBal.used        = plNetUsed;
+      plBal.available   = +Math.max(plBal.credited - plNetUsed, 0).toFixed(2);
+      const plOverflow  = +Math.max(plNetUsed - plBal.credited, 0).toFixed(2);
+      if (plOverflow > 0 && lopBal) lopBal.effectiveLOP = plOverflow;
+    }
+
+    if (cofBal) {
+      const totalCOFUsed  = cofBal.used;
+      const cofOpenAbsorb = +Math.min(totalCOFUsed, cofBal.opening).toFixed(2);
+      const cofNetUsed    = +(totalCOFUsed - cofOpenAbsorb).toFixed(2);
+      cofBal.available    = +Math.max(cofBal.opening - cofOpenAbsorb + cofBal.credited - cofNetUsed, 0).toFixed(2);
     }
   }
 
