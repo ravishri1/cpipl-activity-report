@@ -954,8 +954,21 @@ async function executeFYRollover(fyYear, prisma) {
   const nextFY = fyYear + 1;
   const summary = [];
 
+  // Check if CF (Carry Forward) leave type is active — if so, all carry-forwards
+  // from PL and COF pool into CF.total instead of being set as opening on each type.
+  const cfLeaveType = leaveTypes.find(lt => lt.code === 'CF');
+  const cfEnabled = !!cfLeaveType;
+
+  // Codes whose closing balance contributes to CF pool (PL + COF)
+  const CF_CONTRIBUTOR_CODES = ['PL', 'COF'];
+
   for (const user of users) {
+    // Collect total carry-forward amount into CF for this user
+    let cfCarryTotal = 0;
+
     for (const lt of leaveTypes) {
+      if (lt.code === 'CF') continue; // Handle CF separately below
+
       // Get current FY balance
       const balance = await prisma.leaveBalance.findUnique({
         where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: fyYear } },
@@ -975,25 +988,30 @@ async function executeFYRollover(fyYear, prisma) {
       let carryAmount = 0;
       let lapsed = 0;
 
-      if (lt.carryForward && lt.maxCarryForward > 0) {
+      if (cfEnabled && CF_CONTRIBUTOR_CODES.includes(lt.code)) {
+        // When CF is active: carry-forward goes into CF pool, not into opening
+        // PL: capped by maxCarryForward; COF: all available carries to CF
+        const maxCarry = lt.carryForward && lt.maxCarryForward > 0 ? lt.maxCarryForward : available;
+        carryAmount = Math.min(available, maxCarry);
+        lapsed = Math.max(available - carryAmount, 0);
+        cfCarryTotal += carryAmount;
+        carryAmount = 0; // opening stays 0 — goes to CF instead
+      } else if (lt.carryForward && lt.maxCarryForward > 0) {
         carryAmount = Math.min(available, lt.maxCarryForward);
         lapsed = Math.max(available - lt.maxCarryForward, 0);
       }
-      // For non-carry-forward types, carry = 0, lapsed = available
 
-      // Upsert next FY balance
+      // Upsert next FY balance (opening=0 for CF contributors when CF is active)
       const existing = await prisma.leaveBalance.findUnique({
         where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: nextFY } },
       });
 
       if (existing) {
-        // Only update opening if it hasn't been manually set
         await prisma.leaveBalance.update({
           where: { id: existing.id },
-          data: { opening: carryAmount },
+          data: { opening: carryAmount, balance: carryAmount },
         });
       } else {
-        // Check if there's a grant for next FY
         const grant = await prisma.leaveGranter.findUnique({
           where: { userId_leaveTypeId_fyYear: { userId: user.id, leaveTypeId: lt.id, fyYear: nextFY } },
         });
@@ -1013,7 +1031,7 @@ async function executeFYRollover(fyYear, prisma) {
         });
       }
 
-      if (carryAmount > 0 || lapsed > 0) {
+      if (carryAmount > 0 || lapsed > 0 || (cfEnabled && CF_CONTRIBUTOR_CODES.includes(lt.code) && available > 0)) {
         summary.push({
           userId: user.id,
           userName: user.name,
@@ -1021,10 +1039,49 @@ async function executeFYRollover(fyYear, prisma) {
           leaveType: lt.name,
           leaveTypeCode: lt.code,
           prevBalance: available,
-          carryForward: carryAmount,
+          carryForward: cfEnabled && CF_CONTRIBUTOR_CODES.includes(lt.code) ? 0 : carryAmount,
+          towardsCF: cfEnabled && CF_CONTRIBUTOR_CODES.includes(lt.code) ? Math.min(available, lt.maxCarryForward || available) : 0,
           lapsed,
         });
       }
+    }
+
+    // Create/update CF balance for next FY with the aggregated carry amount
+    if (cfEnabled && cfCarryTotal > 0) {
+      const existingCF = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: cfLeaveType.id, year: nextFY } },
+      });
+
+      if (existingCF) {
+        await prisma.leaveBalance.update({
+          where: { id: existingCF.id },
+          data: { total: cfCarryTotal, balance: cfCarryTotal - existingCF.used, opening: 0 },
+        });
+      } else {
+        await prisma.leaveBalance.create({
+          data: {
+            userId: user.id,
+            leaveTypeId: cfLeaveType.id,
+            year: nextFY,
+            opening: 0,
+            total: cfCarryTotal,
+            used: 0,
+            balance: cfCarryTotal,
+          },
+        });
+      }
+
+      summary.push({
+        userId: user.id,
+        userName: user.name,
+        employeeId: user.employeeId,
+        leaveType: 'Carry Forward',
+        leaveTypeCode: 'CF',
+        prevBalance: 0,
+        carryForward: cfCarryTotal,
+        towardsCF: 0,
+        lapsed: 0,
+      });
     }
   }
 
