@@ -52,13 +52,15 @@ router.get('/status', authenticate, requireActiveEmployee, asyncHandler(async (r
   const scopes = token?.scopes || '';
   const hasGmailScope = scopes.includes('gmail.readonly');
   const hasTasksWriteScope = scopes.includes('/auth/tasks') && !scopes.includes('tasks.readonly');
+  const hasDriveScope = scopes.includes('drive.file') || scopes.includes('/auth/drive');
   res.json({
     connected: !!token,
     scopes,
     expiresAt: token?.expiresAt || null,
     hasGmailScope,
     hasTasksWriteScope,
-    needsReconnect: !!token && !hasGmailScope,
+    hasDriveScope,
+    needsReconnect: !!token && (!hasGmailScope || !hasDriveScope),
   });
 }));
 

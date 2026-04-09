@@ -1,6 +1,6 @@
 const { google } = require('googleapis');
 const { Readable } = require('stream');
-const { getServiceAccountClient } = require('./googleAuth');
+const { getServiceAccountClient, getAuthedClientForUser } = require('./googleAuth');
 
 const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive'];
 const ROOT_FOLDER_NAME = process.env.DRIVE_ROOT_FOLDER_NAME || 'CPIPL HR Files';
@@ -214,8 +214,23 @@ function getDirectImageUrl(fileId) {
   return `https://lh3.googleusercontent.com/d/${fileId}`;
 }
 
+/**
+ * Get a Google Drive v3 client using the user's stored OAuth token.
+ * Use this when service account DWD is not configured.
+ * Requires the user's token to have the drive.file scope.
+ */
+async function getDriveClientOAuth(userId, prisma) {
+  try {
+    const oauthClient = await getAuthedClientForUser(userId, prisma);
+    return google.drive({ version: 'v3', auth: oauthClient });
+  } catch (err) {
+    throw new Error(friendlyDriveError(err));
+  }
+}
+
 module.exports = {
   getDriveClient,
+  getDriveClientOAuth,
   getOrCreateRootFolder,
   getOrCreateEmployeeFolder,
   uploadFile,

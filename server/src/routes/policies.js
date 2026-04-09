@@ -5,7 +5,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
 const { notifyAllExcept } = require('../utils/notify');
-const { getDriveClient, getOrCreateRootFolder, uploadFile, deleteFile } = require('../services/google/googleDrive');
+const { getDriveClientOAuth, getOrCreateRootFolder, uploadFile, deleteFile } = require('../services/google/googleDrive');
 
 const policyUpload = multer({
   storage: multer.memoryStorage(),
@@ -199,7 +199,7 @@ router.post('/admin/create', requireAdmin, policyUpload.single('file'), asyncHan
   // Upload PDF to Drive if provided
   let fileUrl = null, fileName = null, driveFileId = null;
   if (req.file) {
-    const drive = getDriveClient();
+    const drive = await getDriveClientOAuth(req.user.id, req.prisma);
     const folderId = await getPoliciesFolderId(drive);
     const uploaded = await uploadFile(drive, folderId, req.file.originalname, 'application/pdf', req.file.buffer);
     fileUrl = uploaded.webViewLink;
@@ -255,7 +255,7 @@ router.put('/admin/:id', requireAdmin, policyUpload.single('file'), asyncHandler
 
   // Handle PDF upload
   if (req.file) {
-    const drive = getDriveClient();
+    const drive = await getDriveClientOAuth(req.user.id, req.prisma);
     // Delete old file from Drive if exists
     if (policy.driveFileId) {
       try { await deleteFile(drive, policy.driveFileId); } catch (e) { /* ignore if already deleted */ }
