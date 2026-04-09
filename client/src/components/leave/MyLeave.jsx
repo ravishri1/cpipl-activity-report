@@ -7,7 +7,7 @@ import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import {
   CalendarOff, Plus, Clock, CheckCircle2, XCircle, Ban, Trash2,
-  ChevronLeft, ChevronRight, TrendingUp, Calendar, Info, Lock, Shield,
+  ChevronLeft, ChevronRight, TrendingUp, Calendar, Info, Lock, Shield, AlertTriangle,
 } from 'lucide-react';
 import { formatDate } from '../../utils/formatters';
 
@@ -156,13 +156,21 @@ export default function MyLeave() {
                   <>
                     {/* LOP: show used count in red */}
                     <div className="flex items-baseline gap-1 mb-3">
-                      <span className="text-3xl font-bold text-red-600">{b.used}</span>
+                      <span className="text-3xl font-bold text-red-600">{b.used + (b.effectiveLOP || 0)}</span>
                       <span className="text-sm text-red-400">LOP Used</span>
                     </div>
+                    {b.effectiveLOP > 0 && (
+                      <div className="flex items-center gap-1.5 mb-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+                        <span className="text-xs text-orange-700">
+                          <strong>{b.effectiveLOP}d</strong> auto-converted from PL overage (salary deduction)
+                        </span>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 gap-1 text-center">
                       <div className="bg-red-50 rounded-lg py-1.5 px-3">
                         <p className="text-[10px] text-red-400 uppercase font-medium">Total LOP Days</p>
-                        <p className="text-sm font-bold text-red-600">{b.used}</p>
+                        <p className="text-sm font-bold text-red-600">{b.used + (b.effectiveLOP || 0)}</p>
                       </div>
                     </div>
                   </>
@@ -179,6 +187,26 @@ export default function MyLeave() {
                         <Lock className="w-3.5 h-3.5 text-amber-600" />
                         <span className="text-xs text-amber-700">
                           <strong>{b.frozenBalance}</strong> leaves frozen until confirmation
+                        </span>
+                      </div>
+                    )}
+
+                    {/* PL overflow notice */}
+                    {b.overflowDays > 0 && (
+                      <div className="flex items-center gap-1.5 mb-3 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+                        <span className="text-xs text-orange-700">
+                          <strong>{b.overflowDays}d</strong> over pool — adjusted against Carry Forward / LOP
+                        </span>
+                      </div>
+                    )}
+
+                    {/* CF absorbed overflow notice */}
+                    {b.adjustedUsed > 0 && (
+                      <div className="flex items-center gap-1.5 mb-3 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-orange-600 flex-shrink-0" />
+                        <span className="text-xs text-orange-700">
+                          <strong>{b.adjustedUsed}d</strong> absorbed from this pool to cover PL overage
                         </span>
                       </div>
                     )}
