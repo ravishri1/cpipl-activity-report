@@ -761,14 +761,21 @@ router.post('/components', requireAdmin, asyncHandler(async (req, res) => {
   if (!name?.trim() || !code?.trim() || !type?.trim()) throw badRequest('Name, code, and type are required.');
   if (!['earning', 'deduction', 'employer'].includes(type)) throw badRequest('Type must be earning, deduction, or employer.');
 
+  // Check for existing component with same code before creating
+  const normalizedCode = code.trim().toUpperCase();
+  const existing = await req.prisma.salaryComponent.findUnique({ where: { code: normalizedCode } });
+  if (existing) {
+    throw badRequest(`A component with code "${normalizedCode}" already exists${existing.isActive ? '' : ' (inactive)'}. Use a different code or edit the existing one.`);
+  }
+
   const maxSort = await req.prisma.salaryComponent.aggregate({ _max: { sortOrder: true } });
   const component = await req.prisma.salaryComponent.create({
     data: {
       name: name.trim(),
-      code: code.trim().toUpperCase(),
+      code: normalizedCode,
       type,
-      taxable: req.body.taxable ?? true,
-      mandatory: req.body.mandatory ?? false,
+      taxable: req.body.taxable !== undefined ? (req.body.taxable === true || req.body.taxable === 'true') : true,
+      mandatory: req.body.mandatory !== undefined ? (req.body.mandatory === true || req.body.mandatory === 'true') : false,
       calculationType: req.body.calculationType || 'fixed',
       percentageOf: req.body.percentageOf || null,
       defaultPercentage: parseFloat(req.body.defaultPercentage) || null,

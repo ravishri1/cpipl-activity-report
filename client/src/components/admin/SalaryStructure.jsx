@@ -103,8 +103,8 @@ const emptyComponentForm = {
   name: '',
   code: '',
   type: 'earning',
-  isTaxable: false,
-  isMandatory: false,
+  taxable: false,
+  mandatory: false,
   calculationType: 'fixed',
   percentageOf: 'basic',
   defaultPercentage: '',
@@ -452,8 +452,8 @@ export default function SalaryStructure() {
       name: comp.name || '',
       code: comp.code || '',
       type: comp.type || 'earning',
-      isTaxable: comp.isTaxable ?? false,
-      isMandatory: comp.isMandatory ?? false,
+      taxable: comp.taxable ?? false,
+      mandatory: comp.mandatory ?? false,
       calculationType: comp.calculationType || 'fixed',
       percentageOf: comp.percentageOf || 'basic',
       defaultPercentage: comp.defaultPercentage ?? '',
@@ -495,8 +495,8 @@ export default function SalaryStructure() {
       name: componentForm.name.trim(),
       code: componentForm.code.trim().toUpperCase(),
       type: componentForm.type,
-      isTaxable: componentForm.isTaxable,
-      isMandatory: componentForm.isMandatory,
+      taxable: componentForm.taxable,
+      mandatory: componentForm.mandatory,
       calculationType: componentForm.calculationType,
       percentageOf: componentForm.calculationType === 'percentage' ? componentForm.percentageOf : null,
       defaultPercentage: componentForm.calculationType === 'percentage' ? parseFloat(componentForm.defaultPercentage) || 0 : null,
@@ -1191,14 +1191,14 @@ export default function SalaryStructure() {
                     </td>
                     <td className="py-2.5 px-4 font-medium text-slate-800">{comp.name}</td>
                     <td className="py-2.5 px-4 text-center">
-                      {comp.isTaxable ? (
+                      {comp.taxable ? (
                         <span className="text-emerald-600 font-bold">✓</span>
                       ) : (
                         <span className="text-red-400 font-bold">✕</span>
                       )}
                     </td>
                     <td className="py-2.5 px-4 text-center">
-                      {comp.isMandatory ? (
+                      {comp.mandatory ? (
                         <span className="text-emerald-600 font-bold">✓</span>
                       ) : (
                         <span className="text-slate-300">—</span>
@@ -1395,8 +1395,8 @@ export default function SalaryStructure() {
               <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
-                  name="isTaxable"
-                  checked={componentForm.isTaxable}
+                  name="taxable"
+                  checked={componentForm.taxable}
                   onChange={handleComponentChange}
                   className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
@@ -1405,8 +1405,8 @@ export default function SalaryStructure() {
               <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
-                  name="isMandatory"
-                  checked={componentForm.isMandatory}
+                  name="mandatory"
+                  checked={componentForm.mandatory}
                   onChange={handleComponentChange}
                   className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
