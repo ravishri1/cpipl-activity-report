@@ -1,9 +1,35 @@
 const express = require('express');
+const multer = require('multer');
 const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound } = require('../utils/httpErrors');
 const { parseId } = require('../utils/validate');
 const { notifyAllExcept } = require('../utils/notify');
+const { getDriveClient, getOrCreateRootFolder, uploadFile, deleteFile } = require('../services/google/googleDrive');
+
+const policyUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are allowed'));
+  },
+});
+
+// Get or create "Company Policies" folder in Drive root
+async function getPoliciesFolderId(drive) {
+  const rootId = await getOrCreateRootFolder(drive);
+  const res = await drive.files.list({
+    q: `name='Company Policies' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id)',
+  });
+  if (res.data.files.length > 0) return res.data.files[0].id;
+  const folder = await drive.files.create({
+    requestBody: { name: 'Company Policies', mimeType: 'application/vnd.google-apps.folder', parents: [rootId] },
+    fields: 'id',
+  });
+  return folder.data.id;
+}
 
 const router = express.Router();
 router.use(authenticate);
@@ -29,6 +55,7 @@ router.get('/', asyncHandler(async (req, res) => {
     select: {
       id: true, title: true, slug: true, category: true, summary: true,
       version: true, effectiveDate: true, isMandatory: true, companyId: true, createdAt: true,
+      serialNo: true, fileUrl: true, fileName: true,
       _count: { select: { acceptances: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -159,34 +186,42 @@ router.get('/admin/all', requireAdmin, asyncHandler(async (req, res) => {
   })));
 }));
 
-// POST /admin/create — Create new policy
-router.post('/admin/create', requireAdmin, asyncHandler(async (req, res) => {
-  const { title, category, content, summary, effectiveDate, isMandatory, companyId, sections } = req.body;
-  if (!title || !content) throw badRequest('Title and content required.');
+// POST /admin/create — Create new policy (with optional PDF upload)
+router.post('/admin/create', requireAdmin, policyUpload.single('file'), asyncHandler(async (req, res) => {
+  const { title, category, content, summary, effectiveDate, isMandatory, companyId, serialNo } = req.body;
+  if (!title) throw badRequest('Title is required.');
+  if (!req.file && !content) throw badRequest('Either a PDF file or policy content is required.');
 
   const slug = slugify(title);
   const existing = await req.prisma.policy.findUnique({ where: { slug } });
   if (existing) throw badRequest('A policy with this title already exists.');
 
+  // Upload PDF to Drive if provided
+  let fileUrl = null, fileName = null, driveFileId = null;
+  if (req.file) {
+    const drive = getDriveClient();
+    const folderId = await getPoliciesFolderId(drive);
+    const uploaded = await uploadFile(drive, folderId, req.file.originalname, 'application/pdf', req.file.buffer);
+    fileUrl = uploaded.webViewLink;
+    fileName = req.file.originalname;
+    driveFileId = uploaded.fileId;
+  }
+
+  const policyContent = content || '';
+
   const policy = await req.prisma.policy.create({
     data: {
-      title: title.trim(), slug, category: category || 'general', content,
+      title: title.trim(), slug, category: category || 'general', content: policyContent,
       summary: summary || null, effectiveDate: effectiveDate || null,
-      isMandatory: isMandatory !== false, companyId: companyId ? parseInt(companyId) : null,
+      isMandatory: isMandatory !== undefined ? (isMandatory === true || isMandatory === 'true') : true,
+      companyId: companyId ? parseInt(companyId) : null,
       createdBy: req.user.id, version: 1,
+      serialNo: serialNo || null, fileUrl, fileName, driveFileId,
     },
   });
 
-  if (sections && Array.isArray(sections)) {
-    for (let i = 0; i < sections.length; i++) {
-      await req.prisma.policySection.create({
-        data: { policyId: policy.id, title: sections[i].title, content: sections[i].content, sortOrder: i, isEditable: sections[i].isEditable || false },
-      });
-    }
-  }
-
   await req.prisma.policyVersion.create({
-    data: { policyId: policy.id, version: 1, content, changedBy: req.user.id, changeLog: 'Initial version' },
+    data: { policyId: policy.id, version: 1, content: policyContent, changedBy: req.user.id, changeLog: 'Initial version' },
   });
 
   // Notify all employees about new policy
@@ -200,27 +235,43 @@ router.post('/admin/create', requireAdmin, asyncHandler(async (req, res) => {
   res.json(policy);
 }));
 
-// PUT /admin/:id — Update policy
-router.put('/admin/:id', requireAdmin, asyncHandler(async (req, res) => {
+// PUT /admin/:id — Update policy (with optional PDF upload)
+router.put('/admin/:id', requireAdmin, policyUpload.single('file'), asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const policy = await req.prisma.policy.findUnique({ where: { id } });
   if (!policy) throw notFound('Policy');
 
-  const { title, category, content, summary, effectiveDate, isMandatory, companyId, isActive, bumpVersion } = req.body;
+  const { title, category, content, summary, effectiveDate, isMandatory, companyId, isActive, bumpVersion, serialNo } = req.body;
   const data = {};
   if (title !== undefined) { data.title = title.trim(); data.slug = slugify(title); }
   if (category !== undefined) data.category = category;
   if (content !== undefined) data.content = content;
   if (summary !== undefined) data.summary = summary;
   if (effectiveDate !== undefined) data.effectiveDate = effectiveDate;
-  if (isMandatory !== undefined) data.isMandatory = isMandatory;
+  if (isMandatory !== undefined) data.isMandatory = isMandatory === true || isMandatory === 'true';
   if (companyId !== undefined) data.companyId = companyId ? parseInt(companyId) : null;
-  if (isActive !== undefined) data.isActive = isActive;
+  if (isActive !== undefined) data.isActive = isActive === true || isActive === 'true';
+  if (serialNo !== undefined) data.serialNo = serialNo || null;
 
-  if (bumpVersion && content) {
+  // Handle PDF upload
+  if (req.file) {
+    const drive = getDriveClient();
+    // Delete old file from Drive if exists
+    if (policy.driveFileId) {
+      try { await deleteFile(drive, policy.driveFileId); } catch (e) { /* ignore if already deleted */ }
+    }
+    const folderId = await getPoliciesFolderId(drive);
+    const uploaded = await uploadFile(drive, folderId, req.file.originalname, 'application/pdf', req.file.buffer);
+    data.fileUrl = uploaded.webViewLink;
+    data.fileName = req.file.originalname;
+    data.driveFileId = uploaded.fileId;
+  }
+
+  const newContent = content || (req.file ? policy.content : undefined);
+  if (bumpVersion && newContent) {
     data.version = policy.version + 1;
     await req.prisma.policyVersion.create({
-      data: { policyId: id, version: data.version, content, changedBy: req.user.id, changeLog: req.body.changeLog || 'Updated policy' },
+      data: { policyId: id, version: data.version, content: newContent, changedBy: req.user.id, changeLog: req.body.changeLog || 'Updated policy' },
     });
   }
 

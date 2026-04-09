@@ -520,37 +520,74 @@ function PolicyDetail({ slug, onBack, onAccepted }) {
       />
 
       {/* Policy content */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        {policy.content && (
-          <div className="prose prose-sm max-w-none mb-6">
-            {renderPolicyContent(policy.content)}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* PDF viewer — shown when a PDF is uploaded */}
+        {policy.fileUrl && (
+          <div>
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <FileText className="w-4 h-4 text-red-500" />
+                <span className="font-medium">{policy.fileName || 'Policy Document'}</span>
+              </div>
+              <a
+                href={policy.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open in new tab
+              </a>
+            </div>
+            {/* Embedded PDF (Drive embed URL) */}
+            <iframe
+              src={policy.fileUrl.replace('/view', '/preview')}
+              className="w-full border-0"
+              style={{ height: '70vh' }}
+              title={policy.title}
+              allow="autoplay"
+            />
           </div>
         )}
 
-        {policy.sections && policy.sections.length > 0 && (
-          <div className="space-y-6">
-            {policy.sections
-              .sort((a, b) => (a.order ?? a.sortOrder ?? 0) - (b.order ?? b.sortOrder ?? 0))
-              .map((section, idx) => (
-                <div key={section.id || idx} className="border-l-2 border-blue-200 pl-4">
-                  <h3 className="text-base font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
-                      {idx + 1}
-                    </span>
-                    {section.title}
-                  </h3>
-                  <div className="prose prose-sm max-w-none">
-                    {renderPolicyContent(section.content)}
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
+        {/* Text content (shown when no PDF, or in addition) */}
+        {!policy.fileUrl && (
+          <div className="p-6">
+            {policy.content && policy.content.trim() && (
+              <div className="prose prose-sm max-w-none mb-6">
+                {renderPolicyContent(policy.content)}
+              </div>
+            )}
 
-        {!policy.content && (!policy.sections || policy.sections.length === 0) && (
-          <div className="text-center py-8">
-            <FileText className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No content available for this policy.</p>
+            {policy.sections && policy.sections.length > 0 && (
+              <div className="space-y-6">
+                {policy.sections
+                  .sort((a, b) => (a.order ?? a.sortOrder ?? 0) - (b.order ?? b.sortOrder ?? 0))
+                  .map((section, idx) => (
+                    <div key={section.id || idx} className="border-l-2 border-blue-200 pl-4">
+                      <h3 className="text-base font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        {section.title}
+                      </h3>
+                      <div className="prose prose-sm max-w-none">
+                        {renderPolicyContent(section.content)}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {(!policy.content || !policy.content.trim()) && (!policy.sections || policy.sections.length === 0) && (
+              <div className="text-center py-8">
+                <FileText className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                <p className="text-sm text-slate-400">No content available for this policy.</p>
+              </div>
+            )}
           </div>
         )}
       </div>

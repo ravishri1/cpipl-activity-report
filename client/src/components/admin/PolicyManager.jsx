@@ -7,6 +7,7 @@ import {
   X, Loader2, ChevronUp, ToggleLeft, ToggleRight, Trash2,
   GripVertical, Save, Clock, GitCompare, TrendingUp,
   AlertOctagon, ArrowRight, Building2, History, BarChart3,
+  Upload, Download, File,
 } from 'lucide-react';
 import PolicyScorecard from './PolicyScorecard';
 
@@ -1272,16 +1273,16 @@ function ImpactModal({ policy, onClose }) {
 }
 
 // ═══════════════════════════════════════════════
-// Policy Create/Edit Modal
+// Policy Create/Edit Modal — greythr style (PDF upload)
 // ═══════════════════════════════════════════════
 function PolicyFormModal({ policy, companies, onClose }) {
   const isEdit = !!policy;
 
   const [form, setForm] = useState({
     title: policy?.title || '',
+    serialNo: policy?.serialNo || '',
     category: policy?.category || 'general',
     summary: policy?.summary || '',
-    content: policy?.content || '',
     effectiveDate: policy?.effectiveDate?.split('T')[0] || '',
     isMandatory: policy?.isMandatory ?? true,
     isActive: policy?.isActive ?? true,
@@ -1290,113 +1291,71 @@ function PolicyFormModal({ policy, companies, onClose }) {
     changeLog: '',
   });
 
-  const [sections, setSections] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [loadingSections, setLoadingSections] = useState(false);
-  const [activeTab, setActiveTab] = useState('details');
 
-  // Load sections for existing policy
-  useEffect(() => {
-    if (isEdit && policy?.id) {
-      loadPolicySections();
-    }
-  }, []);
+  const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const loadPolicySections = async () => {
-    setLoadingSections(true);
-    try {
-      const res = await api.get(`/policies/${policy.slug}`);
-      if (res.data.sections) {
-        setSections(res.data.sections.map(s => ({
-          id: s.id,
-          title: s.title,
-          content: s.content,
-          isEditable: s.isEditable,
-        })));
-      }
-    } catch {
-      // Non-critical
-    } finally {
-      setLoadingSections(false);
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setSelectedFile(file);
+      setError('');
+    } else {
+      setError('Only PDF files are allowed.');
     }
   };
 
-  const updateForm = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setSelectedFile(file);
+      setError('');
+    } else if (file) {
+      setError('Only PDF files are allowed.');
+    }
   };
 
-  // ── Section management ──
-  const addSection = () => {
-    setSections(prev => [...prev, { title: '', content: '', isEditable: false }]);
-  };
-
-  const updateSection = (index, field, value) => {
-    setSections(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
-  };
-
-  const removeSection = (index) => {
-    setSections(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const moveSection = (index, direction) => {
-    const newSections = [...sections];
-    const target = index + direction;
-    if (target < 0 || target >= newSections.length) return;
-    [newSections[index], newSections[target]] = [newSections[target], newSections[index]];
-    setSections(newSections);
-  };
+  const removeFile = () => setSelectedFile(null);
 
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) {
-      setError('Title and content are required.');
-      return;
-    }
+    if (!form.title.trim()) { setError('Policy name is required.'); return; }
+    if (!form.summary.trim()) { setError('Description is required.'); return; }
+    if (!isEdit && !selectedFile) { setError('Please upload a PDF file.'); return; }
+
     setSaving(true);
     setError('');
 
     try {
-      const payload = {
-        title: form.title.trim(),
-        category: form.category,
-        summary: form.summary.trim() || null,
-        content: form.content,
-        effectiveDate: form.effectiveDate || null,
-        isMandatory: form.isMandatory,
-        isActive: form.isActive,
-        companyId: form.companyId || null,
-      };
+      // Use FormData for multipart upload
+      const fd = new FormData();
+      fd.append('title', form.title.trim());
+      fd.append('serialNo', form.serialNo.trim());
+      fd.append('category', form.category);
+      fd.append('summary', form.summary.trim());
+      fd.append('effectiveDate', form.effectiveDate || '');
+      fd.append('isMandatory', String(form.isMandatory));
+      fd.append('isActive', String(form.isActive));
+      if (form.companyId) fd.append('companyId', form.companyId);
+      if (selectedFile) fd.append('file', selectedFile);
 
       if (isEdit) {
-        // Add version bump fields
         if (form.bumpVersion) {
-          payload.bumpVersion = true;
-          payload.changeLog = form.changeLog.trim() || 'Updated policy';
+          fd.append('bumpVersion', 'true');
+          fd.append('changeLog', form.changeLog.trim() || 'Updated policy');
         }
-        await api.put(`/policies/admin/${policy.id}`, payload);
-        // Update sections
-        if (sections.length > 0) {
-          await api.put(`/policies/admin/${policy.id}/sections`, {
-            sections: sections.map(s => ({
-              title: s.title,
-              content: s.content,
-              isEditable: s.isEditable,
-            })),
-          });
-        }
+        await api.put(`/policies/admin/${policy.id}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
       } else {
-        // Create with sections
-        await api.post('/policies/admin/create', {
-          ...payload,
-          sections: sections.length > 0
-            ? sections.map(s => ({
-                title: s.title,
-                content: s.content,
-                isEditable: s.isEditable,
-              }))
-            : undefined,
+        await api.post('/policies/admin/create', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
 
@@ -1410,12 +1369,12 @@ function PolicyFormModal({ policy, companies, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-8">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-3xl mx-4">
-        {/* Modal header */}
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-2xl mx-4">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
             {isEdit ? <Edit className="w-5 h-5 text-blue-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
-            {isEdit ? 'Edit Policy' : 'Create Policy'}
+            {isEdit ? 'Edit Policy' : 'Add Policy'}
             {isEdit && (
               <span className="text-xs font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded ml-1">
                 v{policy.version}
@@ -1424,35 +1383,6 @@ function PolicyFormModal({ policy, companies, onClose }) {
           </h2>
           <button onClick={() => onClose(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 px-6">
-          <button
-            onClick={() => setActiveTab('details')}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'details'
-                ? 'border-blue-500 text-blue-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Details
-          </button>
-          <button
-            onClick={() => setActiveTab('sections')}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-              activeTab === 'sections'
-                ? 'border-blue-500 text-blue-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Sections
-            {sections.length > 0 && (
-              <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {sections.length}
-              </span>
-            )}
           </button>
         </div>
 
@@ -1465,256 +1395,237 @@ function PolicyFormModal({ policy, companies, onClose }) {
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* ── Details Tab ── */}
-          {activeTab === 'details' && (
-            <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Title */}
+          <div className="px-6 py-5 space-y-5">
+
+            {/* Policy Name */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Policy Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => updateForm('title', e.target.value)}
+                placeholder="e.g. Employee Attendance & Leave Policy"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                required
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Description <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={form.summary}
+                onChange={(e) => updateForm('summary', e.target.value)}
+                rows={3}
+                placeholder="Brief description of the policy..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                required
+              />
+            </div>
+
+            {/* Serial No + Category row */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Title <span className="text-red-400">*</span>
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Serial No</label>
                 <input
                   type="text"
-                  value={form.title}
-                  onChange={(e) => updateForm('title', e.target.value)}
-                  placeholder="e.g. Employee Leave Policy"
+                  value={form.serialNo}
+                  onChange={(e) => updateForm('serialNo', e.target.value)}
+                  placeholder="e.g. 01-CP"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
                 />
               </div>
-
-              {/* Category + Company row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => updateForm('category', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    {CATEGORIES.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Company (optional)</label>
-                  <select
-                    value={form.companyId}
-                    onChange={(e) => updateForm('companyId', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">All Companies</option>
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}{c.shortName ? ` (${c.shortName})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Summary */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Summary</label>
-                <textarea
-                  value={form.summary}
-                  onChange={(e) => updateForm('summary', e.target.value)}
-                  rows={2}
-                  placeholder="Brief summary of the policy..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => updateForm('category', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
               </div>
+            </div>
 
-              {/* Content */}
+            {/* Effective Date + Company row */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Content <span className="text-red-400">*</span>
-                  <span className="text-xs text-slate-400 font-normal ml-1">(Markdown supported)</span>
-                </label>
-                <textarea
-                  value={form.content}
-                  onChange={(e) => updateForm('content', e.target.value)}
-                  rows={10}
-                  placeholder="Full policy content. Use markdown for formatting..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-y"
-                  required
+                <label className="block text-sm font-medium text-slate-700 mb-1">Effective Date</label>
+                <input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(e) => updateForm('effectiveDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
-
-              {/* Effective Date + Toggles */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Effective Date</label>
-                  <input
-                    type="date"
-                    value={form.effectiveDate}
-                    onChange={(e) => updateForm('effectiveDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div className="flex items-end pb-1">
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <button
-                      type="button"
-                      onClick={() => updateForm('isMandatory', !form.isMandatory)}
-                      className="text-slate-500"
-                    >
-                      {form.isMandatory ? (
-                        <ToggleRight className="w-6 h-6 text-red-600" />
-                      ) : (
-                        <ToggleLeft className="w-6 h-6 text-slate-400" />
-                      )}
-                    </button>
-                    Mandatory
-                  </label>
-                </div>
-                <div className="flex items-end pb-1">
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <button
-                      type="button"
-                      onClick={() => updateForm('isActive', !form.isActive)}
-                      className="text-slate-500"
-                    >
-                      {form.isActive ? (
-                        <ToggleRight className="w-6 h-6 text-green-600" />
-                      ) : (
-                        <ToggleLeft className="w-6 h-6 text-slate-400" />
-                      )}
-                    </button>
-                    Active
-                  </label>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+                <select
+                  value={form.companyId}
+                  onChange={(e) => updateForm('companyId', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="">All Companies</option>
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.shortName ? ` (${c.shortName})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
 
-              {/* ── Version Bump (Edit mode only) ── */}
-              {isEdit && (
-                <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => updateForm('bumpVersion', !form.bumpVersion)}
-                      className="text-slate-500"
-                    >
-                      {form.bumpVersion ? (
-                        <ToggleRight className="w-6 h-6 text-purple-600" />
-                      ) : (
-                        <ToggleLeft className="w-6 h-6 text-slate-400" />
-                      )}
-                    </button>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">Create New Version</p>
-                      <p className="text-xs text-slate-500">
-                        Bump from v{policy.version} → v{policy.version + 1}. Employees will need to re-accept.
-                      </p>
-                    </div>
-                  </div>
-                  {form.bumpVersion && (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Change Log</label>
-                      <input
-                        type="text"
-                        value={form.changeLog}
-                        onChange={(e) => updateForm('changeLog', e.target.value)}
-                        placeholder="Describe what changed in this version..."
-                        className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-400 outline-none"
-                      />
-                    </div>
-                  )}
+            {/* PDF Upload */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Upload File {!isEdit && <span className="text-red-500">*</span>}
+                {isEdit && <span className="text-xs text-slate-400 font-normal ml-1">(leave empty to keep current)</span>}
+              </label>
+
+              {/* Existing file badge */}
+              {isEdit && policy.fileName && !selectedFile && (
+                <div className="mb-2 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <File className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-sm text-blue-700 truncate flex-1">{policy.fileName}</span>
+                  <a
+                    href={policy.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline flex items-center gap-0.5 flex-shrink-0"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View
+                  </a>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* ── Sections Tab ── */}
-          {activeTab === 'sections' && (
-            <div className="px-6 py-5 max-h-[60vh] overflow-y-auto">
-              {loadingSections ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sections.length === 0 && (
-                    <div className="text-center py-8 text-slate-400">
-                      <FileText className="w-10 h-10 mx-auto mb-2 text-slate-200" />
-                      <p className="text-sm">No sections added yet.</p>
-                      <p className="text-xs mt-1">Sections help organize policy content into manageable parts.</p>
-                    </div>
-                  )}
-
-                  {sections.map((section, index) => (
-                    <div key={index} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <GripVertical className="w-4 h-4 text-slate-300 shrink-0" />
-                        <span className="text-xs font-semibold text-slate-400 w-6">{index + 1}.</span>
-                        <input
-                          type="text"
-                          value={section.title}
-                          onChange={(e) => updateSection(index, 'title', e.target.value)}
-                          placeholder="Section title"
-                          className="flex-1 px-2 py-1 text-sm border border-slate-200 rounded bg-white focus:ring-1 focus:ring-blue-400 outline-none"
-                        />
-                        <label className="flex items-center gap-1 text-[11px] text-slate-500 whitespace-nowrap cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={section.isEditable}
-                            onChange={(e) => updateSection(index, 'isEditable', e.target.checked)}
-                            className="rounded border-slate-300"
-                          />
-                          Editable
-                        </label>
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => moveSection(index, -1)}
-                            disabled={index === 0}
-                            className="p-0.5 text-slate-400 hover:text-slate-600 disabled:opacity-30"
-                            title="Move up"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveSection(index, 1)}
-                            disabled={index === sections.length - 1}
-                            className="p-0.5 text-slate-400 hover:text-slate-600 disabled:opacity-30"
-                            title="Move down"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeSection(index)}
-                            className="p-0.5 text-slate-400 hover:text-red-600 ml-1"
-                            title="Remove section"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <textarea
-                        value={section.content}
-                        onChange={(e) => updateSection(index, 'content', e.target.value)}
-                        rows={3}
-                        placeholder="Section content..."
-                        className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded bg-white focus:ring-1 focus:ring-blue-400 outline-none resize-y font-mono"
-                      />
-                    </div>
-                  ))}
-
+              {/* Drop zone */}
+              {selectedFile ? (
+                <div className="flex items-center gap-3 border border-green-200 bg-green-50 rounded-lg px-4 py-3">
+                  <File className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-green-800 truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-green-600">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
                   <button
                     type="button"
-                    onClick={addSection}
-                    className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-sm text-slate-500 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
+                    onClick={removeFile}
+                    className="p-1 text-green-400 hover:text-red-500 transition-colors"
+                    title="Remove"
                   >
-                    <Plus className="w-4 h-4" />
-                    Add Section
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
+              ) : (
+                <label
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleFileDrop}
+                  className={`flex flex-col items-center justify-center gap-2 w-full py-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                    dragOver
+                      ? 'border-blue-400 bg-blue-50'
+                      : 'border-slate-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                >
+                  <Upload className="w-8 h-8 text-slate-400" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-slate-600">
+                      Drop PDF here or <span className="text-blue-600">browse</span>
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">PDF files only, max 20 MB</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
               )}
             </div>
-          )}
+
+            {/* Toggles row */}
+            <div className="flex items-center gap-6 pt-1">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => updateForm('isMandatory', !form.isMandatory)}
+                  className="text-slate-500"
+                >
+                  {form.isMandatory ? (
+                    <ToggleRight className="w-6 h-6 text-red-600" />
+                  ) : (
+                    <ToggleLeft className="w-6 h-6 text-slate-400" />
+                  )}
+                </button>
+                <span>
+                  Mandatory
+                  <span className="text-xs text-slate-400 ml-1">(employees must accept)</span>
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => updateForm('isActive', !form.isActive)}
+                  className="text-slate-500"
+                >
+                  {form.isActive ? (
+                    <ToggleRight className="w-6 h-6 text-green-600" />
+                  ) : (
+                    <ToggleLeft className="w-6 h-6 text-slate-400" />
+                  )}
+                </button>
+                <span>
+                  Release to employee portal
+                </span>
+              </label>
+            </div>
+
+            {/* Version Bump (edit mode only) */}
+            {isEdit && (
+              <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => updateForm('bumpVersion', !form.bumpVersion)}
+                    className="text-slate-500"
+                  >
+                    {form.bumpVersion ? (
+                      <ToggleRight className="w-6 h-6 text-purple-600" />
+                    ) : (
+                      <ToggleLeft className="w-6 h-6 text-slate-400" />
+                    )}
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Create New Version</p>
+                    <p className="text-xs text-slate-500">
+                      Bump from v{policy.version} → v{policy.version + 1}. Employees will need to re-accept.
+                    </p>
+                  </div>
+                </div>
+                {form.bumpVersion && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Change Log</label>
+                    <input
+                      type="text"
+                      value={form.changeLog}
+                      onChange={(e) => updateForm('changeLog', e.target.value)}
+                      placeholder="Describe what changed..."
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-400 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
@@ -1747,7 +1658,7 @@ function PolicyFormModal({ policy, companies, onClose }) {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    {isEdit ? 'Update Policy' : 'Create Policy'}
+                    {isEdit ? 'Update Policy' : 'Add Policy'}
                   </>
                 )}
               </button>

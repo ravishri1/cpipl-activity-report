@@ -685,8 +685,12 @@ model Policy {
   isMandatory   Boolean  @default(true)               // Must all employees accept?
   companyId     Int?                                   // null = applies to all companies
   createdBy     Int?                                   // admin who created it
+  serialNo        String?                               // "01-CP" serial number like greythr
+  fileUrl         String?                               // Google Drive web view link for PDF
+  fileName        String?                               // Original uploaded filename
+  driveFileId     String?                               // Google Drive file ID (for deletion/update)
   protectionScore Float? @default(0)                   // 0-100 score of how well policy protects company
-  scoreBreakdown  String?                              // JSON: {"legal":80,"compliance":70,...}
+  scoreBreakdown  String?                               // JSON: {"legal":80,"compliance":70,...}
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
