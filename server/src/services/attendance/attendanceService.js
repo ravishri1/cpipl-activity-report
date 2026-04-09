@@ -266,7 +266,7 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
   const [users, attendances, leaves] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
-      select: { id: true, name: true, department: true, employeeId: true, profilePhotoUrl: true },
+      select: { id: true, name: true, department: true, employeeId: true, profilePhotoUrl: true, location: true },
       orderBy: { name: 'asc' },
     }),
     prisma.attendance.findMany({

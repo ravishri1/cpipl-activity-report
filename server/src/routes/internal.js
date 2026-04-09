@@ -259,6 +259,13 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
         });
         log(`Contract token expiry: ${count} contract(s) expired.`);
       } catch (err) { warn(`contract-expiry: ${err.message}`); }
+
+      // Holiday attendance marking — auto-mark today as 'holiday' for eligible employees
+      try {
+        const { runHolidayAttendanceMark } = require('../services/attendance/holidayAttendanceService');
+        const result = await runHolidayAttendanceMark(prisma);
+        log(`Holiday attendance: ${result.marked} marked, ${result.skipped} skipped (${result.holidaysFound} holiday(s) today)`);
+      } catch (err) { warn(`holiday-attendance: ${err.message}`); }
     }
 
     // ── Email + Chat activity fetch ────────────────────────────────────────

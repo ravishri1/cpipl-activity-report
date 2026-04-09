@@ -323,7 +323,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, location: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -331,9 +331,20 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
 
-  // Global holidays for the month
+  // Fetch all holidays for the month
   const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
-  const globalHolidayDates = new Set(holidays.map(h => h.date));
+
+  // Build location-aware holiday cache: 'All' dates + per-location dates
+  // e.g. a Mumbai employee gets global('All') + Mumbai-specific holidays
+  const allDates = holidays.filter(h => h.location === 'All').map(h => h.date);
+  const uniqueHolLocations = [...new Set(holidays.filter(h => h.location !== 'All').map(h => h.location))];
+  const locationHolidayCache = { All: new Set(allDates) };
+  for (const loc of uniqueHolLocations) {
+    locationHolidayCache[loc] = new Set([
+      ...allDates,
+      ...holidays.filter(h => h.location === loc).map(h => h.date),
+    ]);
+  }
 
   // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls
   const branchHolidayCache = {};
@@ -360,8 +371,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
 
-    // Merge global + branch holidays for this employee
-    const mergedHolidays = new Set(globalHolidayDates);
+    // Merge location-specific + branch holidays for this employee
+    const userLocation = sal.user.location || 'All';
+    const locationHols = locationHolidayCache[userLocation] || locationHolidayCache['All'];
+    const mergedHolidays = new Set(locationHols);
     if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
       branchHolidayCache[sal.user.branchId].forEach(d => mergedHolidays.add(d));
     }

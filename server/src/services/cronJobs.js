@@ -20,6 +20,7 @@ const { scanAllMailForRenewals }    = require('./gmailRenewalScanner');
 
 const { syncAllDevices } = require('./biometric/biometricSyncService');
 const { executeFYRollover, getFinancialYear } = require('./leave/leaveService');
+const { runHolidayAttendanceMark } = require('./attendance/holidayAttendanceService');
 
 function initCronJobs(prisma) {
   const reminderHour = process.env.REMINDER_TIME_HOUR || 21;
@@ -519,6 +520,22 @@ function initCronJobs(prisma) {
     }
   }, { timezone: 'Asia/Kolkata' });
   console.log('  -> Contract signing reminder: 0 10 * * 1-6 (Mon-Sat 10 AM IST)');
+
+  // ── Holiday attendance marking — daily 12:15 AM IST ───────────────────────
+  // Marks attendance as 'holiday' for all active employees on holiday dates,
+  // respecting per-user location (Mumbai / Lucknow / All).
+  // Runs AFTER midnight so the date is correct and doesn't override check-ins.
+  cron.schedule('15 0 * * *', async () => {
+    try {
+      const result = await runHolidayAttendanceMark(prisma);
+      if (result.marked > 0) {
+        console.log(`[CRON] HolidayAttendance: marked ${result.marked} records for ${result.date}`);
+      }
+    } catch (err) {
+      console.error('[CRON] HolidayAttendance failed:', err);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('  -> Holiday attendance marking: 15 0 * * * (daily 12:15 AM IST)');
 }
 
 module.exports = { initCronJobs };
