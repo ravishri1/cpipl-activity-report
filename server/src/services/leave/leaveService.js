@@ -1170,14 +1170,11 @@ async function executeFYRollover(fyYear, prisma) {
     }
 
     // ── Combined PL+COF carry forward — each has its own independent cap ──
-    // Policy: PL cap = plLeaveType.maxCarryForward (e.g. 4)
-    //         COF cap = cofLeaveType.maxCarryForward (e.g. 2)
-    //         Both caps are independent — COF is NOT limited by leftover PL slots.
-    // e.g. PL=4, COF=4, PLmax=4, COFmax=2 → PL carries 4, COF carries 2 (2 lapse)
-    // e.g. PL=2, COF=4, PLmax=4, COFmax=2 → PL carries 2, COF carries 2 (2 lapse)
-    // e.g. PL=0, COF=4, PLmax=4, COFmax=2 → PL carries 0, COF carries 2 (2 lapse)
-    const maxPLCarry  = plLeaveType?.maxCarryForward || 4;
-    const maxCOFCarry = cofLeaveType?.maxCarryForward || 2;
+    // Caps come directly from Leave Types settings (maxCarryForward field).
+    // Set the actual values in Admin → Leave Types → Edit → Max Carry Forward.
+    // PL and COF are independent — COF cap is NOT affected by how much PL carries.
+    const maxPLCarry  = plLeaveType?.maxCarryForward ?? 0;
+    const maxCOFCarry = cofLeaveType?.maxCarryForward ?? 0;
     const plForward   = Math.min(plCarry, maxPLCarry);
     const cofForward  = Math.min(cofCarry, maxCOFCarry);
     const combinedCarry  = plForward + cofForward;
@@ -1277,8 +1274,8 @@ async function previewFYRollover(fyYear, prisma) {
 
     // Combined PL+COF carry forward — independent caps per leave type
     const cofLeaveTypeP = leaveTypes.find(lt => lt.code === 'COF');
-    const maxPLCarryP  = plLeaveType?.maxCarryForward || 4;
-    const maxCOFCarryP = cofLeaveTypeP?.maxCarryForward || 2;
+    const maxPLCarryP  = plLeaveType?.maxCarryForward ?? 0;
+    const maxCOFCarryP = cofLeaveTypeP?.maxCarryForward ?? 0;
     const plFwd   = Math.min(plAvail, maxPLCarryP);
     const cofFwd  = Math.min(cofAvail, maxCOFCarryP);
     const combinedCarry  = plFwd + cofFwd;
