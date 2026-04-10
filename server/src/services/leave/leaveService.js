@@ -1118,13 +1118,18 @@ async function executeFYRollover(fyYear, prisma) {
       }
     }
 
-    // ── Combined PL+COF carry forward, capped at PL.maxCarryForward (6) ──
-    // Policy: PL and COF are a combined leave pool for carry-forward purposes.
-    // Combined unused (PL + COF) carries to CF.opening, capped at maxCarryForward.
+    // ── Combined PL+COF carry forward — PL has priority ──
+    // Policy: PL fills the cap first, COF takes whatever slots remain.
+    // e.g. PL=4, COF=3, cap=6 → PL carries 4, COF carries 2 (1 lapsed)
+    // e.g. PL=3, COF=3, cap=6 → PL carries 3, COF carries 3 (all carry)
+    // e.g. PL=6, COF=3, cap=6 → PL carries 6, COF carries 0 (all lapsed)
     const maxCF = plLeaveType?.maxCarryForward || 6;
+    const plForward  = Math.min(plCarry, maxCF);
+    const remaining  = Math.max(maxCF - plForward, 0);
+    const cofForward = Math.min(cofCarry, remaining);
+    const combinedCarry  = plForward + cofForward;
+    const combinedLapsed = Math.max((plCarry - plForward) + (cofCarry - cofForward), 0);
     const combinedAvailable = plCarry + cofCarry;
-    const combinedCarry = Math.min(combinedAvailable, maxCF);
-    const combinedLapsed = Math.max(combinedAvailable - combinedCarry, 0);
 
     // ── Now upsert CF balance with combined carry as opening ──
     if (cfLeaveType) {
@@ -1216,11 +1221,14 @@ async function previewFYRollover(fyYear, prisma) {
       }
     }
 
-    // Combined PL+COF carry forward
+    // Combined PL+COF carry forward — PL has priority
     const maxCF = plLeaveType?.maxCarryForward || 6;
-    const combinedAvail = plAvail + cofAvail;
-    const combinedCarry = Math.min(combinedAvail, maxCF);
-    const combinedLapsed = Math.max(combinedAvail - combinedCarry, 0);
+    const plFwd   = Math.min(plAvail, maxCF);
+    const rem     = Math.max(maxCF - plFwd, 0);
+    const cofFwd  = Math.min(cofAvail, rem);
+    const combinedCarry  = plFwd + cofFwd;
+    const combinedLapsed = Math.max((plAvail - plFwd) + (cofAvail - cofFwd), 0);
+    const combinedAvail  = plAvail + cofAvail;
     if (combinedAvail > 0) {
       preview.push({
         userId: user.id, userName: user.name, employeeId: user.employeeId,
@@ -1228,7 +1236,7 @@ async function previewFYRollover(fyYear, prisma) {
         carryForwardEnabled: true, maxCarryForward: maxCF,
         currentAvailable: combinedAvail,
         willCarry: combinedCarry, willLapse: combinedLapsed,
-        note: `PL(${plAvail}) + COF(${cofAvail}), capped at ${maxCF}`,
+        note: `PL(${plAvail})→${plFwd} + COF(${cofAvail})→${cofFwd}, cap=${maxCF}`,
       });
     }
   }
