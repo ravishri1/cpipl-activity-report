@@ -267,6 +267,13 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
         const result = await runHolidayAttendanceMark(prisma);
         log(`Holiday attendance: ${result.marked} marked, ${result.skipped} skipped (${result.holidaysFound} holiday(s) today)`);
       } catch (err) { warn(`holiday-attendance: ${err.message}`); }
+
+      // Comp-Off 90-day expiry — lapse grants older than 90 days
+      try {
+        const { runCompOffExpiryCheck } = require('../services/leave/compOffExpiryService');
+        const result = await runCompOffExpiryCheck(prisma);
+        log(`Comp-Off expiry: ${result.usersAffected} user(s) affected, ${result.lapsedDays} day(s) lapsed.`);
+      } catch (err) { warn(`compoff-expiry: ${err.message}`); }
     }
 
     // ── Email + Chat activity fetch ────────────────────────────────────────

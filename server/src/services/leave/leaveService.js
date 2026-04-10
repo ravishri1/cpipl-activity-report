@@ -1166,15 +1166,17 @@ async function executeFYRollover(fyYear, prisma) {
       }
     }
 
-    // ── Combined PL+COF carry forward — PL has priority ──
-    // Policy: PL fills the cap first, COF takes whatever slots remain.
-    // e.g. PL=4, COF=3, cap=6 → PL carries 4, COF carries 2 (1 lapsed)
-    // e.g. PL=3, COF=3, cap=6 → PL carries 3, COF carries 3 (all carry)
-    // e.g. PL=6, COF=3, cap=6 → PL carries 6, COF carries 0 (all lapsed)
-    const maxCF = plLeaveType?.maxCarryForward || 6;
-    const plForward  = Math.min(plCarry, maxCF);
-    const remaining  = Math.max(maxCF - plForward, 0);
-    const cofForward = Math.min(cofCarry, remaining);
+    // ── Combined PL+COF carry forward — each has its own independent cap ──
+    // Policy: PL cap = plLeaveType.maxCarryForward (e.g. 4)
+    //         COF cap = cofLeaveType.maxCarryForward (e.g. 2)
+    //         Both caps are independent — COF is NOT limited by leftover PL slots.
+    // e.g. PL=4, COF=4, PLmax=4, COFmax=2 → PL carries 4, COF carries 2 (2 lapse)
+    // e.g. PL=2, COF=4, PLmax=4, COFmax=2 → PL carries 2, COF carries 2 (2 lapse)
+    // e.g. PL=0, COF=4, PLmax=4, COFmax=2 → PL carries 0, COF carries 2 (2 lapse)
+    const maxPLCarry  = plLeaveType?.maxCarryForward || 4;
+    const maxCOFCarry = cofLeaveType?.maxCarryForward || 2;
+    const plForward   = Math.min(plCarry, maxPLCarry);
+    const cofForward  = Math.min(cofCarry, maxCOFCarry);
     const combinedCarry  = plForward + cofForward;
     const combinedLapsed = Math.max((plCarry - plForward) + (cofCarry - cofForward), 0);
     const combinedAvailable = plCarry + cofCarry;
@@ -1212,7 +1214,7 @@ async function executeFYRollover(fyYear, prisma) {
           prevBalance: combinedAvailable,
           carryForward: combinedCarry,
           lapsed: combinedLapsed,
-          note: `PL(${plCarry}) + COF(${cofCarry}) carry-forward, capped at ${maxCF}`,
+          note: `PL(${plCarry})→${plForward}(max ${maxPLCarry}) + COF(${cofCarry})→${cofForward}(max ${maxCOFCarry}) carry-forward`,
         });
       }
     }
@@ -1269,11 +1271,12 @@ async function previewFYRollover(fyYear, prisma) {
       }
     }
 
-    // Combined PL+COF carry forward — PL has priority
-    const maxCF = plLeaveType?.maxCarryForward || 6;
-    const plFwd   = Math.min(plAvail, maxCF);
-    const rem     = Math.max(maxCF - plFwd, 0);
-    const cofFwd  = Math.min(cofAvail, rem);
+    // Combined PL+COF carry forward — independent caps per leave type
+    const cofLeaveTypeP = leaveTypes.find(lt => lt.code === 'COF');
+    const maxPLCarryP  = plLeaveType?.maxCarryForward || 4;
+    const maxCOFCarryP = cofLeaveTypeP?.maxCarryForward || 2;
+    const plFwd   = Math.min(plAvail, maxPLCarryP);
+    const cofFwd  = Math.min(cofAvail, maxCOFCarryP);
     const combinedCarry  = plFwd + cofFwd;
     const combinedLapsed = Math.max((plAvail - plFwd) + (cofAvail - cofFwd), 0);
     const combinedAvail  = plAvail + cofAvail;
@@ -1281,10 +1284,10 @@ async function previewFYRollover(fyYear, prisma) {
       preview.push({
         userId: user.id, userName: user.name, employeeId: user.employeeId,
         leaveType: 'PL + COF (Combined)', leaveTypeCode: 'CF',
-        carryForwardEnabled: true, maxCarryForward: maxCF,
+        carryForwardEnabled: true, maxCarryForward: maxPLCarryP + maxCOFCarryP,
         currentAvailable: combinedAvail,
         willCarry: combinedCarry, willLapse: combinedLapsed,
-        note: `PL(${plAvail})→${plFwd} + COF(${cofAvail})→${cofFwd}, cap=${maxCF}`,
+        note: `PL(${plAvail})→${plFwd}(max ${maxPLCarryP}) + COF(${cofAvail})→${cofFwd}(max ${maxCOFCarryP})`,
       });
     }
   }

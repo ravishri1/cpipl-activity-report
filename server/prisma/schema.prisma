@@ -490,7 +490,8 @@ model LeaveBalance {
   opening     Float @default(0)                 // carry forward from previous FY
   total       Float @default(0)                 // annual entitlement (e.g., 12)
   used        Float @default(0)                 // consumed (approved leaves)
-  balance     Float @default(0)                 // available = opening + credited - used (kept in sync)
+  balance     Float @default(0)                 // available = opening + credited - used - lapsed (kept in sync)
+  lapsed      Float @default(0)                 // days lapsed (comp-off 90-day expiry, or FY rollover cap)
   probationAllowance Float?                     // leaves usable during probation (e.g., 1). null = no restriction
   joiningMonth       Int?                       // 1-12 (FY month employee joined, for pro-rated accrual)
 
@@ -2635,6 +2636,8 @@ model CompOffRequest {
   reviewedBy  Int?
   reviewedAt  DateTime?
   reviewNote  String?
+  lapsedDays  Float     @default(0)          // days lapsed due to 90-day expiry (earn type only)
+  lapsedAt    DateTime?                       // when this grant was marked as (partially) lapsed
   createdAt   DateTime  @default(now())
 
   user        User      @relation(fields: [userId], references: [id])
@@ -2642,6 +2645,7 @@ model CompOffRequest {
 
   @@index([userId])
   @@index([status])
+  @@index([reviewedAt])
 }
 
 // ════════════════════════════════════════════════════════════════
