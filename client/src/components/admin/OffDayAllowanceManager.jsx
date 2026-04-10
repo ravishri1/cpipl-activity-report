@@ -11,7 +11,7 @@ const getCurrentDate = () => new Date().toISOString().slice(0, 10);
 
 export default function OffDayAllowanceManager() {
   const { data: records, loading, error: fetchErr, refetch } = useFetch('/payroll/off-day-allowance', []);
-  const { data: employees } = useFetch('/users/directory', []);
+  const { data: employees } = useFetch('/users', []);
   const { execute, loading: saving, error: saveErr, success, clearMessages } = useApi();
 
   const [showForm, setShowForm] = useState(false);
