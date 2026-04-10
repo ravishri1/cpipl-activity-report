@@ -363,12 +363,18 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     const reimbursements = pendingReimbursements.reduce((sum, e) => sum + e.amount, 0);
 
+    // Fetch pending salary advance repayments for this month
+    const advanceRepayments = await req.prisma.salaryAdvanceRepayment.findMany({
+      where: { month, status: 'pending', advance: { userId: sal.userId, status: { in: ['released', 'repaying'] } } },
+    });
+    const salaryAdvanceDeduction = advanceRepayments.reduce((sum, r) => sum + r.amount, 0);
+
     const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
       sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements;
     const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
-    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction);
+    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
 
-    await req.prisma.payslip.create({
+    const payslip = await req.prisma.payslip.create({
       data: {
         userId: sal.userId, month, year,
         basic: sal.basic, hra: sal.hra, da: sal.da,
@@ -378,9 +384,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         employerPf: sal.employerPf, employerEsi: sal.employerEsi,
         employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
         professionalTax: sal.professionalTax, tds: sal.tds,
-        otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
+        otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
-        reimbursements,
+        reimbursements, salaryAdvanceDeduction,
         companyName: sal.user.company?.name || null,
         designation: sal.user.designation || null,
         dateOfJoining: sal.user.dateOfJoining || null,
@@ -396,7 +402,26 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       });
     }
 
-    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements });
+    // Mark advance repayments as deducted and update advance status
+    if (advanceRepayments.length > 0) {
+      await req.prisma.salaryAdvanceRepayment.updateMany({
+        where: { id: { in: advanceRepayments.map(r => r.id) } },
+        data: { status: 'deducted', deductedAt: new Date() },
+      });
+      // Check if all repayments done → close the advance
+      for (const repayment of advanceRepayments) {
+        const remaining = await req.prisma.salaryAdvanceRepayment.count({
+          where: { advanceId: repayment.advanceId, status: 'pending' },
+        });
+        const advStatus = remaining === 0 ? 'closed' : 'repaying';
+        await req.prisma.salaryAdvance.update({
+          where: { id: repayment.advanceId },
+          data: { status: advStatus, ...(remaining === 0 ? { closedAt: new Date() } : {}) },
+        });
+      }
+    }
+
+    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements, salaryAdvanceDeduction });
   }
 
   // Add stopped employees to results

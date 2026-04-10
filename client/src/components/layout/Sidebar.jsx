@@ -198,6 +198,7 @@ export default function Sidebar({ isOpen, onClose }) {
       icon: IndianRupee,
       items: [
         { to: '/payslips',        label: 'Payslips',               icon: IndianRupee },
+        { to: '/payroll/advance', label: 'Salary Advance',         icon: Wallet },
         { to: '/expenses',        label: 'Expenses',               icon: Wallet },
       ],
     },
@@ -308,7 +309,8 @@ export default function Sidebar({ isOpen, onClose }) {
       label: 'Payroll',
       icon: CreditCard,
       items: [
-        { to: '/admin/payroll',        label: 'Payroll',          icon: CreditCard },
+        { to: '/admin/payroll',          label: 'Payroll',          icon: CreditCard },
+        { to: '/admin/salary-advances', label: 'Salary Advances',  icon: Wallet },
         { to: '/admin/salary-setup',   label: 'Salary Setup',     icon: Banknote },
         { to: '/admin/expense-claims', label: 'Expense Claims',   icon: Receipt },
       ],

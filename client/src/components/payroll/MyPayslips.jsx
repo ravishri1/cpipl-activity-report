@@ -344,6 +344,7 @@ function PayslipDetail({ payslip, onBack }) {
     { label: 'Professional Tax', value: payslip.professionalTax },
     { label: 'TDS / Income Tax', value: payslip.tds },
     { label: 'LOP Deduction', value: payslip.lopDeduction },
+    { label: 'Salary Advance Recovery', value: payslip.salaryAdvanceDeduction },
     { label: 'Other Deductions', value: payslip.otherDeductions },
   ].filter((item) => item.value && item.value > 0);
 

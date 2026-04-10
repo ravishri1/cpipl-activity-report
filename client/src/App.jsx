@@ -28,7 +28,9 @@ const PolicyManager = lazy(() => import('./components/admin/PolicyManager'));
 const PolicyScorecard = lazy(() => import('./components/admin/PolicyScorecard'));
 const SalaryStructure = lazy(() => import('./components/admin/SalaryStructure'));
 const PayrollDashboard = lazy(() => import('./components/admin/PayrollDashboard'));
+const SalaryAdvanceManager = lazy(() => import('./components/admin/SalaryAdvanceManager'));
 const MyPayslips = lazy(() => import('./components/payroll/MyPayslips'));
+const SalaryAdvance = lazy(() => import('./components/payroll/SalaryAdvance'));
 const MyExpenses = lazy(() => import('./components/expenses/MyExpenses'));
 const ExpenseApproval = lazy(() => import('./components/admin/ExpenseApproval'));
 const Announcements = lazy(() => import('./components/announcements/Announcements'));
@@ -197,6 +199,7 @@ function AppRoutes() {
                   {/* Allowed for separated employees */}
                   <Route path="/alumni" element={<AlumniPortal />} />
                   <Route path="/payslips" element={<MyPayslips />} />
+                  <Route path="/payroll/advance" element={<SalaryAdvance />} />
                   <Route path="/my-letters" element={<MyLetters />} />
                   <Route path="/my-tickets" element={<MyTickets />} />
                   <Route path="/suggestions" element={<SuggestionBox />} />
@@ -223,6 +226,7 @@ function AppRoutes() {
                   <Route path="/admin/team" element={<SeparatedRoute><AdminRoute><TeamManagement /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/access-control" element={<SeparatedRoute><AdminRoute><AccessControlManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/payroll" element={<SeparatedRoute><AdminRoute><PayrollDashboard /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/salary-advances" element={<SeparatedRoute><AdminRoute><SalaryAdvanceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/shifts" element={<SeparatedRoute><AdminRoute><ShiftManagement /></AdminRoute></SeparatedRoute>} />

@@ -135,6 +135,9 @@ model User {
   salaryStructure    SalaryStructure?
   payslips           Payslip[]
   salaryRevisions    SalaryRevision[]
+  salaryAdvances     SalaryAdvance[]  @relation("AdvanceRequester")
+  advancesApproved   SalaryAdvance[]  @relation("AdvanceApprover")
+  advancesReleased   SalaryAdvance[]  @relation("AdvanceReleaser")
   payrollArrears     PayrollArrear[]
   salaryRevisionsBy  SalaryRevision[]   @relation("SalaryRevisionsBy")
   expenseClaims      ExpenseClaim[]
@@ -860,7 +863,10 @@ model Payslip {
   dateOfJoining        String?                         // joining date at time of generation
 
   // Reimbursements (settled via salary)
-  reimbursements       Float    @default(0)           // expense claims settled in this payslip
+  reimbursements           Float    @default(0)           // expense claims settled in this payslip
+
+  // Salary Advance repayment deduction
+  salaryAdvanceDeduction   Float    @default(0)           // advance repayment deducted this month
 
   // Attendance
   workingDays          Int      @default(0)
@@ -878,6 +884,57 @@ model Payslip {
   user                 User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, month])
+  @@index([month])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// Salary Advance
+// ═══════════════════════════════════════════════
+
+model SalaryAdvance {
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  amount           Float                                    // requested amount
+  reason           String
+  repaymentMonths  Int       @default(1)                   // number of months to repay
+  repaymentStart   String?                                  // "YYYY-MM" — first deduction month
+  status           String    @default("pending")            // pending | approved | rejected | released | repaying | closed
+  approvedBy       Int?
+  approvedAt       DateTime?
+  approvedAmount   Float?                                   // admin may approve different amount
+  approveNote      String?
+  releasedBy       Int?
+  releasedAt       DateTime?
+  releaseMode      String?                                  // bank_transfer | cash
+  releaseNote      String?
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation("AdvanceRequester", fields: [userId], references: [id])
+  approver         User?     @relation("AdvanceApprover", fields: [approvedBy], references: [id])
+  releaser         User?     @relation("AdvanceReleaser", fields: [releasedBy], references: [id])
+  repayments       SalaryAdvanceRepayment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model SalaryAdvanceRepayment {
+  id          Int      @id @default(autoincrement())
+  advanceId   Int
+  month       String                                        // "YYYY-MM"
+  amount      Float                                         // deduction for this month
+  status      String   @default("pending")                  // pending | deducted
+  payslipId   Int?
+  deductedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  advance     SalaryAdvance @relation(fields: [advanceId], references: [id])
+
+  @@unique([advanceId, month])
+  @@index([advanceId])
   @@index([month])
   @@index([status])
 }
