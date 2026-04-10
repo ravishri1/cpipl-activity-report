@@ -9,58 +9,6 @@ router.use(authenticate);
 
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
-// Default system salary components — auto-seeded on first use
-const DEFAULT_COMPONENTS = [
-  { name: 'Basic Salary', code: 'BASIC', type: 'earning', taxable: true, mandatory: true, calculationType: 'fixed', sortOrder: 1, isSystem: true, isActive: true },
-  { name: 'House Rent Allowance (HRA)', code: 'HRA', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 2, isSystem: true, isActive: true },
-  { name: 'Dearness Allowance (DA)', code: 'DA', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 3, isSystem: true, isActive: true },
-  { name: 'Special Allowance', code: 'SPECIAL_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 4, isSystem: true, isActive: true },
-  { name: 'Medical Allowance', code: 'MEDICAL_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 5, isSystem: true, isActive: true, complianceNote: 'Non-taxable up to ₹15,000/yr' },
-  { name: 'Conveyance Allowance', code: 'CONVEYANCE_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 6, isSystem: true, isActive: true, complianceNote: 'Non-taxable up to ₹19,200/yr' },
-  { name: 'Leave Travel Allowance (LTA)', code: 'LTA', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 7, isSystem: true, isActive: true },
-  { name: 'Food / Meal Allowance', code: 'FOOD_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 8, isSystem: true, isActive: true },
-  { name: 'Internet Allowance', code: 'INTERNET_ALLOWANCE', type: 'earning', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 9, isSystem: true, isActive: true },
-  { name: 'Performance Bonus', code: 'BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 10, isSystem: true, isActive: true },
-  // GreytHR-compatible components (Color Papers India structure)
-  { name: 'Statutory Bonus', code: 'STATUTORY_BONUS', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 11, isSystem: true, isActive: true, complianceNote: 'Payment of Bonus Act — 8.33% of basic' },
-  { name: 'Other Allowance', code: 'OTHER_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 12, isSystem: true, isActive: true },
-  { name: 'Leave Allowance', code: 'LEAVE_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 13, isSystem: true, isActive: true },
-  { name: 'Sunday/Weekly Off Allowance', code: 'SUNDAY_ALLOWANCE', type: 'earning', taxable: true, mandatory: false, calculationType: 'fixed', sortOrder: 14, isSystem: true, isActive: true },
-  { name: 'Employee PF (12%)', code: 'EMP_PF', type: 'deduction', taxable: false, mandatory: true, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 12, sortOrder: 20, isSystem: true, isActive: true, complianceNote: 'Mandatory for basic ≤ ₹15,000' },
-  { name: 'Employee ESI (0.75%)', code: 'EMP_ESI', type: 'deduction', taxable: false, mandatory: false, calculationType: 'percentage', percentageOf: 'gross', defaultPercentage: 0.75, sortOrder: 21, isSystem: true, isActive: true, complianceNote: 'Applicable for gross ≤ ₹21,000/month' },
-  { name: 'Professional Tax', code: 'PT', type: 'deduction', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 22, isSystem: true, isActive: true },
-  { name: 'TDS / Income Tax', code: 'TDS', type: 'deduction', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 23, isSystem: true, isActive: true },
-  { name: 'Salary Advance', code: 'ADVANCE', type: 'deduction', taxable: false, mandatory: false, calculationType: 'fixed', sortOrder: 24, isSystem: true, isActive: true },
-  { name: 'Employer PF (12%)', code: 'EMPLOYER_PF', type: 'employer', taxable: false, mandatory: true, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 12, sortOrder: 30, isSystem: true, isActive: true },
-  { name: 'Employer ESI (3.25%)', code: 'EMPLOYER_ESI', type: 'employer', taxable: false, mandatory: false, calculationType: 'percentage', percentageOf: 'gross', defaultPercentage: 3.25, sortOrder: 31, isSystem: true, isActive: true },
-  { name: 'Employer Gratuity (4.81%)', code: 'EMPLOYER_GRATUITY', type: 'employer', taxable: false, mandatory: false, calculationType: 'percentage', percentageOf: 'basic', defaultPercentage: 4.81, sortOrder: 32, isSystem: true, isActive: true },
-];
-
-// Map component codes to SalaryStructure hardcoded fields (for payslip compat)
-function mapComponentsToFields(components) {
-  const findE = (code) => (components.find(c => c.type === 'earning' && c.code === code)?.amount) || 0;
-  const findD = (code) => (components.find(c => c.type === 'deduction' && c.code === code)?.amount) || 0;
-  const findR = (code) => (components.find(c => c.type === 'employer' && c.code === code)?.amount) || 0;
-  const knownEarningCodes = ['BASIC', 'HRA', 'DA', 'SPECIAL_ALLOWANCE', 'MEDICAL_ALLOWANCE', 'CONVEYANCE_ALLOWANCE'];
-  const otherEarnings = components.filter(c => c.type === 'earning' && !knownEarningCodes.includes(c.code));
-  const otherAmount = otherEarnings.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-  const otherLabel = otherEarnings.map(c => c.label || c.name).join(', ') || null;
-  const earnings = components.filter(c => c.type === 'earning');
-  const deductions = components.filter(c => c.type === 'deduction');
-  const grossEarnings = earnings.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-  const totalDeductions = deductions.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-  return {
-    basic: findE('BASIC'), hra: findE('HRA'), da: findE('DA'),
-    specialAllowance: findE('SPECIAL_ALLOWANCE'), medicalAllowance: findE('MEDICAL_ALLOWANCE'),
-    conveyanceAllowance: findE('CONVEYANCE_ALLOWANCE'),
-    otherAllowance: otherAmount, otherAllowanceLabel: otherLabel,
-    employeePf: findD('EMP_PF'), employeeEsi: findD('EMP_ESI'),
-    professionalTax: findD('PT'), tds: findD('TDS'),
-    employerPf: findR('EMPLOYER_PF'), employerEsi: findR('EMPLOYER_ESI'),
-    grossEarnings, totalDeductions, netPayMonthly: grossEarnings - totalDeductions,
-  };
-}
-
 // GET /salary-list — All employees with their salary structures (admin)
 router.get('/salary-list', requireAdmin, asyncHandler(async (req, res) => {
   const employees = await req.prisma.user.findMany({
@@ -74,7 +22,7 @@ router.get('/salary-list', requireAdmin, asyncHandler(async (req, res) => {
           otherAllowance: true, otherAllowanceLabel: true,
           employerPf: true, employerEsi: true, employeePf: true, employeeEsi: true,
           professionalTax: true, tds: true, netPayMonthly: true,
-          effectiveFrom: true, stopSalaryProcessing: true, isLocked: true, notes: true,
+          effectiveFrom: true, stopSalaryProcessing: true, notes: true,
         },
       },
       salaryRevisions: {
@@ -106,42 +54,21 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
   const userId = parseId(req.params.userId);
   const d = req.body;
 
-  // If new flexible components array provided, derive hardcoded fields from it
-  let fieldData;
-  if (Array.isArray(d.components) && d.components.length > 0) {
-    const mapped = mapComponentsToFields(d.components);
-    const { grossEarnings, totalDeductions, ...mappedFields } = mapped; // strip computed summaries (not in schema)
-    fieldData = {
-      ...mappedFields,
-      ctcAnnual: d.ctcAnnual || grossEarnings * 12,
-      ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : grossEarnings),
-      components: d.components,
-    };
-  } else {
-    // Legacy: accept hardcoded fields directly
-    const grossEarnings = (d.basic || 0) + (d.hra || 0) + (d.da || 0) + (d.specialAllowance || 0) +
-      (d.medicalAllowance || 0) + (d.conveyanceAllowance || 0) + (d.otherAllowance || 0);
-    const totalDeductions = (d.employeePf || 0) + (d.employeeEsi || 0) + (d.professionalTax || 0) + (d.tds || 0);
-    fieldData = {
-      ctcAnnual: d.ctcAnnual || 0, ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : 0),
-      basic: d.basic || 0, hra: d.hra || 0, da: d.da || 0,
-      specialAllowance: d.specialAllowance || 0, medicalAllowance: d.medicalAllowance || 0,
-      conveyanceAllowance: d.conveyanceAllowance || 0, otherAllowance: d.otherAllowance || 0,
-      otherAllowanceLabel: d.otherAllowanceLabel || null,
-      variablePay: d.variablePay || 0, medicalPremium: d.medicalPremium || 0,
-      employerPf: d.employerPf || 0, employerEsi: d.employerEsi || 0,
-      employeePf: d.employeePf || 0, employeeEsi: d.employeeEsi || 0,
-      professionalTax: d.professionalTax || 0, tds: d.tds || 0,
-      netPayMonthly: grossEarnings - totalDeductions,
-    };
-  }
+  const grossEarnings = (d.basic || 0) + (d.hra || 0) + (d.da || 0) + (d.specialAllowance || 0) +
+    (d.medicalAllowance || 0) + (d.conveyanceAllowance || 0) + (d.otherAllowance || 0);
+  const totalDeductions = (d.employeePf || 0) + (d.employeeEsi || 0) + (d.professionalTax || 0) + (d.tds || 0);
+  const netPayMonthly = grossEarnings - totalDeductions;
 
   const data = {
-    ...fieldData,
-    variablePay: d.variablePay || fieldData.variablePay || 0,
-    medicalPremium: d.medicalPremium || fieldData.medicalPremium || 0,
-    effectiveFrom: d.effectiveFrom || null,
-    notes: d.notes || null,
+    ctcAnnual: d.ctcAnnual || 0, ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : 0),
+    basic: d.basic || 0, hra: d.hra || 0, da: d.da || 0,
+    specialAllowance: d.specialAllowance || 0, medicalAllowance: d.medicalAllowance || 0,
+    conveyanceAllowance: d.conveyanceAllowance || 0, otherAllowance: d.otherAllowance || 0,
+    otherAllowanceLabel: d.otherAllowanceLabel || null,
+    employerPf: d.employerPf || 0, employerEsi: d.employerEsi || 0,
+    employeePf: d.employeePf || 0, employeeEsi: d.employeeEsi || 0,
+    professionalTax: d.professionalTax || 0, tds: d.tds || 0,
+    netPayMonthly, effectiveFrom: d.effectiveFrom || null, notes: d.notes || null,
   };
 
   const existing = await req.prisma.salaryStructure.findUnique({ where: { userId } });
@@ -172,24 +99,6 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
     });
   }
   res.json(salary);
-}));
-
-// PUT /salary/:userId/lock — Toggle salary lock (admin only)
-router.put('/salary/:userId/lock', requireAdmin, asyncHandler(async (req, res) => {
-  const userId = parseId(req.params.userId);
-  const existing = await req.prisma.salaryStructure.findUnique({ where: { userId }, select: { isLocked: true } });
-  if (!existing) throw notFound('Salary structure');
-  const nowLocked = !existing.isLocked;
-  const updated = await req.prisma.salaryStructure.update({
-    where: { userId },
-    data: {
-      isLocked: nowLocked,
-      lockedBy: nowLocked ? req.user.id : null,
-      lockedAt: nowLocked ? new Date() : null,
-    },
-    select: { isLocked: true },
-  });
-  res.json({ isLocked: updated.isLocked });
 }));
 
 // GET /salary/:userId/revisions — Revision history (admin or self)
@@ -323,7 +232,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, location: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -331,20 +240,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
 
-  // Fetch all holidays for the month
+  // Global holidays for the month
   const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
-
-  // Build location-aware holiday cache: 'All' dates + per-location dates
-  // e.g. a Mumbai employee gets global('All') + Mumbai-specific holidays
-  const allDates = holidays.filter(h => h.location === 'All').map(h => h.date);
-  const uniqueHolLocations = [...new Set(holidays.filter(h => h.location !== 'All').map(h => h.location))];
-  const locationHolidayCache = { All: new Set(allDates) };
-  for (const loc of uniqueHolLocations) {
-    locationHolidayCache[loc] = new Set([
-      ...allDates,
-      ...holidays.filter(h => h.location === loc).map(h => h.date),
-    ]);
-  }
+  const globalHolidayDates = new Set(holidays.map(h => h.date));
 
   // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls
   const branchHolidayCache = {};
@@ -371,10 +269,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
 
-    // Merge location-specific + branch holidays for this employee
-    const userLocation = sal.user.location || 'All';
-    const locationHols = locationHolidayCache[userLocation] || locationHolidayCache['All'];
-    const mergedHolidays = new Set(locationHols);
+    // Merge global + branch holidays for this employee
+    const mergedHolidays = new Set(globalHolidayDates);
     if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
       branchHolidayCache[sal.user.branchId].forEach(d => mergedHolidays.add(d));
     }
@@ -452,55 +348,26 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
     const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
-
-    // Build earnings from flexible components (only earnings type) or hardcoded fields
-    const comps = Array.isArray(sal.components) ? sal.components : [];
-    let salaryFields;
-    if (comps.length > 0) {
-      salaryFields = mapComponentsToFields(comps);
-    } else {
-      const ge = (sal.basic || 0) + (sal.hra || 0) + (sal.da || 0) + (sal.specialAllowance || 0) +
-        (sal.medicalAllowance || 0) + (sal.conveyanceAllowance || 0) + (sal.otherAllowance || 0);
-      salaryFields = {
-        basic: sal.basic || 0, hra: sal.hra || 0, da: sal.da || 0,
-        specialAllowance: sal.specialAllowance || 0, medicalAllowance: sal.medicalAllowance || 0,
-        conveyanceAllowance: sal.conveyanceAllowance || 0, otherAllowance: sal.otherAllowance || 0,
-        otherAllowanceLabel: sal.otherAllowanceLabel,
-        grossEarnings: ge,
-      };
-    }
-    const grossEarnings = salaryFields.grossEarnings;
-
-    // CTC components (employer-side, not deducted from employee)
-    const variablePay = sal.variablePay || 0;
-    const medicalPremium = sal.medicalPremium || 0;
-
-    // Recalculate statutory deductions from actual (post-LOP) earnings
-    const actualBasic = workingDays > 0
-      ? Math.round((salaryFields.basic || 0) * (workingDays - lopDays) / workingDays)
-      : (salaryFields.basic || 0);
-    const actualGross = Math.max(0, grossEarnings - lopDeduction);
-    const employeePf = actualBasic > 0 ? Math.min(Math.round(actualBasic * 0.12), 1800) : 0;
-    const employerPf = employeePf; // Employer PF = same as employee PF
-    const employeeEsi = actualGross > 0 && actualGross <= 21000 ? Math.round(actualGross * 0.0075) : 0;
-    const professionalTax = actualGross > 10000 ? 200 : actualGross >= 7500 ? 75 : 0;
-    const tds = sal.tds || 0;
-    const totalDeductions = employeePf + employeeEsi + professionalTax + tds + lopDeduction;
-    const netPay = Math.round(grossEarnings - totalDeductions);
+    const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
+      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+    const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
+    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction);
 
     await req.prisma.payslip.create({
       data: {
         userId: sal.userId, month, year,
-        basic: salaryFields.basic, hra: salaryFields.hra, da: salaryFields.da,
-        specialAllowance: salaryFields.specialAllowance, medicalAllowance: salaryFields.medicalAllowance,
-        conveyanceAllowance: salaryFields.conveyanceAllowance, otherAllowance: salaryFields.otherAllowance,
-        otherAllowanceLabel: salaryFields.otherAllowanceLabel, grossEarnings,
-        variablePay, medicalPremium,
-        employerPf, employerEsi: 0,
-        employeePf, employeeEsi, professionalTax, tds,
-        otherDeductions: 0, totalDeductions,
+        basic: sal.basic, hra: sal.hra, da: sal.da,
+        specialAllowance: sal.specialAllowance, medicalAllowance: sal.medicalAllowance,
+        conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
+        otherAllowanceLabel: sal.otherAllowanceLabel, grossEarnings,
+        employerPf: sal.employerPf, employerEsi: sal.employerEsi,
+        employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
+        professionalTax: sal.professionalTax, tds: sal.tds,
+        otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
         companyName: sal.user.company?.name || null,
+        designation: sal.user.designation || null,
+        dateOfJoining: sal.user.dateOfJoining || null,
         status: 'generated', generatedAt: new Date(),
       },
     });
@@ -524,7 +391,7 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
     include: { 
       user: { 
         select: { 
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true, companyId: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true, companyId: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -561,7 +428,7 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
     include: {
       user: {
         select: {
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -594,7 +461,7 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
     include: {
       user: {
         select: {
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true,
           bankName: true, bankAccountNumber: true, bankIfscCode: true,
           companyRegistrationId: true,
         }
@@ -660,8 +527,8 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
     where: { month },
     include: { 
       user: { 
-        select: { 
-          name: true, employeeId: true, department: true, designation: true,
+        select: {
+          name: true, employeeId: true, department: true, designation: true, dateOfJoining: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -745,12 +612,10 @@ router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(
 // Salary Components — Configuration master list
 // ═══════════════════════════════════════════════
 
-// GET /components — List all salary components (always upserts defaults so new ones are added)
+// GET /components — List all salary components
 router.get('/components', requireAdmin, asyncHandler(async (req, res) => {
-  await req.prisma.salaryComponent.createMany({ data: DEFAULT_COMPONENTS, skipDuplicates: true });
   const components = await req.prisma.salaryComponent.findMany({
-    where: { isActive: true },
-    orderBy: [{ type: 'asc' }, { sortOrder: 'asc' }],
+    orderBy: { sortOrder: 'asc' },
   });
   res.json(components);
 }));
@@ -761,21 +626,14 @@ router.post('/components', requireAdmin, asyncHandler(async (req, res) => {
   if (!name?.trim() || !code?.trim() || !type?.trim()) throw badRequest('Name, code, and type are required.');
   if (!['earning', 'deduction', 'employer'].includes(type)) throw badRequest('Type must be earning, deduction, or employer.');
 
-  // Check for existing component with same code before creating
-  const normalizedCode = code.trim().toUpperCase();
-  const existing = await req.prisma.salaryComponent.findUnique({ where: { code: normalizedCode } });
-  if (existing) {
-    throw badRequest(`A component with code "${normalizedCode}" already exists${existing.isActive ? '' : ' (inactive)'}. Use a different code or edit the existing one.`);
-  }
-
   const maxSort = await req.prisma.salaryComponent.aggregate({ _max: { sortOrder: true } });
   const component = await req.prisma.salaryComponent.create({
     data: {
       name: name.trim(),
-      code: normalizedCode,
+      code: code.trim().toUpperCase(),
       type,
-      taxable: req.body.taxable !== undefined ? (req.body.taxable === true || req.body.taxable === 'true') : true,
-      mandatory: req.body.mandatory !== undefined ? (req.body.mandatory === true || req.body.mandatory === 'true') : false,
+      taxable: req.body.taxable ?? true,
+      mandatory: req.body.mandatory ?? false,
       calculationType: req.body.calculationType || 'fixed',
       percentageOf: req.body.percentageOf || null,
       defaultPercentage: parseFloat(req.body.defaultPercentage) || null,
@@ -1291,7 +1149,7 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
   const XLSX = require('xlsx');
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, email: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true, email: true } } },
     orderBy: { user: { name: 'asc' } },
   });
 
@@ -1301,7 +1159,8 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
     'Emp ID':         p.user?.employeeId || '',
     'Name':           p.user?.name || '',
     'Department':     p.user?.department || '',
-    'Designation':    p.user?.designation || '',
+    'Designation':    p.user?.designation || p.designation || '',
+    'Date of Joining': p.user?.dateOfJoining || p.dateOfJoining || '',
     'Basic':          p.basic || 0,
     'HRA':            p.hra || 0,
     'DA':             p.da || 0,
@@ -1419,7 +1278,7 @@ router.get('/statutory', requireAdmin, asyncHandler(async (req, res) => {
 
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true } } },
     orderBy: { user: { name: 'asc' } },
   });
 
@@ -1470,7 +1329,7 @@ router.get('/statutory-export', requireAdmin, asyncHandler(async (req, res) => {
   const XLSX = require('xlsx');
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true } } },
     orderBy: { user: { name: 'asc' } },
   });
   if (payslips.length === 0) throw notFound('No payslips found for this month.');

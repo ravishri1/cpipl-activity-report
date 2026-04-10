@@ -401,7 +401,12 @@ function PayslipDetail({ payslip, onBack }) {
             <InfoItem
               icon={Briefcase}
               label="Designation"
-              value={payslip.user?.designation || '-'}
+              value={payslip.user?.designation || payslip.designation || '-'}
+            />
+            <InfoItem
+              icon={Calendar}
+              label="Date of Joining"
+              value={payslip.user?.dateOfJoining || payslip.dateOfJoining || '-'}
             />
             <div>
               <p className="text-xs font-medium text-slate-500 mb-1">Shift</p>

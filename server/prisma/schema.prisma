@@ -856,6 +856,8 @@ model Payslip {
 
   // Metadata snapshot
   companyName          String?                         // company name at time of generation
+  designation          String?                         // designation at time of generation
+  dateOfJoining        String?                         // joining date at time of generation
 
   // Attendance
   workingDays          Int      @default(0)
