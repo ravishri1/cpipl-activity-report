@@ -1089,7 +1089,10 @@ async function executeFYRollover(fyYear, prisma) {
       const joiningMonth = balance.joiningMonth || null;
       const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
       const credited = isCompOffType ? (balance.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
-      const available = Math.max((balance.opening || 0) + credited - actualUsed, 0);
+      // For comp-off: subtract already-lapsed days (from 90-day daily expiry)
+      // so rollover doesn't count them as still available.
+      const alreadyLapsed = isCompOffType ? (balance.lapsed || 0) : 0;
+      const available = Math.max((balance.opening || 0) + credited - actualUsed - alreadyLapsed, 0);
 
       let carryAmount = 0;
       let lapsed = 0;
@@ -1253,7 +1256,8 @@ async function previewFYRollover(fyYear, prisma) {
       const joiningMonth = balance.joiningMonth || null;
       const isCompOffType = lt.accrualType === 'none' && lt.defaultBalance === 0;
       const credited = isCompOffType ? (balance.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
-      const available = Math.max((balance.opening || 0) + credited - actualUsed, 0);
+      const alreadyLapsed = isCompOffType ? (balance.lapsed || 0) : 0;
+      const available = Math.max((balance.opening || 0) + credited - actualUsed - alreadyLapsed, 0);
 
       if (lt.code === 'PL') {
         plAvail = available;
