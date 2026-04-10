@@ -1606,6 +1606,19 @@ export default function PayrollDashboard() {
                   <p className="text-xs text-red-600">{processCheck.employees.withoutSalary.map(u => `${u.name} (${u.employeeId})`).join(', ')}</p>
                 </div>
               )}
+              {processCheck.employees?.pendingDisbursements?.length > 0 && (
+                <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-xs font-semibold text-amber-700 mb-1">⚠️ Advances approved but not yet disbursed:</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {processCheck.employees.pendingDisbursements.map(u => (
+                      <span key={u.id} className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                        {u.name} — ₹{u.amount?.toLocaleString('en-IN')}
+                      </span>
+                    ))}
+                  </div>
+                  <a href="/admin/salary-advances" className="text-xs text-amber-600 hover:underline mt-1 inline-block">Go to Salary Advance Manager →</a>
+                </div>
+              )}
             </div>
           )}
 

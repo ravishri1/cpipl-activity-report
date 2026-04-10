@@ -610,6 +610,17 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
     where: { status: 'approved', settleOnSalary: true, settlementMonth: null },
   });
 
+  // Salary advances — approved but not yet disbursed
+  const pendingDisbursements = await req.prisma.salaryAdvance.findMany({
+    where: { status: 'approved' },
+    include: { user: { select: { id: true, name: true, employeeId: true } } },
+  });
+
+  // Salary advances — repayments due this month
+  const advanceRepaymentsDue = await req.prisma.salaryAdvanceRepayment.count({
+    where: { month, status: 'pending' },
+  });
+
   res.json({
     month,
     summary: {
@@ -622,6 +633,8 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
       existingPayslips,
       publishedPayslips,
       pendingReimbursements: pendingReimb,
+      pendingAdvanceDisbursements: pendingDisbursements.length,
+      advanceRepaymentsDue,
     },
     checks: [
       { label: 'Salary structures set', status: withoutSalary.length === 0 ? 'ok' : 'warning', detail: withoutSalary.length > 0 ? `${withoutSalary.length} employees missing` : 'All set' },
@@ -629,10 +642,13 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
       { label: 'Pending leave approvals', status: pendingLeaves === 0 ? 'ok' : 'warning', detail: pendingLeaves > 0 ? `${pendingLeaves} leave requests still pending` : 'None pending' },
       { label: 'Payslips generated', status: existingPayslips > 0 ? 'ok' : 'pending', detail: existingPayslips > 0 ? `${existingPayslips} generated, ${publishedPayslips} published` : 'Not generated yet' },
       { label: 'Pending reimbursements', status: pendingReimb === 0 ? 'ok' : 'info', detail: pendingReimb > 0 ? `${pendingReimb} expense claims will be included in next generation` : 'None' },
+      { label: 'Advance disbursements pending', status: pendingDisbursements.length === 0 ? 'ok' : 'warning', detail: pendingDisbursements.length > 0 ? `${pendingDisbursements.length} approved advances not yet disbursed` : 'All disbursed' },
+      { label: 'Advance repayments this month', status: advanceRepaymentsDue === 0 ? 'ok' : 'info', detail: advanceRepaymentsDue > 0 ? `${advanceRepaymentsDue} deductions will auto-apply on payslip generation` : 'None due' },
     ],
     employees: {
       withoutSalary: withoutSalary.map(u => ({ id: u.id, name: u.name, employeeId: u.employeeId })),
       stopped: stopped.map(u => ({ id: u.id, name: u.name, employeeId: u.employeeId })),
+      pendingDisbursements: pendingDisbursements.map(a => ({ id: a.id, name: a.user.name, employeeId: a.user.employeeId, amount: a.approvedAmount || a.amount })),
     },
   });
 }));
@@ -650,7 +666,17 @@ router.get('/neft-export', requireActiveEmployee, requireAdmin, asyncHandler(asy
     orderBy: { user: { name: 'asc' } },
   });
 
-  const rows = [['Sr No', 'Employee ID', 'Employee Name', 'Department', 'Bank Name', 'Account Number', 'IFSC Code', 'Net Pay (INR)']];
+  // Salary advance bank disbursements for this month (released in this month, bank_transfer mode)
+  const advanceDisbursements = await req.prisma.salaryAdvance.findMany({
+    where: {
+      releaseMode: 'bank_transfer',
+      releasedAt: { gte: new Date(`${month}-01`), lt: new Date(`${month}-01`) },
+      status: { in: ['released', 'repaying', 'closed'] },
+    },
+    include: { user: { select: { name: true, employeeId: true, department: true, bankName: true, bankAccountNumber: true, bankIfscCode: true } } },
+  });
+
+  const rows = [['Sr No', 'Employee ID', 'Employee Name', 'Department', 'Bank Name', 'Account Number', 'IFSC Code', 'Net Pay (INR)', 'Type']];
   payslips.forEach((p, i) => {
     rows.push([
       i + 1,
@@ -661,8 +687,28 @@ router.get('/neft-export', requireActiveEmployee, requireAdmin, asyncHandler(asy
       p.user?.bankAccountNumber || '',
       p.user?.bankIfscCode || '',
       p.netPay,
+      'Salary',
     ]);
   });
+
+  if (advanceDisbursements.length > 0) {
+    rows.push([]);
+    rows.push(['--- Salary Advance Disbursements ---', '', '', '', '', '', '', '', '']);
+    rows.push(['Sr No', 'Employee ID', 'Employee Name', 'Department', 'Bank Name', 'Account Number', 'IFSC Code', 'Advance Amount (INR)', 'Type']);
+    advanceDisbursements.forEach((a, i) => {
+      rows.push([
+        i + 1,
+        a.user?.employeeId || '',
+        a.user?.name || '',
+        a.user?.department || '',
+        a.user?.bankName || '',
+        a.user?.bankAccountNumber || '',
+        a.user?.bankIfscCode || '',
+        a.approvedAmount || a.amount,
+        'Advance',
+      ]);
+    });
+  }
 
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   res.setHeader('Content-Type', 'text/csv');

@@ -546,6 +546,7 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
   const [companies, setCompanies] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const { data: activeAdvance } = useFetch(canEdit ? `/salary-advances/user/${userId}` : null, null);
 
   useEffect(() => {
     if (!canEdit) return;
@@ -709,6 +710,51 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
             <Link to="/admin/payroll" className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors">
               Payroll
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Active Salary Advance */}
+      {canEdit && activeAdvance && (
+        <div className={`rounded-xl border-2 p-4 ${
+          activeAdvance.status === 'pending' ? 'border-amber-200 bg-amber-50' :
+          activeAdvance.status === 'approved' ? 'border-blue-200 bg-blue-50' :
+          activeAdvance.status === 'released' ? 'border-violet-200 bg-violet-50' :
+          'border-indigo-200 bg-indigo-50'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <IndianRupee className={`w-5 h-5 ${
+                activeAdvance.status === 'pending' ? 'text-amber-500' :
+                activeAdvance.status === 'approved' ? 'text-blue-500' :
+                activeAdvance.status === 'released' ? 'text-violet-500' : 'text-indigo-500'
+              }`} />
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active Salary Advance</p>
+                <p className="text-lg font-bold text-slate-800">
+                  ₹{(activeAdvance.approvedAmount || activeAdvance.amount).toLocaleString('en-IN')}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
+                activeAdvance.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                activeAdvance.status === 'approved' ? 'bg-blue-100 text-blue-700' :
+                activeAdvance.status === 'released' ? 'bg-violet-100 text-violet-700' :
+                'bg-indigo-100 text-indigo-700'
+              }`}>{activeAdvance.status}</span>
+              <p className="text-xs text-slate-400 mt-1">{activeAdvance.repaymentMonths} month plan</p>
+            </div>
+          </div>
+          {activeAdvance.repaymentStart && (
+            <p className="text-xs text-slate-500 mt-2">
+              Repayment starts: <span className="font-medium">{activeAdvance.repaymentStart}</span>
+              {' · '}
+              {(activeAdvance.repayments || []).filter(r => r.status === 'deducted').length}/{activeAdvance.repaymentMonths} installments done
+            </p>
+          )}
+          <div className="mt-2">
+            <Link to="/admin/salary-advances" className="text-xs text-violet-600 hover:underline">View in Salary Advance Manager →</Link>
           </div>
         </div>
       )}

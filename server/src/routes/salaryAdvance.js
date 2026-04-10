@@ -280,6 +280,17 @@ router.get('/:id/repayments', asyncHandler(async (req, res) => {
   res.json(repayments);
 }));
 
+// GET /user/:userId — Active advance for a specific user (admin view in employee profile)
+router.get('/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const active = await req.prisma.salaryAdvance.findFirst({
+    where: { userId, status: { in: ['pending', 'approved', 'released', 'repaying'] } },
+    include: { repayments: { orderBy: { month: 'asc' } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(active || null);
+}));
+
 // DELETE /:id — Cancel pending advance (self or admin)
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
