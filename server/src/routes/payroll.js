@@ -697,6 +697,14 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
     where: { month, status: 'pending' },
   });
 
+  // Pending attendance regularization requests for the month
+  const pendingRegularizations = await req.prisma.attendanceRegularization.count({
+    where: {
+      status: 'pending',
+      date: { startsWith: month },
+    },
+  });
+
   // Off-day allowance eligible employees this month
   const today2 = new Date().toISOString().slice(0, 10);
   const offDayEligibleCount = await req.prisma.offDayAllowanceEligibility.count({
@@ -720,12 +728,14 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
       pendingReimbursements: pendingReimb,
       pendingAdvanceDisbursements: pendingDisbursements.length,
       advanceRepaymentsDue,
+      pendingRegularizations,
       offDayEligibleCount,
     },
     checks: [
       { label: 'Salary structures set', status: withoutSalary.length === 0 ? 'ok' : 'warning', detail: withoutSalary.length > 0 ? `${withoutSalary.length} employees missing` : 'All set' },
-      { label: 'Attendance data', status: withAttendance >= withSalary.length * 0.8 ? 'ok' : 'warning', detail: `${withAttendance}/${withSalary.length} employees have attendance records` },
-      { label: 'Pending leave approvals', status: pendingLeaves === 0 ? 'ok' : 'warning', detail: pendingLeaves > 0 ? `${pendingLeaves} leave requests still pending` : 'None pending' },
+      { label: 'Attendance data finalized', status: withAttendance >= withSalary.length * 0.8 ? 'ok' : 'warning', detail: `${withAttendance}/${withSalary.length} employees have attendance records` },
+      { label: 'Attendance regularizations', status: pendingRegularizations === 0 ? 'ok' : 'warning', detail: pendingRegularizations > 0 ? `${pendingRegularizations} regularization request(s) still pending approval` : 'All cleared' },
+      { label: 'Pending leave approvals', status: pendingLeaves === 0 ? 'ok' : 'warning', detail: pendingLeaves > 0 ? `${pendingLeaves} leave request(s) still pending` : 'None pending' },
       { label: 'Payslips generated', status: existingPayslips > 0 ? 'ok' : 'pending', detail: existingPayslips > 0 ? `${existingPayslips} generated, ${publishedPayslips} published` : 'Not generated yet' },
       { label: 'Pending reimbursements', status: pendingReimb === 0 ? 'ok' : 'info', detail: pendingReimb > 0 ? `${pendingReimb} expense claims will be included in next generation` : 'None' },
       { label: 'Advance disbursements pending', status: pendingDisbursements.length === 0 ? 'ok' : 'warning', detail: pendingDisbursements.length > 0 ? `${pendingDisbursements.length} approved advances not yet disbursed` : 'All disbursed' },

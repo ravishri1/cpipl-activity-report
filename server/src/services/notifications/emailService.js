@@ -1278,6 +1278,158 @@ async function sendConfirmationAdminNotify(to, employeeName) {
   return sendEmail(to, `Insurance Setup Required — ${employeeName} Confirmed`, html);
 }
 
+// ── Month-End Employee Reminder ───────────────────────────────────────────────
+async function sendMonthEndEmployeeReminder(to, employeeName, data) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const { monthLabel, lastDate, reminderType, pendingRegularizations, pendingLeaves, uncoveredAbsences } = data;
+  const isFinal = reminderType === 'final';
+  const badgeColor = isFinal ? '#dc2626' : '#d97706';
+  const badgeLabel = isFinal ? '🚨 FINAL REMINDER' : '⏰ Reminder';
+  const totalItems = pendingRegularizations.length + pendingLeaves.length + uncoveredAbsences.length;
+
+  const regRows = pendingRegularizations.map(r =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#1e293b;font-weight:600">${r.date}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">Regularization pending</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#64748b;font-size:12px">${r.reason || '—'}</td></tr>`
+  ).join('');
+
+  const leaveRows = pendingLeaves.map(l =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#1e293b;font-weight:600">${l.startDate} → ${l.endDate}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">Leave (${l.leaveType?.name || 'Unknown'}) — pending approval</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#64748b;font-size:12px">${l.days} day(s)</td></tr>`
+  ).join('');
+
+  const absenceRows = uncoveredAbsences.map(date =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#1e293b;font-weight:600">${date}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#dc2626">Absent — no leave applied</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#64748b;font-size:12px">Apply leave to protect salary</td></tr>`
+  ).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:620px;margin:0 auto;background:#f8fafc;padding:24px">
+      <div style="background:white;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
+        <div style="background:${badgeColor};padding:16px 24px">
+          <p style="color:white;font-size:13px;margin:0;font-weight:700;letter-spacing:0.5px">${badgeLabel}</p>
+          <h2 style="color:white;margin:4px 0 0;font-size:20px">Salary May Be Affected — Action Required</h2>
+        </div>
+        <div style="padding:24px">
+          <p style="color:#374151;font-size:14px">Hi <strong>${employeeName}</strong>,</p>
+          <p style="color:#374151;font-size:14px;margin-top:0">
+            The payroll period for <strong>${monthLabel}</strong> closes on <strong>${lastDate}</strong>.
+            You have <strong>${totalItems} pending item(s)</strong> that need your attention.
+            Unresolved items may affect your salary calculation.
+          </p>
+
+          ${totalItems > 0 ? `
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px">
+            <thead>
+              <tr style="background:#f1f5f9">
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Date / Period</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Issue</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Note</th>
+              </tr>
+            </thead>
+            <tbody>${absenceRows}${regRows}${leaveRows}</tbody>
+          </table>` : ''}
+
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:14px;margin-top:20px">
+            <p style="color:#92400e;font-size:13px;margin:0;font-weight:600">What you need to do:</p>
+            <ul style="color:#92400e;font-size:13px;margin:8px 0 0;padding-left:18px">
+              ${uncoveredAbsences.length > 0 ? '<li>Apply for leave for your absent days</li>' : ''}
+              ${pendingRegularizations.length > 0 ? '<li>Follow up with your manager to approve your regularization requests</li>' : ''}
+              ${pendingLeaves.length > 0 ? '<li>Your leave request(s) are pending — ensure manager approves them</li>' : ''}
+            </ul>
+          </div>
+
+          <a href="${appUrl}/attendance"
+             style="display:inline-block;margin-top:20px;padding:12px 24px;background:#2563eb;color:white;
+                    text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">
+            Go to Attendance Portal →
+          </a>
+
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">
+            Deadline: <strong>${lastDate}</strong> | Month: ${monthLabel}<br>
+            This is an automated reminder from the CPIPL HR System.
+          </p>
+        </div>
+      </div>
+    </div>`;
+
+  const urgencyPrefix = isFinal ? '🚨 FINAL REMINDER' : '⏰ Action Required';
+  return sendEmail(to, `${urgencyPrefix}: Complete Attendance & Leave for ${monthLabel}`, html);
+}
+
+// ── Month-End Manager Reminder ────────────────────────────────────────────────
+async function sendMonthEndManagerReminder(to, managerName, data) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const { monthLabel, lastDate, reminderType, pendingLeaves, pendingRegs } = data;
+  const isFinal = reminderType === 'final';
+  const badgeColor = isFinal ? '#dc2626' : '#7c3aed';
+  const badgeLabel = isFinal ? '🚨 FINAL REMINDER' : '📋 Manager Action Required';
+  const total = pendingLeaves.length + pendingRegs.length;
+
+  const leaveRows = pendingLeaves.map(l =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#1e293b;font-weight:600">${l.employee?.name || '—'}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">Leave Request</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">${l.leaveType?.name || '—'}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">${l.startDate} → ${l.endDate}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#64748b;font-size:12px">${l.days} day(s)</td></tr>`
+  ).join('');
+
+  const regRows = pendingRegs.map(r =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#1e293b;font-weight:600">${r.employee?.name || '—'}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#d97706">Regularization</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">Attendance fix</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#475569">${r.date}</td>
+     <td style="padding:8px 12px;border-bottom:1px solid #f0f4f8;color:#64748b;font-size:12px">${r.reason || '—'}</td></tr>`
+  ).join('');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;background:#f8fafc;padding:24px">
+      <div style="background:white;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">
+        <div style="background:${badgeColor};padding:16px 24px">
+          <p style="color:white;font-size:13px;margin:0;font-weight:700">${badgeLabel}</p>
+          <h2 style="color:white;margin:4px 0 0;font-size:20px">${total} Team Request(s) Need Your Approval</h2>
+        </div>
+        <div style="padding:24px">
+          <p style="color:#374151;font-size:14px">Hi <strong>${managerName}</strong>,</p>
+          <p style="color:#374151;font-size:14px;margin-top:0">
+            Payroll for <strong>${monthLabel}</strong> is closing on <strong>${lastDate}</strong>.
+            Your team has <strong>${total} pending request(s)</strong> awaiting your review.
+            Unapproved requests may affect your team members' salary calculations.
+          </p>
+
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px">
+            <thead>
+              <tr style="background:#f1f5f9">
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase">Employee</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase">Type</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase">Detail</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase">Date</th>
+                <th style="padding:10px 12px;text-align:left;color:#475569;font-size:11px;text-transform:uppercase">Info</th>
+              </tr>
+            </thead>
+            <tbody>${leaveRows}${regRows}</tbody>
+          </table>
+
+          <a href="${appUrl}/attendance"
+             style="display:inline-block;margin-top:20px;padding:12px 24px;background:#7c3aed;color:white;
+                    text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">
+            Review & Approve Requests →
+          </a>
+
+          <p style="color:#9ca3af;font-size:12px;margin-top:24px">
+            Deadline: <strong>${lastDate}</strong> | Month: ${monthLabel}<br>
+            This is an automated reminder from the CPIPL HR System.
+          </p>
+        </div>
+      </div>
+    </div>`;
+
+  const urgencyPrefix = isFinal ? '🚨 FINAL REMINDER' : '📋 Action Required';
+  return sendEmail(to, `${urgencyPrefix}: Approve ${total} Team Request(s) for ${monthLabel}`, html);
+}
+
 module.exports = {
   sendEmail,
   sendReminderEmail,
@@ -1298,4 +1450,6 @@ module.exports = {
   sendConfirmationLetter,
   sendConfirmationAdminNotify,
   sendComplianceReminderEmail,
+  sendMonthEndEmployeeReminder,
+  sendMonthEndManagerReminder,
 };

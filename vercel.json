@@ -46,6 +46,7 @@
     { "path": "/api/internal/cron/weekly",        "schedule": "0 3 * * 1"     },
     { "path": "/api/internal/cron/automation",    "schedule": "30 17 * * 0"   },
     { "path": "/api/internal/cron/fy-rollover",   "schedule": "25 18 31 3 *"  },
-    { "path": "/api/internal/cron/auto-payroll",  "schedule": "30 3 9 * *"    }
+    { "path": "/api/internal/cron/auto-payroll",  "schedule": "30 3 9 * *"    },
+    { "path": "/api/internal/cron/month-end-hr",  "schedule": "30 3 * * *"    }
   ]
 }

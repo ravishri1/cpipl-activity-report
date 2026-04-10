@@ -15,6 +15,7 @@ export default function Settings() {
     photo_ai_prompt: '',
     photo_ai_prompt_male_extra: '',
     sandwich_leave_enabled: 'false',
+    payroll_month_end_reminders: 'true',
   });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -166,6 +167,77 @@ export default function Settings() {
               }`}
             />
           </button>
+        </div>
+      </div>
+
+      {/* ═══ Payroll Reminders ═══ */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 mb-1 flex items-center gap-2">
+          💰 Payroll Reminders
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Automated month-end reminders sent directly to employees and managers — so HR doesn't need to follow up manually.
+        </p>
+
+        <div className="space-y-3">
+          {/* Toggle */}
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-700">Month-End Attendance &amp; Leave Reminders</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Automatically emails employees and their managers on the 2nd-to-last and last day of each month.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const newVal = settings.payroll_month_end_reminders === 'false' ? 'true' : 'false';
+                try {
+                  await api.put('/settings', { payroll_month_end_reminders: newVal });
+                  setSettings(s => ({ ...s, payroll_month_end_reminders: newVal }));
+                  setSuccess(`Month-end reminders ${newVal === 'true' ? 'enabled' : 'disabled'}!`);
+                  setTimeout(() => setSuccess(''), 3000);
+                } catch (err) {
+                  console.error('Toggle payroll reminders error:', err);
+                }
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                settings.payroll_month_end_reminders !== 'false' ? 'bg-blue-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  settings.payroll_month_end_reminders !== 'false' ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Info box */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700 space-y-1">
+            <p className="font-semibold text-blue-800 mb-2">📬 What gets sent automatically:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-white rounded-lg p-3 border border-blue-100">
+                <p className="font-semibold text-blue-800">👤 Employee Email</p>
+                <ul className="mt-1 space-y-0.5 list-disc list-inside text-blue-600">
+                  <li>Pending regularization requests</li>
+                  <li>Pending leave requests (not yet approved)</li>
+                  <li>Absent days with no leave applied</li>
+                </ul>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-blue-100">
+                <p className="font-semibold text-blue-800">👔 Manager Email</p>
+                <ul className="mt-1 space-y-0.5 list-disc list-inside text-blue-600">
+                  <li>Team members' pending leave requests</li>
+                  <li>Team members' pending regularizations</li>
+                </ul>
+              </div>
+            </div>
+            <p className="text-blue-500 mt-2">
+              <strong>Schedule:</strong> 1st reminder on 2nd-to-last day · Final reminder on last day of month.
+              Only sent when there is actual pending data.
+            </p>
+          </div>
         </div>
       </div>
 

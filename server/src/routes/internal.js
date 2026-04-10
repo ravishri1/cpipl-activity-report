@@ -142,6 +142,7 @@ router.get('/companies/active', asyncHandler(async (req, res) => {
  *   automation      — Sun 11 PM IST      → schedule: "30 17 * * 0"
  *   fy-rollover     — Mar 31 11:55 PM IST → schedule: "25 18 31 3 *"
  *   auto-payroll    — 9th of month 9 AM IST → schedule: "30 3 9 * *"
+ *   month-end-hr    — Daily 9 AM IST       → schedule: "30 3 * * *"  (only acts on last-2 and last day)
  */
 // Vercel Cron uses clean path routing (/cron/:job) — query strings not allowed in vercel.json
 // Legacy/local dev still supports ?job= query param via the same handler
@@ -401,6 +402,19 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
           }
         }
         log(`auto-payroll (${month}): ${generated} payslip(s) generated, ${skipped} skipped (already existed).`);
+      }
+    }
+
+    // ── Month-End Attendance & Leave Reminders (daily — fires only on last-2 and last day) ──
+    else if (job === 'month-end-hr') {
+      const { runMonthEndAttendanceReminder } = require('../services/notifications/monthEndAttendanceReminderService');
+      const result = await runMonthEndAttendanceReminder(prisma);
+      if (result.skipped) {
+        log('month-end-hr: Not a reminder day — skipped.');
+      } else if (result.disabled) {
+        log('month-end-hr: Setting disabled — skipped.');
+      } else {
+        log(`month-end-hr (${result.reminderType}): ${result.sent} email(s) sent to ${result.affectedEmployees} affected employee(s).`);
       }
     }
 
