@@ -384,35 +384,40 @@ async function getLeaveBalance(userId, fyYear, prisma) {
     });
   }
 
-  // "Opening First" rule:
-  // PL-type leaves consume CF.opening first, then PL credited (monthly bucket).
-  // COF-type leaves consume COF.opening first, then COF credited (grants).
-  // This ensures carry-forward is always drawn before current-year credits.
+  // "PL First" rule:
+  // When employee takes leave, PL (current year credits) is consumed first.
+  // CF.opening (last year's carry) is only drawn when PL is exhausted.
+  // Reason: CF has a 90-day validity (expires June 30). PL lasts the full year.
+  // So PL is spent first; CF is a backup for the first 90 days of the FY.
   const plBal  = balances.find(b => b.leaveType.code === 'PL');
   const cfBal  = balances.find(b => b.leaveType.code === 'CF');
   const cofBal = balances.find(b => b.leaveType.code === 'COF');
   const lopBal = balances.find(b => b.leaveType.code === 'LOP');
 
   if (plBal && cfBal) {
-    const totalPLUsed  = plBal.used; // all PL-type leave requests
-    const cfAbsorb     = +Math.min(totalPLUsed, cfBal.opening).toFixed(2);
-    cfBal.used         = cfAbsorb;
-    cfBal.available    = +(cfBal.opening - cfAbsorb).toFixed(2);
+    const totalPLUsed = plBal.used; // all PL-type leave requests
 
-    const plNetUsed    = +(totalPLUsed - cfAbsorb).toFixed(2);
-    plBal.used         = plNetUsed;
-    plBal.available    = +Math.max(plBal.credited - plNetUsed, 0).toFixed(2);
+    // PL consumed first (current year bucket)
+    const plAbsorb    = +Math.min(totalPLUsed, plBal.credited).toFixed(2);
+    plBal.used        = plAbsorb;
+    plBal.available   = +Math.max(plBal.credited - plAbsorb, 0).toFixed(2);
 
-    // If PL still overflows after CF is exhausted → effective LOP
-    const plOverflow = +Math.max(plNetUsed - plBal.credited, 0).toFixed(2);
-    if (plOverflow > 0 && lopBal) {
-      lopBal.effectiveLOP = plOverflow;
+    // CF only drawn when PL is exhausted
+    const cfNetUsed   = +Math.max(totalPLUsed - plAbsorb, 0).toFixed(2);
+    const cfAbsorb    = +Math.min(cfNetUsed, cfBal.opening).toFixed(2);
+    cfBal.used        = cfAbsorb;
+    cfBal.available   = +Math.max(cfBal.opening - cfAbsorb, 0).toFixed(2);
+
+    // If both PL and CF exhausted → effective LOP
+    const overflow = +Math.max(cfNetUsed - cfAbsorb, 0).toFixed(2);
+    if (overflow > 0 && lopBal) {
+      lopBal.effectiveLOP = overflow;
     }
   }
 
   if (cofBal) {
-    // COF: opening consumed first, then granted credits
-    const totalCOFUsed = cofBal.used;
+    // COF: opening consumed first, then current year grants
+    const totalCOFUsed  = cofBal.used;
     const cofOpenAbsorb = +Math.min(totalCOFUsed, cofBal.opening).toFixed(2);
     const cofNetUsed    = +(totalCOFUsed - cofOpenAbsorb).toFixed(2);
     cofBal.available    = +Math.max(cofBal.opening - cofOpenAbsorb + cofBal.credited - cofNetUsed, 0).toFixed(2);
@@ -506,17 +511,39 @@ async function applyLeave(userId, data, prisma) {
   // Use stored total instead of recalculating from accrual formula.
   const isCompOffType = leaveType.accrualType === 'none' && leaveType.defaultBalance === 0;
   const credited = isCompOffType ? (balance.total || 0) : calculateCredited(leaveType, fyYear, joiningMonth);
-  const totalPool = (balance.opening || 0) + credited;
   const onProbation = isOnProbation(user);
 
   // LOP (Loss of Pay) has unlimited balance — it's a salary deduction, not balance-based
   const isLOP = leaveType.code === 'LOP';
 
+  // For PL: PL is consumed first. CF (carry-forward) acts as backup when PL runs out.
+  // CF has 90-day validity from April 1 (expires June 30 of FY start year).
+  let cfBackup = 0;
+  if (leaveType.code === 'PL') {
+    const cfLeaveType = await prisma.leaveType.findFirst({ where: { code: 'CF', isActive: true } });
+    if (cfLeaveType) {
+      const cfBal = await prisma.leaveBalance.findUnique({
+        where: { userId_leaveTypeId_year: { userId, leaveTypeId: cfLeaveType.id, year: fyYear } },
+      });
+      if (cfBal && cfBal.balance > 0) {
+        // CF valid only within 90 days of April 1 (expires June 30)
+        const todayIST = new Date(Date.now() + 330 * 60 * 1000).toISOString().slice(0, 10);
+        const cfExpiry = `${fyYear}-06-30`;
+        if (todayIST <= cfExpiry) {
+          cfBackup = cfBal.balance;
+        }
+      }
+    }
+  }
+
+  // PL credited this year + CF backup (only when PL runs dry)
+  const totalPool = credited + cfBackup;
+
   let available;
   if (!isLOP) {
     if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
-      // During probation: only probationAllowance is usable
-      const usable = Math.min(balance.probationAllowance, totalPool);
+      // During probation: only probationAllowance is usable (CF not accessible during probation)
+      const usable = Math.min(balance.probationAllowance, credited);
       available = Math.max(usable - actualUsed, 0);
 
       if (available < days) {
@@ -530,8 +557,9 @@ async function applyLeave(userId, data, prisma) {
     } else {
       available = Math.max(totalPool - actualUsed, 0);
       if (available < days) {
+        const cfNote = cfBackup > 0 ? ` (includes ${cfBackup.toFixed(1)} days CF carry-forward)` : '';
         throw new Error(
-          `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}, Requested: ${days}`
+          `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}${cfNote}, Requested: ${days}`
         );
       }
     }
@@ -1169,14 +1197,18 @@ async function executeFYRollover(fyYear, prisma) {
       }
     }
 
-    // ── Combined PL+COF carry forward — each has its own independent cap ──
-    // Caps come directly from Leave Types settings (maxCarryForward field).
-    // Set the actual values in Admin → Leave Types → Edit → Max Carry Forward.
-    // PL and COF are independent — COF cap is NOT affected by how much PL carries.
-    const maxPLCarry  = plLeaveType?.maxCarryForward ?? 0;
-    const maxCOFCarry = cofLeaveType?.maxCarryForward ?? 0;
-    const plForward   = Math.min(plCarry, maxPLCarry);
-    const cofForward  = Math.min(cofCarry, maxCOFCarry);
+    // ── Combined PL+COF carry forward — single cap, PL has priority ──
+    // Total carry-forward cap = PL.maxCarryForward (e.g. 6).
+    // PL fills first up to the cap; COF gets whatever slots remain.
+    // e.g. cap=6, PL=4, COF=5 → PL carries 4, COF carries 2 (3 COF lapse)
+    // e.g. cap=6, PL=6, COF=3 → PL carries 6, COF carries 0 (all COF lapse)
+    // e.g. cap=6, PL=2, COF=3 → PL carries 2, COF carries 3 (stays within cap)
+    const maxCFCap    = plLeaveType?.maxCarryForward ?? 0; // combined cap from PL.maxCarryForward
+    const maxPLCarry  = maxCFCap;
+    const maxCOFCarry = maxCFCap; // COF capped by remaining slots after PL
+    const plForward   = Math.min(plCarry, maxCFCap);
+    const remaining   = Math.max(maxCFCap - plForward, 0);
+    const cofForward  = Math.min(cofCarry, remaining);
     const combinedCarry  = plForward + cofForward;
     const combinedLapsed = Math.max((plCarry - plForward) + (cofCarry - cofForward), 0);
     const combinedAvailable = plCarry + cofCarry;
@@ -1214,7 +1246,7 @@ async function executeFYRollover(fyYear, prisma) {
           prevBalance: combinedAvailable,
           carryForward: combinedCarry,
           lapsed: combinedLapsed,
-          note: `PL(${plCarry})→${plForward}(max ${maxPLCarry}) + COF(${cofCarry})→${cofForward}(max ${maxCOFCarry}) carry-forward`,
+          note: `PL(${plCarry})→${plForward} + COF(${cofCarry})→${cofForward}, combined cap=${maxCFCap}`,
         });
       }
     }
@@ -1273,11 +1305,10 @@ async function previewFYRollover(fyYear, prisma) {
     }
 
     // Combined PL+COF carry forward — independent caps per leave type
-    const cofLeaveTypeP = leaveTypes.find(lt => lt.code === 'COF');
-    const maxPLCarryP  = plLeaveType?.maxCarryForward ?? 0;
-    const maxCOFCarryP = cofLeaveTypeP?.maxCarryForward ?? 0;
-    const plFwd   = Math.min(plAvail, maxPLCarryP);
-    const cofFwd  = Math.min(cofAvail, maxCOFCarryP);
+    const maxCFCapP = plLeaveType?.maxCarryForward ?? 0; // combined cap
+    const plFwd     = Math.min(plAvail, maxCFCapP);
+    const remainP   = Math.max(maxCFCapP - plFwd, 0);
+    const cofFwd    = Math.min(cofAvail, remainP);
     const combinedCarry  = plFwd + cofFwd;
     const combinedLapsed = Math.max((plAvail - plFwd) + (cofAvail - cofFwd), 0);
     const combinedAvail  = plAvail + cofAvail;
@@ -1285,10 +1316,10 @@ async function previewFYRollover(fyYear, prisma) {
       preview.push({
         userId: user.id, userName: user.name, employeeId: user.employeeId,
         leaveType: 'PL + COF (Combined)', leaveTypeCode: 'CF',
-        carryForwardEnabled: true, maxCarryForward: maxPLCarryP + maxCOFCarryP,
+        carryForwardEnabled: true, maxCarryForward: maxCFCapP,
         currentAvailable: combinedAvail,
         willCarry: combinedCarry, willLapse: combinedLapsed,
-        note: `PL(${plAvail})→${plFwd}(max ${maxPLCarryP}) + COF(${cofAvail})→${cofFwd}(max ${maxCOFCarryP})`,
+        note: `PL(${plAvail})→${plFwd} + COF(${cofAvail})→${cofFwd}, combined cap=${maxCFCapP}`,
       });
     }
   }

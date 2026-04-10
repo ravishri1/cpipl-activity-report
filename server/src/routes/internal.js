@@ -268,12 +268,23 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
         log(`Holiday attendance: ${result.marked} marked, ${result.skipped} skipped (${result.holidaysFound} holiday(s) today)`);
       } catch (err) { warn(`holiday-attendance: ${err.message}`); }
 
-      // Comp-Off 90-day expiry — lapse grants older than 90 days
+      // Comp-Off 90-day expiry — lapse COF grants older than 90 days
       try {
         const { runCompOffExpiryCheck } = require('../services/leave/compOffExpiryService');
         const result = await runCompOffExpiryCheck(prisma);
         log(`Comp-Off expiry: ${result.usersAffected} user(s) affected, ${result.lapsedDays} day(s) lapsed.`);
       } catch (err) { warn(`compoff-expiry: ${err.message}`); }
+
+      // CF 90-day expiry — lapse CF carry-forward after June 30 (90 days from April 1 rollover)
+      try {
+        const { runCFExpiryCheck } = require('../services/leave/cfExpiryService');
+        const result = await runCFExpiryCheck(prisma);
+        if (result.usersAffected > 0) {
+          log(`CF expiry: ${result.usersAffected} user(s) affected, ${result.lapsedDays} day(s) lapsed.`);
+        } else {
+          log(`CF expiry: no action needed (${result.checked} checked).`);
+        }
+      } catch (err) { warn(`cf-expiry: ${err.message}`); }
     }
 
     // ── Email + Chat activity fetch ────────────────────────────────────────
