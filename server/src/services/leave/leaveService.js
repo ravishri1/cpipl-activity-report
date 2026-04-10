@@ -506,21 +506,7 @@ async function applyLeave(userId, data, prisma) {
   // Use stored total instead of recalculating from accrual formula.
   const isCompOffType = leaveType.accrualType === 'none' && leaveType.defaultBalance === 0;
   const credited = isCompOffType ? (balance.total || 0) : calculateCredited(leaveType, fyYear, joiningMonth);
-
-  // Opening-first rule: for PL, CF.opening (carry-forward from prev year) is consumed
-  // before PL.credited (monthly bucket). Add CF.opening to the available pool for PL leaves.
-  let cfOpeningPool = 0;
-  if (leaveType.code === 'PL') {
-    const cfType = await prisma.leaveType.findFirst({ where: { code: 'CF' } });
-    if (cfType) {
-      const cfBal = await prisma.leaveBalance.findUnique({
-        where: { userId_leaveTypeId_year: { userId, leaveTypeId: cfType.id, year: fyYear } },
-      });
-      cfOpeningPool = cfBal?.opening || 0;
-    }
-  }
-
-  const totalPool = (balance.opening || 0) + credited + cfOpeningPool;
+  const totalPool = (balance.opening || 0) + credited;
   const onProbation = isOnProbation(user);
 
   // LOP (Loss of Pay) has unlimited balance — it's a salary deduction, not balance-based
@@ -606,7 +592,7 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
     },
   });
 
-  // If approved, deduct from balance and auto-mark attendance as on_leave
+  // If approved, deduct from balance
   if (status === 'approved') {
     const fyYear = getFinancialYear(request.startDate);
     const balance = await ensureBalance(request.userId, request.leaveTypeId, fyYear, prisma);
@@ -622,25 +608,6 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
         },
       });
     }
-
-    // Auto-mark attendance as on_leave for each date in the approved leave range
-    const leaveStatus = (request.session === 'first_half' || request.session === 'second_half')
-      ? 'half_day' : 'on_leave';
-    const start = new Date(request.startDate + 'T00:00:00');
-    const end   = new Date(request.endDate   + 'T00:00:00');
-    const attendanceOps = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().slice(0, 10);
-      attendanceOps.push(
-        prisma.attendance.upsert({
-          where:  { userId_date: { userId: request.userId, date: dateStr } },
-          create: { userId: request.userId, date: dateStr, status: leaveStatus },
-          // Only update if not admin-overridden; use updateMany trick via raw check
-          update: { status: leaveStatus },
-        })
-      );
-    }
-    await Promise.all(attendanceOps);
   }
 
   return updated;
@@ -1082,19 +1049,20 @@ async function executeFYRollover(fyYear, prisma) {
       let nextTotal = lt.defaultBalance;
 
       if (lt.code === 'PL') {
-        // PL carry goes to CF.opening — PL itself always starts with opening=0
-        carryAmount = lt.carryForward && lt.maxCarryForward > 0
-          ? Math.min(available, lt.maxCarryForward) : 0;
-        lapsed = Math.max(available - carryAmount, 0);
-        plCarry = carryAmount;
+        // PL raw available stored; combined carry with COF calculated after loop
+        plCarry = available;
+        carryAmount = 0; // actual carry assigned after COF is known
+        lapsed = 0;      // assigned after loop
         nextOpening = 0; // PL opening is always 0 for next FY
         nextTotal = lt.defaultBalance;
       } else if (lt.code === 'COF') {
-        // COF unused stays in COF.opening for next FY; total resets to 0 (new grants added separately)
-        carryAmount = available; // all unused COF carries forward
-        cofCarry = carryAmount;
-        nextOpening = carryAmount;
-        nextTotal = 0; // new FY starts with 0 comp-off; grants will add to total via requests
+        // COF raw available stored; combined carry with PL calculated after loop
+        // COF resets to 0 next FY — combined carry goes to CF.opening
+        cofCarry = available;
+        carryAmount = 0;
+        lapsed = 0;      // assigned after loop
+        nextOpening = 0; // COF resets to 0; new grants earned fresh via requests
+        nextTotal = 0;
       } else if (lt.carryForward && lt.maxCarryForward > 0) {
         carryAmount = Math.min(available, lt.maxCarryForward);
         lapsed = Math.max(available - lt.maxCarryForward, 0);
@@ -1150,7 +1118,15 @@ async function executeFYRollover(fyYear, prisma) {
       }
     }
 
-    // ── Now upsert CF balance with plCarry as opening ──
+    // ── Combined PL+COF carry forward, capped at PL.maxCarryForward (6) ──
+    // Policy: PL and COF are a combined leave pool for carry-forward purposes.
+    // Combined unused (PL + COF) carries to CF.opening, capped at maxCarryForward.
+    const maxCF = plLeaveType?.maxCarryForward || 6;
+    const combinedAvailable = plCarry + cofCarry;
+    const combinedCarry = Math.min(combinedAvailable, maxCF);
+    const combinedLapsed = Math.max(combinedAvailable - combinedCarry, 0);
+
+    // ── Now upsert CF balance with combined carry as opening ──
     if (cfLeaveType) {
       const existingCF = await prisma.leaveBalance.findUnique({
         where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: cfLeaveType.id, year: nextFY } },
@@ -1158,7 +1134,7 @@ async function executeFYRollover(fyYear, prisma) {
       if (existingCF) {
         await prisma.leaveBalance.update({
           where: { id: existingCF.id },
-          data: { opening: plCarry, total: 0, used: 0 },
+          data: { opening: combinedCarry, total: 0, used: 0 },
         });
       } else {
         await prisma.leaveBalance.create({
@@ -1166,24 +1142,24 @@ async function executeFYRollover(fyYear, prisma) {
             userId: user.id,
             leaveTypeId: cfLeaveType.id,
             year: nextFY,
-            opening: plCarry,
+            opening: combinedCarry,
             total: 0,
             used: 0,
-            balance: plCarry,
+            balance: combinedCarry,
           },
         });
       }
-      if (plCarry > 0) {
+      if (combinedCarry > 0) {
         summary.push({
           userId: user.id,
           userName: user.name,
           employeeId: user.employeeId,
           leaveType: cfLeaveType.name,
           leaveTypeCode: 'CF',
-          prevBalance: plCarry,
-          carryForward: plCarry,
-          lapsed: 0,
-          note: `PL carry-forward`,
+          prevBalance: combinedAvailable,
+          carryForward: combinedCarry,
+          lapsed: combinedLapsed,
+          note: `PL(${plCarry}) + COF(${cofCarry}) carry-forward, capped at ${maxCF}`,
         });
       }
     }
@@ -1202,14 +1178,20 @@ async function previewFYRollover(fyYear, prisma) {
     select: { id: true, name: true, employeeId: true },
   });
 
+  const plLeaveType = leaveTypes.find(lt => lt.code === 'PL');
+  const cfLeaveType  = leaveTypes.find(lt => lt.code === 'CF');
   const preview = [];
 
   for (const user of users) {
+    let plAvail = 0;
+    let cofAvail = 0;
+
     for (const lt of leaveTypes) {
+      if (cfLeaveType && lt.id === cfLeaveType.id) continue; // CF handled separately
+
       const balance = await prisma.leaveBalance.findUnique({
         where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year: fyYear } },
       });
-
       if (!balance) continue;
 
       const actualUsed = await calculateUsedFromRequests(user.id, lt.id, fyYear, prisma);
@@ -1218,30 +1200,36 @@ async function previewFYRollover(fyYear, prisma) {
       const credited = isCompOffType ? (balance.total || 0) : calculateCredited(lt, fyYear, joiningMonth);
       const available = Math.max((balance.opening || 0) + credited - actualUsed, 0);
 
-      let carryAmount = 0;
-      let lapsed = 0;
-
-      if (lt.carryForward && lt.maxCarryForward > 0) {
-        carryAmount = Math.min(available, lt.maxCarryForward);
-        lapsed = Math.max(available - lt.maxCarryForward, 0);
-      } else {
-        lapsed = available;
-      }
-
-      if (available > 0) {
+      if (lt.code === 'PL') {
+        plAvail = available;
+      } else if (lt.code === 'COF') {
+        cofAvail = available;
+      } else if (available > 0) {
+        const carryAmount = lt.carryForward && lt.maxCarryForward > 0 ? Math.min(available, lt.maxCarryForward) : 0;
+        const lapsed = Math.max(available - carryAmount, 0);
         preview.push({
-          userId: user.id,
-          userName: user.name,
-          employeeId: user.employeeId,
-          leaveType: lt.name,
-          leaveTypeCode: lt.code,
-          carryForwardEnabled: lt.carryForward,
-          maxCarryForward: lt.maxCarryForward || 0,
-          currentAvailable: available,
-          willCarry: carryAmount,
-          willLapse: lapsed,
+          userId: user.id, userName: user.name, employeeId: user.employeeId,
+          leaveType: lt.name, leaveTypeCode: lt.code,
+          carryForwardEnabled: lt.carryForward, maxCarryForward: lt.maxCarryForward || 0,
+          currentAvailable: available, willCarry: carryAmount, willLapse: lapsed,
         });
       }
+    }
+
+    // Combined PL+COF carry forward
+    const maxCF = plLeaveType?.maxCarryForward || 6;
+    const combinedAvail = plAvail + cofAvail;
+    const combinedCarry = Math.min(combinedAvail, maxCF);
+    const combinedLapsed = Math.max(combinedAvail - combinedCarry, 0);
+    if (combinedAvail > 0) {
+      preview.push({
+        userId: user.id, userName: user.name, employeeId: user.employeeId,
+        leaveType: 'PL + COF (Combined)', leaveTypeCode: 'CF',
+        carryForwardEnabled: true, maxCarryForward: maxCF,
+        currentAvailable: combinedAvail,
+        willCarry: combinedCarry, willLapse: combinedLapsed,
+        note: `PL(${plAvail}) + COF(${cofAvail}), capped at ${maxCF}`,
+      });
     }
   }
 
