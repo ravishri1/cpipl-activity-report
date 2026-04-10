@@ -16,6 +16,7 @@ import {
   Hash,
   BarChart3,
   ArrowUpDown,
+  Printer,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -334,6 +335,7 @@ function PayslipDetail({ payslip, onBack }) {
     { label: 'Medical Allowance', value: payslip.medicalAllowance },
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
     { label: 'Other Allowances', value: payslip.otherAllowance },
+    { label: 'Reimbursements', value: payslip.reimbursements },
   ].filter((item) => item.value && item.value > 0);
 
   const deductions = [
@@ -349,14 +351,23 @@ function PayslipDetail({ payslip, onBack }) {
 
   return (
     <div className="space-y-6">
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors group"
-      >
-        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-        Back to Payslips
-      </button>
+      {/* Back + Print */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+          Back to Payslips
+        </button>
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors"
+        >
+          <Printer className="w-4 h-4" />
+          Print / Save PDF
+        </button>
+      </div>
 
       {/* Payslip Document */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

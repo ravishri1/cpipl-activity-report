@@ -592,7 +592,7 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
     },
   });
 
-  // If approved, deduct from balance
+  // If approved, deduct from balance and sync attendance records
   if (status === 'approved') {
     const fyYear = getFinancialYear(request.startDate);
     const balance = await ensureBalance(request.userId, request.leaveTypeId, fyYear, prisma);
@@ -607,6 +607,38 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
           balance: Math.max(newAvailable, 0),
         },
       });
+    }
+
+    // Sync attendance: mark each leave day as on_leave (skip if admin-overridden)
+    const leaveName = updated.leaveType?.name || request.leaveType?.name || 'Leave';
+    const cur = new Date(request.startDate + 'T00:00:00');
+    const endDate = new Date(request.endDate + 'T00:00:00');
+    while (cur <= endDate) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      const existing = await prisma.attendance.findUnique({
+        where: { userId_date: { userId: request.userId, date: dateStr } },
+        select: { adminOverride: true },
+      });
+      if (existing?.adminOverride) {
+        cur.setDate(cur.getDate() + 1);
+        continue; // Don't overwrite admin-overridden records
+      }
+      await prisma.attendance.upsert({
+        where: { userId_date: { userId: request.userId, date: dateStr } },
+        create: {
+          userId: request.userId,
+          date: dateStr,
+          status: 'on_leave',
+          notes: `${leaveName} - Approved`,
+          checkInSource: 'leave_sync',
+        },
+        update: {
+          status: 'on_leave',
+          notes: `${leaveName} - Approved`,
+          checkInSource: 'leave_sync',
+        },
+      });
+      cur.setDate(cur.getDate() + 1);
     }
   }
 
@@ -649,6 +681,22 @@ async function cancelLeave(requestId, userId, prisma) {
           balance: Math.max(newAvailable, 0),
         },
       });
+    }
+
+    // Remove auto-synced attendance records (only those created by leave_sync, not admin overrides)
+    const cur = new Date(request.startDate + 'T00:00:00');
+    const endDate = new Date(request.endDate + 'T00:00:00');
+    while (cur <= endDate) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      await prisma.attendance.deleteMany({
+        where: {
+          userId: request.userId,
+          date: dateStr,
+          checkInSource: 'leave_sync',
+          adminOverride: false,
+        },
+      });
+      cur.setDate(cur.getDate() + 1);
     }
   }
 

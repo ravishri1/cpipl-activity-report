@@ -10,7 +10,7 @@ router.use(authenticate);
 router.use(requireActiveEmployee);
 
 const VALID_CATEGORIES = ['office_expenses', 'tea_coffee', 'repair_maintenance', 'diesel_petrol', 'travel', 'staff_welfare', 'food', 'medical', 'office', 'other'];
-const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid'];
+const VALID_STATUSES = ['pending', 'approved', 'rejected', 'paid', 'settled_in_salary'];
 function isAdminRole(user) { return user.role === 'admin' || user.role === 'sub_admin' || user.role === 'team_lead'; }
 
 async function logExpenseAction(prisma, { expenseId, action, actionBy, notes }) {
@@ -218,7 +218,7 @@ router.get('/:id(\\d+)', asyncHandler(async (req, res) => {
 // PUT /:id/review — Approve or reject expense
 router.put('/:id/review', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { status, reviewNote } = req.body;
+  const { status, reviewNote, settleOnSalary } = req.body;
   requireEnum(status, ['approved', 'rejected'], 'status');
 
   const expense = await req.prisma.expenseClaim.findUnique({
@@ -237,9 +237,14 @@ router.put('/:id/review', asyncHandler(async (req, res) => {
     throw forbidden('Leadership expenses can only be approved by admin');
   }
 
+  const updateData = { status, reviewedBy: req.user.id, reviewedAt: new Date(), reviewNote: reviewNote || null };
+  if (status === 'approved' && settleOnSalary === true) {
+    updateData.settleOnSalary = true;
+  }
+
   const updated = await req.prisma.expenseClaim.update({
     where: { id },
-    data: { status, reviewedBy: req.user.id, reviewedAt: new Date(), reviewNote: reviewNote || null },
+    data: updateData,
     include: { user: { select: { id: true, name: true, email: true } } },
   });
   await logExpenseAction(req.prisma, {

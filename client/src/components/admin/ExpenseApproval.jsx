@@ -41,6 +41,7 @@ const STATUS_STYLES = {
   approved: 'bg-blue-100 text-blue-700 border-blue-200',
   rejected: 'bg-red-100 text-red-700 border-red-200',
   paid: 'bg-green-100 text-green-700 border-green-200',
+  settled_in_salary: 'bg-violet-100 text-violet-700 border-violet-200',
 };
 
 const CATEGORIES = [
@@ -115,6 +116,7 @@ export default function ExpenseApproval() {
   const [expandedId, setExpandedId] = useState(null);
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewNote, setReviewNote] = useState('');
+  const [settleOnSalary, setSettleOnSalary] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
 
   // New expense form state
@@ -208,10 +210,12 @@ export default function ExpenseApproval() {
       await api.put(`/expenses/${id}/review`, {
         status,
         reviewNote: reviewNote.trim() || null,
+        settleOnSalary: status === 'approved' ? settleOnSalary : false,
       });
-      setSuccess(`Expense ${status} successfully`);
+      setSuccess(`Expense ${status} successfully${status === 'approved' && settleOnSalary ? ' — will be reimbursed in next payslip' : ''}`);
       setReviewModal(null);
       setReviewNote('');
+      setSettleOnSalary(false);
       await fetchExpenses();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -789,7 +793,7 @@ export default function ExpenseApproval() {
       {/* Review Modal */}
       {reviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setReviewModal(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setReviewModal(null); setReviewNote(''); setSettleOnSalary(false); }} />
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
@@ -799,7 +803,7 @@ export default function ExpenseApproval() {
                   <><XCircle className="w-5 h-5 text-red-500" /> Reject Expense</>
                 )}
               </h3>
-              <button onClick={() => setReviewModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+              <button onClick={() => { setReviewModal(null); setReviewNote(''); setSettleOnSalary(false); }} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -828,8 +832,23 @@ export default function ExpenseApproval() {
               />
             </div>
 
+            {reviewModal.action === 'approved' && (
+              <label className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={settleOnSalary}
+                  onChange={(e) => setSettleOnSalary(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <p className="text-sm font-medium text-emerald-800">Settle on next salary</p>
+                  <p className="text-xs text-emerald-600">Amount will be added as Reimbursement in payslip</p>
+                </div>
+              </label>
+            )}
+
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setReviewModal(null)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
+              <button onClick={() => { setReviewModal(null); setReviewNote(''); setSettleOnSalary(false); }} className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
                 Cancel
               </button>
               <button
