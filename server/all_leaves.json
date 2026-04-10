@@ -1,0 +1,1994 @@
+[
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-04-02",
+    "toDate": "2025-04-02",
+    "days": 0.5,
+    "reason": "stomach pain"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-04-05",
+    "toDate": "2025-04-05",
+    "days": 0.5,
+    "reason": "Going to family function"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-04-07",
+    "toDate": "2025-04-09",
+    "days": 3.0,
+    "reason": "Family Function"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-04-19",
+    "toDate": "2025-04-19",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-04-24",
+    "toDate": "2025-04-24",
+    "days": 1.0,
+    "reason": "Not feeling well"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-04-30",
+    "toDate": "2025-05-01",
+    "days": 2.0,
+    "reason": "visit to Native place"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-05-05",
+    "toDate": "2025-05-05",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-05-06",
+    "toDate": "2025-05-06",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-05-06",
+    "toDate": "2025-05-07",
+    "days": 2.0,
+    "reason": "Health issue"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "CF",
+    "fromDate": "2025-05-07",
+    "toDate": "2025-05-09",
+    "days": 3.0,
+    "reason": "sister's wedding"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-05-08",
+    "toDate": "2025-05-08",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-05-12",
+    "toDate": "2025-05-12",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "CF",
+    "fromDate": "2025-05-13",
+    "toDate": "2025-05-13",
+    "days": 1.0,
+    "reason": "emergency at home"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-05-14",
+    "toDate": "2025-05-14",
+    "days": 1.0,
+    "reason": "My fufa was expire so I have to go in funral,\nThank you for your understanding"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2025-05-14",
+    "toDate": "2025-05-14",
+    "days": 1.0,
+    "reason": "mother hospitalised"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "PL",
+    "fromDate": "2025-05-14",
+    "toDate": "2025-05-17",
+    "days": 4.0,
+    "reason": "Sorry for the late update. I am going to my native place for some personal reasons and I request you to  approval my leave.\n\nI will stay active during this time and keep checking all my work and tasks. In case of any urgent issue, I will be available and make sure it is resolved."
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "PL",
+    "fromDate": "2025-05-15",
+    "toDate": "2025-05-19",
+    "days": 5.0,
+    "reason": "Went Native"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "LOP",
+    "fromDate": "2025-05-20",
+    "toDate": "2025-06-01",
+    "days": 13.0,
+    "reason": "went to native"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-05-22",
+    "toDate": "2025-05-23",
+    "days": 2.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "PL",
+    "fromDate": "2025-06-02",
+    "toDate": "2025-06-02",
+    "days": 1.0,
+    "reason": "webt yo native"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "PL",
+    "fromDate": "2025-06-03",
+    "toDate": "2025-06-03",
+    "days": 1.0,
+    "reason": "Went to native"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "LOP",
+    "fromDate": "2025-06-04",
+    "toDate": "2025-06-04",
+    "days": 1.0,
+    "reason": "Went to native"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-06-05",
+    "toDate": "2025-06-05",
+    "days": 0.5,
+    "reason": "Priyank Singh My Friends Wedding"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-06-06",
+    "toDate": "2025-06-06",
+    "days": 0.5,
+    "reason": "Priyank Wedding"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-06-07",
+    "toDate": "2025-06-07",
+    "days": 1.0,
+    "reason": "Because of personal issue i was on leave"
+  },
+  {
+    "empNo": "COLOR022",
+    "leaveType": "PL",
+    "fromDate": "2025-06-10",
+    "toDate": "2025-06-13",
+    "days": 4.0,
+    "reason": "Leave For Kedarnath Ji"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2025-06-16",
+    "toDate": "2025-06-16",
+    "days": 1.0,
+    "reason": "Examinations"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-06-17",
+    "toDate": "2025-06-17",
+    "days": 1.0,
+    "reason": "Exam"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-06-18",
+    "toDate": "2025-06-18",
+    "days": 1.0,
+    "reason": "Examination"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-06-19",
+    "toDate": "2025-06-19",
+    "days": 1.0,
+    "reason": "Examination"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-06-20",
+    "toDate": "2025-06-21",
+    "days": 2.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2025-06-20",
+    "toDate": "2025-06-20",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-06-21",
+    "toDate": "2025-06-21",
+    "days": 0.5,
+    "reason": "not well"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-06-22",
+    "toDate": "2025-06-24",
+    "days": 3.0,
+    "reason": "personl reason 2 days holiday"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-06-26",
+    "toDate": "2025-06-27",
+    "days": 2.0,
+    "reason": "Suffering from high fever and coughing"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-06-28",
+    "toDate": "2025-06-28",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-06-30",
+    "toDate": "2025-06-30",
+    "days": 1.0,
+    "reason": "Going Village"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-06-30",
+    "toDate": "2025-07-01",
+    "days": 2.0,
+    "reason": "Going to Ujjain"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-07-04",
+    "toDate": "2025-07-05",
+    "days": 2.0,
+    "reason": "I have gone to Pune to attend my cousin sister's birthday"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "PL",
+    "fromDate": "2025-07-05",
+    "toDate": "2025-07-05",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2025-07-07",
+    "toDate": "2025-07-09",
+    "days": 3.0,
+    "reason": "admitted to the hospital"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-07-10",
+    "toDate": "2025-07-10",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "LOP",
+    "fromDate": "2025-07-11",
+    "toDate": "2025-07-13",
+    "days": 3.0,
+    "reason": "LOP"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "LOP",
+    "fromDate": "2025-07-14",
+    "toDate": "2025-07-14",
+    "days": 1.0,
+    "reason": "admitted to the hospital"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-07-17",
+    "toDate": "2025-07-17",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-07-18",
+    "toDate": "2025-07-18",
+    "days": 1.0,
+    "reason": "Compoff"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-07-19",
+    "toDate": "2025-07-19",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-07-21",
+    "toDate": "2025-07-21",
+    "days": 1.0,
+    "reason": "Son Birthday Celebration"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-07-22",
+    "toDate": "2025-07-22",
+    "days": 0.5,
+    "reason": "For personal reason"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-07-31",
+    "toDate": "2025-07-31",
+    "days": 1.0,
+    "reason": "Not feeling well suffering for Fever, Vomiting and headache"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-04",
+    "toDate": "2025-08-04",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "PL",
+    "fromDate": "2025-08-07",
+    "toDate": "2025-08-08",
+    "days": 2.0,
+    "reason": "Due to personal reason health issue I was on leave  please approval my leave"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-08-08",
+    "toDate": "2025-08-10",
+    "days": 3.0,
+    "reason": "Health Issue"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-08-12",
+    "toDate": "2025-08-12",
+    "days": 1.0,
+    "reason": "high fever"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-13",
+    "toDate": "2025-08-13",
+    "days": 1.0,
+    "reason": "sick leave"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-08-16",
+    "toDate": "2025-08-16",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-16",
+    "toDate": "2025-08-16",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-08-17",
+    "toDate": "2025-08-17",
+    "days": 1.0,
+    "reason": "Personal"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2025-08-18",
+    "toDate": "2025-08-18",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-08-19",
+    "toDate": "2025-08-19",
+    "days": 1.0,
+    "reason": "medical emergency"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-08-19",
+    "toDate": "2025-08-19",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-19",
+    "toDate": "2025-08-19",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-26",
+    "toDate": "2025-08-27",
+    "days": 2.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-08-28",
+    "toDate": "2025-08-28",
+    "days": 1.0,
+    "reason": "For Ganpati bappa visarjan i need holiday"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-28",
+    "toDate": "2025-08-28",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-29",
+    "toDate": "2025-08-29",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2025-08-30",
+    "toDate": "2025-08-30",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-09-01",
+    "toDate": "2025-09-01",
+    "days": 1.0,
+    "reason": "PR"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-09-01",
+    "toDate": "2025-09-02",
+    "days": 2.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-09-01",
+    "toDate": "2025-09-03",
+    "days": 3.0,
+    "reason": "Going Village For Ganpati Darshan & Meet Nani"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-09-02",
+    "toDate": "2025-09-02",
+    "days": 1.0,
+    "reason": "my grandfather has passed away"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "LOP",
+    "fromDate": "2025-09-03",
+    "toDate": "2025-09-05",
+    "days": 3.0,
+    "reason": "Ganpati Festival"
+  },
+  {
+    "empNo": "COLOR022",
+    "leaveType": "PL",
+    "fromDate": "2025-09-06",
+    "toDate": "2025-09-06",
+    "days": 1.0,
+    "reason": "gone to village some urgent work"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-09-06",
+    "toDate": "2025-09-06",
+    "days": 0.5,
+    "reason": "ganpati visrjan"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-09-08",
+    "toDate": "2025-09-08",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-09-12",
+    "toDate": "2025-09-12",
+    "days": 1.0,
+    "reason": "leave"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-09-13",
+    "toDate": "2025-09-13",
+    "days": 1.0,
+    "reason": "leave"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-09-16",
+    "toDate": "2025-09-16",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-09-19",
+    "toDate": "2025-09-19",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-09-20",
+    "toDate": "2025-09-20",
+    "days": 1.0,
+    "reason": "medical"
+  },
+  {
+    "empNo": "COLOR176",
+    "leaveType": "LOP",
+    "fromDate": "2025-09-29",
+    "toDate": "2025-09-29",
+    "days": 1.0,
+    "reason": "I need a holiday because I came out"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-09-30",
+    "toDate": "2025-09-30",
+    "days": 1.0,
+    "reason": "I would not able to attend the office  due to Navratri Ashtami Puja."
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-10-01",
+    "toDate": "2025-10-01",
+    "days": 1.0,
+    "reason": "Going to village for family function"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2025-10-04",
+    "toDate": "2025-10-04",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "LOP",
+    "fromDate": "2025-10-04",
+    "toDate": "2025-10-04",
+    "days": 1.0,
+    "reason": "Going to village for family function"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-10-06",
+    "toDate": "2025-10-06",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-10-07",
+    "toDate": "2025-10-07",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-10-08",
+    "toDate": "2025-10-08",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-10-15",
+    "toDate": "2025-10-15",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-10-18",
+    "toDate": "2025-10-18",
+    "days": 1.0,
+    "reason": "Going to Native Place"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "LOP",
+    "fromDate": "2025-10-24",
+    "toDate": "2025-10-25",
+    "days": 2.0,
+    "reason": "i am currently out of station with family."
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "LOP",
+    "fromDate": "2025-10-24",
+    "toDate": "2025-10-24",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "LOP",
+    "fromDate": "2025-10-25",
+    "toDate": "2025-10-26",
+    "days": 2.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-10-27",
+    "toDate": "2025-10-27",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "PL",
+    "fromDate": "2025-10-27",
+    "toDate": "2025-10-27",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-10-28",
+    "toDate": "2025-10-28",
+    "days": 1.0,
+    "reason": "for pooja"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-10-31",
+    "toDate": "2025-10-31",
+    "days": 1.0,
+    "reason": "at Native places"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-11-01",
+    "toDate": "2025-11-01",
+    "days": 1.0,
+    "reason": "medical emergency"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-01",
+    "toDate": "2025-11-01",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-11-03",
+    "toDate": "2025-11-03",
+    "days": 1.0,
+    "reason": "Travellling to Mumbai"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2025-11-04",
+    "toDate": "2025-11-04",
+    "days": 1.0,
+    "reason": "medical emergency"
+  },
+  {
+    "empNo": "COLOR184",
+    "leaveType": "PL",
+    "fromDate": "2025-11-04",
+    "toDate": "2025-11-04",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-11-05",
+    "toDate": "2025-11-05",
+    "days": 1.0,
+    "reason": "going to village due to some emergency"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-11-08",
+    "toDate": "2025-11-08",
+    "days": 1.0,
+    "reason": "Going to Ujjain With Friends"
+  },
+  {
+    "empNo": "COLOR184",
+    "leaveType": "PL",
+    "fromDate": "2025-11-12",
+    "toDate": "2025-11-12",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-11-13",
+    "toDate": "2025-11-13",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-14",
+    "toDate": "2025-11-14",
+    "days": 1.0,
+    "reason": "hospital visit"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-11-15",
+    "toDate": "2025-11-15",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-15",
+    "toDate": "2025-11-15",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-11-15",
+    "toDate": "2025-11-15",
+    "days": 1.0,
+    "reason": "Due to some issues i couldn't come to office"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "PL",
+    "fromDate": "2025-11-18",
+    "toDate": "2025-11-18",
+    "days": 1.0,
+    "reason": "PERSONAL REASON"
+  },
+  {
+    "empNo": "COLOR167",
+    "leaveType": "PL",
+    "fromDate": "2025-11-19",
+    "toDate": "2025-11-19",
+    "days": 1.0,
+    "reason": "dentist appointment and driver license appointment"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "PL",
+    "fromDate": "2025-11-21",
+    "toDate": "2025-11-25",
+    "days": 5.0,
+    "reason": "Going to Native place"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-21",
+    "toDate": "2025-11-21",
+    "days": 1.0,
+    "reason": "hospital visit"
+  },
+  {
+    "empNo": "COLOR022",
+    "leaveType": "PL",
+    "fromDate": "2025-11-22",
+    "toDate": "2025-11-22",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-11-24",
+    "toDate": "2025-11-24",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-11-25",
+    "toDate": "2025-11-25",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-26",
+    "toDate": "2025-11-26",
+    "days": 1.0,
+    "reason": "Sick Leave"
+  },
+  {
+    "empNo": "COLOR013",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-26",
+    "toDate": "2025-12-06",
+    "days": 11.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-11-26",
+    "toDate": "2025-11-26",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2025-11-26",
+    "toDate": "2025-11-26",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "LOP",
+    "fromDate": "2025-11-27",
+    "toDate": "2025-11-27",
+    "days": 1.0,
+    "reason": "Sick Leave"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2025-11-27",
+    "toDate": "2025-11-27",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2025-11-28",
+    "toDate": "2025-11-28",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-11-29",
+    "toDate": "2025-11-29",
+    "days": 0.5,
+    "reason": "Family Outing"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2025-11-29",
+    "toDate": "2025-11-29",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-12-02",
+    "toDate": "2025-12-02",
+    "days": 0.5,
+    "reason": "PERSONAL REASONS"
+  },
+  {
+    "empNo": "COLOR176",
+    "leaveType": "PL",
+    "fromDate": "2025-12-03",
+    "toDate": "2025-12-03",
+    "days": 1.0,
+    "reason": "due to personal reason"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "COF",
+    "fromDate": "2025-12-03",
+    "toDate": "2025-12-03",
+    "days": 1.0,
+    "reason": "working on Tuesday 2-dec"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "COF",
+    "fromDate": "2025-12-04",
+    "toDate": "2025-12-04",
+    "days": 1.0,
+    "reason": "working on Tuesday 9-dec"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2025-12-04",
+    "toDate": "2025-12-06",
+    "days": 3.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-12-05",
+    "toDate": "2025-12-05",
+    "days": 1.0,
+    "reason": "Personal reasons"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-05",
+    "toDate": "2025-12-05",
+    "days": 1.0,
+    "reason": "Delhi for mother's treatment"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2025-12-06",
+    "toDate": "2025-12-06",
+    "days": 1.0,
+    "reason": "family function"
+  },
+  {
+    "empNo": "COLOR184",
+    "leaveType": "PL",
+    "fromDate": "2025-12-06",
+    "toDate": "2025-12-06",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-06",
+    "toDate": "2025-12-07",
+    "days": 2.0,
+    "reason": "Delhi for mother's treatment"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-08",
+    "toDate": "2025-12-08",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-09",
+    "toDate": "2025-12-09",
+    "days": 1.0,
+    "reason": "Delhi for mother's treatment"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-10",
+    "toDate": "2025-12-10",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-11",
+    "toDate": "2025-12-11",
+    "days": 1.0,
+    "reason": "Health issues"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 1.0,
+    "reason": "PERSONAL WORK"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 1.0,
+    "reason": "I am going to my native house"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 0.5,
+    "reason": "For personal reason"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2025-12-13",
+    "toDate": "2025-12-13",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2025-12-15",
+    "toDate": "2025-12-15",
+    "days": 1.0,
+    "reason": "my mother not well"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "COF",
+    "fromDate": "2025-12-15",
+    "toDate": "2025-12-15",
+    "days": 1.0,
+    "reason": "work on  my leave day"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2025-12-17",
+    "toDate": "2025-12-20",
+    "days": 4.0,
+    "reason": "MEDICAL EMERGENCY"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2025-12-20",
+    "toDate": "2025-12-20",
+    "days": 1.0,
+    "reason": "PERSONAL LEAVE"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2025-12-20",
+    "toDate": "2025-12-20",
+    "days": 1.0,
+    "reason": "Going to resort with family"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2025-12-22",
+    "toDate": "2025-12-22",
+    "days": 1.0,
+    "reason": "mother sick"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "COF",
+    "fromDate": "2025-12-26",
+    "toDate": "2025-12-26",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2025-12-27",
+    "toDate": "2025-12-27",
+    "days": 1.0,
+    "reason": "Comp Off"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2025-12-27",
+    "toDate": "2025-12-27",
+    "days": 1.0,
+    "reason": "Going to Pandharpur with family"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2025-12-29",
+    "toDate": "2025-12-29",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2026-01-02",
+    "toDate": "2026-01-02",
+    "days": 0.5,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "LOP",
+    "fromDate": "2026-01-02",
+    "toDate": "2026-01-02",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2026-01-03",
+    "toDate": "2026-01-03",
+    "days": 1.0,
+    "reason": "PR, I am avialable on call"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2026-01-03",
+    "toDate": "2026-01-05",
+    "days": 3.0,
+    "reason": "personal reasons"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2026-01-03",
+    "toDate": "2026-01-03",
+    "days": 1.0,
+    "reason": "Personal issues"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "PL",
+    "fromDate": "2026-01-05",
+    "toDate": "2026-01-07",
+    "days": 3.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "PL",
+    "fromDate": "2026-01-07",
+    "toDate": "2026-01-07",
+    "days": 1.0,
+    "reason": "personal issues"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "PL",
+    "fromDate": "2026-01-15",
+    "toDate": "2026-01-15",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "LOP",
+    "fromDate": "2026-01-15",
+    "toDate": "2026-01-15",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-01-16",
+    "toDate": "2026-01-17",
+    "days": 2.0,
+    "reason": "relative expired emergency"
+  },
+  {
+    "empNo": "COLOR182",
+    "leaveType": "PL",
+    "fromDate": "2026-01-17",
+    "toDate": "2026-01-17",
+    "days": 1.0,
+    "reason": "fever"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "PL",
+    "fromDate": "2026-01-19",
+    "toDate": "2026-01-20",
+    "days": 2.0,
+    "reason": "PR"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2026-01-19",
+    "toDate": "2026-01-19",
+    "days": 1.0,
+    "reason": "birthday celebration"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "COF",
+    "fromDate": "2026-01-19",
+    "toDate": "2026-01-19",
+    "days": 1.0,
+    "reason": "Not feeling well"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2026-01-21",
+    "toDate": "2026-01-21",
+    "days": 0.5,
+    "reason": "Half Day"
+  },
+  {
+    "empNo": "COLOR184",
+    "leaveType": "PL",
+    "fromDate": "2026-01-22",
+    "toDate": "2026-01-22",
+    "days": 1.0,
+    "reason": "personal work"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "PL",
+    "fromDate": "2026-01-23",
+    "toDate": "2026-01-23",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "COF",
+    "fromDate": "2026-01-23",
+    "toDate": "2026-01-24",
+    "days": 2.0,
+    "reason": "I have to attend a family function in Pune"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2026-01-24",
+    "toDate": "2026-01-24",
+    "days": 1.0,
+    "reason": "Sick Leave"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2026-01-30",
+    "toDate": "2026-01-30",
+    "days": 1.0,
+    "reason": "personal reasons"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2026-01-31",
+    "toDate": "2026-01-31",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2026-01-31",
+    "toDate": "2026-01-31",
+    "days": 0.5,
+    "reason": "Birthday"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-04",
+    "toDate": "2026-02-06",
+    "days": 3.0,
+    "reason": "Went to Village due to emergency"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-02-04",
+    "toDate": "2026-02-04",
+    "days": 1.0,
+    "reason": "health issues had fever yesterday"
+  },
+  {
+    "empNo": "COLOR185",
+    "leaveType": "PL",
+    "fromDate": "2026-02-05",
+    "toDate": "2026-02-05",
+    "days": 1.0,
+    "reason": "funeral"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2026-02-06",
+    "toDate": "2026-02-06",
+    "days": 1.0,
+    "reason": "PR"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-06",
+    "toDate": "2026-02-06",
+    "days": 1.0,
+    "reason": "Personal reason"
+  },
+  {
+    "empNo": "COLOR194",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-06",
+    "toDate": "2026-02-06",
+    "days": 0.5,
+    "reason": "personal reasons"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "PL",
+    "fromDate": "2026-02-09",
+    "toDate": "2026-02-09",
+    "days": 1.0,
+    "reason": "Going to Anganwadi jatra Maharashtra"
+  },
+  {
+    "empNo": "COLOR167",
+    "leaveType": "PL",
+    "fromDate": "2026-02-09",
+    "toDate": "2026-02-09",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-09",
+    "toDate": "2026-02-10",
+    "days": 2.0,
+    "reason": "Going to native place mela"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-02-09",
+    "toDate": "2026-02-10",
+    "days": 2.0,
+    "reason": "Examinations"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-10",
+    "toDate": "2026-02-10",
+    "days": 1.0,
+    "reason": "not feeling well"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-02-11",
+    "toDate": "2026-02-11",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-02-13",
+    "toDate": "2026-02-13",
+    "days": 1.0,
+    "reason": "treatment related issue to mother"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2026-02-16",
+    "toDate": "2026-02-16",
+    "days": 1.0,
+    "reason": "PR"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2026-02-16",
+    "toDate": "2026-02-16",
+    "days": 1.0,
+    "reason": "hospitalised due to stomach pain"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "COF",
+    "fromDate": "2026-02-16",
+    "toDate": "2026-02-16",
+    "days": 1.0,
+    "reason": "PERSONAL REASONS"
+  },
+  {
+    "empNo": "COLOR064",
+    "leaveType": "COF",
+    "fromDate": "2026-02-17",
+    "toDate": "2026-02-17",
+    "days": 1.0,
+    "reason": "fever"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "COF",
+    "fromDate": "2026-02-18",
+    "toDate": "2026-02-18",
+    "days": 1.0,
+    "reason": "Persona reason"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "PL",
+    "fromDate": "2026-02-18",
+    "toDate": "2026-02-18",
+    "days": 1.0,
+    "reason": "Due to body pain & cold I unable to come office"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2026-02-19",
+    "toDate": "2026-02-19",
+    "days": 1.0,
+    "reason": "NOT FEELING WELL"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2026-02-20",
+    "toDate": "2026-02-20",
+    "days": 1.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-20",
+    "toDate": "2026-02-20",
+    "days": 1.0,
+    "reason": "Personal Reason"
+  },
+  {
+    "empNo": "COLOR194",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-20",
+    "toDate": "2026-02-20",
+    "days": 0.5,
+    "reason": "Personal Reason"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-23",
+    "toDate": "2026-02-23",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2026-02-24",
+    "toDate": "2026-02-24",
+    "days": 1.0,
+    "reason": "Sick Leave"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-24",
+    "toDate": "2026-02-24",
+    "days": 0.5,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR194",
+    "leaveType": "LOP",
+    "fromDate": "2026-02-24",
+    "toDate": "2026-02-24",
+    "days": 0.5,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2026-02-27",
+    "toDate": "2026-03-04",
+    "days": 6.0,
+    "reason": "my close relative got expired so on emergency I have to go village"
+  },
+  {
+    "empNo": "COLOR176",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-02",
+    "toDate": "2026-03-02",
+    "days": 0.5,
+    "reason": "Going With Family For Holi Celebration"
+  },
+  {
+    "empNo": "COLOR120",
+    "leaveType": "COF",
+    "fromDate": "2026-03-02",
+    "toDate": "2026-03-02",
+    "days": 1.0,
+    "reason": "VISIT NATIVE PLACE"
+  },
+  {
+    "empNo": "COLOR190",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-02",
+    "toDate": "2026-03-02",
+    "days": 1.0,
+    "reason": "Personal reasons"
+  },
+  {
+    "empNo": "COLOR146",
+    "leaveType": "PL",
+    "fromDate": "2026-03-02",
+    "toDate": "2026-03-05",
+    "days": 4.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR182",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-04",
+    "toDate": "2026-03-04",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "COF",
+    "fromDate": "2026-03-05",
+    "toDate": "2026-03-05",
+    "days": 1.0,
+    "reason": "wo"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-05",
+    "toDate": "2026-03-05",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR176",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-06",
+    "toDate": "2026-03-06",
+    "days": 0.5,
+    "reason": "Not Feeling Well"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "PL",
+    "fromDate": "2026-03-06",
+    "toDate": "2026-03-06",
+    "days": 0.5,
+    "reason": "Not feeling well"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2026-03-09",
+    "toDate": "2026-03-09",
+    "days": 0.5,
+    "reason": "Half Day"
+  },
+  {
+    "empNo": "COLOR115",
+    "leaveType": "PL",
+    "fromDate": "2026-03-10",
+    "toDate": "2026-03-10",
+    "days": 1.0,
+    "reason": "healt issue"
+  },
+  {
+    "empNo": "COLOR194",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-10",
+    "toDate": "2026-03-10",
+    "days": 1.0,
+    "reason": "personal reason"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-03-10",
+    "toDate": "2026-03-11",
+    "days": 2.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR182",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-10",
+    "toDate": "2026-03-10",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "PL",
+    "fromDate": "2026-03-11",
+    "toDate": "2026-03-11",
+    "days": 1.0,
+    "reason": "I am utilizing my remaining 2 leaves, which are due to lapse"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "PL",
+    "fromDate": "2026-03-12",
+    "toDate": "2026-03-12",
+    "days": 1.0,
+    "reason": "personal leave"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-03-12",
+    "toDate": "2026-03-12",
+    "days": 1.0,
+    "reason": "for health related"
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-03-13",
+    "toDate": "2026-03-13",
+    "days": 1.0,
+    "reason": "for health related"
+  },
+  {
+    "empNo": "COLOR184",
+    "leaveType": "PL",
+    "fromDate": "2026-03-16",
+    "toDate": "2026-03-16",
+    "days": 1.0,
+    "reason": "parsonal reason"
+  },
+  {
+    "empNo": "COLOR026",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-16",
+    "toDate": "2026-03-18",
+    "days": 3.0,
+    "reason": "Going to Uttar Paradesh Ayodhya & Varanasi For Vacation"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-03-16",
+    "toDate": "2026-03-16",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "empNo": "COLOR188",
+    "leaveType": "COF",
+    "fromDate": "2026-03-18",
+    "toDate": "2026-03-18",
+    "days": 1.0,
+    "reason": "family member expired today"
+  },
+  {
+    "empNo": "COLOR117",
+    "leaveType": "COF",
+    "fromDate": "2026-03-20",
+    "toDate": "2026-03-20",
+    "days": 1.0,
+    "reason": "working on 17.03.26"
+  },
+  {
+    "empNo": "COLOR185",
+    "leaveType": "PL",
+    "fromDate": "2026-03-23",
+    "toDate": "2026-03-23",
+    "days": 1.0,
+    "reason": "Some personal work"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-23",
+    "toDate": "2026-03-23",
+    "days": 1.0,
+    "reason": "Not Well"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2026-03-23",
+    "toDate": "2026-03-23",
+    "days": 0.5,
+    "reason": "Family function"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-03-23",
+    "toDate": "2026-03-23",
+    "days": 0.5,
+    "reason": "College Purpose"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-24",
+    "toDate": "2026-03-24",
+    "days": 1.0,
+    "reason": "Personal Reason"
+  },
+  {
+    "empNo": "COLOR182",
+    "leaveType": "PL",
+    "fromDate": "2026-03-24",
+    "toDate": "2026-03-24",
+    "days": 1.0,
+    "reason": "fever"
+  },
+  {
+    "empNo": "COLOR171",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-25",
+    "toDate": "2026-03-25",
+    "days": 1.0,
+    "reason": "personal leave"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-25",
+    "toDate": "2026-03-25",
+    "days": 0.5,
+    "reason": "Personal Reasons"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-26",
+    "toDate": "2026-03-26",
+    "days": 1.0,
+    "reason": "Personal Reason"
+  },
+  {
+    "empNo": "COLOR170",
+    "leaveType": "PL",
+    "fromDate": "2026-03-26",
+    "toDate": "2026-03-26",
+    "days": 0.5,
+    "reason": "Fever"
+  },
+  {
+    "empNo": "COLOR185",
+    "leaveType": "PL",
+    "fromDate": "2026-03-27",
+    "toDate": "2026-03-27",
+    "days": 1.0,
+    "reason": "personal work"
+  },
+  {
+    "empNo": "COLOR195",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-27",
+    "toDate": "2026-03-31",
+    "days": 5.0,
+    "reason": "personal"
+  },
+  {
+    "empNo": "COLOR057",
+    "leaveType": "PL",
+    "fromDate": "2026-03-27",
+    "toDate": "2026-03-27",
+    "days": 1.0,
+    "reason": "I am utilizing my remaining 2 carry-forward leaves, which are due to lapse"
+  },
+  {
+    "empNo": "COLOR193",
+    "leaveType": "LOP",
+    "fromDate": "2026-03-27",
+    "toDate": "2026-03-27",
+    "days": 1.0,
+    "reason": "Personal Reason"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "COF",
+    "fromDate": "2026-03-27",
+    "toDate": "2026-03-27",
+    "days": 1.0,
+    "reason": "not well"
+  },
+  {
+    "empNo": "COLOR191",
+    "leaveType": "COF",
+    "fromDate": "2026-03-30",
+    "toDate": "2026-03-30",
+    "days": 1.0,
+    "reason": "Sick Leave"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "COF",
+    "fromDate": "2026-03-30",
+    "toDate": "2026-03-30",
+    "days": 1.0,
+    "reason": "mother sick"
+  },
+  {
+    "empNo": "COLOR034",
+    "leaveType": "PL",
+    "fromDate": "2026-03-30",
+    "toDate": "2026-03-30",
+    "days": 1.0,
+    "reason": "not well"
+  },
+  {
+    "empNo": "COLOR176",
+    "leaveType": "COF",
+    "fromDate": "2026-03-31",
+    "toDate": "2026-03-31",
+    "days": 1.0,
+    "reason": "going to native place"
+  },
+  {
+    "empNo": "COLOR047",
+    "leaveType": "PL",
+    "fromDate": "2026-03-31",
+    "toDate": "2026-03-31",
+    "days": 1.0,
+    "reason": "mother hospitalised"
+  }
+]

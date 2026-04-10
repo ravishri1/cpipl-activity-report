@@ -1,0 +1,653 @@
+[
+  {
+    "empNo": "COLOR001",
+    "name": "Ravi Pardeep Shrivastav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR002",
+    "name": "Priyanka Ravi Shrivastav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR003",
+    "name": "Himanshu Srivastava",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR005",
+    "name": "Dayanand Vishnu Halde",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR006",
+    "name": "Rajendra Pandharinath Ghuge",
+    "cofUsed": 5.5,
+    "lopUsed": 0.0,
+    "plUsed": 6.0
+  },
+  {
+    "empNo": "COLOR007",
+    "name": "Pradnya Sushil Vaidya",
+    "cofUsed": 5.0,
+    "lopUsed": 6.0,
+    "plUsed": 6.0
+  },
+  {
+    "empNo": "COLOR013",
+    "name": "Manish Singh",
+    "cofUsed": 0.0,
+    "lopUsed": 25.0,
+    "plUsed": 12.0
+  },
+  {
+    "empNo": "COLOR015",
+    "name": "Rajan Saroj",
+    "cofUsed": 0.0,
+    "lopUsed": 1.0,
+    "plUsed": 6.0
+  },
+  {
+    "empNo": "COLOR018",
+    "name": "Anil Kumar Ramdhruv Gautam",
+    "cofUsed": 0.0,
+    "lopUsed": 7.0,
+    "plUsed": 10.0
+  },
+  {
+    "empNo": "COLOR021",
+    "name": "Ajeet Kumar Yadav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR022",
+    "name": "Rahul Dixit",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 6.0
+  },
+  {
+    "empNo": "COLOR026",
+    "name": "Shailesh Vinod Naik",
+    "cofUsed": 0.0,
+    "lopUsed": 6.0,
+    "plUsed": 13.0
+  },
+  {
+    "empNo": "COLOR034",
+    "name": "Pranali Nandu Patil",
+    "cofUsed": 21.0,
+    "lopUsed": 0.0,
+    "plUsed": 2.5
+  },
+  {
+    "empNo": "COLOR044",
+    "name": "Rajat Kumar Shrivastava",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR047",
+    "name": "Jyoti Vasant Naik",
+    "cofUsed": 6.5,
+    "lopUsed": 4.0,
+    "plUsed": 13.0
+  },
+  {
+    "empNo": "COLOR051",
+    "name": "Suraj Baban Hate",
+    "cofUsed": 0.0,
+    "lopUsed": 9.0,
+    "plUsed": 2.0
+  },
+  {
+    "empNo": "COLOR055",
+    "name": "Anil Kumar",
+    "cofUsed": 0.0,
+    "lopUsed": 1.0,
+    "plUsed": 11.0
+  },
+  {
+    "empNo": "COLOR057",
+    "name": "Nandan Sanjay Maurya",
+    "cofUsed": 13.0,
+    "lopUsed": 0.0,
+    "plUsed": 9.0
+  },
+  {
+    "empNo": "COLOR059",
+    "name": "Pankaj Kumar",
+    "cofUsed": 1.0,
+    "lopUsed": 3.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR063",
+    "name": "Pallavi Pravin More",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR064",
+    "name": "Anuj Arya",
+    "cofUsed": 10.0,
+    "lopUsed": 0.0,
+    "plUsed": 15.0
+  },
+  {
+    "empNo": "COLOR068",
+    "name": "Rachana Ravindra Sawant",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR070",
+    "name": "Pratik Anil Singh",
+    "cofUsed": 3.5,
+    "lopUsed": 0.0,
+    "plUsed": 9.5
+  },
+  {
+    "empNo": "COLOR071",
+    "name": "Lavita Jane Fernandes",
+    "cofUsed": 6.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR076",
+    "name": "Dilip Yadav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR077",
+    "name": "Vishal Sonu Gharate",
+    "cofUsed": 0.0,
+    "lopUsed": 6.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR085",
+    "name": "Badal Mishra",
+    "cofUsed": 0.0,
+    "lopUsed": 12.0,
+    "plUsed": 3.0
+  },
+  {
+    "empNo": "COLOR087",
+    "name": "Nutan Nitin Chikhle",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR088",
+    "name": "ARATI BHAGAWAN RAUT",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR089",
+    "name": "Nishad Sujit",
+    "cofUsed": 0.0,
+    "lopUsed": 1.0,
+    "plUsed": 9.0
+  },
+  {
+    "empNo": "COLOR090",
+    "name": "Abhishek Yadav",
+    "cofUsed": 0.0,
+    "lopUsed": 26.0,
+    "plUsed": 11.0
+  },
+  {
+    "empNo": "COLOR091",
+    "name": "Shubhadra Nayba Sadawarte",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR093",
+    "name": "Shawn Godfrey Fernandes",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR095",
+    "name": "Prashant Kumar Vishwakarma",
+    "cofUsed": 1.0,
+    "lopUsed": 0.0,
+    "plUsed": 6.0
+  },
+  {
+    "empNo": "COLOR098",
+    "name": "Priyank Kamlesh Singh",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR100",
+    "name": "Abhishek Suresh Sawant",
+    "cofUsed": 13.5,
+    "lopUsed": 0.0,
+    "plUsed": 9.5
+  },
+  {
+    "empNo": "COLOR101",
+    "name": "Swapnil Mahadev Parab",
+    "cofUsed": 5.0,
+    "lopUsed": 1.5,
+    "plUsed": 10.0
+  },
+  {
+    "empNo": "COLOR104",
+    "name": "Prajyot Vijay Chavan",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR106",
+    "name": "Uttara Jayant Chavan",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR107",
+    "name": "Tanuja Vasudev More",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR108",
+    "name": "Pritesh Santosh Varose",
+    "cofUsed": 0.0,
+    "lopUsed": 2.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR110",
+    "name": "Divya Devi",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR112",
+    "name": "Nishant Deepak Upadhayay",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR113",
+    "name": "Abhilasha Jaiswal",
+    "cofUsed": 1.0,
+    "lopUsed": 3.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR115",
+    "name": "Aman Saini",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 1.0
+  },
+  {
+    "empNo": "COLOR116",
+    "name": "Shashi Pal",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR117",
+    "name": "Lahiri Noopur",
+    "cofUsed": 5.0,
+    "lopUsed": 5.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR120",
+    "name": "Ashishkumar Ashok Tavasalkar",
+    "cofUsed": 7.5,
+    "lopUsed": 3.0,
+    "plUsed": 10.0
+  },
+  {
+    "empNo": "COLOR121",
+    "name": "Suraj Gajanan Parab",
+    "cofUsed": 4.0,
+    "lopUsed": 7.5,
+    "plUsed": 10.0
+  },
+  {
+    "empNo": "COLOR122",
+    "name": "PRATHAMESH RAMESH RAMANE",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR123",
+    "name": "Chandrakant Krishna Jadhav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR126",
+    "name": "VIJAY KUMAR SINGH",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR128",
+    "name": "Sameer Subhash Bhandvilkar",
+    "cofUsed": 0.0,
+    "lopUsed": 2.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR131",
+    "name": "Chitrangi Satyawan Mungekar",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR133",
+    "name": "Neha Premchand Yadav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR134",
+    "name": "Divyash Chandegra",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR136",
+    "name": "Mansi Harsukhbhai Thummar",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 8.0
+  },
+  {
+    "empNo": "COLOR137",
+    "name": "Shubham Arya",
+    "cofUsed": 0.0,
+    "lopUsed": 6.5,
+    "plUsed": 2.0
+  },
+  {
+    "empNo": "COLOR138",
+    "name": "Rajeev Kumar Singh",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR139",
+    "name": "Viraj Sawner",
+    "cofUsed": 3.0,
+    "lopUsed": 0.0,
+    "plUsed": 7.0
+  },
+  {
+    "empNo": "COLOR143",
+    "name": "Samiksha Pushparaj Dhuri",
+    "cofUsed": 2.0,
+    "lopUsed": 7.0,
+    "plUsed": 9.0
+  },
+  {
+    "empNo": "COLOR145",
+    "name": "Shikha Ankit Shukla",
+    "cofUsed": 0.0,
+    "lopUsed": 35.0,
+    "plUsed": 9.0
+  },
+  {
+    "empNo": "COLOR146",
+    "name": "Mehul Rikame",
+    "cofUsed": 2.0,
+    "lopUsed": 0.0,
+    "plUsed": 16.0
+  },
+  {
+    "empNo": "COLOR147",
+    "name": "Kaustubh Gaikwad",
+    "cofUsed": 0.0,
+    "lopUsed": 10.5,
+    "plUsed": 10.0
+  },
+  {
+    "empNo": "COLOR153",
+    "name": "Daniel Sunil Das Kuzhivila",
+    "cofUsed": 0.0,
+    "lopUsed": 3.0,
+    "plUsed": 4.0
+  },
+  {
+    "empNo": "COLOR154",
+    "name": "Aashutosh Shailendra Patil",
+    "cofUsed": 0.0,
+    "lopUsed": 26.5,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR155",
+    "name": "Sharmila Dayanand Halde",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR156",
+    "name": "Rupali Ramesh Sharma",
+    "cofUsed": 0.0,
+    "lopUsed": 19.0,
+    "plUsed": 11.0
+  },
+  {
+    "empNo": "COLOR157",
+    "name": "Yashashree Yadava Kotian",
+    "cofUsed": 2.0,
+    "lopUsed": 13.5,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR158",
+    "name": "Nikhil Shahaji Thorat",
+    "cofUsed": 1.5,
+    "lopUsed": 13.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR159",
+    "name": "Sonal Ramkumar Chauhan",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR160",
+    "name": "Chetan Mukesh Soudagar",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR163",
+    "name": "Sagar Stavarmath",
+    "cofUsed": 0.0,
+    "lopUsed": 3.5,
+    "plUsed": 0.5
+  },
+  {
+    "empNo": "COLOR167",
+    "name": "Sameer Manik Patil",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 2.0
+  },
+  {
+    "empNo": "COLOR170",
+    "name": "Shaunak Sharad Kadam",
+    "cofUsed": 7.0,
+    "lopUsed": 10.5,
+    "plUsed": 11.0
+  },
+  {
+    "empNo": "COLOR171",
+    "name": "Avinash Vinayak Kadam",
+    "cofUsed": 9.0,
+    "lopUsed": 4.0,
+    "plUsed": 7.0
+  },
+  {
+    "empNo": "COLOR175",
+    "name": "Rohit Raosaheb Phatangare",
+    "cofUsed": 4.0,
+    "lopUsed": 5.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR176",
+    "name": "Ankit Singh Anil",
+    "cofUsed": 1.0,
+    "lopUsed": 2.0,
+    "plUsed": 1.0
+  },
+  {
+    "empNo": "COLOR177",
+    "name": "Sumit Kumar Maurya",
+    "cofUsed": 0.0,
+    "lopUsed": 6.0,
+    "plUsed": 1.0
+  },
+  {
+    "empNo": "COLOR179",
+    "name": "Shelton Rodrigues",
+    "cofUsed": 2.0,
+    "lopUsed": 5.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR181",
+    "name": "Shraddha Prakash Shivgan",
+    "cofUsed": 1.0,
+    "lopUsed": 1.5,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR182",
+    "name": "Yadav Ritesh Vinod",
+    "cofUsed": 0.0,
+    "lopUsed": 2.0,
+    "plUsed": 2.0
+  },
+  {
+    "empNo": "COLOR184",
+    "name": "Rahul Yadav",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 5.0
+  },
+  {
+    "empNo": "COLOR185",
+    "name": "Dilip Kumar",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 3.0
+  },
+  {
+    "empNo": "COLOR188",
+    "name": "Shubhanshu Prasad",
+    "cofUsed": 7.0,
+    "lopUsed": 10.0,
+    "plUsed": 1.0
+  },
+  {
+    "empNo": "COLOR189",
+    "name": "Vikrant Aravind Malavade",
+    "cofUsed": 0.0,
+    "lopUsed": 3.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR190",
+    "name": "Manish Jaya Mendon",
+    "cofUsed": 0.0,
+    "lopUsed": 15.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR191",
+    "name": "Akshat Shailesh Mehta",
+    "cofUsed": 6.0,
+    "lopUsed": 4.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR193",
+    "name": "PRATIKSHA PANKAJ MANJREKAR",
+    "cofUsed": 0.0,
+    "lopUsed": 7.5,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR194",
+    "name": "SHALINI CHAURASIA",
+    "cofUsed": 0.0,
+    "lopUsed": 2.5,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR195",
+    "name": "NISHAD SUJIT",
+    "cofUsed": 0.0,
+    "lopUsed": 5.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR196",
+    "name": "Pravin Hindurao Shinde",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  },
+  {
+    "empNo": "COLOR197",
+    "name": "SHELTON RODRIGUES",
+    "cofUsed": 0.0,
+    "lopUsed": 0.0,
+    "plUsed": 0.0
+  }
+]

@@ -8,6 +8,7 @@
     "postinstall": "cd server && npm install --legacy-peer-deps && npx prisma generate"
   },
   "dependencies": {
-    "docx": "^9.6.1"
+    "docx": "^9.6.1",
+    "mssql": "^12.2.1"
   }
 }

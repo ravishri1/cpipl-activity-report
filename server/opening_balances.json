@@ -1,0 +1,478 @@
+[
+  {
+    "empNo": "COLOR001",
+    "name": "Ravi Pardeep Shrivastav",
+    "cofOpen": 0.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR002",
+    "name": "Priyanka Ravi Shrivastav",
+    "cofOpen": 0.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR003",
+    "name": "Himanshu Srivastava",
+    "cofOpen": 0.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR005",
+    "name": "Dayanand Vishnu Halde",
+    "cofOpen": 0.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR006",
+    "name": "Rajendra Pandharinath Ghuge",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 1.0
+  },
+  {
+    "empNo": "COLOR007",
+    "name": "Pradnya Sushil Vaidya",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR013",
+    "name": "Manish Singh",
+    "cofOpen": 0.0,
+    "cfOpen": 4.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR015",
+    "name": "Rajan Saroj",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR018",
+    "name": "Anil Kumar Ramdhruv Gautam",
+    "cofOpen": 0.0,
+    "cfOpen": 4.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR021",
+    "name": "Ajeet Kumar Yadav",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 7.0
+  },
+  {
+    "empNo": "COLOR022",
+    "name": "Rahul Dixit",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 7.0
+  },
+  {
+    "empNo": "COLOR026",
+    "name": "Shailesh Vinod Naik",
+    "cofOpen": 0.0,
+    "cfOpen": 2.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR034",
+    "name": "Pranali Nandu Patil",
+    "cofOpen": 15.5,
+    "cfOpen": 6,
+    "lapsed": 22.5
+  },
+  {
+    "empNo": "COLOR044",
+    "name": "Rajat Kumar Shrivastava",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 6.0
+  },
+  {
+    "empNo": "COLOR047",
+    "name": "Jyoti Vasant Naik",
+    "cofOpen": 0.5,
+    "cfOpen": 4.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR051",
+    "name": "Suraj Baban Hate",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR055",
+    "name": "Anil Kumar",
+    "cofOpen": 0.0,
+    "cfOpen": 4.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR057",
+    "name": "Nandan Sanjay Maurya",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR059",
+    "name": "Pankaj Kumar",
+    "cofOpen": 0.0,
+    "cfOpen": 5.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR063",
+    "name": "Pallavi Pravin More",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR064",
+    "name": "Anuj Arya",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 7.0
+  },
+  {
+    "empNo": "COLOR068",
+    "name": "Rachana Ravindra Sawant",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR070",
+    "name": "Pratik Anil Singh",
+    "cofOpen": 1.0,
+    "cfOpen": 6,
+    "lapsed": 1.0
+  },
+  {
+    "empNo": "COLOR071",
+    "name": "Lavita Jane Fernandes",
+    "cofOpen": 5.5,
+    "cfOpen": 6,
+    "lapsed": 6.5
+  },
+  {
+    "empNo": "COLOR076",
+    "name": "Dilip Yadav",
+    "cofOpen": 0.0,
+    "cfOpen": 6,
+    "lapsed": 7.0
+  },
+  {
+    "empNo": "COLOR077",
+    "name": "Vishal Sonu Gharate",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR085",
+    "name": "Badal Mishra",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR087",
+    "name": "Nutan Nitin Chikhle",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR088",
+    "name": "ARATI BHAGAWAN RAUT",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR089",
+    "name": "Nishad Sujit",
+    "cofOpen": 0.0,
+    "cfOpen": 4.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR090",
+    "name": "Abhishek Yadav",
+    "cofOpen": 0.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR091",
+    "name": "Shubhadra Nayba Sadawarte",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR093",
+    "name": "Shawn Godfrey Fernandes",
+    "cofOpen": 0.0,
+    "cfOpen": 5.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR095",
+    "name": "Prashant Kumar Vishwakarma",
+    "cofOpen": 1.0,
+    "cfOpen": 6,
+    "lapsed": 3.0
+  },
+  {
+    "empNo": "COLOR098",
+    "name": "Priyank Kamlesh Singh",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR100",
+    "name": "Abhishek Suresh Sawant",
+    "cofOpen": 3.5,
+    "cfOpen": 6,
+    "lapsed": 3.0
+  },
+  {
+    "empNo": "COLOR101",
+    "name": "Swapnil Mahadev Parab",
+    "cofOpen": 1.0,
+    "cfOpen": 2.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR104",
+    "name": "Prajyot Vijay Chavan",
+    "cofOpen": 0.0,
+    "cfOpen": 4.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR106",
+    "name": "Uttara Jayant Chavan",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR107",
+    "name": "Tanuja Vasudev More",
+    "cofOpen": 0.0,
+    "cfOpen": 2.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR108",
+    "name": "Pritesh Santosh Varose",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR110",
+    "name": "Divya Devi",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR112",
+    "name": "Nishant Deepak Upadhayay",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR113",
+    "name": "Abhilasha Jaiswal",
+    "cofOpen": 0.0,
+    "cfOpen": 0.5,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR120",
+    "name": "Ashishkumar Ashok Tavasalkar",
+    "cofOpen": 0.0,
+    "cfOpen": 2.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR121",
+    "name": "Suraj Gajanan Parab",
+    "cofOpen": 0.0,
+    "cfOpen": 4.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR122",
+    "name": "PRATHAMESH RAMESH RAMANE",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR123",
+    "name": "Chandrakant Krishna Jadhav",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR126",
+    "name": "VIJAY KUMAR SINGH",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR128",
+    "name": "Sameer Subhash Bhandvilkar",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR131",
+    "name": "Chitrangi Satyawan Mungekar",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR133",
+    "name": "Neha Premchand Yadav",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR134",
+    "name": "Divyash Chandegra",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR136",
+    "name": "Mansi Harsukhbhai Thummar",
+    "cofOpen": 0.0,
+    "cfOpen": 5.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR137",
+    "name": "Shubham Arya",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR138",
+    "name": "Rajeev Kumar Singh",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR139",
+    "name": "Viraj Sawner",
+    "cofOpen": 0.0,
+    "cfOpen": 3.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR143",
+    "name": "Samiksha Pushparaj Dhuri",
+    "cofOpen": 1.0,
+    "cfOpen": 6.0,
+    "lapsed": 0.0
+  },
+  {
+    "empNo": "COLOR145",
+    "name": "Shikha Ankit Shukla",
+    "cofOpen": 0.0,
+    "cfOpen": 5.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR146",
+    "name": "Mehul Rikame",
+    "cofOpen": 0.0,
+    "cfOpen": 5.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR147",
+    "name": "Kaustubh Gaikwad",
+    "cofOpen": 0.0,
+    "cfOpen": 1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR153",
+    "name": "Daniel Sunil Das Kuzhivila",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR154",
+    "name": "Aashutosh Shailendra Patil",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR156",
+    "name": "Rupali Ramesh Sharma",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR157",
+    "name": "Yashashree Yadava Kotian",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR158",
+    "name": "Nikhil Shahaji Thorat",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR159",
+    "name": "Sonal Ramkumar Chauhan",
+    "cofOpen": 0.0,
+    "cfOpen": 0.0,
+    "lapsed": 0
+  },
+  {
+    "empNo": "COLOR160",
+    "name": "Chetan Mukesh Soudagar",
+    "cofOpen": 0.0,
+    "cfOpen": -1.0,
+    "lapsed": 0
+  }
+]

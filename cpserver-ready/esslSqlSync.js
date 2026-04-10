@@ -18,7 +18,7 @@ const SQL_CONFIG = {
 
 const HR_API_URL    = 'https://eod.colorpapers.in';
 const HR_AGENT_KEY  = 'cpipl-bio-sync-2026-xK9mP4qR7v2';
-const LOOKBACK_DAYS = 1;
+const LOOKBACK_DAYS = parseInt(process.env.LOOKBACK_DAYS) || 1;
 const LOG_FILE      = path.join(__dirname, 'sync-log.txt');
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -44,28 +44,41 @@ function log(msg) {
 async function fetchPunchesFromSQL() {
   const pool = await sql.connect(SQL_CONFIG);
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const tableName = `DeviceLogs_${month}_${year}`;
   const since = new Date();
   since.setDate(since.getDate() - LOOKBACK_DAYS);
 
-  const result = await pool.request()
-    .input('since', sql.DateTime, since)
-    .query(`
-      SELECT
-        DeviceId,
-        CAST(UserId AS VARCHAR) AS enrollNumber,
-        LogDate                 AS punchTime,
-        Direction               AS direction
-      FROM dbo.${tableName}
-      WHERE LogDate >= @since
-      ORDER BY LogDate ASC
-    `);
+  // Build list of monthly tables to query (handles multi-month lookback)
+  const tables = [];
+  const cur = new Date(since.getFullYear(), since.getMonth(), 1);
+  while (cur <= now) {
+    tables.push(`DeviceLogs_${cur.getMonth() + 1}_${cur.getFullYear()}`);
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  let allRows = [];
+  for (const tableName of tables) {
+    try {
+      const result = await pool.request()
+        .input('since', sql.DateTime, since)
+        .query(`
+          SELECT
+            DeviceId,
+            CAST(UserId AS VARCHAR) AS enrollNumber,
+            LogDate                 AS punchTime,
+            Direction               AS direction
+          FROM dbo.${tableName}
+          WHERE LogDate >= @since
+          ORDER BY LogDate ASC
+        `);
+      allRows = allRows.concat(result.recordset);
+    } catch (e) {
+      log(`  Table ${tableName} skipped: ${e.message}`);
+    }
+  }
 
   await pool.close();
 
-  return result.recordset.map(row => ({
+  return allRows.map(row => ({
     deviceId:     row.DeviceId,
     enrollNumber: String(row.enrollNumber),
     punchTime:    formatDateTime(row.punchTime),

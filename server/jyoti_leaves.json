@@ -1,0 +1,128 @@
+[
+  {
+    "leaveType": "CF",
+    "fromDate": "2025-05-07",
+    "toDate": "2025-05-09",
+    "days": 3.0,
+    "reason": "sister's wedding"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-05-12",
+    "toDate": "2025-05-12",
+    "days": 0.5,
+    "reason": ""
+  },
+  {
+    "leaveType": "CF",
+    "fromDate": "2025-05-13",
+    "toDate": "2025-05-13",
+    "days": 1.0,
+    "reason": "emergency at home"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2025-05-14",
+    "toDate": "2025-05-14",
+    "days": 1.0,
+    "reason": "mother hospitalised"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2025-07-07",
+    "toDate": "2025-07-09",
+    "days": 3.0,
+    "reason": "admitted to the hospital"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-07-10",
+    "toDate": "2025-07-10",
+    "days": 1.0,
+    "reason": ""
+  },
+  {
+    "leaveType": "LOP",
+    "fromDate": "2025-07-11",
+    "toDate": "2025-07-13",
+    "days": 3.0,
+    "reason": "LOP"
+  },
+  {
+    "leaveType": "LOP",
+    "fromDate": "2025-07-14",
+    "toDate": "2025-07-14",
+    "days": 1.0,
+    "reason": "admitted to the hospital"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-08-12",
+    "toDate": "2025-08-12",
+    "days": 1.0,
+    "reason": "high fever"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-09-02",
+    "toDate": "2025-09-02",
+    "days": 1.0,
+    "reason": "my grandfather has passed away"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-11-05",
+    "toDate": "2025-11-05",
+    "days": 1.0,
+    "reason": "going to village due to some emergency"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2025-12-06",
+    "toDate": "2025-12-06",
+    "days": 1.0,
+    "reason": "family function"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2025-12-15",
+    "toDate": "2025-12-15",
+    "days": 1.0,
+    "reason": "my mother not well"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2025-12-22",
+    "toDate": "2025-12-22",
+    "days": 1.0,
+    "reason": "mother sick"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2026-01-19",
+    "toDate": "2026-01-19",
+    "days": 1.0,
+    "reason": "birthday celebration"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2026-02-16",
+    "toDate": "2026-02-16",
+    "days": 1.0,
+    "reason": "hospitalised due to stomach pain"
+  },
+  {
+    "leaveType": "COF",
+    "fromDate": "2026-03-30",
+    "toDate": "2026-03-30",
+    "days": 1.0,
+    "reason": "mother sick"
+  },
+  {
+    "leaveType": "PL",
+    "fromDate": "2026-03-31",
+    "toDate": "2026-03-31",
+    "days": 1.0,
+    "reason": "mother hospitalised"
+  }
+]

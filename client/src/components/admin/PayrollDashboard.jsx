@@ -38,6 +38,11 @@ import {
   Banknote,
   Shield,
   FileDown,
+  CheckSquare,
+  Square,
+  ExternalLink,
+  ListChecks,
+  SkipForward,
 } from 'lucide-react';
 import api from '../../utils/api';
 
@@ -772,6 +777,532 @@ const StatutoryReport = ({ month }) => {
   );
 };
 
+// ─── Process Payroll Wizard ──────────────────────────────────────────────────
+function ProcessPayrollWizard({ month, onClose, onDone }) {
+  const [step, setStep] = useState(1); // 1=scanning, 2=review, 3=confirm, 4=generating, 5=done
+  const [checks, setChecks] = useState(null);
+  const [scanErr, setScanErr] = useState(null);
+  const [generateResult, setGenerateResult] = useState(null);
+  const [genErr, setGenErr] = useState(null);
+
+  // Step 1: auto-scan on open
+  useEffect(() => {
+    api.get(`/payroll/process-check?month=${month}`)
+      .then(r => { setChecks(r.data); setStep(2); })
+      .catch(e => { setScanErr(e.response?.data?.message || 'Scan failed'); setStep(2); });
+  }, [month]);
+
+  const runGenerate = async () => {
+    setStep(4);
+    try {
+      const r = await api.post('/payroll/generate', { month });
+      setGenerateResult(r.data);
+      setStep(5);
+      onDone?.();
+    } catch (e) {
+      setGenErr(e.response?.data?.message || 'Generation failed');
+      setStep(5);
+    }
+  };
+
+  const CHECK_STATUS = {
+    ok:      { icon: '✅', color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+    warning: { icon: '⚠️', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
+    info:    { icon: 'ℹ️', color: 'text-blue-600',  bg: 'bg-blue-50 border-blue-200' },
+    pending: { icon: '🕐', color: 'text-slate-500', bg: 'bg-slate-50 border-slate-200' },
+  };
+
+  const CHECK_LINKS = {
+    'Salary structures set':          '/admin/salary-structures',
+    'Pending leave approvals':        '/admin/leave',
+    'Advance disbursements pending':  '/admin/salary-advances',
+    'Attendance data':                '/admin/attendance',
+  };
+
+  const warnings = (checks?.checks || []).filter(c => c.status === 'warning');
+  const hasBlocking = warnings.length > 0;
+
+  // Generated count from results
+  const genCount   = generateResult?.results?.filter(r => r.status === 'generated').length || 0;
+  const skipCount  = generateResult?.results?.filter(r => r.status === 'skipped').length || 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center">
+              <Play className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Process Payroll</h2>
+              <p className="text-xs text-slate-400">{formatMonthDisplay(month)}</p>
+            </div>
+          </div>
+          {step !== 4 && (
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+              <X className="w-4 h-4 text-slate-400" />
+            </button>
+          )}
+        </div>
+
+        {/* Step Progress */}
+        <div className="flex items-center gap-0 px-6 pt-4">
+          {['Scan', 'Review', 'Confirm', 'Generate', 'Done'].map((label, i) => {
+            const s = i + 1;
+            const active = step === s;
+            const done = step > s;
+            return (
+              <React.Fragment key={s}>
+                <div className="flex flex-col items-center">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all
+                    ${done ? 'bg-green-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    {done ? '✓' : s}
+                  </div>
+                  <span className={`text-[9px] mt-0.5 font-medium ${active ? 'text-blue-600' : done ? 'text-green-600' : 'text-slate-400'}`}>{label}</span>
+                </div>
+                {i < 4 && <div className={`flex-1 h-0.5 mb-3 mx-1 ${done ? 'bg-green-400' : 'bg-slate-200'}`} />}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 min-h-[260px]">
+
+          {/* Step 1: Scanning */}
+          {step === 1 && (
+            <div className="flex flex-col items-center justify-center h-52 gap-4">
+              <div className="relative">
+                <div className="w-14 h-14 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Search className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">Scanning payroll data…</p>
+                <p className="text-xs text-slate-400 mt-1">Checking attendance, leaves, advances & structures</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Review */}
+          {step === 2 && (
+            <div className="space-y-3">
+              {scanErr && (
+                <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-600">{scanErr}</div>
+              )}
+              {checks && (
+                <>
+                  {/* Summary row */}
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {[
+                      { label: 'Eligible', value: checks.summary.eligibleForPayroll, color: 'text-blue-600' },
+                      { label: 'No Salary Set', value: checks.summary.withoutSalaryStructure, color: checks.summary.withoutSalaryStructure > 0 ? 'text-red-500' : 'text-green-600' },
+                      { label: 'Stopped', value: checks.summary.salaryProcessingStopped, color: 'text-amber-600' },
+                    ].map(item => (
+                      <div key={item.label} className="bg-slate-50 rounded-lg p-2.5 text-center">
+                        <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
+                        <p className="text-[10px] text-slate-500">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Checks list */}
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {checks.checks.map((c, i) => {
+                      const st = CHECK_STATUS[c.status] || CHECK_STATUS.info;
+                      const link = CHECK_LINKS[c.label];
+                      return (
+                        <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${st.bg}`}>
+                          <span className="text-base shrink-0 mt-0.5">{st.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-700">{c.label}</p>
+                            <p className={`text-xs mt-0.5 ${st.color}`}>{c.detail}</p>
+                          </div>
+                          {c.status === 'warning' && link && (
+                            <a href={link} className="shrink-0 text-[10px] font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded transition-colors whitespace-nowrap">
+                              Go Fix →
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {checks.summary.existingPayslips > 0 && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                      ℹ️ <strong>{checks.summary.existingPayslips} payslips already generated</strong> — existing ones will be skipped. Only new employees will be added.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Confirm */}
+          {step === 3 && checks && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
+                <p className="text-sm font-bold text-blue-800 mb-3">Ready to generate payslips for {formatMonthDisplay(month)}</p>
+                <div className="space-y-2 text-xs text-blue-700">
+                  <div className="flex justify-between">
+                    <span>Employees to process</span>
+                    <span className="font-bold">{checks.summary.eligibleForPayroll}</span>
+                  </div>
+                  {checks.summary.pendingReimbursements > 0 && (
+                    <div className="flex justify-between">
+                      <span>Reimbursements included</span>
+                      <span className="font-bold text-green-700">{checks.summary.pendingReimbursements} claims</span>
+                    </div>
+                  )}
+                  {checks.summary.advanceRepaymentsDue > 0 && (
+                    <div className="flex justify-between">
+                      <span>Advance deductions</span>
+                      <span className="font-bold text-amber-700">{checks.summary.advanceRepaymentsDue} auto-applied</span>
+                    </div>
+                  )}
+                  {checks.summary.salaryProcessingStopped > 0 && (
+                    <div className="flex justify-between">
+                      <span>Salary stopped (skipped)</span>
+                      <span className="font-bold text-red-600">{checks.summary.salaryProcessingStopped}</span>
+                    </div>
+                  )}
+                  {checks.summary.existingPayslips > 0 && (
+                    <div className="flex justify-between">
+                      <span>Already generated (skipped)</span>
+                      <span className="font-bold text-slate-500">{checks.summary.existingPayslips}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {hasBlocking && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                  ⚠️ There are <strong>{warnings.length} warning(s)</strong> — you can still proceed but review them first.
+                </div>
+              )}
+              <p className="text-xs text-slate-400 text-center">This will generate payslips. Existing ones will be skipped.</p>
+            </div>
+          )}
+
+          {/* Step 4: Generating */}
+          {step === 4 && (
+            <div className="flex flex-col items-center justify-center h-52 gap-4">
+              <div className="relative">
+                <div className="w-14 h-14 rounded-full border-4 border-green-100 border-t-green-600 animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">Generating payslips…</p>
+                <p className="text-xs text-slate-400 mt-1">Calculating attendance, LOP, advances & deductions</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Done */}
+          {step === 5 && (
+            <div className="flex flex-col items-center justify-center h-52 gap-4">
+              {genErr ? (
+                <>
+                  <div className="text-4xl">❌</div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-red-600">Generation Failed</p>
+                    <p className="text-xs text-slate-400 mt-1">{genErr}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl">🎉</div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-green-700">Payslips Generated!</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="font-semibold text-green-600">{genCount} generated</span>
+                      {skipCount > 0 && <span className="text-slate-400"> · {skipCount} skipped</span>}
+                    </p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-xs text-green-700 text-center">
+                    Go to <strong>Payslips tab</strong> to review and publish
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
+          {step === 2 && (
+            <>
+              <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                disabled={!!scanErr && !checks}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Review & Continue →
+              </button>
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <button onClick={() => setStep(2)} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
+                ← Back
+              </button>
+              <button
+                onClick={runGenerate}
+                className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Play className="w-4 h-4" />
+                Generate Payslips
+              </button>
+            </>
+          )}
+          {step === 5 && (
+            <button
+              onClick={onClose}
+              className="w-full px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              {genErr ? 'Close' : 'Done — View Payslips'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Payroll Process Checklist ───────────────────────────────────────────────
+const CHECKLIST_ITEMS = [
+  { id: 'lock_prev',       label: 'Lock Previous Payroll',        desc: 'Ensure last month payroll is locked before starting',   link: '/admin/payroll',           category: 'setup' },
+  { id: 'emp_additions',   label: 'Employee Additions',           desc: 'Add new joiners and set up salary structures',          link: '/admin/employees/new',     category: 'employees' },
+  { id: 'emp_separations', label: 'Employee Separations',         desc: 'Process separations, FnF and last working day',         link: '/admin/lifecycle',         category: 'employees' },
+  { id: 'emp_confirm',     label: 'Employee Confirmations',       desc: 'Confirm probationary employees due this month',         link: '/admin/employees',         category: 'employees' },
+  { id: 'emp_data',        label: 'Employee Data Updates',        desc: 'Update personal info, bank details, PAN, address',      link: '/admin/employees',         category: 'employees' },
+  { id: 'salary_revisions',label: 'Salary Revisions',            desc: 'Apply increment or revision letters effective this month', link: '/admin/salary-structures', category: 'salary' },
+  { id: 'one_time_pay',    label: 'Update One Time Payments',     desc: 'Add bonuses, incentives, or special allowances',        link: '/admin/payroll',           category: 'salary' },
+  { id: 'one_time_ded',    label: 'Update One Time Deductions',   desc: 'Add fines, recoveries or advance deductions',           link: '/admin/payroll',           category: 'salary' },
+  { id: 'advance_update',  label: 'Salary Advance Update',        desc: 'Disburse approved advances and verify repayment deductions', link: '/admin/salary-advances', category: 'salary' },
+  { id: 'stop_salary',     label: 'Stop Salary Processing',       desc: 'Mark employees whose salary should be held this month', link: '/admin/payroll',           category: 'salary' },
+  { id: 'lop_update',      label: 'Update LOP / LWP',             desc: 'Sync attendance and apply Loss Of Pay days',            link: '/admin/attendance',        category: 'attendance' },
+  { id: 'arrears',         label: 'Update Arrears',               desc: 'Calculate and add salary arrears from revisions',       link: '/admin/payroll',           category: 'salary' },
+  { id: 'fnf',             label: 'Full & Final Settlements',     desc: 'Process FnF for separated employees',                   link: '/admin/lifecycle',         category: 'salary' },
+  { id: 'reimbursements',  label: 'Reimbursement Claims',         desc: 'Approve pending expense and reimbursement claims',      link: '/admin/expenses',          category: 'salary' },
+  { id: 'process_payroll', label: 'Process / Generate Payroll',   desc: 'Generate payslips for all active employees',            link: '/admin/payroll',           category: 'process' },
+  { id: 'review_register', label: 'Review Pay Register',          desc: 'Verify earnings, deductions and net pay register',      link: '/admin/payroll',           category: 'process' },
+  { id: 'bank_transfer',   label: 'Bank Transfer / NEFT Export',  desc: 'Download NEFT file and initiate salary bank transfer',  link: '/admin/payroll',           category: 'process' },
+  { id: 'publish_payslips',label: 'Publish Payslips',             desc: 'Make payslips visible to employees on their portal',    link: '/admin/payroll',           category: 'process' },
+  { id: 'statutory',       label: 'Statutory Compliance',         desc: 'Download PF ECR, ESIC return and PT challan',           link: '/admin/payroll',           category: 'statutory' },
+  { id: 'lock_payroll',    label: 'Lock Payroll',                 desc: 'Lock the month so no further changes can be made',      link: '/admin/payroll',           category: 'statutory' },
+];
+
+const CATEGORY_COLORS = {
+  setup:      'bg-slate-100 text-slate-600',
+  employees:  'bg-blue-100 text-blue-600',
+  salary:     'bg-amber-100 text-amber-700',
+  attendance: 'bg-teal-100 text-teal-600',
+  process:    'bg-green-100 text-green-700',
+  statutory:  'bg-purple-100 text-purple-700',
+};
+
+function PayrollChecklist({ month }) {
+  const storageKey = `payroll-checklist-${month}`;
+
+  const [checked, setChecked] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch { return {}; }
+  });
+  const [ignored, setIgnored] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`${storageKey}-ignored`) || '{}'); } catch { return {}; }
+  });
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Reload state when month changes
+  useEffect(() => {
+    try { setChecked(JSON.parse(localStorage.getItem(storageKey) || '{}')); } catch { setChecked({}); }
+    try { setIgnored(JSON.parse(localStorage.getItem(`${storageKey}-ignored`) || '{}')); } catch { setIgnored({}); }
+  }, [storageKey]);
+
+  const toggle = (id) => {
+    const next = { ...checked, [id]: !checked[id] };
+    if (!next[id]) delete next[id];
+    setChecked(next);
+    localStorage.setItem(storageKey, JSON.stringify(next));
+    // un-ignore if re-checking
+    if (ignored[id]) {
+      const ig = { ...ignored };
+      delete ig[id];
+      setIgnored(ig);
+      localStorage.setItem(`${storageKey}-ignored`, JSON.stringify(ig));
+    }
+  };
+
+  const ignore = (id) => {
+    const next = { ...ignored, [id]: true };
+    setIgnored(next);
+    localStorage.setItem(`${storageKey}-ignored`, JSON.stringify(next));
+  };
+
+  const resetAll = () => {
+    if (!window.confirm('Reset all checklist items for this month?')) return;
+    setChecked({});
+    setIgnored({});
+    localStorage.removeItem(storageKey);
+    localStorage.removeItem(`${storageKey}-ignored`);
+  };
+
+  const pending = CHECKLIST_ITEMS.filter(i => !checked[i.id] && !ignored[i.id]);
+  const done    = CHECKLIST_ITEMS.filter(i => checked[i.id]);
+  const skipped = CHECKLIST_ITEMS.filter(i => ignored[i.id] && !checked[i.id]);
+  const total   = CHECKLIST_ITEMS.length;
+  const doneCount = done.length + skipped.length;
+  const pct = Math.round((doneCount / total) * 100);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <ListChecks className="w-5 h-5 text-blue-600" />
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Payroll Process Checklist</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{formatMonthDisplay(month)} · {done.length} done · {skipped.length} skipped · {pending.length} remaining</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Progress bar */}
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="text-xs font-semibold text-slate-600">{pct}%</span>
+          </div>
+          <button onClick={resetAll} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Reset</button>
+          <button onClick={() => setCollapsed(c => !c)} className="p-1 rounded hover:bg-slate-100 transition-colors">
+            {collapsed ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronUp className="w-4 h-4 text-slate-400" />}
+          </button>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div className="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+          {/* LEFT — Pending */}
+          <div className="flex-1 p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              {pending.length === 0 ? '🎉 All done!' : `To Do (${pending.length})`}
+            </p>
+            {pending.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="text-4xl mb-2">✅</div>
+                <p className="text-sm font-medium text-green-700">Payroll checklist complete!</p>
+                <p className="text-xs text-slate-400 mt-1">All steps done for {formatMonthDisplay(month)}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {pending.map((item) => (
+                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 group border border-transparent hover:border-slate-200 transition-all">
+                    <button
+                      onClick={() => toggle(item.id)}
+                      className="mt-0.5 shrink-0 text-slate-300 hover:text-blue-500 transition-colors"
+                    >
+                      <Square className="w-4 h-4" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${CATEGORY_COLORS[item.category]}`}>
+                          {item.category}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <a
+                        href={item.link}
+                        title="Take me there"
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Go
+                      </a>
+                      <button
+                        onClick={() => ignore(item.id)}
+                        title="Skip this step"
+                        className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-600 px-2 py-1 rounded hover:bg-slate-100 transition-colors"
+                      >
+                        <SkipForward className="w-3 h-3" />
+                        Skip
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Skipped items */}
+            {skipped.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Skipped ({skipped.length})</p>
+                <div className="space-y-1">
+                  {skipped.map(item => (
+                    <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50">
+                      <SkipForward className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                      <span className="text-xs text-slate-400 line-through flex-1">{item.label}</span>
+                      <button
+                        onClick={() => toggle(item.id)}
+                        className="text-[10px] text-blue-500 hover:underline"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT — Completed */}
+          <div className="flex-1 p-4 bg-green-50/30">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              Completed ({done.length})
+            </p>
+            {done.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="text-3xl mb-2">📋</div>
+                <p className="text-sm text-slate-400">Feeling empty.</p>
+                <p className="text-xs text-slate-300 mt-1">Tick off some items &amp; make my day…</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {done.map(item => (
+                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg bg-white border border-green-100">
+                    <button onClick={() => toggle(item.id)} className="mt-0.5 shrink-0 text-green-500 hover:text-slate-400 transition-colors">
+                      <CheckSquare className="w-4 h-4" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-slate-500 line-through">{item.label}</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <CheckCircle className="w-3 h-3 text-green-500" />
+                        <span className="text-[10px] text-green-600">Done</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PayrollDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [activeTab, setActiveTab] = useState('overview');
@@ -790,6 +1321,7 @@ export default function PayrollDashboard() {
   const [processCheck, setProcessCheck] = useState(null);
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -975,6 +1507,15 @@ export default function PayrollDashboard() {
         />
       )}
 
+      {/* Process Payroll Wizard */}
+      {wizardOpen && (
+        <ProcessPayrollWizard
+          month={selectedMonth}
+          onClose={() => { setWizardOpen(false); fetchPayslips(); fetchOverview(); setActiveTab('payslips'); }}
+          onDone={() => { fetchPayslips(); fetchOverview(); }}
+        />
+      )}
+
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1143,6 +1684,9 @@ export default function PayrollDashboard() {
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Payroll Process Checklist */}
+          <PayrollChecklist month={selectedMonth} />
+
           {overviewLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
@@ -1206,7 +1750,7 @@ export default function PayrollDashboard() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setActiveTab('payslips')}
+                  onClick={() => setWizardOpen(true)}
                   className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <Play className="w-4 h-4" />
