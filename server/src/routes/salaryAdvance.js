@@ -1,9 +1,20 @@
 const express = require('express');
+const multer = require('multer');
 const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
 const { notifyUsers } = require('../utils/notify');
+const { getDriveClient, getOrCreateRootFolder, uploadFile } = require('../services/google/googleDrive');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are allowed'));
+  },
+});
 
 const router = express.Router();
 router.use(authenticate);
@@ -186,14 +197,13 @@ router.put('/:id/review', asyncHandler(async (req, res) => {
   res.json(updated);
 }));
 
-// PUT /:id/release — Disburse the advance (admin only)
-router.put('/:id/release', requireAdmin, asyncHandler(async (req, res) => {
+// PUT /:id/release — Disburse the advance (admin only) — supports optional PDF upload
+router.put('/:id/release', requireAdmin, upload.single('disbursementDoc'), asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  requireFields(req.body, 'releaseMode', 'repaymentStart');
   const { releaseMode, repaymentStart, releaseNote } = req.body;
-  requireEnum(releaseMode, ['bank_transfer', 'cash'], 'releaseMode');
 
-  // Validate repaymentStart format YYYY-MM
+  if (!releaseMode || !repaymentStart) throw badRequest('releaseMode and repaymentStart are required');
+  requireEnum(releaseMode, ['bank_transfer', 'cash'], 'releaseMode');
   if (!/^\d{4}-\d{2}$/.test(repaymentStart)) throw badRequest('repaymentStart must be YYYY-MM format');
 
   const advance = await req.prisma.salaryAdvance.findUnique({
@@ -205,6 +215,26 @@ router.put('/:id/release', requireAdmin, asyncHandler(async (req, res) => {
 
   const disbursedAmount = advance.approvedAmount || advance.amount;
 
+  // Upload disbursement PDF to Google Drive (optional)
+  let disbursementDoc = null;
+  if (req.file) {
+    try {
+      const drive = await getDriveClient();
+      const rootFolderId = await getOrCreateRootFolder(drive);
+      const uploadResult = await uploadFile(
+        drive,
+        rootFolderId,
+        `Salary_Advance_${id}_${advance.user.name.replace(/\s+/g, '_')}_${repaymentStart}.pdf`,
+        'application/pdf',
+        req.file.buffer,
+      );
+      disbursementDoc = uploadResult.webViewLink || null;
+    } catch (driveErr) {
+      console.error('[SalaryAdvance] Drive upload failed:', driveErr.message);
+      // Non-fatal — continue without doc
+    }
+  }
+
   const updated = await req.prisma.salaryAdvance.update({
     where: { id },
     data: {
@@ -214,6 +244,7 @@ router.put('/:id/release', requireAdmin, asyncHandler(async (req, res) => {
       releaseMode,
       releaseNote: releaseNote || null,
       repaymentStart,
+      ...(disbursementDoc && { disbursementDoc }),
     },
   });
 

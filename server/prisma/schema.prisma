@@ -908,6 +908,7 @@ model SalaryAdvance {
   releasedAt       DateTime?
   releaseMode      String?                                  // bank_transfer | cash
   releaseNote      String?
+  disbursementDoc  String?                                  // Google Drive URL of disbursement PDF
   closedAt         DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

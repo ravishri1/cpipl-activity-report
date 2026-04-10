@@ -52,6 +52,7 @@ export default function SalaryAdvanceManager() {
   const [reviewNote, setReviewNote] = useState('');
   const [approvedAmount, setApprovedAmount] = useState('');
   const [releaseForm, setReleaseForm] = useState({ releaseMode: 'bank_transfer', repaymentStart: getCurrentMonth(), releaseNote: '' });
+  const [disbursementFile, setDisbursementFile] = useState(null);
 
   const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } = useFetch('/salary-advances/pending', []);
   const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch('/salary-advances/all', []);
@@ -75,18 +76,23 @@ export default function SalaryAdvanceManager() {
   const handleRelease = async () => {
     if (!releaseModal) return;
     try {
-      await execute(() => api.put(`/salary-advances/${releaseModal.id}/release`, {
-        releaseMode: releaseForm.releaseMode,
-        repaymentStart: releaseForm.repaymentStart,
-        releaseNote: releaseForm.releaseNote.trim() || null,
+      const formData = new FormData();
+      formData.append('releaseMode', releaseForm.releaseMode);
+      formData.append('repaymentStart', releaseForm.repaymentStart);
+      if (releaseForm.releaseNote.trim()) formData.append('releaseNote', releaseForm.releaseNote.trim());
+      if (disbursementFile) formData.append('disbursementDoc', disbursementFile);
+
+      await execute(() => api.put(`/salary-advances/${releaseModal.id}/release`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       }), 'Advance disbursed! Repayment schedule created.');
       setReleaseModal(null);
+      setDisbursementFile(null);
       refetch();
     } catch {}
   };
 
   const closeReview = () => { setReviewModal(null); setReviewNote(''); setApprovedAmount(''); clearMessages(); };
-  const closeRelease = () => { setReleaseModal(null); clearMessages(); };
+  const closeRelease = () => { setReleaseModal(null); setDisbursementFile(null); clearMessages(); };
 
   const displayList = tab === 'pending' ? pending : all.filter(a => {
     if (statusFilter && a.status !== statusFilter) return false;
@@ -297,6 +303,38 @@ export default function SalaryAdvanceManager() {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Disbursement Document <span className="text-slate-400 font-normal">(PDF, optional)</span>
+              </label>
+              <div className={`relative border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${disbursementFile ? 'border-violet-400 bg-violet-50' : 'border-slate-300 hover:border-violet-400 hover:bg-violet-50/50'}`}
+                onClick={() => document.getElementById('disbursement-doc-input').click()}>
+                <input
+                  id="disbursement-doc-input"
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={e => setDisbursementFile(e.target.files[0] || null)}
+                />
+                {disbursementFile ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-violet-700">
+                      <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                      <span className="font-medium truncate max-w-[200px]">{disbursementFile.name}</span>
+                      <span className="text-xs text-slate-400">({(disbursementFile.size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                    <button type="button" onClick={e => { e.stopPropagation(); setDisbursementFile(null); }}
+                      className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded">Remove</button>
+                  </div>
+                ) : (
+                  <div className="text-slate-400 text-sm">
+                    <svg className="w-8 h-8 mx-auto mb-1 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    Click to upload PDF receipt / voucher
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-700 flex gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
               This will create a repayment schedule. Deductions will auto-apply during monthly payslip generation.
@@ -364,6 +402,20 @@ function AdvanceRow({ advance, expanded, onToggle, onApprove, onReject, onReleas
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
               <p className="text-xs text-blue-400 font-medium mb-0.5">Review Note</p>
               <p className="text-sm text-blue-700">{advance.approveNote}</p>
+            </div>
+          )}
+
+          {advance.disbursementDoc && (
+            <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-violet-500 font-medium mb-0.5">Disbursement Document</p>
+                <p className="text-xs text-slate-500">PDF uploaded to Google Drive</p>
+              </div>
+              <a href={advance.disbursementDoc} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-50">
+                <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"/></svg>
+                View PDF
+              </a>
             </div>
           )}
 
