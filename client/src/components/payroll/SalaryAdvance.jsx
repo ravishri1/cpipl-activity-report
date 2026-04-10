@@ -41,7 +41,7 @@ export default function SalaryAdvance() {
   const [showForm, setShowForm] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [form, setForm] = useState({ amount: '', reason: '', repaymentMonths: '3' });
-  const { data: advances, loading, error: fetchErr, refetch } = useFetch('/api/salary-advances/my', []);
+  const { data: advances, loading, error: fetchErr, refetch } = useFetch('/salary-advances/my', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const activeAdvance = advances.find(a => ['pending', 'approved', 'released', 'repaying'].includes(a.status));
@@ -50,7 +50,7 @@ export default function SalaryAdvance() {
     e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) return;
     try {
-      await execute(() => api.post('/api/salary-advances', {
+      await execute(() => api.post('/salary-advances', {
         amount: parseFloat(form.amount),
         reason: form.reason,
         repaymentMonths: parseInt(form.repaymentMonths),
@@ -64,7 +64,7 @@ export default function SalaryAdvance() {
   const handleCancel = async (id) => {
     if (!window.confirm('Cancel this advance request?')) return;
     try {
-      await execute(() => api.delete(`/api/salary-advances/${id}`), 'Advance request cancelled.');
+      await execute(() => api.delete(`/salary-advances/${id}`), 'Advance request cancelled.');
       refetch();
     } catch {}
   };

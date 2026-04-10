@@ -53,8 +53,8 @@ export default function SalaryAdvanceManager() {
   const [approvedAmount, setApprovedAmount] = useState('');
   const [releaseForm, setReleaseForm] = useState({ releaseMode: 'bank_transfer', repaymentStart: getCurrentMonth(), releaseNote: '' });
 
-  const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } = useFetch('/api/salary-advances/pending', []);
-  const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch('/api/salary-advances/all', []);
+  const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } = useFetch('/salary-advances/pending', []);
+  const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch('/salary-advances/all', []);
   const { execute, loading: acting, error: actErr, success, clearMessages } = useApi();
 
   const refetch = useCallback(() => { refetchPending(); refetchAll(); }, [refetchPending, refetchAll]);
@@ -62,7 +62,7 @@ export default function SalaryAdvanceManager() {
   const handleReview = async () => {
     if (!reviewModal) return;
     try {
-      await execute(() => api.put(`/api/salary-advances/${reviewModal.advance.id}/review`, {
+      await execute(() => api.put(`/salary-advances/${reviewModal.advance.id}/review`, {
         status: reviewModal.action,
         approveNote: reviewNote.trim() || null,
         approvedAmount: reviewModal.action === 'approved' && approvedAmount ? parseFloat(approvedAmount) : undefined,
@@ -75,7 +75,7 @@ export default function SalaryAdvanceManager() {
   const handleRelease = async () => {
     if (!releaseModal) return;
     try {
-      await execute(() => api.put(`/api/salary-advances/${releaseModal.id}/release`, {
+      await execute(() => api.put(`/salary-advances/${releaseModal.id}/release`, {
         releaseMode: releaseForm.releaseMode,
         repaymentStart: releaseForm.repaymentStart,
         releaseNote: releaseForm.releaseNote.trim() || null,
