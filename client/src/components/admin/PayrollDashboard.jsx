@@ -779,29 +779,30 @@ const StatutoryReport = ({ month }) => {
 
 // ─── Process Payroll Wizard ──────────────────────────────────────────────────
 function ProcessPayrollWizard({ month, onClose, onDone }) {
-  const [step, setStep] = useState(1); // 1=scanning, 2=review, 3=confirm, 4=generating, 5=done
+  const [step, setStep] = useState(1); // 1=checklist, 2=scanning, 3=review, 4=confirm, 5=generating, 6=done
   const [checks, setChecks] = useState(null);
   const [scanErr, setScanErr] = useState(null);
   const [generateResult, setGenerateResult] = useState(null);
   const [genErr, setGenErr] = useState(null);
 
-  // Step 1: auto-scan on open
-  useEffect(() => {
+  // Step 2: scan (triggered manually after checklist)
+  const runScan = () => {
+    setStep(2);
     api.get(`/payroll/process-check?month=${month}`)
-      .then(r => { setChecks(r.data); setStep(2); })
-      .catch(e => { setScanErr(e.response?.data?.message || 'Scan failed'); setStep(2); });
-  }, [month]);
+      .then(r => { setChecks(r.data); setStep(3); })
+      .catch(e => { setScanErr(e.response?.data?.message || 'Scan failed'); setStep(3); });
+  };
 
   const runGenerate = async () => {
-    setStep(4);
+    setStep(5);
     try {
       const r = await api.post('/payroll/generate', { month });
       setGenerateResult(r.data);
-      setStep(5);
+      setStep(6);
       onDone?.();
     } catch (e) {
       setGenErr(e.response?.data?.message || 'Generation failed');
-      setStep(5);
+      setStep(6);
     }
   };
 
@@ -840,7 +841,7 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
               <p className="text-xs text-slate-400">{formatMonthDisplay(month)}</p>
             </div>
           </div>
-          {step !== 4 && (
+          {step !== 5 && (
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
               <X className="w-4 h-4 text-slate-400" />
             </button>
@@ -849,7 +850,7 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
 
         {/* Step Progress */}
         <div className="flex items-center gap-0 px-6 pt-4">
-          {['Scan', 'Review', 'Confirm', 'Generate', 'Done'].map((label, i) => {
+          {['Checklist', 'Scan', 'Review', 'Confirm', 'Generate', 'Done'].map((label, i) => {
             const s = i + 1;
             const active = step === s;
             const done = step > s;
@@ -862,7 +863,7 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
                   </div>
                   <span className={`text-[9px] mt-0.5 font-medium ${active ? 'text-blue-600' : done ? 'text-green-600' : 'text-slate-400'}`}>{label}</span>
                 </div>
-                {i < 4 && <div className={`flex-1 h-0.5 mb-3 mx-1 ${done ? 'bg-green-400' : 'bg-slate-200'}`} />}
+                {i < 5 && <div className={`flex-1 h-0.5 mb-3 mx-1 ${done ? 'bg-green-400' : 'bg-slate-200'}`} />}
               </React.Fragment>
             );
           })}
@@ -871,8 +872,18 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
         {/* Body */}
         <div className="px-6 py-5 min-h-[260px]">
 
-          {/* Step 1: Scanning */}
+          {/* Step 1: Checklist */}
           {step === 1 && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">Complete all pre-payroll steps before proceeding. You can skip steps that don't apply.</p>
+              <div className="max-h-64 overflow-y-auto pr-1 space-y-1.5">
+                <PayrollChecklist month={month} compact />
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Scanning */}
+          {step === 2 && (
             <div className="flex flex-col items-center justify-center h-52 gap-4">
               <div className="relative">
                 <div className="w-14 h-14 rounded-full border-4 border-blue-100 border-t-blue-600 animate-spin" />
@@ -887,8 +898,8 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
             </div>
           )}
 
-          {/* Step 2: Review */}
-          {step === 2 && (
+          {/* Step 3: Review */}
+          {step === 3 && (
             <div className="space-y-3">
               {scanErr && (
                 <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-600">{scanErr}</div>
@@ -941,8 +952,8 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
             </div>
           )}
 
-          {/* Step 3: Confirm */}
-          {step === 3 && checks && (
+          {/* Step 4: Confirm */}
+          {step === 4 && checks && (
             <div className="space-y-4">
               <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
                 <p className="text-sm font-bold text-blue-800 mb-3">Ready to generate payslips for {formatMonthDisplay(month)}</p>
@@ -986,8 +997,8 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
             </div>
           )}
 
-          {/* Step 4: Generating */}
-          {step === 4 && (
+          {/* Step 5: Generating */}
+          {step === 5 && (
             <div className="flex flex-col items-center justify-center h-52 gap-4">
               <div className="relative">
                 <div className="w-14 h-14 rounded-full border-4 border-green-100 border-t-green-600 animate-spin" />
@@ -1002,8 +1013,8 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
             </div>
           )}
 
-          {/* Step 5: Done */}
-          {step === 5 && (
+          {/* Step 6: Done */}
+          {step === 6 && (
             <div className="flex flex-col items-center justify-center h-52 gap-4">
               {genErr ? (
                 <>
@@ -1034,13 +1045,26 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
-          {step === 2 && (
+          {step === 1 && (
             <>
               <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
                 Cancel
               </button>
               <button
-                onClick={() => setStep(3)}
+                onClick={runScan}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Scan System →
+              </button>
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => setStep(4)}
                 disabled={!!scanErr && !checks}
                 className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
@@ -1048,9 +1072,9 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
               </button>
             </>
           )}
-          {step === 3 && (
+          {step === 4 && (
             <>
-              <button onClick={() => setStep(2)} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
+              <button onClick={() => setStep(3)} className="text-sm text-slate-500 hover:text-slate-700 font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors">
                 ← Back
               </button>
               <button
@@ -1062,7 +1086,7 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
               </button>
             </>
           )}
-          {step === 5 && (
+          {step === 6 && (
             <button
               onClick={onClose}
               className="w-full px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -1109,7 +1133,7 @@ const CATEGORY_COLORS = {
   statutory:  'bg-purple-100 text-purple-700',
 };
 
-function PayrollChecklist({ month }) {
+function PayrollChecklist({ month, compact = false }) {
   const storageKey = `payroll-checklist-${month}`;
 
   const [checked, setChecked] = useState(() => {
@@ -1160,6 +1184,41 @@ function PayrollChecklist({ month }) {
   const total   = CHECKLIST_ITEMS.length;
   const doneCount = done.length + skipped.length;
   const pct = Math.round((doneCount / total) * 100);
+
+  // Compact mode — used inside the Process Payroll wizard
+  if (compact) {
+    return (
+      <div className="space-y-1">
+        {CHECKLIST_ITEMS.map(item => {
+          const isDone = !!checked[item.id];
+          const isIgnored = !!ignored[item.id] && !isDone;
+          return (
+            <div key={item.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${isDone ? 'bg-green-50' : isIgnored ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50'}`}>
+              <button onClick={() => toggle(item.id)} className={`shrink-0 ${isDone ? 'text-green-500' : 'text-slate-300 hover:text-blue-500'}`}>
+                {isDone ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+              </button>
+              <span className={`text-xs flex-1 ${isDone ? 'line-through text-slate-400' : isIgnored ? 'line-through text-slate-400' : 'text-slate-700 font-medium'}`}>{item.label}</span>
+              {!isDone && !isIgnored && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                  <a href={item.link} className="text-[10px] text-blue-500 hover:underline">Go</a>
+                  <span className="text-slate-300">·</span>
+                  <button onClick={() => ignore(item.id)} className="text-[10px] text-slate-400 hover:text-slate-600">Skip</button>
+                </div>
+              )}
+              {isDone && <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />}
+              {isIgnored && <SkipForward className="w-3 h-3 text-slate-300 shrink-0" />}
+            </div>
+          );
+        })}
+        <div className="pt-2 flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs font-semibold text-slate-500">{pct}%</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1684,9 +1743,6 @@ export default function PayrollDashboard() {
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Payroll Process Checklist */}
-          <PayrollChecklist month={selectedMonth} />
-
           {overviewLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-6 h-6 animate-spin text-blue-600 mr-2" />
