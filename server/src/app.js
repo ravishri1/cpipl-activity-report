@@ -227,8 +227,8 @@ const MAX_FAILURES_BEFORE_ALERT = 3;
 const ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between alerts
 
 async function checkAgentKey(req, res) {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
-  const agentKey = req.body?.agentKey || req.headers['x-agent-key'];
+  const expectedKey = (process.env.BIOMETRIC_AGENT_KEY || '').trim();
+  const agentKey = (req.body?.agentKey || req.headers['x-agent-key'] || '').trim();
 
   // Misconfiguration: key not set in env
   if (!expectedKey) {
@@ -290,8 +290,8 @@ async function checkAgentKey(req, res) {
 
 // GET /api/agent/key-check — agent self-test endpoint
 app.get('/api/agent/key-check', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
-  const agentKey = req.headers['x-agent-key'];
+  const expectedKey = (process.env.BIOMETRIC_AGENT_KEY || '').trim();
+  const agentKey = (req.headers['x-agent-key'] || '').trim();
   if (!expectedKey) return res.status(503).json({ ok: false, error: 'BIOMETRIC_AGENT_KEY not configured on server' });
   if (agentKey === expectedKey) {
     agentAuthFailures.count = 0;
