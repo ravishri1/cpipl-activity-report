@@ -45,6 +45,7 @@ import {
   SkipForward,
 } from 'lucide-react';
 import api from '../../utils/api';
+import OffDayAllowanceManager from './OffDayAllowanceManager';
 
 const formatCurrency = (amount) => {
   if (amount == null || isNaN(amount)) return '₹0';
@@ -192,6 +193,7 @@ const PayslipDetail = ({ payslip }) => {
     { label: 'Medical Allowance', value: payslip.medicalAllowance },
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
     { label: 'Other Allowances', value: payslip.otherAllowance },
+    { label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance },
   ];
 
   const deductions = [
@@ -1737,6 +1739,19 @@ export default function PayrollDashboard() {
               Statutory
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('offday')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'offday'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Off-Day Allowance
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -2468,6 +2483,13 @@ export default function PayrollDashboard() {
 
       {/* Statutory Tab */}
       {activeTab === 'statutory' && <StatutoryReport month={selectedMonth} />}
+
+      {/* Off-Day Allowance Tab */}
+      {activeTab === 'offday' && (
+        <div className="py-2">
+          <OffDayAllowanceManager />
+        </div>
+      )}
 
     </div>
   );

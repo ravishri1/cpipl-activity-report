@@ -2,7 +2,8 @@ const express = require('express');
 const { authenticate, requireAdmin, requireActiveEmployee } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
-const { parseId } = require('../utils/validate');
+const { parseId, requireFields } = require('../utils/validate');
+const { getWeeklyOffMap } = require('../services/attendance/weeklyOffHelper');
 
 const router = express.Router();
 router.use(authenticate);
@@ -262,6 +263,20 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     return count;
   };
 
+  // Pre-fetch weekly off map for all employees
+  const allUserIds = activeSalaries.map(s => s.userId);
+  const weeklyOffMap = await getWeeklyOffMap(allUserIds, req.prisma);
+
+  // Pre-fetch off-day allowance eligible employees for this month
+  const eligibleOffDay = await req.prisma.offDayAllowanceEligibility.findMany({
+    where: {
+      eligibleFrom: { lte: `${month}-31` },
+      OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }],
+    },
+    select: { userId: true, eligibleFrom: true, eligibleTo: true },
+  });
+  const offDayEligibleUserIds = new Set(eligibleOffDay.map(e => e.userId));
+
   const results = [];
   for (const sal of activeSalaries) {
     const existing = await req.prisma.payslip.findUnique({
@@ -369,8 +384,42 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     const salaryAdvanceDeduction = advanceRepayments.reduce((sum, r) => sum + r.amount, 0);
 
+    // ── Off-Day Allowance ──────────────────────────────────────────────────
+    let offDayAllowance = 0;
+    let offDaysWorked = 0;
+    if (offDayEligibleUserIds.has(sal.userId)) {
+      const eligibility = eligibleOffDay.find(e => e.userId === sal.userId);
+      const weeklyOffs = weeklyOffMap.get(sal.userId) || [0, 6];
+
+      // Identify off days in month: weekends (per shift) + holidays
+      const offDatesInMonth = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+        const dow = new Date(year, monthNum - 1, d).getDay();
+        const isWeeklyOff = weeklyOffs.includes(dow);
+        const isHoliday = mergedHolidays.has(dateStr);
+
+        if ((isWeeklyOff || isHoliday) && dateStr >= eligibility.eligibleFrom &&
+            (!eligibility.eligibleTo || dateStr <= eligibility.eligibleTo)) {
+          offDatesInMonth.push(dateStr);
+        }
+      }
+
+      // Count off days where employee was present
+      const attMap = {};
+      for (const att of attendances) { attMap[att.date] = att.status; }
+      for (const date of offDatesInMonth) {
+        if (attMap[date] === 'present') offDaysWorked++;
+      }
+
+      // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
+      const grossBase = sal.basic + sal.hra + sal.da + sal.specialAllowance +
+        sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+      offDayAllowance = daysInMonth > 0 ? Math.round((grossBase / daysInMonth) * offDaysWorked) : 0;
+    }
+
     const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
-      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements;
+      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements + offDayAllowance;
     const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
 
@@ -386,7 +435,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         professionalTax: sal.professionalTax, tds: sal.tds,
         otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
-        reimbursements, salaryAdvanceDeduction,
+        reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
         companyName: sal.user.company?.name || null,
         designation: sal.user.designation || null,
         dateOfJoining: sal.user.dateOfJoining || null,
@@ -421,7 +470,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       }
     }
 
-    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements, salaryAdvanceDeduction });
+    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked });
   }
 
   // Add stopped employees to results
@@ -648,6 +697,15 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
     where: { month, status: 'pending' },
   });
 
+  // Off-day allowance eligible employees this month
+  const today2 = new Date().toISOString().slice(0, 10);
+  const offDayEligibleCount = await req.prisma.offDayAllowanceEligibility.count({
+    where: {
+      eligibleFrom: { lte: `${month}-31` },
+      OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }],
+    },
+  });
+
   res.json({
     month,
     summary: {
@@ -662,6 +720,7 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
       pendingReimbursements: pendingReimb,
       pendingAdvanceDisbursements: pendingDisbursements.length,
       advanceRepaymentsDue,
+      offDayEligibleCount,
     },
     checks: [
       { label: 'Salary structures set', status: withoutSalary.length === 0 ? 'ok' : 'warning', detail: withoutSalary.length > 0 ? `${withoutSalary.length} employees missing` : 'All set' },
@@ -671,6 +730,7 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
       { label: 'Pending reimbursements', status: pendingReimb === 0 ? 'ok' : 'info', detail: pendingReimb > 0 ? `${pendingReimb} expense claims will be included in next generation` : 'None' },
       { label: 'Advance disbursements pending', status: pendingDisbursements.length === 0 ? 'ok' : 'warning', detail: pendingDisbursements.length > 0 ? `${pendingDisbursements.length} approved advances not yet disbursed` : 'All disbursed' },
       { label: 'Advance repayments this month', status: advanceRepaymentsDue === 0 ? 'ok' : 'info', detail: advanceRepaymentsDue > 0 ? `${advanceRepaymentsDue} deductions will auto-apply on payslip generation` : 'None due' },
+      { label: 'Off-Day Allowance', status: offDayEligibleCount === 0 ? 'ok' : 'info', detail: offDayEligibleCount > 0 ? `${offDayEligibleCount} employees eligible — allowance will auto-calculate on generation` : 'No employees assigned' },
     ],
     employees: {
       withoutSalary: withoutSalary.map(u => ({ id: u.id, name: u.name, employeeId: u.employeeId })),
@@ -1591,6 +1651,113 @@ router.get('/statutory-export', requireAdmin, asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="statutory_${month}.xlsx"`);
   res.send(buffer);
+}));
+
+// ─── Off-Day Allowance Eligibility CRUD ──────────────────────────────────────
+
+// GET /off-day-allowance — All eligible employees
+router.get('/off-day-allowance', requireAdmin, asyncHandler(async (req, res) => {
+  const records = await req.prisma.offDayAllowanceEligibility.findMany({
+    include: {
+      user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } },
+      createdByUser: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(records);
+}));
+
+// GET /off-day-allowance/active — Only currently active eligibilities
+router.get('/off-day-allowance/active', requireAdmin, asyncHandler(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const records = await req.prisma.offDayAllowanceEligibility.findMany({
+    where: {
+      eligibleFrom: { lte: today },
+      OR: [{ eligibleTo: null }, { eligibleTo: { gte: today } }],
+    },
+    include: {
+      user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(records);
+}));
+
+// GET /off-day-allowance/user/:userId — Eligibility history for a specific employee
+router.get('/off-day-allowance/user/:userId', requireAdmin, asyncHandler(async (req, res) => {
+  const userId = parseId(req.params.userId);
+  const records = await req.prisma.offDayAllowanceEligibility.findMany({
+    where: { userId },
+    orderBy: { eligibleFrom: 'desc' },
+  });
+  res.json(records);
+}));
+
+// POST /off-day-allowance — Assign eligibility
+router.post('/off-day-allowance', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'eligibleFrom');
+  const { userId, eligibleFrom, eligibleTo, notes } = req.body;
+  const uid = parseId(userId);
+
+  // Check user exists
+  const user = await req.prisma.user.findUnique({ where: { id: uid }, select: { id: true, name: true } });
+  if (!user) throw notFound('Employee');
+
+  // Check no overlapping active eligibility
+  const existing = await req.prisma.offDayAllowanceEligibility.findFirst({
+    where: { userId: uid, OR: [{ eligibleTo: null }, { eligibleTo: { gte: eligibleFrom } }] },
+  });
+  if (existing) throw badRequest('This employee already has an active off-day allowance eligibility. Stop the existing one first.');
+
+  const record = await req.prisma.offDayAllowanceEligibility.create({
+    data: { userId: uid, eligibleFrom, eligibleTo: eligibleTo || null, notes: notes || null, createdBy: req.user.id },
+    include: { user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } } },
+  });
+  res.status(201).json(record);
+}));
+
+// PUT /off-day-allowance/:id — Update eligibility dates/notes
+router.put('/off-day-allowance/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const { eligibleFrom, eligibleTo, notes } = req.body;
+  const record = await req.prisma.offDayAllowanceEligibility.findUnique({ where: { id } });
+  if (!record) throw notFound('Off-Day Allowance Eligibility');
+
+  const updated = await req.prisma.offDayAllowanceEligibility.update({
+    where: { id },
+    data: {
+      ...(eligibleFrom && { eligibleFrom }),
+      eligibleTo: eligibleTo !== undefined ? (eligibleTo || null) : record.eligibleTo,
+      ...(notes !== undefined && { notes: notes || null }),
+    },
+    include: { user: { select: { id: true, name: true, employeeId: true, department: true, designation: true } } },
+  });
+  res.json(updated);
+}));
+
+// PUT /off-day-allowance/:id/stop — Stop eligibility today
+router.put('/off-day-allowance/:id/stop', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const today = new Date().toISOString().slice(0, 10);
+  const record = await req.prisma.offDayAllowanceEligibility.findUnique({ where: { id } });
+  if (!record) throw notFound('Off-Day Allowance Eligibility');
+  if (record.eligibleTo) throw badRequest('This eligibility is already stopped.');
+
+  const updated = await req.prisma.offDayAllowanceEligibility.update({
+    where: { id },
+    data: { eligibleTo: today },
+    include: { user: { select: { id: true, name: true, employeeId: true } } },
+  });
+  res.json(updated);
+}));
+
+// DELETE /off-day-allowance/:id — Remove completely
+router.delete('/off-day-allowance/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const record = await req.prisma.offDayAllowanceEligibility.findUnique({ where: { id } });
+  if (!record) throw notFound('Off-Day Allowance Eligibility');
+  await req.prisma.offDayAllowanceEligibility.delete({ where: { id } });
+  res.json({ message: 'Off-day allowance eligibility removed.' });
 }));
 
 module.exports = router;

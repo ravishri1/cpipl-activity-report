@@ -336,6 +336,7 @@ function PayslipDetail({ payslip, onBack }) {
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
     { label: 'Other Allowances', value: payslip.otherAllowance },
     { label: 'Reimbursements', value: payslip.reimbursements },
+    { label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance },
   ].filter((item) => item.value && item.value > 0);
 
   const deductions = [

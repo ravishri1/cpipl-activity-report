@@ -244,6 +244,8 @@ model User {
   skillsAdded               EmployeeSkill[]      @relation("EmployeeSkillAdder")
   pulseResponses            PulseResponse[]      @relation("PulseResponses")
   payrollLocks              PayrollMonthLock[]   @relation("PayrollLocker")
+  offDayAllowances          OffDayAllowanceEligibility[] @relation("OffDayAllowanceUser")
+  offDayAllowancesCreated   OffDayAllowanceEligibility[] @relation("OffDayAllowanceCreator")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -868,6 +870,10 @@ model Payslip {
 
   // Salary Advance repayment deduction
   salaryAdvanceDeduction   Float    @default(0)           // advance repayment deducted this month
+
+  // Off-Day Allowance (weekend/holiday work)
+  offDayAllowance          Float    @default(0)           // extra pay for working on off days/holidays
+  offDaysWorked            Int      @default(0)           // number of off/holiday days worked
 
   // Attendance
   workingDays          Int      @default(0)
@@ -3108,6 +3114,25 @@ model PulseResponse {
   @@index([week])
 }
 
+
+// ── Off-Day Allowance Eligibility ────────────────────────────────────────────
+
+model OffDayAllowanceEligibility {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  eligibleFrom  String                                   // "YYYY-MM-DD" — start date of eligibility
+  eligibleTo    String?                                  // null = currently active; set to stop
+  notes         String?
+  createdBy     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation("OffDayAllowanceUser",    fields: [userId],    references: [id])
+  createdByUser User     @relation("OffDayAllowanceCreator", fields: [createdBy], references: [id])
+
+  @@index([userId])
+  @@index([eligibleFrom])
+}
 
 // ── Payroll Month Lock ────────────────────────────────────────────────────────
 
