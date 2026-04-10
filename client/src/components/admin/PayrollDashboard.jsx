@@ -1506,11 +1506,11 @@ export default function PayrollDashboard() {
         month: selectedMonth,
       });
       showToast(
-        response.data?.message ||
-          `All payslips published for ${formatMonthDisplay(selectedMonth)}`,
+        `All payslips published for ${formatMonthDisplay(selectedMonth)}. 🔒 Month is now locked — attendance, leaves & expenses for this month cannot be deleted.`,
         'success'
       );
       fetchPayslips();
+      fetchOverview();
     } catch (err) {
       showToast(
         err.response?.data?.message || 'Failed to publish payslips',

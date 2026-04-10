@@ -557,7 +557,7 @@ router.put('/payslip/:id/publish', requireActiveEmployee, requireAdmin, asyncHan
   res.json(payslip);
 }));
 
-// POST /payslips/publish-all — Publish all payslips for a month (admin)
+// POST /payslips/publish-all — Publish all payslips + auto-lock month
 router.post('/payslips/publish-all', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.body;
   if (!month) throw badRequest('Month is required');
@@ -565,7 +565,34 @@ router.post('/payslips/publish-all', requireActiveEmployee, requireAdmin, asyncH
     where: { month, status: 'generated' },
     data: { status: 'published', publishedAt: new Date() },
   });
-  res.json({ message: `Published ${result.count} payslips for ${month}`, count: result.count });
+  // Auto-lock the month after publishing all payslips
+  await req.prisma.payrollMonthLock.upsert({
+    where: { month },
+    create: { month, lockedBy: req.user.id },
+    update: { lockedAt: new Date(), lockedBy: req.user.id },
+  });
+  res.json({ message: `Published ${result.count} payslips for ${month} and month locked.`, count: result.count, locked: true });
+}));
+
+// GET /month-locks — List all locked months (admin)
+router.get('/month-locks', requireAdmin, asyncHandler(async (req, res) => {
+  const locks = await req.prisma.payrollMonthLock.findMany({
+    orderBy: { month: 'desc' },
+    include: { locker: { select: { name: true, employeeId: true } } },
+  });
+  res.json(locks);
+}));
+
+// GET /month-locks/:month — Check if a specific month is locked
+router.get('/month-locks/:month', asyncHandler(async (req, res) => {
+  const lock = await req.prisma.payrollMonthLock.findUnique({ where: { month: req.params.month } });
+  res.json({ locked: !!lock, lock: lock || null });
+}));
+
+// DELETE /month-locks/:month — Unlock a month (admin only — emergency use)
+router.delete('/month-locks/:month', requireAdmin, asyncHandler(async (req, res) => {
+  await req.prisma.payrollMonthLock.deleteMany({ where: { month: req.params.month } });
+  res.json({ message: `Month ${req.params.month} unlocked.` });
 }));
 
 // GET /process-check?month= — Pre-payroll checklist (admin)

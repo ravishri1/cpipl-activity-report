@@ -25,6 +25,7 @@ const {
   executeFYRollover,
 } = require('../services/leave/leaveService');
 const { notifyUsers } = require('../utils/notify');
+const { isDateRangeLocked } = require('../utils/payrollLock');
 
 const router = express.Router();
 router.use(authenticate);
@@ -107,6 +108,12 @@ router.post('/apply', asyncHandler(async (req, res) => {
 // DELETE /api/leave/:id — Cancel own pending/approved request
 router.delete('/:id', asyncHandler(async (req, res) => {
   const requestId = parseId(req.params.id);
+  // Block if leave dates fall in a payroll-locked month
+  const leave = await req.prisma.leaveRequest.findUnique({ where: { id: requestId }, select: { startDate: true, endDate: true } });
+  if (leave) {
+    const lockedMonth = await isDateRangeLocked(req.prisma, leave.startDate, leave.endDate);
+    if (lockedMonth) throw badRequest(`Cannot cancel leave — payroll for ${lockedMonth} is locked and published.`);
+  }
   const result = await cancelLeave(requestId, req.user.id, req.prisma);
   res.json(result);
 }));
@@ -188,6 +195,12 @@ router.put('/:id/review', requireAdmin, asyncHandler(async (req, res) => {
   const requestId = parseId(req.params.id);
   const { status, reviewNote } = req.body;
   if (!status) throw badRequest('Status is required (approved or rejected).');
+  // Block review changes if leave falls in a locked payroll month
+  const leave = await req.prisma.leaveRequest.findUnique({ where: { id: requestId }, select: { startDate: true, endDate: true } });
+  if (leave) {
+    const lockedMonth = await isDateRangeLocked(req.prisma, leave.startDate, leave.endDate);
+    if (lockedMonth) throw badRequest(`Cannot modify leave — payroll for ${lockedMonth} is locked and published.`);
+  }
   const updated = await reviewLeave(requestId, req.user.id, status, reviewNote, req.prisma);
 
   // Notify the requestor

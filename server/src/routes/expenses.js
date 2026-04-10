@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
 const { notifyUsers } = require('../utils/notify');
+const { isMonthLocked } = require('../utils/payrollLock');
 
 const router = express.Router();
 router.use(authenticate);
@@ -297,6 +298,12 @@ router.put('/:id/paid', requireAdmin, asyncHandler(async (req, res) => {
 // DELETE /:id — Delete expense (admin)
 router.delete('/:id(\\d+)', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  // Block delete if expense was settled in a locked payroll month
+  const expense = await req.prisma.expenseClaim.findUnique({ where: { id }, select: { settlementMonth: true } });
+  if (expense?.settlementMonth) {
+    const locked = await isMonthLocked(req.prisma, expense.settlementMonth);
+    if (locked) throw badRequest(`Cannot delete expense — it was settled in payroll ${expense.settlementMonth} which is locked.`);
+  }
   await req.prisma.expenseApprovalLog.deleteMany({ where: { expenseId: id } });
   await req.prisma.expenseClaim.delete({ where: { id } });
   res.json({ message: 'Expense deleted' });

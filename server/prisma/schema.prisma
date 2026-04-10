@@ -243,6 +243,7 @@ model User {
   skills                    EmployeeSkill[]      @relation("EmployeeSkillUser")
   skillsAdded               EmployeeSkill[]      @relation("EmployeeSkillAdder")
   pulseResponses            PulseResponse[]      @relation("PulseResponses")
+  payrollLocks              PayrollMonthLock[]   @relation("PayrollLocker")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -3107,3 +3108,16 @@ model PulseResponse {
   @@index([week])
 }
 
+
+// ── Payroll Month Lock ────────────────────────────────────────────────────────
+
+model PayrollMonthLock {
+  id        Int      @id @default(autoincrement())
+  month     String   @unique                    // "YYYY-MM"
+  lockedAt  DateTime @default(now())
+  lockedBy  Int
+
+  locker    User     @relation("PayrollLocker", fields: [lockedBy], references: [id])
+
+  @@index([month])
+}
