@@ -95,7 +95,14 @@ export default function SalaryAdvance() {
         )}
       </div>
 
-      {fetchErr && <AlertMessage type="error" message={fetchErr} />}
+      {fetchErr && (
+        <div className="flex items-center gap-3">
+          <AlertMessage type="error" message={fetchErr} />
+          <button onClick={refetch} className="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 flex items-center gap-1">
+            <RefreshCw className="w-3 h-3" /> Retry
+          </button>
+        </div>
+      )}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
 
