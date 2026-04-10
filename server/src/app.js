@@ -219,12 +219,89 @@ app.use((req, res, next) => {
 // ═══ Agent endpoints (unauthenticated — agent key only) ═══
 // These are mounted BEFORE all other routes to ensure no auth middleware can intercept them.
 // The local biometric sync agent on cpserver uses these to communicate with the cloud app.
-app.get('/api/agent/devices', asyncHandler(async (req, res) => {
-  const agentKey = req.headers['x-agent-key'];
+
+// Track consecutive agent auth failures (in-memory, resets on success or server restart)
+const agentAuthFailures = { count: 0, lastAlertAt: null };
+const ALERT_EMAIL = 'jyoti.naik@colorpapers.in';
+const MAX_FAILURES_BEFORE_ALERT = 3;
+const ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between alerts
+
+async function checkAgentKey(req, res) {
   const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
-  if (agentKey !== expectedKey) {
-    return res.status(401).json({ error: 'Invalid agent key' });
+  const agentKey = req.body?.agentKey || req.headers['x-agent-key'];
+
+  // Misconfiguration: key not set in env
+  if (!expectedKey) {
+    console.error('[BIOMETRIC] BIOMETRIC_AGENT_KEY not set in environment! Sync will always fail.');
+    res.status(503).json({ error: 'Server misconfiguration: BIOMETRIC_AGENT_KEY not set. Contact admin.' });
+    return false;
   }
+
+  if (agentKey === expectedKey) {
+    agentAuthFailures.count = 0; // reset on success
+    return true;
+  }
+
+  // Auth failed — track and alert
+  agentAuthFailures.count += 1;
+  const received = agentKey ? `${String(agentKey).slice(0, 4)}****` : '(none)';
+  console.error(`[BIOMETRIC] Auth failure #${agentAuthFailures.count} — received key: ${received}`);
+
+  // Send email alert after threshold, with cooldown
+  if (agentAuthFailures.count >= MAX_FAILURES_BEFORE_ALERT) {
+    const now = Date.now();
+    if (!agentAuthFailures.lastAlertAt || (now - agentAuthFailures.lastAlertAt) > ALERT_COOLDOWN_MS) {
+      agentAuthFailures.lastAlertAt = now;
+      try {
+        const { sendEmail } = require('./services/notifications/emailService');
+        await sendEmail(
+          ALERT_EMAIL,
+          `⚠️ Biometric Sync Failing — Invalid Agent Key (${agentAuthFailures.count} failures)`,
+          `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <div style="background:#dc2626;color:white;padding:20px;border-radius:8px 8px 0 0;">
+              <h2 style="margin:0">⚠️ Biometric Sync Authentication Failure</h2>
+            </div>
+            <div style="background:#fff;padding:20px;border:1px solid #e5e7eb;border-radius:0 0 8px 8px;">
+              <p>The biometric sync agent on <strong>CPSERVER</strong> is failing to authenticate.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <tr><td style="padding:8px;background:#f9fafb;font-weight:bold;width:40%">Failures so far</td><td style="padding:8px">${agentAuthFailures.count}</td></tr>
+                <tr><td style="padding:8px;background:#f9fafb;font-weight:bold">Key received</td><td style="padding:8px;font-family:monospace">${received}</td></tr>
+                <tr><td style="padding:8px;background:#f9fafb;font-weight:bold">Time</td><td style="padding:8px">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</td></tr>
+              </table>
+              <p style="color:#6b7280;font-size:13px;margin-top:16px"><strong>Action needed:</strong> Check that <code>BIOMETRIC_AGENT_KEY</code> in <code>esslSqlSync.js</code> on CPSERVER matches the value set in Vercel environment variables.</p>
+              <p style="color:#6b7280;font-size:13px">Correct key starts with: <strong>${String(expectedKey).slice(0, 6)}****</strong></p>
+            </div>
+          </div>`
+        );
+        console.log(`[BIOMETRIC] Alert email sent to ${ALERT_EMAIL}`);
+      } catch (mailErr) {
+        console.error('[BIOMETRIC] Failed to send alert email:', mailErr.message);
+      }
+    }
+  }
+
+  res.status(401).json({
+    error: 'Invalid agent key',
+    hint: `Key received: ${received} — ensure BIOMETRIC_AGENT_KEY in esslSqlSync.js matches Vercel env var (starts with: ${String(expectedKey).slice(0, 6)}****)`,
+    failures: agentAuthFailures.count,
+  });
+  return false;
+}
+
+// GET /api/agent/key-check — agent self-test endpoint
+app.get('/api/agent/key-check', asyncHandler(async (req, res) => {
+  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
+  const agentKey = req.headers['x-agent-key'];
+  if (!expectedKey) return res.status(503).json({ ok: false, error: 'BIOMETRIC_AGENT_KEY not configured on server' });
+  if (agentKey === expectedKey) {
+    agentAuthFailures.count = 0;
+    return res.json({ ok: true, message: 'Agent key is valid ✓' });
+  }
+  return res.status(401).json({ ok: false, error: 'Key mismatch', hint: `Expected key starts with: ${String(expectedKey).slice(0, 6)}****` });
+}));
+
+app.get('/api/agent/devices', asyncHandler(async (req, res) => {
+  if (!await checkAgentKey(req, res)) return;
   const devices = await req.prisma.biometricDevice.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
@@ -233,11 +310,7 @@ app.get('/api/agent/devices', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/agent/sync', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
-  const agentKey = req.body.agentKey || req.headers['x-agent-key'];
-  if (agentKey !== expectedKey) {
-    return res.status(401).json({ error: 'Invalid agent key' });
-  }
+  if (!await checkAgentKey(req, res)) return;
 
   const { devices: deviceData } = req.body;
   if (!Array.isArray(deviceData) || deviceData.length === 0) {
@@ -282,11 +355,7 @@ app.post('/api/agent/sync', asyncHandler(async (req, res) => {
 }));
 
 app.post('/api/agent/sync-single', asyncHandler(async (req, res) => {
-  const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
-  const agentKey = req.body.agentKey || req.headers['x-agent-key'];
-  if (agentKey !== expectedKey) {
-    return res.status(401).json({ error: 'Invalid agent key' });
-  }
+  if (!await checkAgentKey(req, res)) return;
 
   const { deviceSerial, punches } = req.body;
   if (!deviceSerial) return res.status(400).json({ error: 'deviceSerial required' });

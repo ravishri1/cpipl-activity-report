@@ -99,14 +99,27 @@ router.delete('/devices/:id', authenticate, requireAdmin, asyncHandler(async (re
 // POST /api/biometric/sync — sync agent pushes punches from eSSL
 // Body: { agentKey: "...", deviceSerial: "CUB7240300491", punches: [...] }
 router.post('/sync', asyncHandler(async (req, res) => {
-  // Simple shared-secret auth for the local agent
   const expectedKey = process.env.BIOMETRIC_AGENT_KEY;
   const { agentKey: bodyKey, deviceSerial, punches } = req.body || {};
-  // Also accept key from x-agent-key header as fallback
   const agentKey = bodyKey || req.headers['x-agent-key'];
 
+  if (!expectedKey) {
+    return res.status(503).json({ error: 'Server misconfiguration: BIOMETRIC_AGENT_KEY not set' });
+  }
   if (agentKey !== expectedKey) {
-    return res.status(401).json({ error: 'Invalid agent key' });
+    const received = agentKey ? `${String(agentKey).slice(0, 4)}****` : '(none)';
+    console.error(`[BIOMETRIC /sync] Auth failure — received: ${received}`);
+    // Fire-and-forget alert email
+    try {
+      const { sendEmail } = require('../services/notifications/emailService');
+      sendEmail('jyoti.naik@colorpapers.in',
+        '⚠️ Biometric Sync Auth Failure',
+        `<p>Biometric sync from CPSERVER failed authentication at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.</p>
+         <p>Key received: <code>${received}</code></p>
+         <p>Fix: ensure <code>BIOMETRIC_AGENT_KEY</code> in esslSqlSync.js matches Vercel env (starts with <strong>${String(expectedKey).slice(0,6)}****</strong>).</p>`
+      ).catch(() => {});
+    } catch {}
+    return res.status(401).json({ error: 'Invalid agent key', hint: `Expected key starts with: ${String(expectedKey).slice(0, 6)}****` });
   }
   if (!deviceSerial) throw badRequest('deviceSerial required');
   if (!Array.isArray(punches) || punches.length === 0) {
