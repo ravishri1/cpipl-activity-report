@@ -842,6 +842,11 @@ model Payslip {
 
   // Metadata snapshot
   companyName          String?                         // company name at time of generation
+  designation          String?                         // designation at time of generation
+  dateOfJoining        String?                         // joining date at time of generation
+
+  // Reimbursements (settled via salary)
+  reimbursements       Float    @default(0)           // expense claims settled in this payslip
 
   // Attendance
   workingDays          Int      @default(0)
@@ -944,12 +949,14 @@ model ExpenseClaim {
   description   String?
   receiptUrl    String?                                // base64 or URL
   date          String                                 // "YYYY-MM-DD"
-  status        String    @default("pending")          // pending, approved, rejected, paid
+  status        String    @default("pending")          // pending, approved, rejected, paid, settled_in_salary
   reviewedBy    Int?
   reviewedAt    DateTime?
   reviewNote    String?
   paidOn        String?                                // "YYYY-MM-DD"
   fundRequestId Int?                                   // Optional link to fund advance
+  settleOnSalary  Boolean   @default(false)            // if true, reimburse via salary
+  settlementMonth String?                              // "YYYY-MM" — month in which settled
   items         String?                                // JSON array: [{title,category,amount,date,description}]
   attachments   String?                                // JSON array: [{name,url,driveFileId}]
   createdAt     DateTime  @default(now())

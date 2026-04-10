@@ -787,6 +787,9 @@ export default function PayrollDashboard() {
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [lockSaving, setLockSaving] = useState(null);
+  const [processCheck, setProcessCheck] = useState(null);
+  const [processCheckLoading, setProcessCheckLoading] = useState(false);
+  const [neftExporting, setNeftExporting] = useState(false);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -840,6 +843,32 @@ export default function PayrollDashboard() {
   }, [fetchPayslips]);
 
   useEffect(() => { if (activeTab === 'overview') fetchOverview(); }, [activeTab, fetchOverview]);
+
+  const handleProcessCheck = async () => {
+    setProcessCheckLoading(true);
+    try {
+      const res = await api.get(`/payroll/process-check?month=${selectedMonth}`);
+      setProcessCheck(res.data);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to run process check', 'error');
+    } finally {
+      setProcessCheckLoading(false);
+    }
+  };
+
+  const handleNeftExport = async () => {
+    setNeftExporting(true);
+    try {
+      const res = await api.get(`/payroll/neft-export?month=${selectedMonth}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a'); a.href = url; a.download = `neft-${selectedMonth}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast('NEFT export failed — ensure payslips are published first', 'error');
+    } finally {
+      setNeftExporting(false);
+    }
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -1518,6 +1547,22 @@ export default function PayrollDashboard() {
                 </button>
               )}
               <button
+                onClick={handleProcessCheck}
+                disabled={processCheckLoading}
+                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                {processCheckLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                Pre-Check
+              </button>
+              <button
+                onClick={handleNeftExport}
+                disabled={neftExporting}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                {neftExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+                NEFT Export
+              </button>
+              <button
                 onClick={handleGenerate}
                 disabled={generating}
                 className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
@@ -1531,6 +1576,38 @@ export default function PayrollDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Process Check Panel */}
+          {processCheck && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-500" />
+                  Pre-Payroll Checklist — {processCheck.month}
+                </h3>
+                <button onClick={() => setProcessCheck(null)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {processCheck.checks?.map((check) => (
+                  <div key={check.label} className={`flex items-start gap-3 p-3 rounded-lg border ${check.status === 'ok' ? 'bg-emerald-50 border-emerald-200' : check.status === 'warning' ? 'bg-amber-50 border-amber-200' : check.status === 'pending' ? 'bg-slate-50 border-slate-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <span className="text-lg mt-0.5">{check.status === 'ok' ? '✅' : check.status === 'warning' ? '⚠️' : check.status === 'pending' ? '⏳' : 'ℹ️'}</span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{check.label}</p>
+                      <p className="text-xs text-slate-500">{check.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {processCheck.employees?.withoutSalary?.length > 0 && (
+                <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Missing salary structures:</p>
+                  <p className="text-xs text-red-600">{processCheck.employees.withoutSalary.map(u => `${u.name} (${u.employeeId})`).join(', ')}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Payslip Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

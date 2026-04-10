@@ -259,6 +259,39 @@ export default function MyLeave() {
         )}
       </div>
 
+      {/* Combined PL + COF balance summary */}
+      {(() => {
+        const plBal  = balances.find(b => b.leaveType.code === 'PL');
+        const cofBal = balances.find(b => b.leaveType.code === 'COF');
+        if (!plBal && !cofBal) return null;
+        const plAvail  = plBal?.available  || 0;
+        const cofAvail = cofBal?.available || 0;
+        const combined = plAvail + cofAvail;
+        const maxCF = 6;
+        const willCarry = Math.min(combined, maxCF);
+        const willLapse = Math.max(combined - maxCF, 0);
+        return (
+          <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+            <Info className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-emerald-800 flex-1">
+              <p className="font-semibold mb-1">Combined Leave Balance (PL + Comp Off)</p>
+              <div className="flex flex-wrap gap-4">
+                <span>PL: <strong>{plAvail}</strong></span>
+                <span>Comp Off: <strong>{cofAvail}</strong></span>
+                <span className="font-bold text-emerald-700">Total usable: <strong>{combined}</strong></span>
+              </div>
+              <p className="mt-1 text-emerald-700">
+                At year-end, up to <strong>{maxCF}</strong> leaves carry forward (PL + COF combined).
+                {willLapse > 0
+                  ? <span className="text-orange-600"> {willLapse} leave(s) will lapse at March 31.</span>
+                  : <span> All <strong>{combined}</strong> leave(s) will carry forward.</span>
+                }
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Accrual info banner */}
       {balances.some(b => b.leaveType.accrualType === 'monthly') && (
         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">

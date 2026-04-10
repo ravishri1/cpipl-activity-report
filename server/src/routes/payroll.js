@@ -232,7 +232,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true, branchId: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -280,22 +280,27 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       where: { userId: sal.userId, date: { startsWith: month } },
     });
 
-    // Fetch approved leaves for this month (prevent them from becoming LOP)
+    // Fetch approved leaves for this month — separate LOP (deduction) from paid leaves
     const approvedLeaves = await req.prisma.leaveRequest.findMany({
       where: {
         userId: sal.userId, status: 'approved',
         startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
         endDate: { gte: `${month}-01` },
       },
-      select: { startDate: true, endDate: true },
+      select: { startDate: true, endDate: true, leaveType: { select: { code: true } } },
     });
-    const leaveDatesSet = new Set();
+    const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
+    const lopDatesSet = new Set();    // LOP leave days (deducted like absent)
     for (const lr of approvedLeaves) {
+      const isLop = lr.leaveType?.code === 'LOP';
       const cur = new Date(lr.startDate + 'T00:00:00');
       const end = new Date(lr.endDate + 'T00:00:00');
       while (cur <= end) {
         const ds = cur.toISOString().slice(0, 10);
-        if (ds.startsWith(month)) leaveDatesSet.add(ds);
+        if (ds.startsWith(month)) {
+          if (isLop) lopDatesSet.add(ds);
+          else leaveDatesSet.add(ds);
+        }
         cur.setDate(cur.getDate() + 1);
       }
     }
@@ -309,7 +314,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     let presentDays = 0, lopDays = 0;
     const today = new Date().toISOString().slice(0, 10);
 
-    if (attendances.length === 0 && leaveDatesSet.size === 0 && !separation) {
+    if (attendances.length === 0 && leaveDatesSet.size === 0 && lopDatesSet.size === 0 && !separation) {
       // No data at all → assume full attendance (fallback for missing biometric)
       presentDays = workingDays;
       lopDays = 0;
@@ -328,8 +333,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           continue;
         }
         const status = attMap[dateStr];
-        if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
-          presentDays += 1; // Approved leave = paid day
+        if (lopDatesSet.has(dateStr)) {
+          lopDays += 1; // LOP leave = deduction (same as absent)
+        } else if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
+          presentDays += 1; // Approved paid leave = paid day
         } else if (status === 'present') {
           presentDays += 1;
         } else if (status === 'half_day') {
@@ -348,8 +355,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
     const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
+
+    // Fetch approved expenses flagged for salary settlement (not yet settled)
+    const pendingReimbursements = await req.prisma.expenseClaim.findMany({
+      where: { userId: sal.userId, status: 'approved', settleOnSalary: true, settlementMonth: null },
+      select: { id: true, amount: true, title: true },
+    });
+    const reimbursements = pendingReimbursements.reduce((sum, e) => sum + e.amount, 0);
+
     const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
-      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements;
     const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction);
 
@@ -365,11 +380,23 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         professionalTax: sal.professionalTax, tds: sal.tds,
         otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
+        reimbursements,
         companyName: sal.user.company?.name || null,
+        designation: sal.user.designation || null,
+        dateOfJoining: sal.user.dateOfJoining || null,
         status: 'generated', generatedAt: new Date(),
       },
     });
-    results.push({ userId: sal.userId, status: 'generated', netPay });
+
+    // Mark those expenses as settled in this month
+    if (pendingReimbursements.length > 0) {
+      await req.prisma.expenseClaim.updateMany({
+        where: { id: { in: pendingReimbursements.map(e => e.id) } },
+        data: { settlementMonth: month, status: 'settled_in_salary' },
+      });
+    }
+
+    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements });
   }
 
   // Add stopped employees to results
@@ -389,7 +416,7 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
     include: { 
       user: { 
         select: { 
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true, companyId: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true, companyId: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -426,7 +453,7 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
     include: {
       user: {
         select: {
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -459,7 +486,7 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
     include: {
       user: {
         select: {
-          id: true, name: true, email: true, employeeId: true, designation: true, department: true,
+          id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true,
           bankName: true, bankAccountNumber: true, bankIfscCode: true,
           companyRegistrationId: true,
         }
@@ -516,6 +543,108 @@ router.post('/payslips/publish-all', requireActiveEmployee, requireAdmin, asyncH
   res.json({ message: `Published ${result.count} payslips for ${month}`, count: result.count });
 }));
 
+// GET /process-check?month= — Pre-payroll checklist (admin)
+router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const { month } = req.query;
+  if (!month) throw badRequest('Month is required');
+
+  const activeEmployees = await req.prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, employeeId: true, salaryStructure: { select: { id: true, stopSalaryProcessing: true } } },
+  });
+
+  const withSalary = activeEmployees.filter(u => u.salaryStructure && !u.salaryStructure.stopSalaryProcessing);
+  const withoutSalary = activeEmployees.filter(u => !u.salaryStructure);
+  const stopped = activeEmployees.filter(u => u.salaryStructure?.stopSalaryProcessing);
+
+  // Attendance coverage
+  const attendanceCounts = await req.prisma.attendance.groupBy({
+    by: ['userId'],
+    where: { date: { startsWith: month } },
+    _count: { id: true },
+  });
+  const attendanceUserIds = new Set(attendanceCounts.map(a => a.userId));
+  const withAttendance = withSalary.filter(u => attendanceUserIds.has(u.id)).length;
+
+  // Pending leave approvals
+  const daysInMonth = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).getDate();
+  const pendingLeaves = await req.prisma.leaveRequest.count({
+    where: {
+      status: 'pending',
+      startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
+      endDate: { gte: `${month}-01` },
+    },
+  });
+
+  // Existing payslips for month
+  const existingPayslips = await req.prisma.payslip.count({ where: { month } });
+  const publishedPayslips = await req.prisma.payslip.count({ where: { month, status: 'published' } });
+
+  // Pending reimbursements
+  const pendingReimb = await req.prisma.expenseClaim.count({
+    where: { status: 'approved', settleOnSalary: true, settlementMonth: null },
+  });
+
+  res.json({
+    month,
+    summary: {
+      activeEmployees: activeEmployees.length,
+      eligibleForPayroll: withSalary.length,
+      withoutSalaryStructure: withoutSalary.length,
+      salaryProcessingStopped: stopped.length,
+      attendanceCoverage: withSalary.length > 0 ? `${withAttendance}/${withSalary.length}` : '0/0',
+      pendingLeaveApprovals: pendingLeaves,
+      existingPayslips,
+      publishedPayslips,
+      pendingReimbursements: pendingReimb,
+    },
+    checks: [
+      { label: 'Salary structures set', status: withoutSalary.length === 0 ? 'ok' : 'warning', detail: withoutSalary.length > 0 ? `${withoutSalary.length} employees missing` : 'All set' },
+      { label: 'Attendance data', status: withAttendance >= withSalary.length * 0.8 ? 'ok' : 'warning', detail: `${withAttendance}/${withSalary.length} employees have attendance records` },
+      { label: 'Pending leave approvals', status: pendingLeaves === 0 ? 'ok' : 'warning', detail: pendingLeaves > 0 ? `${pendingLeaves} leave requests still pending` : 'None pending' },
+      { label: 'Payslips generated', status: existingPayslips > 0 ? 'ok' : 'pending', detail: existingPayslips > 0 ? `${existingPayslips} generated, ${publishedPayslips} published` : 'Not generated yet' },
+      { label: 'Pending reimbursements', status: pendingReimb === 0 ? 'ok' : 'info', detail: pendingReimb > 0 ? `${pendingReimb} expense claims will be included in next generation` : 'None' },
+    ],
+    employees: {
+      withoutSalary: withoutSalary.map(u => ({ id: u.id, name: u.name, employeeId: u.employeeId })),
+      stopped: stopped.map(u => ({ id: u.id, name: u.name, employeeId: u.employeeId })),
+    },
+  });
+}));
+
+// GET /neft-export?month= — Bank transfer CSV export (admin)
+router.get('/neft-export', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const { month } = req.query;
+  if (!month) throw badRequest('Month is required');
+
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month, status: 'published' },
+    include: {
+      user: { select: { name: true, employeeId: true, department: true, bankName: true, bankAccountNumber: true, bankIfscCode: true } },
+    },
+    orderBy: { user: { name: 'asc' } },
+  });
+
+  const rows = [['Sr No', 'Employee ID', 'Employee Name', 'Department', 'Bank Name', 'Account Number', 'IFSC Code', 'Net Pay (INR)']];
+  payslips.forEach((p, i) => {
+    rows.push([
+      i + 1,
+      p.user?.employeeId || '',
+      p.user?.name || '',
+      p.user?.department || '',
+      p.user?.bankName || '',
+      p.user?.bankAccountNumber || '',
+      p.user?.bankIfscCode || '',
+      p.netPay,
+    ]);
+  });
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="neft-${month}.csv"`);
+  res.send(csv);
+}));
+
 // GET /pay-register?month= — Pay register summary (admin)
 router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { month } = req.query;
@@ -525,8 +654,8 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
     where: { month },
     include: { 
       user: { 
-        select: { 
-          name: true, employeeId: true, department: true, designation: true,
+        select: {
+          name: true, employeeId: true, department: true, designation: true, dateOfJoining: true,
           shiftAssignments: {
             where: {
               status: 'active',
@@ -1147,7 +1276,7 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
   const XLSX = require('xlsx');
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, email: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true, email: true } } },
     orderBy: { user: { name: 'asc' } },
   });
 
@@ -1157,7 +1286,8 @@ router.get('/export', requireAdmin, asyncHandler(async (req, res) => {
     'Emp ID':         p.user?.employeeId || '',
     'Name':           p.user?.name || '',
     'Department':     p.user?.department || '',
-    'Designation':    p.user?.designation || '',
+    'Designation':    p.user?.designation || p.designation || '',
+    'Date of Joining': p.user?.dateOfJoining || p.dateOfJoining || '',
     'Basic':          p.basic || 0,
     'HRA':            p.hra || 0,
     'DA':             p.da || 0,
@@ -1275,7 +1405,7 @@ router.get('/statutory', requireAdmin, asyncHandler(async (req, res) => {
 
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true } } },
     orderBy: { user: { name: 'asc' } },
   });
 
@@ -1326,7 +1456,7 @@ router.get('/statutory-export', requireAdmin, asyncHandler(async (req, res) => {
   const XLSX = require('xlsx');
   const payslips = await req.prisma.payslip.findMany({
     where: { month },
-    include: { user: { select: { name: true, employeeId: true, department: true, designation: true } } },
+    include: { user: { select: { name: true, employeeId: true, department: true, designation: true, dateOfJoining: true } } },
     orderBy: { user: { name: 'asc' } },
   });
   if (payslips.length === 0) throw notFound('No payslips found for this month.');
