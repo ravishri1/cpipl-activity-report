@@ -1,26 +1,29 @@
 /**
  * Comp-Off 90-Day Expiry Service
  *
- * Runs daily (maintenance cron). For each employee's comp-off (COF) earn grants:
+ * Runs daily (maintenance cron). For each employee's comp-off (COF) earn grants
+ * within the CURRENT financial year:
  * - Uses FIFO: oldest grants consumed by redemptions first
- * - Any remaining unused days in a grant that is >90 days old → lapsed
+ * - Remaining unused days in a grant approved >90 days ago → lapsed
  * - Updates CompOffRequest.lapsedDays (per grant) + LeaveBalance.lapsed + LeaveBalance.balance
  * - Idempotent: re-running does not double-lapse already-lapsed days
  *
  * 90-day clock starts from reviewedAt (date manager approved the earn request).
- * Lapsed days are tracked on the individual grant so FIFO accounting stays correct
- * across multiple daily runs.
+ * Earn/redeem queries are scoped to the CURRENT FY (workDate range) to avoid
+ * cross-FY contamination — previous FY comp-offs that carried forward to CF
+ * are tracked separately and not double-counted here.
  */
 
 const COF_EXPIRY_DAYS = 90;
 
 /**
- * Returns the current financial year start year (Apr–Mar cycle).
- * e.g. April 2026 → 2026; January 2026 → 2025
+ * Returns the current financial year start year (Apr–Mar cycle, IST).
+ * April 2026 → 2026; January 2026 → 2025
  */
 function getCurrentFY() {
-  const now = new Date();
-  return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // Use IST (UTC+5:30) — add 5.5 hours to UTC
+  const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
 /**
@@ -36,16 +39,23 @@ async function runCompOffExpiryCheck(prisma) {
   }
 
   const fyYear = getCurrentFY();
-  const today = new Date();
-  // Date before which earn approvals are considered expired
-  const expiryDate = new Date(today);
+  const fyStart = `${fyYear}-04-01`;
+  const fyEnd   = `${fyYear + 1}-03-31`;
+
+  // Date before which earn approvals are considered expired (90 days ago in IST)
+  const now = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const expiryDate = new Date(now);
   expiryDate.setDate(expiryDate.getDate() - COF_EXPIRY_DAYS);
+  const expiryDateStr = expiryDate.toISOString().slice(0, 10);
 
-  console.log(`[COMPOFF_EXPIRY] Checking COF expiry for FY ${fyYear}. Grants approved before ${expiryDate.toISOString().slice(0, 10)} are expired.`);
+  console.log(
+    `[COMPOFF_EXPIRY] FY ${fyYear} (${fyStart}→${fyEnd}). ` +
+    `Grants approved before ${expiryDateStr} are expired.`
+  );
 
-  // All users with a COF balance this FY
+  // All users with a positive COF balance this FY
   const balances = await prisma.leaveBalance.findMany({
-    where: { leaveTypeId: cofLeaveType.id, year: fyYear },
+    where: { leaveTypeId: cofLeaveType.id, year: fyYear, balance: { gt: 0 } },
     select: { id: true, userId: true, balance: true, lapsed: true },
   });
 
@@ -53,93 +63,97 @@ async function runCompOffExpiryCheck(prisma) {
   let usersAffected = 0;
 
   for (const bal of balances) {
-    if (bal.balance <= 0) continue;
-
     const userId = bal.userId;
 
-    // All approved 'earn' requests, oldest first
+    // ── Current FY earn grants only, oldest approval first ──
     const earnRequests = await prisma.compOffRequest.findMany({
-      where: { userId, type: 'earn', status: 'approved' },
+      where: {
+        userId,
+        type: 'earn',
+        status: 'approved',
+        workDate: { gte: fyStart, lte: fyEnd },
+      },
       orderBy: { reviewedAt: 'asc' },
     });
 
     if (earnRequests.length === 0) continue;
 
-    // Total redeemed (all approved redeem requests — lifetime, not FY-scoped)
+    // ── Total redeemed this FY (FIFO: oldest earn grants consumed first) ──
     const redeemAgg = await prisma.compOffRequest.aggregate({
-      where: { userId, type: 'redeem', status: 'approved' },
+      where: {
+        userId,
+        type: 'redeem',
+        status: 'approved',
+        workDate: { gte: fyStart, lte: fyEnd },
+      },
       _sum: { days: true },
     });
     let remainingRedeemed = redeemAgg._sum.days || 0;
 
-    // FIFO: walk through earn grants, consume redemptions from oldest first
-    // For each grant: determine remaining unused days, then check if expired
-    let newLapsedThisRun = 0;
-    const grantsToUpdate = [];
+    // ── FIFO walk — find expired unused days ──
+    const grantsToLapse = []; // [{ id, lapseAmount }]
 
     for (const earn of earnRequests) {
-      const grantDays = earn.days || 1;
+      const grantDays    = earn.days || 1;
       const alreadyLapsed = earn.lapsedDays || 0;
-      const effectiveDays = grantDays - alreadyLapsed; // days still potentially available
+      const effectiveDays = grantDays - alreadyLapsed; // unlapsed days remaining on this grant
 
-      // How many of this grant's effective days are consumed by redemptions?
+      // Consume redemptions from this grant (oldest first)
       const consumed = Math.min(remainingRedeemed, effectiveDays);
       remainingRedeemed = Math.max(remainingRedeemed - consumed, 0);
-      const remainingUnused = effectiveDays - consumed;
+      const unused = effectiveDays - consumed;
 
-      if (remainingUnused <= 0) continue; // fully consumed — nothing to lapse
+      if (unused <= 0) continue; // fully consumed — nothing to lapse
 
-      // Is this grant expired?
+      // Check expiry: 90 days from manager's approval date
       const approvalDate = earn.reviewedAt;
       if (!approvalDate) continue;
-      if (approvalDate > expiryDate) continue; // still within 90 days — active
+      const approvalDateStr = approvalDate.toISOString().slice(0, 10);
+      if (approvalDateStr > expiryDateStr) continue; // still within 90 days — active
 
-      // This grant has expired unused days → lapse them
-      newLapsedThisRun += remainingUnused;
-      grantsToUpdate.push({ id: earn.id, additionalLapse: remainingUnused });
+      grantsToLapse.push({ id: earn.id, lapseAmount: unused });
     }
 
-    if (newLapsedThisRun <= 0) continue;
+    if (grantsToLapse.length === 0) continue;
 
-    // Cap lapse to current balance (safety)
-    const actualLapse = Math.min(newLapsedThisRun, bal.balance);
-    if (actualLapse <= 0) continue;
+    // ── Apply lapse — capped by actual balance, FIFO order ──
+    let balanceRemaining = bal.balance;
+    let actualLapsed = 0;
 
-    // Update each affected earn grant
-    for (const g of grantsToUpdate) {
+    for (const g of grantsToLapse) {
+      const amount = Math.min(g.lapseAmount, balanceRemaining);
+      if (amount <= 0) break;
+
       await prisma.compOffRequest.update({
         where: { id: g.id },
-        data: {
-          lapsedDays: { increment: g.additionalLapse },
-          lapsedAt: new Date(),
-        },
+        data: { lapsedDays: { increment: amount }, lapsedAt: new Date() },
       });
+
+      balanceRemaining -= amount;
+      actualLapsed     += amount;
     }
 
-    // Update the balance: decrement available, increment lapsed counter
+    if (actualLapsed <= 0) continue;
+
     await prisma.leaveBalance.update({
       where: { id: bal.id },
       data: {
-        balance: { decrement: actualLapse },
-        lapsed: { increment: actualLapse },
+        balance: { decrement: actualLapsed },
+        lapsed:  { increment: actualLapsed },
       },
     });
 
-    totalLapsedDays += actualLapse;
+    totalLapsedDays += actualLapsed;
     usersAffected++;
-
-    console.log(`[COMPOFF_EXPIRY] User ${userId}: lapsed ${actualLapse} COF day(s).`);
+    console.log(`[COMPOFF_EXPIRY] User ${userId}: ${actualLapsed} COF day(s) lapsed.`);
   }
 
   console.log(
-    `[COMPOFF_EXPIRY] Done. ${usersAffected} user(s) affected. Total ${totalLapsedDays} COF day(s) lapsed.`
+    `[COMPOFF_EXPIRY] Done. ${usersAffected}/${balances.length} user(s) affected. ` +
+    `Total ${totalLapsedDays} COF day(s) lapsed.`
   );
 
-  return {
-    checked: balances.length,
-    lapsedDays: totalLapsedDays,
-    usersAffected,
-  };
+  return { checked: balances.length, lapsedDays: totalLapsedDays, usersAffected };
 }
 
 module.exports = { runCompOffExpiryCheck, COF_EXPIRY_DAYS };

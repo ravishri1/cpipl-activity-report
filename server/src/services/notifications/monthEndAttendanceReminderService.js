@@ -49,7 +49,7 @@ function buildLeaveDateSet(startDate, endDate) {
   const dates = new Set();
   const start = new Date(startDate);
   const end = new Date(endDate);
-  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     dates.add(d.toISOString().slice(0, 10));
   }
   return dates;
