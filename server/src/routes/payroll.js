@@ -77,6 +77,9 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
     conveyanceAllowance: getComp('CONVEYANCE_ALLOWANCE') || d.conveyanceAllowance || 0,
     otherAllowance: getComp('OTHER') || d.otherAllowance || 0,
     otherAllowanceLabel: d.otherAllowanceLabel || null,
+    // CTC employer-side components
+    variablePay: d.variablePay || 0,
+    medicalPremium: d.medicalPremium || 0,
     // Deductions (pre-calculated by frontend)
     employerPf: d.employerPf || 0, employerEsi: d.employerEsi || 0,
     employeePf: d.employeePf || 0, employeeEsi: d.employeeEsi || 0,
