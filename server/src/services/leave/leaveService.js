@@ -450,12 +450,12 @@ async function applyLeave(userId, data, prisma) {
   // }
 
   // Check department holiday blocks that block leave applications
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { department: true, companyId: true } });
-  if (user?.department && user?.companyId) {
+  const applicant = await prisma.user.findUnique({ where: { id: userId }, select: { department: true, companyId: true } });
+  if (applicant?.department && applicant?.companyId) {
     const leaveBlock = await prisma.departmentHolidayBlock.findFirst({
       where: {
-        department: user.department,
-        companyId: user.companyId,
+        department: applicant.department,
+        companyId: applicant.companyId,
         blockLeave: true,
         dateFrom: { lte: endDate },
         dateTo: { gte: startDate },
