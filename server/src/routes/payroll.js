@@ -286,15 +286,17 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const saturdayPolicy = await getSaturdayPolicyForMonth(parseInt(companyId), month, req.prisma);
   const offSaturdaySet = saturdayPolicy ? buildOffSaturdaySet(month, saturdayPolicy.saturdayType) : buildOffSaturdaySet(month, 'all');
 
-  // Helper: compute working days for a given holiday set (respects Saturday policy)
-  const calcWorkingDays = (holidaySet) => {
+  // Helper: compute working days for a given employee's off-day set + holidays
+  // offDays: number[] e.g. [0,6] = Sun+Sat; saturdayPolicy controls WHICH Saturdays
+  const calcWorkingDays = (holidaySet, offDays) => {
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const date = `${month}-${String(d).padStart(2, '0')}`;
       const dow = new Date(year, monthNum - 1, d).getDay();
-      const isSunday = dow === 0;
-      const isOffSat = dow === 6 && offSaturdaySet.has(date);
-      if (!isSunday && !isOffSat && !holidaySet.has(date)) count++;
+      const isWeeklyOff = offDays.includes(dow);
+      // Saturday: only off if it's in the employee's weekly off AND in the SaturdayPolicy set
+      const isOff = dow === 6 ? (offDays.includes(6) && offSaturdaySet.has(date)) : isWeeklyOff;
+      if (!isOff && !holidaySet.has(date)) count++;
     }
     return count;
   };
@@ -320,6 +322,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
 
+    // Get employee's weekly off days (from pattern/assignment, falls back to [0,6])
+    const empOffDays = weeklyOffMap.get(sal.userId) || [0, 6];
+
     // Merge global + branch holidays for this employee
     const mergedHolidays = new Set(globalHolidayDates);
     if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
@@ -328,7 +333,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // Remove department-blocked holidays for this employee
     const deptBlocks = deptBlockMap[sal.user.department] || new Set();
     deptBlocks.forEach(d => mergedHolidays.delete(d));
-    const workingDays = calcWorkingDays(mergedHolidays);
+    const workingDays = calcWorkingDays(mergedHolidays, empOffDays);
 
     // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──
     // These are employees added to the attendance exception list (isAttendanceExempt = true).
@@ -388,9 +393,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dow = new Date(year, monthNum - 1, d).getDay();
-        // Skip Sundays, off Saturdays (per policy), holidays, future dates
-        const isOffSat = dow === 6 && offSaturdaySet.has(dateStr);
-        if (dow === 0 || isOffSat || mergedHolidays.has(dateStr) || dateStr > today) continue;
+        // Skip weekly off days (per employee pattern + SaturdayPolicy), holidays, future dates
+        const isOff = dow === 6 ? (empOffDays.includes(6) && offSaturdaySet.has(dateStr)) : empOffDays.includes(dow);
+        if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
         // Skip days after last working date (pro-rata separation)
         if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
           lopDays++;

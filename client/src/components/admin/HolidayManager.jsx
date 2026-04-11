@@ -377,19 +377,21 @@ function WeeklyOffTab() {
       {/* Info Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
         <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-        <div className="text-sm text-blue-700">
-          <span className="font-semibold">Weekly Off Patterns</span> define which days of the week are off for each employee. Assign a pattern to each employee from their profile or using the + Assign button below.
-          These affect attendance, leave calculations, muster, and roster views.
+        <div className="text-sm text-blue-700 space-y-1">
+          <p><span className="font-semibold">How weekly offs work (3 layers):</span></p>
+          <p>① <span className="font-semibold">Weekly Off Patterns</span> — Set which days of week are off per employee (e.g. Sat+Sun, Sun only). Assign from employee profile.</p>
+          <p>② <span className="font-semibold">Saturday Rules</span> — Company-level: control <em>which</em> Saturdays are off (All / 2nd &amp; 4th / None) for each date range. Payroll uses this.</p>
+          <p>③ <span className="font-semibold">Temp Overrides</span> — Advanced: temporarily assign a different pattern to a specific employee or department for a date range.</p>
         </div>
       </div>
 
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
         {[
-          { key: 'patterns', label: 'Patterns' },
-          { key: 'assignments', label: 'Assignments (Date Range)' },
-          { key: 'blocks', label: 'Holiday Blocks' },
+          { key: 'patterns', label: 'Weekly Off Patterns' },
           { key: 'saturday', label: 'Saturday Rules' },
+          { key: 'blocks', label: 'Work Blocks' },
+          { key: 'assignments', label: 'Temp Overrides' },
         ].map(t => (
           <button key={t.key} onClick={() => setSubTab(t.key)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${subTab === t.key ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
@@ -616,7 +618,7 @@ function SaturdayRulesPanel() {
       <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
         <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
         <p className="text-sm text-amber-700">
-          Define which Saturdays are working or off for each date range. Payroll uses this to calculate working days correctly.
+          Company-level Saturday rule per date range. Payroll uses this to calculate working days. Only applies to employees whose weekly off pattern includes Saturday.
         </p>
       </div>
 
