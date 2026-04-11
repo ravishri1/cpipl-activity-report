@@ -278,20 +278,42 @@ async function recalculateAttendanceFromPunches(prisma, userId, date) {
   // Upsert attendance record
   let attendance = await prisma.attendance.findUnique({
     where: { userId_date: { userId, date } },
+    select: { id: true, status: true, adminOverride: true },
   });
+
+  // Check if employee has an approved leave on this date — leave status wins over biometric
+  const approvedLeave = await prisma.leaveRequest.findFirst({
+    where: {
+      userId,
+      status: 'approved',
+      startDate: { lte: date },
+      endDate: { gte: date },
+    },
+    select: { id: true },
+  });
+
+  // If admin has manually overridden this record, preserve their status override
+  const isAdminOverride = attendance?.adminOverride === true;
+
+  // Determine status: leave > admin override > biometric
+  const resolvedStatus = approvedLeave ? 'on_leave' : (isAdminOverride && attendance ? attendance.status : 'present');
 
   const attendanceData = {
     checkIn: firstIn,
     checkOut: lastOut || null,  // Don't set checkOut when only 1 punch (day still in progress)
     workHours,
-    status: 'present',
+    status: resolvedStatus,
     notes: `Biometric: In ${firstInStr}${lastOutStr ? ` | Out ${lastOutStr}` : ''} | Actual ${workHours.toFixed(2)}h | Break ${breakHours.toFixed(2)}h`,
   };
 
   if (attendance) {
+    // If admin override, only update punch times/hours — never touch status or notes
+    const updateData = isAdminOverride
+      ? { checkIn: firstIn, checkOut: lastOut || null, workHours }
+      : attendanceData;
     attendance = await prisma.attendance.update({
       where: { id: attendance.id },
-      data: attendanceData,
+      data: updateData,
     });
   } else {
     attendance = await prisma.attendance.create({
