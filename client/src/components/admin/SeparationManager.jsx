@@ -39,7 +39,8 @@ export default function SeparationManager() {
   const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
 
   const { data: separations, loading, error: fetchErr, refetch } = useFetch('/api/separation', []);
-  const { data: users } = useFetch('/api/users', []);
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const filtered = filter === 'active'
@@ -47,6 +48,21 @@ export default function SeparationManager() {
     : filter === 'completed'
     ? separations.filter(s => s.status === 'completed')
     : separations;
+
+  const openInitiateForm = async () => {
+    setShowInitiateForm(true);
+    if (users.length === 0) {
+      setUsersLoading(true);
+      try {
+        const res = await api.get('/api/users?fields=id,name,employeeId,department,employmentStatus,isActive');
+        setUsers(res.data || []);
+      } catch {
+        // ignore — dropdown will be empty
+      } finally {
+        setUsersLoading(false);
+      }
+    }
+  };
 
   const handleInitiate = async () => {
     if (!form.userId) return;
@@ -76,7 +92,7 @@ export default function SeparationManager() {
             className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">
             {view === 'pipeline' ? '📋 List View' : '🗂 Pipeline View'}
           </button>
-          <button onClick={() => setShowInitiateForm(true)}
+          <button onClick={openInitiateForm}
             className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
             + Initiate Separation
           </button>
@@ -120,8 +136,8 @@ export default function SeparationManager() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}>
-                <option value="">Select employee...</option>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} disabled={usersLoading}>
+                <option value="">{usersLoading ? 'Loading employees...' : 'Select employee...'}</option>
                 {users.filter(u => u.employmentStatus === 'active' || u.isActive).map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.employeeId || 'No ID'}) — {u.department}</option>
                 ))}
