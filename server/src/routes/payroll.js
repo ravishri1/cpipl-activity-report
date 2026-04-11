@@ -340,16 +340,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // No biometric required, no LOP deduction, no leave impact on payroll.
     let presentDays = 0, lopDays = 0;
     const today = new Date().toISOString().slice(0, 10);
+    const isIntern = sal.user.employeeType === 'intern';
+    let attendances = [];
 
     if (sal.user.isAttendanceExempt) {
       presentDays = workingDays;
       lopDays = 0;
     } else {
-    const attendances = await req.prisma.attendance.findMany({
+    attendances = await req.prisma.attendance.findMany({
       where: { userId: sal.userId, date: { startsWith: month } },
     });
-
-    const isIntern = sal.user.employeeType === 'intern';
 
     // Fetch approved leaves for this month — separate LOP (deduction) from paid leaves
     const approvedLeaves = await req.prisma.leaveRequest.findMany({
