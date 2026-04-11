@@ -3,7 +3,6 @@ import api from '../../utils/api';
 import {
   CalendarDays, Plus, Trash2, X, Upload, Download,
   FileSpreadsheet, CheckCircle2, AlertTriangle, Pencil, Info,
-  ChevronDown, ChevronUp, Users, UserMinus,
 } from 'lucide-react';
 import SaturdayPolicyManager from './SaturdayPolicyManager';
 
@@ -249,379 +248,48 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
   );
 }
 
-// ─── Weekly Off Tab ─────────────────────────────────────────────────────────
-function WeeklyOffTab() {
-  const [subTab, setSubTab] = useState('patterns'); // 'patterns' | 'assignments' | 'blocks' | 'saturday'
-  const [patterns, setPatterns] = useState([]);
-  const [unassigned, setUnassigned] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [expanded, setExpanded] = useState(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showAssignModal, setShowAssignModal] = useState(null); // patternId
-  const [addForm, setAddForm] = useState({ name: '', days: [] });
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [pRes, uRes] = await Promise.all([
-        api.get('/holidays/weekly-off-patterns'),
-        api.get('/holidays/weekly-off-unassigned'),
-      ]);
-      setPatterns(pRes.data);
-      setUnassigned(uRes.data);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to load weekly off patterns.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  const handleAddPattern = async (e) => {
-    e.preventDefault();
-    if (addForm.days.length === 0) { setError('Select at least one day'); return; }
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      await api.post('/holidays/weekly-off-patterns', addForm);
-      setSuccess('Pattern created!');
-      setShowAddForm(false);
-      setAddForm({ name: '', days: [] });
-      await fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create pattern.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeletePattern = async (id, name) => {
-    if (!window.confirm(`Delete pattern "${name}"?`)) return;
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      await api.delete(`/holidays/weekly-off-patterns/${id}`);
-      setSuccess('Pattern deleted.');
-      await fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete pattern.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemoveUser = async (patternId, userId, userName) => {
-    if (!window.confirm(`Remove ${userName} from this pattern? They will use the default (Sat+Sun).`)) return;
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      await api.delete(`/holidays/weekly-off-patterns/${patternId}/users/${userId}`);
-      setSuccess(`${userName} removed.`);
-      await fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to remove employee.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAssign = async () => {
-    if (selectedUsers.length === 0) return;
-    setSaving(true); setError(''); setSuccess('');
-    try {
-      const res = await api.post(`/holidays/weekly-off-patterns/${showAssignModal}/assign`, { userIds: selectedUsers });
-      setSuccess(res.data.message);
-      setShowAssignModal(null);
-      setSelectedUsers([]);
-      setSearchQuery('');
-      await fetchData();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to assign employees.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleDay = (day) => {
-    setAddForm(prev => ({
-      ...prev,
-      days: prev.days.includes(day) ? prev.days.filter(d => d !== day) : [...prev.days, day].sort(),
-    }));
-  };
-
-  // All employees for assign modal (unassigned + employees from other patterns)
-  const allActiveEmployees = useMemo(() => {
-    const assigned = patterns.flatMap(p => p.users || []);
-    const all = [...unassigned, ...assigned];
-    const seen = new Set();
-    return all.filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true; }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [patterns, unassigned]);
-
-  const filteredEmployees = useMemo(() => {
-    if (!searchQuery) return allActiveEmployees;
-    const q = searchQuery.toLowerCase();
-    return allActiveEmployees.filter(u => u.name.toLowerCase().includes(q) || (u.employeeId || '').toLowerCase().includes(q) || (u.department || '').toLowerCase().includes(q));
-  }, [allActiveEmployees, searchQuery]);
-
-  if (loading) return <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" /></div>;
-
-  return (
-    <div className="px-6 py-4 space-y-4">
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>}
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg">{success}</div>}
-
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
-        <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-        <div className="text-sm text-blue-700 space-y-1">
-          <p><span className="font-semibold">How weekly offs work (3 layers):</span></p>
-          <p>① <span className="font-semibold">Weekly Off Patterns</span> — Set which days of week are off per employee (e.g. Sat+Sun, Sun only). Assign from employee profile.</p>
-          <p>② <span className="font-semibold">Saturday Rules</span> — Company-level: control <em>which</em> Saturdays are off (All / 2nd &amp; 4th / None) for each date range. Payroll uses this.</p>
-          <p>③ <span className="font-semibold">Temp Overrides</span> — Advanced: temporarily assign a different pattern to a specific employee or department for a date range.</p>
-        </div>
-      </div>
-
-      {/* Sub-tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-        {[
-          { key: 'patterns', label: 'Weekly Off Patterns' },
-          { key: 'saturday', label: 'Saturday Rules' },
-          { key: 'blocks', label: 'Work Blocks' },
-          { key: 'assignments', label: 'Temp Overrides' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setSubTab(t.key)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${subTab === t.key ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ASSIGNMENTS sub-tab */}
-      {subTab === 'assignments' && (
-        <WeeklyOffAssignmentsPanel patterns={patterns} />
-      )}
-
-      {/* HOLIDAY BLOCKS sub-tab */}
-      {subTab === 'blocks' && (
-        <DepartmentHolidayBlocksPanel />
-      )}
-
-      {/* SATURDAY RULES sub-tab */}
-      {subTab === 'saturday' && (
-        <SaturdayRulesPanel />
-      )}
-
-      {/* PATTERNS sub-tab */}
-      {subTab === 'patterns' && <>
-
-      {/* Header with Add button */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-700">
-          {patterns.length} Pattern{patterns.length !== 1 ? 's' : ''} configured
-          <span className="text-slate-400 font-normal ml-2">|</span>
-          <span className="text-slate-500 font-normal ml-2">{unassigned.length} employees using default (Sat+Sun)</span>
-        </h2>
-        <button onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-          <Plus className="w-4 h-4" /> Add Pattern
-        </button>
-      </div>
-
-      {/* Pattern Cards */}
-      {patterns.map(p => (
-        <div key={p.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1">
-                {DAY_NAMES.map((dn, i) => (
-                  <span key={i} className={`text-xs font-medium px-2 py-1 rounded ${p.days.includes(i) ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-slate-50 text-slate-400'}`}>{dn}</span>
-                ))}
-              </div>
-              <span className="text-sm font-semibold text-slate-800">{p.name}</span>
-              {p.isDefault && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Default</span>}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-500"><Users className="w-4 h-4 inline mr-1" />{p.userCount}</span>
-              <button onClick={(e) => { e.stopPropagation(); setShowAssignModal(p.id); setSelectedUsers([]); setSearchQuery(''); }}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">
-                + Assign
-              </button>
-              {!p.isDefault && (
-                <button onClick={(e) => { e.stopPropagation(); handleDeletePattern(p.id, p.name); }}
-                  className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {expanded === p.id ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-            </div>
-          </div>
-
-          {expanded === p.id && (
-            <div className="border-t border-slate-200 p-4">
-              {(p.users || []).length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No employees assigned to this pattern.</p>
-              ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs font-medium text-slate-500 uppercase tracking-wider px-2 pb-1">
-                    <span>Name</span><span>ID</span><span>Department</span><span></span>
-                  </div>
-                  {p.users.map(u => (
-                    <div key={u.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center px-2 py-1.5 rounded hover:bg-slate-50">
-                      <span className="text-sm text-slate-800">{u.name}</span>
-                      <span className="text-sm text-slate-500 font-mono">{u.employeeId || '-'}</span>
-                      <span className="text-sm text-slate-500">{u.department}</span>
-                      <button onClick={() => handleRemoveUser(p.id, u.id, u.name)}
-                        className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600" title="Remove from pattern">
-                        <UserMinus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-
-      {/* Add Pattern Modal */}
-      {showAddForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h3 className="text-base font-semibold text-slate-800">Add Weekly Off Pattern</h3>
-              <button onClick={() => setShowAddForm(false)} className="p-1 rounded hover:bg-slate-100"><X className="w-4 h-4 text-slate-400" /></button>
-            </div>
-            <form onSubmit={handleAddPattern} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Pattern Name</label>
-                <input type="text" value={addForm.name} required placeholder="e.g. Thu+Sat, Fri+Sun"
-                  onChange={e => setAddForm({ ...addForm, name: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-2">Off Days</label>
-                <div className="flex gap-2 flex-wrap">
-                  {DAY_NAMES.map((dn, i) => (
-                    <button key={i} type="button" onClick={() => toggleDay(i)}
-                      className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                        addForm.days.includes(i)
-                          ? 'bg-orange-100 text-orange-700 border-orange-300'
-                          : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                      }`}>{dn}</button>
-                  ))}
-                </div>
-                {addForm.days.length > 0 && (
-                  <p className="text-xs text-slate-500 mt-2">Selected: {addForm.days.map(d => DAY_NAMES[d]).join(', ')}</p>
-                )}
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setShowAddForm(false)}
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-                <button type="submit" disabled={saving || addForm.days.length === 0}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? 'Creating...' : 'Create Pattern'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Assign Employees Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h3 className="text-base font-semibold text-slate-800">
-                Assign Employees to {patterns.find(p => p.id === showAssignModal)?.name || 'Pattern'}
-              </h3>
-              <button onClick={() => { setShowAssignModal(null); setSelectedUsers([]); setSearchQuery(''); }}
-                className="p-1 rounded hover:bg-slate-100"><X className="w-4 h-4 text-slate-400" /></button>
-            </div>
-            <div className="px-5 py-3 border-b border-slate-100">
-              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search by name, ID, or department..."
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              {filteredEmployees.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No employees found.</p>
-              ) : (
-                <div className="space-y-1">
-                  <label className="flex items-center gap-3 p-2 rounded-lg bg-blue-50 border border-blue-100 cursor-pointer mb-2">
-                    <input type="checkbox"
-                      checked={filteredEmployees.length > 0 && filteredEmployees.every(u => selectedUsers.includes(u.id))}
-                      onChange={e => {
-                        if (e.target.checked) setSelectedUsers(filteredEmployees.map(u => u.id));
-                        else setSelectedUsers([]);
-                      }}
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                    <span className="text-sm font-semibold text-blue-700">Select All ({filteredEmployees.length})</span>
-                  </label>
-                  {filteredEmployees.map(u => (
-                    <label key={u.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" checked={selectedUsers.includes(u.id)}
-                        onChange={e => {
-                          if (e.target.checked) setSelectedUsers(prev => [...prev, u.id]);
-                          else setSelectedUsers(prev => prev.filter(id => id !== u.id));
-                        }}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-slate-800 truncate">{u.name}</div>
-                        <div className="text-xs text-slate-500">{u.employeeId || '-'} | {u.department}</div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-              <span className="text-sm text-slate-500">{selectedUsers.length} selected</span>
-              <div className="flex gap-3">
-                <button onClick={() => { setShowAssignModal(null); setSelectedUsers([]); setSearchQuery(''); }}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
-                <button onClick={handleAssign} disabled={saving || selectedUsers.length === 0}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  {saving ? 'Assigning...' : `Assign ${selectedUsers.length}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      </>}
-    </div>
-  );
-}
-
-// ─── Saturday Rules Panel ────────────────────────────────────────────────────
-function SaturdayRulesPanel() {
+// ─── Company Weekly Off Panel ────────────────────────────────────────────────
+function CompanyWeeklyOffPanel() {
   const [companies, setCompanies] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [defaultPattern, setDefaultPattern] = useState(null);
+  const [editDays, setEditDays] = useState(null); // null = not editing
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
 
   useEffect(() => {
-    api.get('/companies').then(r => {
-      const list = r.data || [];
-      setCompanies(list);
-      if (list.length > 0) setSelectedCompanyId(list[0].id);
+    Promise.all([
+      api.get('/companies'),
+      api.get('/holidays/weekly-off-patterns'),
+    ]).then(([cr, pr]) => {
+      const cList = cr.data || [];
+      setCompanies(cList);
+      if (cList.length > 0) setSelectedCompanyId(cList[0].id);
+      const def = (pr.data || []).find(p => p.isDefault);
+      setDefaultPattern(def || null);
     }).catch(() => {});
   }, []);
 
   const selected = companies.find(c => c.id === selectedCompanyId);
 
-  return (
-    <div className="space-y-4">
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
-        <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-        <p className="text-sm text-amber-700">
-          Company-level Saturday rule per date range. Payroll uses this to calculate working days. Only applies to employees whose weekly off pattern includes Saturday.
-        </p>
-      </div>
+  const handleSaveDays = async () => {
+    if (!defaultPattern || !editDays) return;
+    setSaving(true); setMsg(null);
+    try {
+      await api.put(`/holidays/weekly-off-patterns/${defaultPattern.id}`, { days: editDays });
+      setDefaultPattern(p => ({ ...p, days: editDays }));
+      setEditDays(null);
+      setMsg({ type: 'success', text: 'Default weekly off days updated.' });
+    } catch (e) {
+      setMsg({ type: 'error', text: e.response?.data?.error || 'Save failed' });
+    } finally { setSaving(false); }
+  };
 
+  const days = editDays ?? (defaultPattern?.days || [0, 6]);
+
+  return (
+    <div className="space-y-5">
+      {/* Company selector */}
       {companies.length > 1 && (
         <div className="flex gap-2 flex-wrap">
           {companies.map(c => (
@@ -633,6 +301,54 @@ function SaturdayRulesPanel() {
         </div>
       )}
 
+      {msg && (
+        <div className={`px-3 py-2 rounded-lg text-xs font-medium ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Default off days */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700">Default Weekly Off Days</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Standard off days for all employees (override per employee from their profile)</p>
+          </div>
+          {editDays === null
+            ? <button onClick={() => setEditDays(defaultPattern?.days || [0, 6])} className="text-xs font-medium text-blue-600 hover:underline">Edit</button>
+            : <div className="flex gap-2">
+                <button onClick={handleSaveDays} disabled={saving} className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+                <button onClick={() => setEditDays(null)} className="px-3 py-1 text-xs font-medium bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200">Cancel</button>
+              </div>
+          }
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {DAY_NAMES.map((dn, i) => {
+            const isOff = days.includes(i);
+            const isEditing = editDays !== null;
+            return (
+              <button key={i} type="button"
+                disabled={!isEditing}
+                onClick={() => {
+                  if (!isEditing) return;
+                  setEditDays(prev => prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i].sort());
+                }}
+                className={`px-3 py-2 text-sm font-medium rounded-lg border transition ${
+                  isOff ? 'bg-orange-100 text-orange-700 border-orange-300' : 'bg-slate-50 text-slate-400 border-slate-200'
+                } ${isEditing ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>
+                {dn}
+              </button>
+            );
+          })}
+        </div>
+        {!editDays && defaultPattern && (
+          <p className="text-xs text-slate-400 mt-2">
+            Off: {(defaultPattern.days || []).map(d => DAY_NAMES[d]).join(' + ') || 'None'}
+          </p>
+        )}
+      </div>
+
+      {/* Saturday Rules */}
       {selectedCompanyId && selected && (
         <SaturdayPolicyManager companyId={selectedCompanyId} companyName={selected.name} />
       )}
@@ -640,191 +356,27 @@ function SaturdayRulesPanel() {
   );
 }
 
-// ─── Weekly Off Assignments Panel ────────────────────────────────────────────
-const DAY_NAMES_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-function WeeklyOffAssignmentsPanel({ patterns }) {
-  const [companyId, setCompanyId] = useState(1);
-  const [companies, setCompanies] = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' });
-
-  useEffect(() => {
-    api.get('/companies').then(r => { setCompanies(r.data || []); }).catch(() => {});
-    api.get('/users').then(r => {
-      const active = (r.data || []).filter(u => u.isActive);
-      setEmployees(active);
-      const depts = [...new Set(active.map(u => u.department).filter(Boolean))].sort();
-      setDepartments(depts);
-    }).catch(() => {});
-  }, []);
-
-  const fetchAssignments = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/holidays/weekly-off-assignments?companyId=${companyId}`);
-      setAssignments(res.data || []);
-    } catch { } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchAssignments(); }, [companyId]);
-
-  const handleSave = async () => {
-    setSaving(true); setMsg(null);
-    try {
-      const payload = {
-        patternId: parseInt(form.patternId),
-        effectiveFrom: form.effectiveFrom,
-        effectiveTo: form.effectiveTo || null,
-        companyId,
-        userId: form.targetType === 'employee' ? parseInt(form.userId) : null,
-        department: form.targetType === 'department' ? form.department : null,
-      };
-      if (editingId) {
-        await api.put(`/holidays/weekly-off-assignments/${editingId}`, payload);
-      } else {
-        await api.post('/holidays/weekly-off-assignments', payload);
-      }
-      setMsg({ type: 'success', text: 'Saved!' });
-      setShowForm(false); setEditingId(null);
-      setForm({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' });
-      fetchAssignments();
-    } catch (e) {
-      setMsg({ type: 'error', text: e.response?.data?.message || 'Save failed' });
-    } finally { setSaving(false); }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this assignment?')) return;
-    try { await api.delete(`/holidays/weekly-off-assignments/${id}`); fetchAssignments(); } catch { }
-  };
-
-  const patternDays = (p) => {
-    try { return JSON.parse(p.days).map(d => DAY_NAMES_SHORT[d]).join('+'); } catch { return p.name; }
-  };
+// ─── Weekly Off Tab ─────────────────────────────────────────────────────────
+function WeeklyOffTab() {
+  const [subTab, setSubTab] = useState('weeklyoff'); // 'weeklyoff' | 'blocks'
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <select value={companyId} onChange={e => setCompanyId(parseInt(e.target.value))}
-            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <span className="text-xs text-slate-500">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''}</span>
-        </div>
-        <button onClick={() => { setShowForm(true); setEditingId(null); setMsg(null); setForm({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' }); }}
-          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-          <span>+</span> Add Assignment
-        </button>
+    <div className="px-6 py-4 space-y-4">
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        {[
+          { key: 'weeklyoff', label: 'Weekly Off' },
+          { key: 'blocks', label: 'Work Blocks' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition ${subTab === t.key ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {msg && <div className={`px-3 py-2 rounded-lg text-xs font-medium ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>{msg.text}</div>}
-
-      {showForm && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-slate-700">{editingId ? 'Edit' : 'New'} Assignment</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Pattern *</label>
-              <select value={form.patternId} onChange={e => setForm(f => ({ ...f, patternId: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Select pattern</option>
-                {patterns.map(p => <option key={p.id} value={p.id}>{p.name} ({patternDays(p)})</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Apply To *</label>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setForm(f => ({ ...f, targetType: 'employee', department: '' }))}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition ${form.targetType === 'employee' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>
-                  Employee
-                </button>
-                <button type="button" onClick={() => setForm(f => ({ ...f, targetType: 'department', userId: '' }))}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition ${form.targetType === 'department' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>
-                  Department
-                </button>
-              </div>
-            </div>
-          </div>
-          {form.targetType === 'employee' ? (
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Employee *</label>
-              <select value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Select employee</option>
-                {employees.map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId || '—'}) {u.department ? `· ${u.department}` : ''}</option>)}
-              </select>
-            </div>
-          ) : (
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Department *</label>
-              <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Select department</option>
-                {departments.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Effective From *</label>
-              <input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">Effective To (blank = ongoing)</label>
-              <input type="date" value={form.effectiveTo} onChange={e => setForm(f => ({ ...f, effectiveTo: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={handleSave} disabled={saving || !form.patternId || !form.effectiveFrom || (form.targetType === 'employee' ? !form.userId : !form.department)}
-              className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
-              {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
-            </button>
-            <button onClick={() => { setShowForm(false); setEditingId(null); }}
-              className="px-4 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-xs text-slate-400 text-center py-6">Loading...</p>
-      ) : assignments.length === 0 ? (
-        <p className="text-xs text-slate-400 text-center py-6">No date-ranged assignments — all employees use their profile pattern or default (Sat+Sun)</p>
-      ) : (
-        <div className="space-y-2">
-          {assignments.map(a => (
-            <div key={a.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-700">
-                    {a.userId ? (a.user?.name || `User ${a.userId}`) : `Dept: ${a.department}`}
-                  </span>
-                  <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-                    {a.pattern?.name} ({patternDays(a.pattern)})
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {a.effectiveFrom} → {a.effectiveTo || 'ongoing'}
-                  </span>
-                </div>
-                {a.userId && a.user?.department && <p className="text-[10px] text-slate-400 mt-0.5">{a.user.employeeId} · {a.user.department}</p>}
-              </div>
-              <button onClick={() => { setForm({ patternId: String(a.patternId), effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo || '', targetType: a.userId ? 'employee' : 'department', userId: a.userId ? String(a.userId) : '', department: a.department || '' }); setEditingId(a.id); setShowForm(true); setMsg(null); }}
-                className="text-xs text-blue-600 hover:underline shrink-0">Edit</button>
-              <button onClick={() => handleDelete(a.id)} className="text-xs text-red-500 hover:underline shrink-0">Remove</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {subTab === 'weeklyoff' && <CompanyWeeklyOffPanel />}
+      {subTab === 'blocks' && <DepartmentHolidayBlocksPanel />}
     </div>
   );
 }
