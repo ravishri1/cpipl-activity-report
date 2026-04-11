@@ -496,8 +496,10 @@ async function getEmployeeCalendar(userId, month, prisma) {
     else if (isWeekend) { status = 'weekend'; statusLabel = 'W'; }
     else if (leave) { status = 'on_leave'; statusLabel = leave.type; }
 
-    // Attendance record overrides
-    if (att) {
+    // Attendance record overrides — approved leave ALWAYS wins over biometric/attendance record.
+    // If employee punched in on a leave day, calendar still shows the leave type (PL, CF, etc.)
+    // This mirrors GreytHR behaviour: leave approval overrides biometric presence.
+    if (att && !leave) {
       if (att.status === 'present') { status = 'present'; statusLabel = 'P'; }
       else if (att.status === 'half_day') { status = 'half_day'; statusLabel = 'HD'; }
       else if (att.status === 'on_leave') { status = 'on_leave'; statusLabel = leave?.type || 'L'; }
