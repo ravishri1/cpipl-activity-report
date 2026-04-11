@@ -590,18 +590,18 @@ model WeeklyOffAssignment {
   company   Company          @relation(fields: [companyId], references: [id])
 }
 
-// Block holidays from applying to specific departments
+// Block working dates for a department — holiday treated as working, leave blocked
 model DepartmentHolidayBlock {
   id            Int      @id @default(autoincrement())
   department    String   // "Logistic", "Accounts_Finance", etc.
   companyId     Int
-  date          String   // "2025-04-14" — the holiday date to block
+  dateFrom      String   // "2025-04-14" — start of blocked period
+  dateTo        String   // "2025-04-14" — end (same as dateFrom for single day)
+  blockLeave    Boolean  @default(false)  // if true, employees can't apply leave in this period
   reason        String?
   createdAt     DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id])
-
-  @@unique([department, companyId, date])
 }
 
 model Education {

@@ -449,6 +449,24 @@ async function applyLeave(userId, data, prisma) {
   //   }
   // }
 
+  // Check department holiday blocks that block leave applications
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { department: true, companyId: true } });
+  if (user?.department && user?.companyId) {
+    const leaveBlock = await prisma.departmentHolidayBlock.findFirst({
+      where: {
+        department: user.department,
+        companyId: user.companyId,
+        blockLeave: true,
+        dateFrom: { lte: endDate },
+        dateTo: { gte: startDate },
+      },
+    });
+    if (leaveBlock) {
+      const range = leaveBlock.dateFrom === leaveBlock.dateTo ? leaveBlock.dateFrom : `${leaveBlock.dateFrom} to ${leaveBlock.dateTo}`;
+      throw new Error(`Leave cannot be applied for this period. Your department has a work block from ${range}${leaveBlock.reason ? ` (${leaveBlock.reason})` : ''}.`);
+    }
+  }
+
   // Check for overlapping requests
   const overlapping = await prisma.leaveRequest.findFirst({
     where: {

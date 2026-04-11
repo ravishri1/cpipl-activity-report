@@ -255,14 +255,23 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
   const globalHolidayDates = new Set(holidays.map(h => h.date));
 
-  // Department holiday blocks for this month
+  // Department holiday blocks overlapping this month — build per-dept set of blocked dates
+  const monthStart = `${month}-01`;
+  const monthEndStr = `${month}-${String(daysInMonth).padStart(2, '0')}`;
   const deptHolidayBlocks = await req.prisma.departmentHolidayBlock.findMany({
-    where: { companyId: parseInt(companyId), date: { startsWith: month } },
+    where: { companyId: parseInt(companyId), dateFrom: { lte: monthEndStr }, dateTo: { gte: monthStart } },
   });
   const deptBlockMap = {};
   for (const b of deptHolidayBlocks) {
     if (!deptBlockMap[b.department]) deptBlockMap[b.department] = new Set();
-    deptBlockMap[b.department].add(b.date);
+    // Expand date range into individual dates within this month
+    const cur = new Date(b.dateFrom + 'T00:00:00');
+    const end = new Date(b.dateTo + 'T00:00:00');
+    while (cur <= end) {
+      const ds = cur.toISOString().slice(0, 10);
+      if (ds.startsWith(month)) deptBlockMap[b.department].add(ds);
+      cur.setDate(cur.getDate() + 1);
+    }
   }
 
   // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls

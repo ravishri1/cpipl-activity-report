@@ -304,19 +304,30 @@ router.get('/dept-holiday-blocks', requireAdmin, asyncHandler(async (req, res) =
   if (!companyId) throw badRequest('companyId required');
   const blocks = await req.prisma.departmentHolidayBlock.findMany({
     where: { companyId: parseInt(companyId) },
-    orderBy: [{ department: 'asc' }, { date: 'desc' }],
+    orderBy: [{ department: 'asc' }, { dateFrom: 'desc' }],
   });
   res.json(blocks);
 }));
 
 // POST /dept-holiday-blocks
 router.post('/dept-holiday-blocks', requireAdmin, asyncHandler(async (req, res) => {
-  const { department, companyId, date, reason } = req.body;
-  if (!department || !companyId || !date) throw badRequest('department, companyId, date required');
+  const { department, companyId, dateFrom, dateTo, blockLeave, reason } = req.body;
+  if (!department || !companyId || !dateFrom || !dateTo) throw badRequest('department, companyId, dateFrom, dateTo required');
   const block = await req.prisma.departmentHolidayBlock.create({
-    data: { department, companyId: parseInt(companyId), date, reason: reason || null },
+    data: { department, companyId: parseInt(companyId), dateFrom, dateTo, blockLeave: !!blockLeave, reason: reason || null },
   });
   res.status(201).json(block);
+}));
+
+// PUT /dept-holiday-blocks/:id
+router.put('/dept-holiday-blocks/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { dateFrom, dateTo, blockLeave, reason } = req.body;
+  const block = await req.prisma.departmentHolidayBlock.update({
+    where: { id },
+    data: { ...(dateFrom && { dateFrom }), ...(dateTo && { dateTo }), ...(blockLeave !== undefined && { blockLeave: !!blockLeave }), reason: reason || null },
+  });
+  res.json(block);
 }));
 
 // DELETE /dept-holiday-blocks/:id
