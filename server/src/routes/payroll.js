@@ -414,11 +414,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         // Skip weekly off days (per employee pattern + SaturdayPolicy), holidays, future dates
         const isOff = dow === 6 ? (empOffDays.includes(6) && offSaturdaySet.has(dateStr)) : empOffDays.includes(dow);
         if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
-        // Skip days after last working date (pro-rata separation)
+        // Skip days after last working date (pro-rata separation — NOT LOP)
         if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
-          lopDays++;
           continue;
         }
+        // Skip days before employee's date of joining (mid-month joiners)
+        const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
+        if (joinDateStr && dateStr < joinDateStr) continue;
         const status = attMap[dateStr];
         if (lopDatesSet.has(dateStr)) {
           lopDays += 1; // LOP leave = deduction (same as absent)
@@ -441,7 +443,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
     } // end of attendance-exempt else block
 
-    const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
+    const perDaySalary = daysInMonth > 0 ? sal.ctcMonthly / daysInMonth : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
     // Fetch approved expenses flagged for salary settlement (not yet settled)
@@ -486,13 +488,19 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       }
 
       // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
-      const grossBase = sal.basic + sal.hra + sal.da + sal.specialAllowance +
-        sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
-      offDayAllowance = daysInMonth > 0 ? Math.round((grossBase / daysInMonth) * offDaysWorked) : 0;
+      const offEarningComps = Array.isArray(sal.components) ? sal.components.filter(c => c.type === 'earning') : [];
+      const offGrossBase = offEarningComps.length > 0
+        ? offEarningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+        : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+      offDayAllowance = daysInMonth > 0 ? Math.round((offGrossBase / daysInMonth) * offDaysWorked) : 0;
     }
 
-    const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
-      sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements + offDayAllowance;
+    // Use components JSON when available (flexible salary structures), fall back to legacy fields
+    const earningComps = Array.isArray(sal.components) ? sal.components.filter(c => c.type === 'earning') : [];
+    const grossBase = earningComps.length > 0
+      ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+      : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
+    const grossEarnings = grossBase + reimbursements + offDayAllowance;
     // Interns: no PF, no ESI, no PT, no Mediclaim deductions
     const totalDeductions = isIntern ? sal.tds : (sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
