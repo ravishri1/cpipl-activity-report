@@ -816,7 +816,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   };
 
   const CHECK_LINKS = {
-    'Salary structures set':          '/admin/salary-structures',
+    'Salary structures set':          '/admin/salary-setup?filter=missing',
     'Pending leave approvals':        '/admin/leave',
     'Advance disbursements pending':  '/admin/salary-advances',
     'Attendance data':                '/admin/attendance',

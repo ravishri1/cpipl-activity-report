@@ -221,16 +221,25 @@ export default function SalaryStructure() {
   }, [fetchComponents]);
 
   // ─── Filtered employees ───
+  // Auto-apply "missing salary" filter from URL param (?filter=missing)
+  const filterMissing = searchParams.get('filter') === 'missing';
+
   const filteredEmployees = useMemo(() => {
-    if (!searchQuery.trim()) return employees;
+    let list = employees;
+    // If ?filter=missing, show only employees without a salary structure
+    if (filterMissing) {
+      const pendingIds = new Set(pendingSalary.map(e => e.id));
+      list = list.filter(e => pendingIds.has(e.id));
+    }
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return employees.filter(
+    return list.filter(
       (e) =>
         (e.name && e.name.toLowerCase().includes(q)) ||
         (e.employeeId && e.employeeId.toLowerCase().includes(q)) ||
         (e.department && e.department.toLowerCase().includes(q))
     );
-  }, [employees, searchQuery]);
+  }, [employees, searchQuery, filterMissing, pendingSalary]);
 
   // ─── Calculations (earnings from components; deductions auto-calculated) ───
   const calculations = useMemo(() => {
@@ -1536,8 +1545,23 @@ export default function SalaryStructure() {
 
   const renderEmployeesTab = () => (
     <div className="space-y-4">
+      {/* "From Payroll" filter banner */}
+      {filterMissing && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <span className="text-blue-600 text-sm font-medium">
+            🔍 Showing {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} without salary structure
+          </span>
+          <button
+            onClick={() => { searchParams.delete('filter'); setSearchParams(searchParams, { replace: true }); }}
+            className="ml-auto text-xs text-blue-500 hover:text-blue-700 underline"
+          >
+            Show all
+          </button>
+        </div>
+      )}
+
       {/* Pending Salary Banner */}
-      {pendingSalary.length > 0 && (
+      {!filterMissing && pendingSalary.length > 0 && (
         <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
           <div className="flex-1 min-w-0">
