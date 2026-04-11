@@ -56,6 +56,7 @@ import {
   KeyRound,
   Home,
   ClipboardSignature,
+  DoorOpen,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -214,6 +215,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/my-appraisals',       label: 'My Appraisals',      icon: LineChart },
         { to: '/my-goals',            label: 'My Goals',           icon: CheckSquare },
         { to: '/my-exit-interview',   label: 'Exit Interview',     icon: ClipboardSignature },
+        { to: '/my-resignation',      label: 'My Resignation',     icon: DoorOpen },
         { to: '/my-grievances',       label: 'My Grievances',      icon: MessageSquare },
         { to: '/weekly-pulse',        label: 'Weekly Pulse',       icon: HeartPulse },
       ],

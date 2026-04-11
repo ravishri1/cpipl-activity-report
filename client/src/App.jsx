@@ -38,6 +38,8 @@ const LetterManager = lazy(() => import('./components/admin/LetterManager'));
 const AssetManager = lazy(() => import('./components/admin/AssetManager'));
 const OnboardingManager = lazy(() => import('./components/admin/OnboardingManager'));
 const SeparationManager = lazy(() => import('./components/admin/SeparationManager'));
+const SeparationDetail = lazy(() => import('./components/admin/SeparationDetail'));
+const MyResignation = lazy(() => import('./components/separation/MyResignation'));
 const HRReports = lazy(() => import('./components/admin/HRReports'));
 const MyAssets = lazy(() => import('./components/assets/MyAssets'));
 const SurveyManager = lazy(() => import('./components/admin/SurveyManager'));
@@ -253,6 +255,8 @@ function AppRoutes() {
                   <Route path="/admin/renewals" element={<SeparatedRoute><AdminRoute><RenewalManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/onboarding" element={<SeparatedRoute><AdminRoute><OnboardingManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/separations" element={<SeparatedRoute><AdminRoute><SeparationManager /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/separations/:id" element={<SeparatedRoute><AdminRoute><SeparationDetail /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/my-resignation" element={<SeparatedRoute><MyResignation /></SeparatedRoute>} />
                   <Route path="/admin/reports" element={<SeparatedRoute><AdminRoute><HRReports /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/surveys" element={<SeparatedRoute><AdminRoute><SurveyManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/tickets" element={<SeparatedRoute><AdminRoute><TicketManager /></AdminRoute></SeparatedRoute>} />

@@ -285,6 +285,31 @@ router.get(['/cron', '/cron/:job'], asyncHandler(async (req, res) => {
           log(`CF expiry: no action needed (${result.checked} checked).`);
         }
       } catch (err) { warn(`cf-expiry: ${err.message}`); }
+
+      // Separation 45-day salary hold release reminder
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const dueSeps = await prisma.separation.findMany({
+          where: { salaryReleased: false, salaryHoldUntil: { lte: today }, status: { in: ['fnf_approved', 'completed'] } },
+          include: {
+            user: { select: { name: true, email: true } },
+            salaryHolds: true,
+          },
+        });
+        for (const sep of dueSeps) {
+          const total = sep.salaryHolds.reduce((s, h) => s + h.heldAmount, 0);
+          const { sendSeparationNotification } = require('../services/notifications/separationNotificationService');
+          await sendSeparationNotification('salary_hold_reminder', {
+            employeeName: sep.user.name,
+            employeeEmail: sep.user.email,
+            holdUntil: sep.salaryHoldUntil,
+            heldAmount: total,
+            separationId: sep.id,
+          });
+          log(`Salary hold reminder sent for ${sep.user.name} (sep #${sep.id})`);
+        }
+        if (dueSeps.length === 0) log('Salary hold reminders: none due today.');
+      } catch (err) { warn(`separation-hold-reminder: ${err.message}`); }
     }
 
     // ── Email + Chat activity fetch ────────────────────────────────────────

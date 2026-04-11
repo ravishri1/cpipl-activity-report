@@ -152,8 +152,14 @@ model User {
   lettersGeneratedBy GeneratedLetter[]  @relation("LetterGeneratedBy")
   assignedAssets     Asset[]            @relation("AssetAssignment")
   onboardingTasks    OnboardingChecklist[]
-  separation         Separation?
-  separationHandler  Separation[]       @relation("SeparationHandler")
+  separation                    Separation?
+  separationHandler             Separation[]       @relation("SeparationHandler")
+  separationManagerApprovals    Separation[]       @relation("SeparationManagerApprover")
+  separationHRConfirmations     Separation[]       @relation("SeparationHRConfirmer")
+  separationFnFApprovals        Separation[]       @relation("SeparationFnFApprover")
+  separationSalaryReleases      Separation[]       @relation("SeparationSalaryReleaser")
+  separationChecklistAssigned   SeparationChecklist[] @relation("SeparationChecklistAssignee")
+  separationChecklistCompleted  SeparationChecklist[] @relation("SeparationChecklistCompleter")
   surveyResponses    SurveyResponse[]
   surveysCreated     Survey[]           @relation("SurveyCreator")
   tickets            Ticket[]
@@ -882,6 +888,12 @@ model Payslip {
   lopDays              Float    @default(0)           // Loss of Pay days
   lopDeduction         Float    @default(0)
 
+  // Separation FnF Salary Hold (last 30 days held, released after 45 days from LWD)
+  fnfHoldFlag          Boolean  @default(false)        // true = part or all of this payslip is held
+  fnfHoldDays          Int      @default(0)            // days held in this payslip
+  fnfHoldAmount        Float    @default(0)            // amount held (shown in books, not paid yet)
+  fnfHoldNote          String?                         // "Separation hold: 15 days (Jun 1–15)"
+
   status               String   @default("draft")     // draft, generated, published
   generatedAt          DateTime?
   publishedAt          DateTime?
@@ -1277,27 +1289,154 @@ model Separation {
   id                 Int       @id @default(autoincrement())
   userId             Int       @unique
   type               String                              // resignation, termination, absconding, retirement
-  requestDate        String                              // "YYYY-MM-DD"
-  lastWorkingDate    String?                             // "YYYY-MM-DD"
+  requestDate        String                              // "YYYY-MM-DD" — date submitted
+  preferredLWD       String?                             // employee's preferred last working day
+  expectedLWD        String?                             // requestDate + noticePeriodDays (auto-calc)
+  adjustedLWD        String?                             // expectedLWD + leaveDaysDuringNotice
+  lastWorkingDate    String?                             // HR-confirmed official LWD
   reason             String?
-  status             String    @default("initiated")     // initiated, notice_period, fnf_pending, completed, cancelled
+  status             String    @default("pending_manager") // pending_manager | pending_hr | notice_period | clearance | fnf_pending | fnf_approved | completed | rejected | cancelled
   noticePeriodDays   Int       @default(30)
+
+  // Initiation
+  initiatedBy        String    @default("hr")            // 'employee' | 'hr'
+
+  // Manager approval
+  managerApprovedAt  String?
+  managerApprovedBy  Int?
+  managerNote        String?
+  managerProposedLWD String?
+
+  // HR confirmation
+  hrConfirmedAt      String?
+  hrConfirmedBy      Int?
+  hrNote             String?
+
+  // Leave blocking (on HR confirmation)
+  leavesBlocked      Boolean   @default(false)           // HR has blocked all future leave requests
+  leavesBlockedAt    DateTime?
+
+  // Notice period tracking
+  leaveDaysDuringNotice Int    @default(0)               // leave days taken during notice (extends LWD)
+
+  // Exit interview
   exitInterviewDone  Boolean   @default(false)
   exitInterviewNotes String?
-  allAssetsReturned  Boolean   @default(false)           // must be true before FnF
-  assetReturnNotes   String?                             // JSON: details of pending/returned assets
-  fnfAmount             Float?
-  fnfHoldReason         String?                          // "pending_asset_return" etc.
-  fnfPaidOn             String?                          // "YYYY-MM-DD"
-  workspaceBackupEmail  String?                          // Email to forward departing user's mail to
-  workspaceAction       String?                          // 'suspended', 'suspended_forwarding', 'failed', null
+  exitInterviewDate  String?
+
+  // Asset clearance
+  allAssetsReturned  Boolean   @default(false)
+  assetReturnNotes   String?
+
+  // FnF
+  fnfAmount          Float?                              // legacy total
+  fnfNetAmount       Float?                              // calculated net from FnF line items
+  fnfHoldReason      String?
+  fnfPaidOn          String?
+  fnfApprovedAt      String?
+  fnfApprovedBy      Int?
+
+  // Salary hold (30 days, processed after 45 days from LWD)
+  salaryHoldDays     Int       @default(30)
+  salaryHoldUntil    String?                             // lastWorkingDate + 45 days
+  salaryReleased     Boolean   @default(false)
+  salaryReleasedAt   String?
+  salaryReleasedBy   Int?
+
+  // Document generation
+  documentsGenerated    Boolean   @default(false)
+  documentsGeneratedAt  DateTime?
+  relievingLetterUrl    String?
+  experienceLetterUrl   String?
+
+  // Workspace
+  workspaceBackupEmail  String?
+  workspaceAction       String?                          // 'suspended', 'suspended_forwarding', 'active_limited', 'forwarding_only', 'failed'
+
+  // Admin handler (legacy / fallback)
   processedBy           Int?
+
+  completedAt        DateTime?
+  rejectionReason    String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  user               User     @relation(fields: [userId], references: [id])
-  processor          User?    @relation("SeparationHandler", fields: [processedBy], references: [id])
+  user               User      @relation(fields: [userId], references: [id])
+  processor          User?     @relation("SeparationHandler", fields: [processedBy], references: [id])
+  managerApprover    User?     @relation("SeparationManagerApprover", fields: [managerApprovedBy], references: [id])
+  hrConfirmer        User?     @relation("SeparationHRConfirmer", fields: [hrConfirmedBy], references: [id])
+  fnfApprover        User?     @relation("SeparationFnFApprover", fields: [fnfApprovedBy], references: [id])
+  salaryReleaser     User?     @relation("SeparationSalaryReleaser", fields: [salaryReleasedBy], references: [id])
   exitInterview      ExitInterview?
+  checklist          SeparationChecklist[]
+  fnfItems           SeparationFnF[]
+  salaryHolds        SeparationSalaryHold[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ── Separation Clearance Checklist ────────────────────────────────────────────
+
+model SeparationChecklist {
+  id             Int        @id @default(autoincrement())
+  separationId   Int
+  department     String                                  // IT | Admin | Finance | HR | Manager
+  task           String
+  assignedToId   Int?
+  dueDate        String?
+  status         String     @default("pending")         // pending | done | na
+  completedAt    String?
+  completedById  Int?
+  remarks        String?
+  sortOrder      Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  separation     Separation @relation(fields: [separationId], references: [id], onDelete: Cascade)
+  assignedTo     User?      @relation("SeparationChecklistAssignee", fields: [assignedToId], references: [id])
+  completedBy    User?      @relation("SeparationChecklistCompleter", fields: [completedById], references: [id])
+
+  @@index([separationId])
+  @@index([status])
+}
+
+// ── Separation FnF Line Items ─────────────────────────────────────────────────
+
+model SeparationFnF {
+  id             Int        @id @default(autoincrement())
+  separationId   Int
+  component      String                                  // last_month_salary | leave_encashment | notice_recovery | notice_buyout | asset_deduction | expense_claim | other
+  label          String
+  amount         Float                                   // positive = payable to employee, negative = deduction
+  days           Float?                                  // days used in calculation
+  dailyRate      Float?                                  // gross/30
+  autoCalculated Boolean    @default(true)
+  note           String?
+  overriddenBy   Int?
+  overriddenAt   String?
+  createdAt      DateTime   @default(now())
+
+  separation     Separation @relation(fields: [separationId], references: [id], onDelete: Cascade)
+
+  @@index([separationId])
+}
+
+// ── Separation Salary Hold Breakdown ─────────────────────────────────────────
+
+model SeparationSalaryHold {
+  id             Int        @id @default(autoincrement())
+  separationId   Int
+  month          String                                  // "YYYY-MM" — which payslip month this hold belongs to
+  heldDays       Int                                     // number of days held in this month
+  heldAmount     Float                                   // amount held for this month
+  description    String?                                 // e.g. "Jun 1–15 (last 15 days of employment)"
+  released       Boolean    @default(false)
+  releasedAt     DateTime?
+  createdAt      DateTime   @default(now())
+
+  separation     Separation @relation(fields: [separationId], references: [id], onDelete: Cascade)
+
+  @@index([separationId])
 }
 
 // ═══════════════════════════════════════════════
