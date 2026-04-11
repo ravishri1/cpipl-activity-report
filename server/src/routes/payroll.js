@@ -115,18 +115,22 @@ router.get('/salary/:userId/revisions', requireActiveEmployee, asyncHandler(asyn
   res.json(revisions);
 }));
 
-// GET /overview?month=YYYY-MM — Payroll overview for a month (greytHR-style)
+// GET /overview?month=YYYY-MM&companyId=1 — Payroll overview for a month (greytHR-style)
 router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const month = req.query.month || new Date().toISOString().substring(0, 7);
+  const companyId = req.query.companyId ? parseInt(req.query.companyId) : null;
   const [yearStr, monthStr] = month.split('-');
   const year = parseInt(yearStr);
   const monthNum = parseInt(monthStr);
   const daysInMonth = new Date(year, monthNum, 0).getDate();
   const monthStart = `${month}-01`;
   const monthEnd = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+  const companyFilter = companyId ? { companyId } : {};
 
-  // Payslip aggregates
-  const payslips = await req.prisma.payslip.findMany({ where: { month } });
+  // Payslip aggregates — filtered by company if provided
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month, ...(companyId ? { user: { companyId } } : {}) },
+  });
   const totalGross = payslips.reduce((s, p) => s + (p.grossEarnings || 0), 0);
   const totalDeductions = payslips.reduce((s, p) => s + (p.totalDeductions || 0), 0);
   const totalNetPay = payslips.reduce((s, p) => s + (p.netPay || 0), 0);
@@ -139,32 +143,21 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const totalTds = payslips.reduce((s, p) => s + (p.tds || 0), 0);
   const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
 
-  // Employee counts — all filtered to employees who had joined by monthEnd
-  // "Eligible for this month" = joined on or before last day of month AND (still active OR separated after monthStart)
+  // Employee counts — filtered by company + joined by monthEnd
   const totalActiveEmployees = await req.prisma.user.count({
-    where: {
-      isActive: true,
-      dateOfJoining: { lte: monthEnd },
-    },
+    where: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter },
   });
   const additions = await req.prisma.user.count({
-    where: {
-      isActive: true,
-      dateOfJoining: { gte: monthStart, lte: monthEnd },
-    },
+    where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd }, ...companyFilter },
   });
   const separations = await req.prisma.separation.count({
-    where: { lastWorkingDate: { gte: monthStart, lte: monthEnd } },
+    where: { lastWorkingDate: { gte: monthStart, lte: monthEnd }, ...(companyId ? { user: { companyId } } : {}) },
   });
   const exclusions = await req.prisma.user.count({
-    where: {
-      isActive: true,
-      dateOfJoining: { lte: monthEnd },
-      salaryStructure: null,
-    },
+    where: { isActive: true, dateOfJoining: { lte: monthEnd }, salaryStructure: null, ...companyFilter },
   });
   const stoppedSalaryCount = await req.prisma.salaryStructure.count({
-    where: { stopSalaryProcessing: true, user: { isActive: true, dateOfJoining: { lte: monthEnd } } },
+    where: { stopSalaryProcessing: true, user: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter } },
   });
 
   // Payslip status counts
@@ -239,18 +232,21 @@ router.put('/overview/locks', requireAdmin, asyncHandler(async (req, res) => {
 
 // POST /generate — Generate payslips for a month (admin)
 router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
-  const { month } = req.body;
+  const { month, companyId } = req.body;
   if (!month) throw badRequest('Month is required (format: YYYY-MM)');
+  if (!companyId) throw badRequest('companyId is required — payroll must be processed per company');
 
   const year = parseInt(month.split('-')[0]);
   const monthNum = parseInt(month.split('-')[1]);
+  const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
 
   const salaries = await req.prisma.salaryStructure.findMany({
+    where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd } } },
     include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
-  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures');
+  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures for this company');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
 

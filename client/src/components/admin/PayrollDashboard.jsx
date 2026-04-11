@@ -780,7 +780,7 @@ const StatutoryReport = ({ month }) => {
 };
 
 // ─── Process Payroll Wizard ──────────────────────────────────────────────────
-function ProcessPayrollWizard({ month, onClose, onDone }) {
+function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   const [step, setStep] = useState(1); // 1=checklist, 2=scanning, 3=review, 4=confirm, 5=generating, 6=done
   const [checks, setChecks] = useState(null);
   const [scanErr, setScanErr] = useState(null);
@@ -798,7 +798,7 @@ function ProcessPayrollWizard({ month, onClose, onDone }) {
   const runGenerate = async () => {
     setStep(5);
     try {
-      const r = await api.post('/payroll/generate', { month });
+      const r = await api.post('/payroll/generate', { month, companyId });
       setGenerateResult(r.data);
       setStep(6);
       onDone?.();
@@ -1366,6 +1366,8 @@ function PayrollChecklist({ month, compact = false }) {
 
 export default function PayrollDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
+  const [selectedCompanyId, setSelectedCompanyId] = useState(1); // default CPIPL
+  const [companies, setCompanies] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [payslips, setPayslips] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1383,6 +1385,11 @@ export default function PayrollDashboard() {
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+
+  // Load companies on mount
+  useEffect(() => {
+    api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+  }, []);
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
@@ -1406,7 +1413,7 @@ export default function PayrollDashboard() {
   const fetchOverview = useCallback(async () => {
     setOverviewLoading(true);
     try {
-      const res = await api.get(`/payroll/overview?month=${selectedMonth}`);
+      const res = await api.get(`/payroll/overview?month=${selectedMonth}&companyId=${selectedCompanyId}`);
       setOverview(res.data);
     } catch (err) {
       console.error('Failed to fetch overview:', err);
@@ -1435,7 +1442,7 @@ export default function PayrollDashboard() {
     setStatusFilter('all');
   }, [fetchPayslips]);
 
-  useEffect(() => { if (activeTab === 'overview') fetchOverview(); }, [activeTab, fetchOverview]);
+  useEffect(() => { if (activeTab === 'overview') fetchOverview(); }, [activeTab, fetchOverview, selectedCompanyId, selectedMonth]);
 
   const handleProcessCheck = async () => {
     setProcessCheckLoading(true);
@@ -1572,6 +1579,7 @@ export default function PayrollDashboard() {
       {wizardOpen && (
         <ProcessPayrollWizard
           month={selectedMonth}
+          companyId={selectedCompanyId}
           onClose={() => { setWizardOpen(false); fetchPayslips(); fetchOverview(); setActiveTab('payslips'); }}
           onDone={() => { fetchPayslips(); fetchOverview(); }}
         />
@@ -1591,6 +1599,24 @@ export default function PayrollDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Company selector */}
+          <div className="relative">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(parseInt(e.target.value))}
+              className="pl-9 pr-8 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+            >
+              {companies.length === 0 ? (
+                <option value={1}>CPIPL</option>
+              ) : (
+                companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))
+              )}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
           <div className="relative">
             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
