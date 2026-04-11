@@ -5,6 +5,7 @@ import {
   FileSpreadsheet, CheckCircle2, AlertTriangle, Pencil, Info,
   ChevronDown, ChevronUp, Users, UserMinus,
 } from 'lucide-react';
+import SaturdayPolicyManager from './SaturdayPolicyManager';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -250,7 +251,7 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
 
 // ─── Weekly Off Tab ─────────────────────────────────────────────────────────
 function WeeklyOffTab() {
-  const [subTab, setSubTab] = useState('patterns'); // 'patterns' | 'assignments' | 'blocks'
+  const [subTab, setSubTab] = useState('patterns'); // 'patterns' | 'assignments' | 'blocks' | 'saturday'
   const [patterns, setPatterns] = useState([]);
   const [unassigned, setUnassigned] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -388,6 +389,7 @@ function WeeklyOffTab() {
           { key: 'patterns', label: 'Patterns' },
           { key: 'assignments', label: 'Assignments (Date Range)' },
           { key: 'blocks', label: 'Holiday Blocks' },
+          { key: 'saturday', label: 'Saturday Rules' },
         ].map(t => (
           <button key={t.key} onClick={() => setSubTab(t.key)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${subTab === t.key ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
@@ -404,6 +406,11 @@ function WeeklyOffTab() {
       {/* HOLIDAY BLOCKS sub-tab */}
       {subTab === 'blocks' && (
         <DepartmentHolidayBlocksPanel />
+      )}
+
+      {/* SATURDAY RULES sub-tab */}
+      {subTab === 'saturday' && (
+        <SaturdayRulesPanel />
       )}
 
       {/* PATTERNS sub-tab */}
@@ -585,6 +592,48 @@ function WeeklyOffTab() {
         </div>
       )}
       </>}
+    </div>
+  );
+}
+
+// ─── Saturday Rules Panel ────────────────────────────────────────────────────
+function SaturdayRulesPanel() {
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+
+  useEffect(() => {
+    api.get('/companies').then(r => {
+      const list = r.data || [];
+      setCompanies(list);
+      if (list.length > 0) setSelectedCompanyId(list[0].id);
+    }).catch(() => {});
+  }, []);
+
+  const selected = companies.find(c => c.id === selectedCompanyId);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
+        <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+        <p className="text-sm text-amber-700">
+          Define which Saturdays are working or off for each date range. Payroll uses this to calculate working days correctly.
+        </p>
+      </div>
+
+      {companies.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {companies.map(c => (
+            <button key={c.id} onClick={() => setSelectedCompanyId(c.id)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition ${selectedCompanyId === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selectedCompanyId && selected && (
+        <SaturdayPolicyManager companyId={selectedCompanyId} companyName={selected.name} />
+      )}
     </div>
   );
 }
