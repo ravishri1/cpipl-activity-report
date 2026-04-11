@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
-import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
 
@@ -77,8 +76,6 @@ export default function SeparationManager() {
   const byStatus = (status) => filtered.filter(s => s.status === status);
   const today = new Date().toISOString().slice(0, 10);
 
-  if (loading) return <LoadingSpinner />;
-
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
@@ -99,6 +96,9 @@ export default function SeparationManager() {
         </div>
       </div>
 
+      {/* Thin loading bar */}
+      {loading && <div className="h-1 bg-blue-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 animate-pulse w-2/3" /></div>}
+
       {fetchErr && <AlertMessage type="error" message={fetchErr} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
@@ -113,7 +113,7 @@ export default function SeparationManager() {
         ].map(s => (
           <div key={s.label} className={`bg-white rounded-xl border p-4 ${s.alert && s.count > 0 ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}>
             <p className="text-xs text-gray-500">{s.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.count}</p>
+            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{loading ? '—' : s.count}</p>
             {s.alert && s.count > 0 && <p className="text-xs text-amber-600 mt-1">⏰ Ready to release</p>}
           </div>
         ))}
@@ -185,13 +185,16 @@ export default function SeparationManager() {
                 <div key={col.key} className="w-64 flex-shrink-0">
                   <div className="flex items-center justify-between mb-2 px-1">
                     <span className="text-sm font-semibold text-gray-700">{col.icon} {col.label}</span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{cards.length}</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{loading ? '…' : cards.length}</span>
                   </div>
                   <div className="space-y-2 min-h-24">
-                    {cards.length === 0 && (
+                    {loading ? (
+                      <div className="h-16 bg-gray-100 animate-pulse rounded-xl border border-dashed border-gray-200" />
+                    ) : cards.length === 0 ? (
                       <div className="text-xs text-gray-400 text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">Empty</div>
+                    ) : (
+                      cards.map(s => <SepCard key={s.id} sep={s} today={today} onClick={() => navigate(`/admin/separations/${s.id}`)} />)
                     )}
-                    {cards.map(s => <SepCard key={s.id} sep={s} today={today} onClick={() => navigate(`/admin/separations/${s.id}`)} />)}
                   </div>
                 </div>
               );
