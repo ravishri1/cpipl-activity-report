@@ -4,6 +4,7 @@
  */
 
 const { getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('./weeklyOffHelper');
+const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../../utils/saturdayPolicyHelper');
 
 const GRACE_MINUTES = 15;
 
@@ -113,7 +114,28 @@ async function getAttendanceMuster(month, department, location, prisma) {
   }
 
   // Batch-fetch weekly off patterns for all employees
-  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma);
+  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma, month);
+
+  // Fetch company IDs for users and load per-company Saturday policy
+  const usersWithCompany = await prisma.user.findMany({
+    where: { id: { in: users.map(u => u.id) } },
+    select: { id: true, companyId: true },
+  });
+  const userCompanyMap = {};
+  for (const u of usersWithCompany) userCompanyMap[u.id] = u.companyId;
+
+  // Build per-company offSaturdaySet cache for this month
+  const satCache = {};
+  const getOffSatSet = async (companyId) => {
+    if (!satCache[companyId]) {
+      const pol = await getSaturdayPolicyForMonth(companyId || 0, month, prisma);
+      satCache[companyId] = pol ? buildOffSaturdaySet(month, pol.saturdayType) : buildOffSaturdaySet(month, 'all');
+    }
+    return satCache[companyId];
+  };
+  // Pre-warm cache for all companies present
+  const uniqueCompanyIds = [...new Set(Object.values(userCompanyMap))];
+  for (const cid of uniqueCompanyIds) await getOffSatSet(cid);
 
   // Build employee rows
   const employees = users.map(user => {
@@ -122,11 +144,15 @@ async function getAttendanceMuster(month, department, location, prisma) {
     const shift = shiftMap[user.id] || null;
     const shiftStartMins = shift ? parseTimeToMinutes(shift.startTime) : null;
     const userOffDays = weeklyOffMap.get(user.id) || DEFAULT_OFF_DAYS;
+    const offSatSet = satCache[userCompanyMap[user.id]] || satCache[0] || new Set();
 
     for (const di of dayInfo) {
       const att = attMap[user.id]?.[di.date];
       const isHoliday = !!holidayMap[di.date];
-      const isWeekend = userOffDays.includes(di.dow);
+      // Saturday: off only if in weekly pattern AND in Saturday policy set
+      const isWeekend = di.dow === 6
+        ? (userOffDays.includes(6) && offSatSet.has(di.date))
+        : userOffDays.includes(di.dow);
       const leaveCode = leaveMap[user.id]?.[di.date] || null;
       const isFuture = di.date > today;
       const regStatus = regMap[user.id]?.[di.date] || null;

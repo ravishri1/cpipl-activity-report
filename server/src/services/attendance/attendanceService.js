@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════
 
 const { getUserWeeklyOffDays, getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('./weeklyOffHelper');
+const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../../utils/saturdayPolicyHelper');
 
 function getTodayDate() {
   return new Date().toISOString().split('T')[0];
@@ -286,6 +287,28 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
   // Batch-fetch weekly off patterns for all users
   const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma);
 
+  // Build per-month Saturday policy cache (companyId → month → offSaturdaySet)
+  const satPolicyCache = {};
+  const isDateWeeklyOff = async (dateStr, dow, offDays, companyId) => {
+    if (dow !== 6) return offDays.includes(dow);
+    if (!offDays.includes(6)) return false;
+    const month = dateStr.substring(0, 7);
+    const key = `${companyId}-${month}`;
+    if (!satPolicyCache[key]) {
+      const pol = await getSaturdayPolicyForMonth(companyId || 0, month, prisma);
+      satPolicyCache[key] = pol ? buildOffSaturdaySet(month, pol.saturdayType) : buildOffSaturdaySet(month, 'all');
+    }
+    return satPolicyCache[key].has(dateStr);
+  };
+
+  // Build company map for users
+  const userCompanyMap = {};
+  const usersWithCompany = await prisma.user.findMany({
+    where: { id: { in: users.map(u => u.id) } },
+    select: { id: true, companyId: true },
+  });
+  for (const u of usersWithCompany) userCompanyMap[u.id] = u.companyId;
+
   // Build attendance map: userId → array of records
   const attByUser = {};
   for (const a of attendances) {
@@ -293,44 +316,52 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
     attByUser[a.userId].push(a);
   }
 
-  // Build leave days per user (using per-user weekly off)
+  // Build leave days per user (using per-user weekly off + Saturday policy)
   const leaveByUser = {};
   for (const lr of leaves) {
     if (!leaveByUser[lr.userId]) leaveByUser[lr.userId] = 0;
     const offDays = weeklyOffMap.get(lr.userId) || DEFAULT_OFF_DAYS;
+    const companyId = userCompanyMap[lr.userId];
     let ld = new Date(Math.max(new Date(lr.startDate + 'T00:00:00'), new Date(startDate + 'T00:00:00')));
     const le = new Date(Math.min(new Date(lr.endDate + 'T00:00:00'), new Date(endDate + 'T00:00:00')));
     while (ld <= le) {
+      const ds = ld.toISOString().slice(0, 10);
       const dow = ld.getDay();
-      if (!offDays.includes(dow)) leaveByUser[lr.userId]++;
+      const isOff = await isDateWeeklyOff(ds, dow, offDays, companyId);
+      if (!isOff) leaveByUser[lr.userId]++;
       ld.setDate(ld.getDate() + 1);
     }
   }
 
-  const employees = users.map(u => {
+  const employees = await Promise.all(users.map(async u => {
     const offDays = weeklyOffMap.get(u.id) || DEFAULT_OFF_DAYS;
+    const companyId = userCompanyMap[u.id];
     const records = attByUser[u.id] || [];
     const presentDays = records.filter(r => r.status === 'present').length;
     const halfDays = records.filter(r => r.status === 'half_day').length;
     const totalHours = records.reduce((s, r) => s + (r.workHours || 0), 0);
     const leaveDays = leaveByUser[u.id] || 0;
 
-    // Count working days for this user (based on their weekly off pattern)
+    // Count working days for this user (respecting Saturday policy)
     let userWorkingDays = 0;
     let d = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T00:00:00');
     while (d <= end) {
+      const ds = d.toISOString().slice(0, 10);
       const dow = d.getDay();
-      if (!offDays.includes(dow)) userWorkingDays++;
+      const isOff = await isDateWeeklyOff(ds, dow, offDays, companyId);
+      if (!isOff) userWorkingDays++;
       d.setDate(d.getDate() + 1);
     }
 
     // Holiday weekdays for this user
-    const holidayWeekdays = holidays.filter(h => {
+    const holidayWeekdays = await Promise.all(holidays.map(async h => {
       const hd = new Date(h.date + 'T00:00:00').getDay();
-      return !offDays.includes(hd);
-    }).length;
-    const effectiveWorkDays = userWorkingDays - holidayWeekdays;
+      const isOff = await isDateWeeklyOff(h.date, hd, offDays, companyId);
+      return isOff ? 0 : 1;
+    }));
+    const totalHolidayWeekdays = holidayWeekdays.reduce((s, v) => s + v, 0);
+    const effectiveWorkDays = userWorkingDays - totalHolidayWeekdays;
     const absentDays = Math.max(0, effectiveWorkDays - presentDays - halfDays - leaveDays);
     const avgHours = presentDays + halfDays > 0 ? totalHours / (presentDays + halfDays) : 0;
 
@@ -347,7 +378,7 @@ async function getTeamAttendanceRange(startDate, endDate, department, prisma) {
       totalHours: Math.round(totalHours * 100) / 100,
       avgHours: Math.round(avgHours * 100) / 100,
     };
-  });
+  }));
 
   // Use default off days for summary (aggregate view)
   let defaultWorkingDays = 0;
