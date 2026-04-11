@@ -233,7 +233,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    include: { user: { select: { id: true, name: true, isActive: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -291,6 +291,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
     const workingDays = calcWorkingDays(mergedHolidays);
 
+    // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──
+    // These are employees added to the attendance exception list (isAttendanceExempt = true).
+    // No biometric required, no LOP deduction, no leave impact on payroll.
+    let presentDays = 0, lopDays = 0;
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (sal.user.isAttendanceExempt) {
+      presentDays = workingDays;
+      lopDays = 0;
+    } else {
     const attendances = await req.prisma.attendance.findMany({
       where: { userId: sal.userId, date: { startsWith: month } },
     });
@@ -325,9 +335,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       where: { userId: sal.userId, lastWorkingDate: { startsWith: month } },
       select: { lastWorkingDate: true },
     });
-
-    let presentDays = 0, lopDays = 0;
-    const today = new Date().toISOString().slice(0, 10);
 
     if (attendances.length === 0 && leaveDatesSet.size === 0 && lopDatesSet.size === 0 && !separation) {
       // No data at all → assume full attendance (fallback for missing biometric)
@@ -367,6 +374,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         }
       }
     }
+    } // end of attendance-exempt else block
 
     const perDaySalary = workingDays > 0 ? sal.ctcMonthly / workingDays : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
@@ -651,12 +659,14 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
 
   const activeEmployees = await req.prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, employeeId: true, salaryStructure: { select: { id: true, stopSalaryProcessing: true } } },
+    select: { id: true, name: true, employeeId: true, isAttendanceExempt: true, salaryStructure: { select: { id: true, stopSalaryProcessing: true } } },
   });
 
   const withSalary = activeEmployees.filter(u => u.salaryStructure && !u.salaryStructure.stopSalaryProcessing);
   const withoutSalary = activeEmployees.filter(u => !u.salaryStructure);
   const stopped = activeEmployees.filter(u => u.salaryStructure?.stopSalaryProcessing);
+  // Attendance-exempt employees never need biometric — exclude from attendance coverage check
+  const needsAttendance = withSalary.filter(u => !u.isAttendanceExempt);
 
   // Attendance coverage
   const attendanceCounts = await req.prisma.attendance.groupBy({
@@ -665,7 +675,7 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
     _count: { id: true },
   });
   const attendanceUserIds = new Set(attendanceCounts.map(a => a.userId));
-  const withAttendance = withSalary.filter(u => attendanceUserIds.has(u.id)).length;
+  const withAttendance = needsAttendance.filter(u => attendanceUserIds.has(u.id)).length;
 
   // Pending leave approvals
   const daysInMonth = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).getDate();
@@ -733,7 +743,7 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
     },
     checks: [
       { label: 'Salary structures set', status: withoutSalary.length === 0 ? 'ok' : 'warning', detail: withoutSalary.length > 0 ? `${withoutSalary.length} employees missing` : 'All set' },
-      { label: 'Attendance data finalized', status: withAttendance >= withSalary.length * 0.8 ? 'ok' : 'warning', detail: `${withAttendance}/${withSalary.length} employees have attendance records` },
+      { label: 'Attendance data finalized', status: needsAttendance.length === 0 || withAttendance >= needsAttendance.length * 0.8 ? 'ok' : 'warning', detail: `${withAttendance}/${needsAttendance.length} employees have attendance records${withSalary.length - needsAttendance.length > 0 ? ` (${withSalary.length - needsAttendance.length} exempt)` : ''}` },
       { label: 'Attendance regularizations', status: pendingRegularizations === 0 ? 'ok' : 'warning', detail: pendingRegularizations > 0 ? `${pendingRegularizations} regularization request(s) still pending approval` : 'All cleared' },
       { label: 'Pending leave approvals', status: pendingLeaves === 0 ? 'ok' : 'warning', detail: pendingLeaves > 0 ? `${pendingLeaves} leave request(s) still pending` : 'None pending' },
       { label: 'Payslips generated', status: existingPayslips > 0 ? 'ok' : 'pending', detail: existingPayslips > 0 ? `${existingPayslips} generated, ${publishedPayslips} published` : 'Not generated yet' },
