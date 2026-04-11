@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { parseId, requireFields } = require('../utils/validate');
 const { getWeeklyOffMap } = require('../services/attendance/weeklyOffHelper');
+const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../utils/saturdayPolicyHelper');
 
 const router = express.Router();
 router.use(authenticate);
@@ -242,7 +243,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   const salaries = await req.prisma.salaryStructure.findMany({
     where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } } },
-    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -262,12 +263,19 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     branchHolidayCache[branchId] = new Set(bh.map(h => h.date));
   }
 
-  // Helper: compute working days for a given holiday set
+  // Load Saturday policy for this company and month
+  const saturdayPolicy = await getSaturdayPolicyForMonth(parseInt(companyId), month, req.prisma);
+  const offSaturdaySet = saturdayPolicy ? buildOffSaturdaySet(month, saturdayPolicy.saturdayType) : buildOffSaturdaySet(month, 'all');
+
+  // Helper: compute working days for a given holiday set (respects Saturday policy)
   const calcWorkingDays = (holidaySet) => {
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const date = `${month}-${String(d).padStart(2, '0')}`;
-      if (new Date(year, monthNum - 1, d).getDay() !== 0 && !holidaySet.has(date)) count++;
+      const dow = new Date(year, monthNum - 1, d).getDay();
+      const isSunday = dow === 0;
+      const isOffSat = dow === 6 && offSaturdaySet.has(date);
+      if (!isSunday && !isOffSat && !holidaySet.has(date)) count++;
     }
     return count;
   };
@@ -314,6 +322,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       where: { userId: sal.userId, date: { startsWith: month } },
     });
 
+    const isIntern = sal.user.employeeType === 'intern';
+
     // Fetch approved leaves for this month — separate LOP (deduction) from paid leaves
     const approvedLeaves = await req.prisma.leaveRequest.findMany({
       where: {
@@ -326,7 +336,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
     const lopDatesSet = new Set();    // LOP leave days (deducted like absent)
     for (const lr of approvedLeaves) {
-      const isLop = lr.leaveType?.code === 'LOP';
+      const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
       const cur = new Date(lr.startDate + 'T00:00:00');
       const end = new Date(lr.endDate + 'T00:00:00');
       while (cur <= end) {
@@ -356,8 +366,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dow = new Date(year, monthNum - 1, d).getDay();
-        // Skip weekends, holidays, future dates
-        if (dow === 0 || mergedHolidays.has(dateStr) || dateStr > today) continue;
+        // Skip Sundays, off Saturdays (per policy), holidays, future dates
+        const isOffSat = dow === 6 && offSaturdaySet.has(dateStr);
+        if (dow === 0 || isOffSat || mergedHolidays.has(dateStr) || dateStr > today) continue;
         // Skip days after last working date (pro-rata separation)
         if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
           lopDays++;
@@ -437,7 +448,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
     const grossEarnings = sal.basic + sal.hra + sal.da + sal.specialAllowance +
       sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance + reimbursements + offDayAllowance;
-    const totalDeductions = sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds;
+    // Interns: no PF, no ESI, no PT, no Mediclaim deductions
+    const totalDeductions = isIntern ? sal.tds : (sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
 
     const payslip = await req.prisma.payslip.create({
@@ -448,8 +460,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
         otherAllowanceLabel: sal.otherAllowanceLabel, grossEarnings,
         employerPf: sal.employerPf, employerEsi: sal.employerEsi,
-        employeePf: sal.employeePf, employeeEsi: sal.employeeEsi,
-        professionalTax: sal.professionalTax, tds: sal.tds,
+        employeePf: isIntern ? 0 : sal.employeePf, employeeEsi: isIntern ? 0 : sal.employeeEsi,
+        professionalTax: isIntern ? 0 : sal.professionalTax, tds: sal.tds,
         otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
         reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,

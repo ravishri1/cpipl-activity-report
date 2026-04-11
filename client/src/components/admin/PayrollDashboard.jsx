@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import OffDayAllowanceManager from './OffDayAllowanceManager';
+import SaturdayPolicyManager from './SaturdayPolicyManager';
 
 const formatCurrency = (amount) => {
   if (amount == null || isNaN(amount)) return '₹0';
@@ -2010,6 +2011,12 @@ export default function PayrollDashboard() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Saturday Policy */}
+                  <SaturdayPolicyManager
+                    companyId={selectedCompanyId}
+                    companyName={companies.find(c => c.id === selectedCompanyId)?.name || 'Company'}
+                  />
 
                   {/* Payslip Status */}
                   <div className="bg-white rounded-xl border border-slate-200 p-6">

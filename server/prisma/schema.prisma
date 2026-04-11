@@ -679,6 +679,23 @@ model Company {
   costCenterEmployees  User[]       @relation("CostCenter")
   contracts        CompanyContract[]
   branches         Branch[]
+  saturdayPolicies SaturdayPolicy[]
+}
+
+// ═══════════════════════════════════════════════
+// Saturday Policy (date-ranged per company)
+// ═══════════════════════════════════════════════
+
+model SaturdayPolicy {
+  id            Int      @id @default(autoincrement())
+  companyId     Int
+  effectiveFrom String                               // "2025-04-01" — start of effective period
+  effectiveTo   String?                              // "2025-04-30" — end, null = ongoing
+  saturdayType  String   @default("all")             // "all" | "2nd_4th" | "none"
+  description   String?
+  createdAt     DateTime @default(now())
+
+  company       Company  @relation(fields: [companyId], references: [id])
 }
 
 // ═══════════════════════════════════════════════
