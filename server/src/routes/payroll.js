@@ -56,21 +56,36 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
   const userId = parseId(req.params.userId);
   const d = req.body;
 
-  const grossEarnings = (d.basic || 0) + (d.hra || 0) + (d.da || 0) + (d.specialAllowance || 0) +
-    (d.medicalAllowance || 0) + (d.conveyanceAllowance || 0) + (d.otherAllowance || 0);
+  // Support both new flexible components array and legacy individual fields
+  const earningComps = Array.isArray(d.components) ? d.components.filter(c => c.type === 'earning') : [];
+  const getComp = (code) => parseFloat(earningComps.find(c => c.code === code)?.amount) || 0;
+  const grossEarnings = earningComps.length > 0
+    ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+    : (d.basic || 0) + (d.hra || 0) + (d.da || 0) + (d.specialAllowance || 0) +
+      (d.medicalAllowance || 0) + (d.conveyanceAllowance || 0) + (d.otherAllowance || 0);
   const totalDeductions = (d.employeePf || 0) + (d.employeeEsi || 0) + (d.professionalTax || 0) + (d.tds || 0);
   const netPayMonthly = grossEarnings - totalDeductions;
 
   const data = {
     ctcAnnual: d.ctcAnnual || 0, ctcMonthly: d.ctcMonthly || (d.ctcAnnual ? d.ctcAnnual / 12 : 0),
-    basic: d.basic || 0, hra: d.hra || 0, da: d.da || 0,
-    specialAllowance: d.specialAllowance || 0, medicalAllowance: d.medicalAllowance || 0,
-    conveyanceAllowance: d.conveyanceAllowance || 0, otherAllowance: d.otherAllowance || 0,
+    // Legacy fields — derived from components when available (backward compat with old payslip generation)
+    basic: getComp('BASIC') || d.basic || 0,
+    hra: getComp('HRA') || d.hra || 0,
+    da: getComp('DA') || d.da || 0,
+    specialAllowance: getComp('SPECIAL_ALLOWANCE') || d.specialAllowance || 0,
+    medicalAllowance: getComp('MEDICAL_ALLOWANCE') || d.medicalAllowance || 0,
+    conveyanceAllowance: getComp('CONVEYANCE_ALLOWANCE') || d.conveyanceAllowance || 0,
+    otherAllowance: getComp('OTHER') || d.otherAllowance || 0,
     otherAllowanceLabel: d.otherAllowanceLabel || null,
+    // Deductions (pre-calculated by frontend)
     employerPf: d.employerPf || 0, employerEsi: d.employerEsi || 0,
     employeePf: d.employeePf || 0, employeeEsi: d.employeeEsi || 0,
     professionalTax: d.professionalTax || 0, tds: d.tds || 0,
-    netPayMonthly, effectiveFrom: d.effectiveFrom || null, notes: d.notes || null,
+    netPayMonthly,
+    effectiveFrom: d.effectiveFrom || null,
+    notes: d.notes || null,
+    // Flexible components JSON — THIS is what the UI reads back
+    components: d.components && d.components.length > 0 ? d.components : null,
   };
 
   const existing = await req.prisma.salaryStructure.findUnique({ where: { userId } });
