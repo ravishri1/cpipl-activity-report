@@ -506,6 +506,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
     } // end of attendance-exempt else block
 
+    // Fetch one-time payroll deductions for this employee/month
+    const oneTimeDeductions = await req.prisma.payrollDeduction.findMany({
+      where: { userId: sal.userId, month, payslipId: null },
+    });
+    const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
+    const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
+
     const perDaySalary = daysInMonth > 0 ? sal.ctcMonthly / daysInMonth : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
@@ -566,7 +573,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const grossEarnings = grossBase + reimbursements + offDayAllowance;
     // Interns: no PF, no ESI, no PT, no Mediclaim deductions
     const totalDeductions = isIntern ? sal.tds : (sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds);
-    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
+    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
     const payslip = await req.prisma.payslip.create({
       data: {
@@ -578,7 +585,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         employerPf: sal.employerPf, employerEsi: sal.employerEsi,
         employeePf: isIntern ? 0 : sal.employeePf, employeeEsi: isIntern ? 0 : sal.employeeEsi,
         professionalTax: isIntern ? 0 : sal.professionalTax, tds: sal.tds,
-        otherDeductions: 0, totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction,
+        otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
+        totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
         reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
         companyName: sal.user.company?.name || null,
@@ -613,6 +621,14 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           data: { status: advStatus, ...(remaining === 0 ? { closedAt: new Date() } : {}) },
         });
       }
+    }
+
+    // Link one-time deductions to payslip
+    if (oneTimeDeductions.length > 0) {
+      await req.prisma.payrollDeduction.updateMany({
+        where: { id: { in: oneTimeDeductions.map(d => d.id) }, payslipId: null },
+        data: { payslipId: payslip.id },
+      });
     }
 
     results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked });
@@ -1924,6 +1940,53 @@ router.delete('/off-day-allowance/:id', requireAdmin, asyncHandler(async (req, r
   if (!record) throw notFound('Off-Day Allowance Eligibility');
   await req.prisma.offDayAllowanceEligibility.delete({ where: { id } });
   res.json({ message: 'Off-day allowance eligibility removed.' });
+}));
+
+// ── One-Time Payroll Deductions ─────────────────────────────────────────────
+
+// GET /deductions?month=YYYY-MM&userId=X — list deductions
+router.get('/deductions', requireAdmin, asyncHandler(async (req, res) => {
+  const { month, userId } = req.query;
+  const where = {};
+  if (month) where.month = month;
+  if (userId) where.userId = parseInt(userId);
+  const deductions = await req.prisma.payrollDeduction.findMany({
+    where,
+    include: {
+      user: { select: { name: true, employeeId: true } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(deductions);
+}));
+
+// POST /deductions — add deduction
+router.post('/deductions', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, month, amount, label, reason } = req.body;
+  requireFields(req.body, 'userId', 'month', 'amount', 'label');
+  const d = await req.prisma.payrollDeduction.create({
+    data: {
+      userId: parseInt(userId),
+      month,
+      amount: parseFloat(amount),
+      label,
+      reason: reason || null,
+      createdById: req.user.id,
+    },
+    include: { user: { select: { name: true, employeeId: true } } },
+  });
+  res.status(201).json(d);
+}));
+
+// DELETE /deductions/:id
+router.delete('/deductions/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const d = await req.prisma.payrollDeduction.findUnique({ where: { id } });
+  if (!d) throw notFound('Deduction');
+  if (d.payslipId) throw badRequest('Cannot delete — payslip already generated. Delete the payslip first.');
+  await req.prisma.payrollDeduction.delete({ where: { id } });
+  res.json({ success: true });
 }));
 
 module.exports = router;

@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import OffDayAllowanceManager from './OffDayAllowanceManager';
+import PayrollDeductions from './PayrollDeductions';
 
 const formatCurrency = (amount) => {
   if (amount == null || isNaN(amount)) return '₹0';
@@ -1385,6 +1386,7 @@ export default function PayrollDashboard() {
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [showDeductions, setShowDeductions] = useState(false);
 
   // Load companies on mount
   useEffect(() => {
@@ -1572,6 +1574,14 @@ export default function PayrollDashboard() {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* One-Time Payroll Deductions Modal */}
+      {showDeductions && (
+        <PayrollDeductions
+          month={selectedMonth}
+          onClose={() => setShowDeductions(false)}
         />
       )}
 
@@ -2202,6 +2212,13 @@ export default function PayrollDashboard() {
               >
                 {neftExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                 NEFT Export
+              </button>
+              <button
+                onClick={() => setShowDeductions(true)}
+                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                <Banknote className="w-4 h-4" />
+                Deductions
               </button>
               <button
                 onClick={handleGenerate}

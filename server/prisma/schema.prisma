@@ -252,6 +252,8 @@ model User {
   payrollLocks              PayrollMonthLock[]   @relation("PayrollLocker")
   offDayAllowances          OffDayAllowanceEligibility[] @relation("OffDayAllowanceUser")
   offDayAllowancesCreated   OffDayAllowanceEligibility[] @relation("OffDayAllowanceCreator")
+  payrollDeductions         PayrollDeduction[]   @relation("PayrollDeductions")
+  payrollDeductionsCreated  PayrollDeduction[]   @relation("PayrollDeductionCreatedBy")
 
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
@@ -957,6 +959,29 @@ model Payslip {
   @@unique([userId, month])
   @@index([month])
   @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// One-Time Payroll Deductions
+// ═══════════════════════════════════════════════
+
+model PayrollDeduction {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  month       String                    // "YYYY-MM"
+  amount      Float
+  label       String                    // e.g. "Uniform Recovery", "Equipment Damage"
+  reason      String?
+  payslipId   Int?                      // set after payslip is generated
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation("PayrollDeductions", fields: [userId], references: [id])
+  createdBy   User     @relation("PayrollDeductionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([userId])
+  @@index([month])
 }
 
 // ═══════════════════════════════════════════════
