@@ -185,7 +185,7 @@ export default function SalaryStructure() {
   // Fetch pending salary — scoped to companyId+month when coming from payroll Go Fix link
   const filterCompanyId = searchParams.get('companyId');
   const filterMonth = searchParams.get('month');
-  useEffect(() => {
+  const fetchPendingSalary = useCallback(() => {
     const params = new URLSearchParams();
     if (filterCompanyId) params.set('companyId', filterCompanyId);
     if (filterMonth) params.set('month', filterMonth);
@@ -193,6 +193,7 @@ export default function SalaryStructure() {
       .then((r) => setPendingSalary(r.data || []))
       .catch(() => {});
   }, [filterCompanyId, filterMonth]);
+  useEffect(() => { fetchPendingSalary(); }, [fetchPendingSalary]);
 
   // Auto-open employee salary modal from URL param (?employeeId=123)
   useEffect(() => {
@@ -424,6 +425,7 @@ export default function SalaryStructure() {
       setTimeout(() => {
         closeModal();
         fetchEmployees();
+        fetchPendingSalary();
       }, 1500);
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to save salary structure.';
@@ -431,7 +433,7 @@ export default function SalaryStructure() {
     } finally {
       setSaving(false);
     }
-  }, [selectedEmployee, salaryForm, selectedComponents, closeModal, fetchEmployees]);
+  }, [selectedEmployee, salaryForm, selectedComponents, closeModal, fetchEmployees, fetchPendingSalary]);
 
   const toggleRevisions = useCallback(async () => {
     if (showRevisions) {
@@ -573,9 +575,21 @@ export default function SalaryStructure() {
       return (
         <div className="text-center py-16">
           <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">
-            {searchQuery ? 'No employees match your search.' : 'No active employees found.'}
+          <p className="text-slate-500 text-sm font-medium mb-1">
+            {searchQuery
+              ? 'No employees match your search.'
+              : filterMissing
+              ? '✅ All employees have salary structures!'
+              : 'No active employees found.'}
           </p>
+          {filterMissing && !searchQuery && (
+            <button
+              onClick={() => { searchParams.delete('filter'); setSearchParams(searchParams, { replace: true }); }}
+              className="mt-3 text-sm text-blue-600 hover:underline"
+            >
+              Show all employees
+            </button>
+          )}
         </div>
       );
     }
