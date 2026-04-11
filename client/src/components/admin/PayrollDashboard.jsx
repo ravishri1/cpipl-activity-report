@@ -1987,8 +1987,8 @@ export default function PayrollDashboard() {
                         </div>
                         <div className="flex items-center gap-2">
                           {[
-                            { label: ctrl.invert ? ctrl.unlockLabel : ctrl.unlockLabel, active: !ctrl.value },
-                            { label: ctrl.invert ? ctrl.lockLabel : ctrl.lockLabel, active: ctrl.value },
+                            { label: ctrl.unlockLabel, active: ctrl.invert ? !ctrl.value : ctrl.value },
+                            { label: ctrl.lockLabel,   active: ctrl.invert ? ctrl.value  : !ctrl.value },
                           ].map((btn, i) => (
                             <button
                               key={i}
