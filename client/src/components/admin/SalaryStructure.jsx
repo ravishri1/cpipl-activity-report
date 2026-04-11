@@ -182,12 +182,17 @@ export default function SalaryStructure() {
     }).catch(() => {});
   }, []);
 
-  // Fetch pending salary
+  // Fetch pending salary — scoped to companyId+month when coming from payroll Go Fix link
+  const filterCompanyId = searchParams.get('companyId');
+  const filterMonth = searchParams.get('month');
   useEffect(() => {
-    api.get('/payroll/pending-salary')
+    const params = new URLSearchParams();
+    if (filterCompanyId) params.set('companyId', filterCompanyId);
+    if (filterMonth) params.set('month', filterMonth);
+    api.get(`/payroll/pending-salary?${params.toString()}`)
       .then((r) => setPendingSalary(r.data || []))
       .catch(() => {});
-  }, []);
+  }, [filterCompanyId, filterMonth]);
 
   // Auto-open employee salary modal from URL param (?employeeId=123)
   useEffect(() => {

@@ -790,7 +790,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   // Step 2: scan (triggered manually after checklist)
   const runScan = () => {
     setStep(2);
-    api.get(`/payroll/process-check?month=${month}`)
+    api.get(`/payroll/process-check?month=${month}&companyId=${companyId}`)
       .then(r => { setChecks(r.data); setStep(3); })
       .catch(e => { setScanErr(e.response?.data?.message || 'Scan failed'); setStep(3); });
   };
@@ -816,7 +816,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   };
 
   const CHECK_LINKS = {
-    'Salary structures set':          '/admin/salary-setup?filter=missing',
+    'Salary structures set':          `/admin/salary-setup?filter=missing&companyId=${companyId}&month=${month}`,
     'Pending leave approvals':        '/admin/leave',
     'Advance disbursements pending':  '/admin/salary-advances',
     'Attendance data':                '/admin/attendance',
@@ -1447,7 +1447,7 @@ export default function PayrollDashboard() {
   const handleProcessCheck = async () => {
     setProcessCheckLoading(true);
     try {
-      const res = await api.get(`/payroll/process-check?month=${selectedMonth}`);
+      const res = await api.get(`/payroll/process-check?month=${selectedMonth}&companyId=${selectedCompanyId}`);
       setProcessCheck(res.data);
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to run process check', 'error');

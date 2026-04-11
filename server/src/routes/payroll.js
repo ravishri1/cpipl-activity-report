@@ -661,13 +661,17 @@ router.delete('/month-locks/:month', requireAdmin, asyncHandler(async (req, res)
   res.json({ message: `Month ${req.params.month} unlocked.` });
 }));
 
-// GET /process-check?month= — Pre-payroll checklist (admin)
+// GET /process-check?month=&companyId= — Pre-payroll checklist (admin)
 router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
-  const { month } = req.query;
+  const { month, companyId } = req.query;
   if (!month) throw badRequest('Month is required');
+  if (!companyId) throw badRequest('companyId is required');
+
+  const [year, mon] = month.split('-');
+  const monthEnd = `${year}-${mon}-${String(new Date(parseInt(year), parseInt(mon), 0).getDate()).padStart(2, '0')}`;
 
   const activeEmployees = await req.prisma.user.findMany({
-    where: { isActive: true },
+    where: { isActive: true, companyId: parseInt(companyId), dateOfJoining: { lte: monthEnd } },
     select: { id: true, name: true, employeeId: true, isAttendanceExempt: true, salaryStructure: { select: { id: true, stopSalaryProcessing: true } } },
   });
 
@@ -902,13 +906,18 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
   });
 }));
 
-// GET /api/payroll/pending-salary — active employees with no salary structure (admin)
+// GET /api/payroll/pending-salary?companyId=&month= — active employees with no salary structure (admin)
 router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const { companyId, month } = req.query;
+  const where = { isActive: true, salaryStructure: null };
+  if (companyId) where.companyId = parseInt(companyId);
+  if (month) {
+    const [year, mon] = month.split('-');
+    const monthEnd = `${year}-${mon}-${String(new Date(parseInt(year), parseInt(mon), 0).getDate()).padStart(2, '0')}`;
+    where.dateOfJoining = { lte: monthEnd };
+  }
   const pending = await req.prisma.user.findMany({
-    where: {
-      isActive: true,
-      salaryStructure: null,
-    },
+    where,
     select: {
       id: true,
       name: true,
