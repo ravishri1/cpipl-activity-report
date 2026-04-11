@@ -4,7 +4,7 @@
  * Expected cache size: ~50-100MB for typical usage
  */
 
-const CACHE_PREFIX = 'cpipl-hr-v1';
+const CACHE_PREFIX = 'cpipl-hr-v2';
 const ASSET_CACHE = `${CACHE_PREFIX}-assets`;
 const API_CACHE = `${CACHE_PREFIX}-api`;
 const DYNAMIC_CACHE = `${CACHE_PREFIX}-dynamic`;
@@ -13,6 +13,10 @@ const CACHES_TO_DELETE = [
   'cpipl-hr-v0',
   'cpipl-hr-assets-v0',
   'cpipl-hr-api-v0',
+  'cpipl-hr-v1',
+  'cpipl-hr-v1-assets',
+  'cpipl-hr-v1-api',
+  'cpipl-hr-v1-dynamic',
 ];
 
 // Assets to pre-cache on install (critical rendering path)
