@@ -137,21 +137,42 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const totalEsi = payslips.reduce((s, p) => s + (p.employeeEsi || 0), 0);
   const totalPt = payslips.reduce((s, p) => s + (p.professionalTax || 0), 0);
   const totalTds = payslips.reduce((s, p) => s + (p.tds || 0), 0);
-  const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
+  // Working days: calculate from actual calendar (Sundays + holidays excluded), not daysInMonth
+  const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
+  const holidayDates = new Set(holidays.map(h => h.date));
+  let calcWorkingDays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${month}-${String(d).padStart(2, '0')}`;
+    if (new Date(year, monthNum - 1, d).getDay() !== 0 && !holidayDates.has(date)) calcWorkingDays++;
+  }
+  const workingDays = payslips.length > 0 ? payslips[0].workingDays : calcWorkingDays;
 
-  // Employee counts
-  const totalActiveEmployees = await req.prisma.user.count({ where: { isActive: true } });
+  // Employee counts — all filtered to employees who had joined by monthEnd
+  // "Eligible for this month" = joined on or before last day of month AND (still active OR separated after monthStart)
+  const totalActiveEmployees = await req.prisma.user.count({
+    where: {
+      isActive: true,
+      dateOfJoining: { lte: monthEnd },
+    },
+  });
   const additions = await req.prisma.user.count({
-    where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd } },
+    where: {
+      isActive: true,
+      dateOfJoining: { gte: monthStart, lte: monthEnd },
+    },
   });
   const separations = await req.prisma.separation.count({
     where: { lastWorkingDate: { gte: monthStart, lte: monthEnd } },
   });
   const exclusions = await req.prisma.user.count({
-    where: { isActive: true, salaryStructure: null },
+    where: {
+      isActive: true,
+      dateOfJoining: { lte: monthEnd },
+      salaryStructure: null,
+    },
   });
   const stoppedSalaryCount = await req.prisma.salaryStructure.count({
-    where: { stopSalaryProcessing: true, user: { isActive: true } },
+    where: { stopSalaryProcessing: true, user: { isActive: true, dateOfJoining: { lte: monthEnd } } },
   });
 
   // Payslip status counts
