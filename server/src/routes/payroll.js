@@ -304,16 +304,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const saturdayPolicy = await getSaturdayPolicyForMonth(parseInt(companyId), month, req.prisma);
   const offSaturdaySet = saturdayPolicy ? buildOffSaturdaySet(month, saturdayPolicy.saturdayType) : buildOffSaturdaySet(month, 'all');
 
-  // Helper: compute working days for a given employee's off-day set + holidays
-  // offDays: number[] e.g. [0,6] = Sun+Sat; saturdayPolicy controls WHICH Saturdays
-  const calcWorkingDays = (holidaySet, offDays) => {
+  // Helper: compute working days per employee — uses period-bound off-day resolution
+  // NOTE: getOffDaysForDate is defined after allAssignments are loaded (below)
+  // This closure captures getOffDaysForDate which is defined in the same scope
+  const calcWorkingDays = (holidaySet, userId) => {
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const date = `${month}-${String(d).padStart(2, '0')}`;
       const dow = new Date(year, monthNum - 1, d).getDay();
-      const isWeeklyOff = offDays.includes(dow);
-      // Saturday: only off if it's in the employee's weekly off AND in the SaturdayPolicy set
-      const isOff = dow === 6 ? (offDays.includes(6) && offSaturdaySet.has(date)) : isWeeklyOff;
+      const offDaysForDate = getOffDaysForDate ? getOffDaysForDate(userId, date) : (weeklyOffMap.get(userId) || [0, 6]);
+      const isOff = dow === 6 ? (offDaysForDate.includes(6) && offSaturdaySet.has(date)) : offDaysForDate.includes(dow);
       if (!isOff && !holidaySet.has(date)) count++;
     }
     return count;
@@ -322,6 +322,68 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   // Pre-fetch weekly off map for all employees
   const allUserIds = activeSalaries.map(s => s.userId);
   const weeklyOffMap = await getWeeklyOffMap(allUserIds, req.prisma, month);
+
+  // Pre-fetch ALL WeeklyOffAssignments (individual + dept) overlapping this month
+  // Used for per-date off-day resolution inside the payroll loop
+  const allAssignments = await req.prisma.weeklyOffAssignment.findMany({
+    where: {
+      effectiveFrom: { lte: monthEndStr },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: monthStart } }],
+    },
+    include: { pattern: { select: { days: true } } },
+    orderBy: { effectiveFrom: 'asc' },
+  });
+  // Per-user: sorted individual assignments (asc so last-matching wins)
+  const userAssignmentMap = new Map();
+  const deptAssignmentMap = new Map();
+  for (const a of allAssignments) {
+    if (a.userId !== null) {
+      if (!userAssignmentMap.has(a.userId)) userAssignmentMap.set(a.userId, []);
+      userAssignmentMap.get(a.userId).push(a);
+    } else if (a.department) {
+      if (!deptAssignmentMap.has(a.department)) deptAssignmentMap.set(a.department, []);
+      deptAssignmentMap.get(a.department).push(a);
+    }
+  }
+  // User-level pattern fallback
+  const userPatternRows = await req.prisma.user.findMany({
+    where: { id: { in: allUserIds } },
+    select: { id: true, department: true, weeklyOffPattern: { select: { days: true } } },
+  });
+  const userPatternMap = new Map(userPatternRows.map(u => [u.id, u]));
+
+  // Per-date off-day resolver: checks period-bound assignments first, then fallbacks
+  function getOffDaysForDate(userId, dateStr) {
+    const parseD = s => { try { return JSON.parse(s); } catch { return null; } };
+    // 1. Individual assignment active on this specific date
+    const indivList = userAssignmentMap.get(userId) || [];
+    for (let i = indivList.length - 1; i >= 0; i--) {
+      const a = indivList[i];
+      if (a.effectiveFrom <= dateStr && (!a.effectiveTo || a.effectiveTo >= dateStr)) {
+        const days = parseD(a.pattern.days);
+        if (days) return days;
+      }
+    }
+    // 2. Department assignment active on this specific date
+    const u = userPatternMap.get(userId);
+    if (u?.department) {
+      const deptList = deptAssignmentMap.get(u.department) || [];
+      for (let i = deptList.length - 1; i >= 0; i--) {
+        const a = deptList[i];
+        if (a.effectiveFrom <= dateStr && (!a.effectiveTo || a.effectiveTo >= dateStr)) {
+          const days = parseD(a.pattern.days);
+          if (days) return days;
+        }
+      }
+    }
+    // 3. Legacy pattern on User
+    if (u?.weeklyOffPattern?.days) {
+      const days = parseD(u.weeklyOffPattern.days);
+      if (days) return days;
+    }
+    // 4. Default: Sun + Sat
+    return [0, 6];
+  }
 
   // Pre-fetch off-day allowance eligible employees for this month
   const eligibleOffDay = await req.prisma.offDayAllowanceEligibility.findMany({
@@ -340,9 +402,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     });
     if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
 
-    // Get employee's weekly off days (from pattern/assignment, falls back to [0,6])
-    const empOffDays = weeklyOffMap.get(sal.userId) || [0, 6];
-
     // Merge global + branch holidays for this employee
     const mergedHolidays = new Set(globalHolidayDates);
     if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
@@ -351,7 +410,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // Remove department-blocked holidays for this employee
     const deptBlocks = deptBlockMap[sal.user.department] || new Set();
     deptBlocks.forEach(d => mergedHolidays.delete(d));
-    const workingDays = calcWorkingDays(mergedHolidays, empOffDays);
+    // Working days uses per-date off resolution (period-bound assignments)
+    const workingDays = calcWorkingDays(mergedHolidays, sal.userId);
 
     // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──
     // These are employees added to the attendance exception list (isAttendanceExempt = true).
@@ -411,8 +471,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dow = new Date(year, monthNum - 1, d).getDay();
-        // Skip weekly off days (per employee pattern + SaturdayPolicy), holidays, future dates
-        const isOff = dow === 6 ? (empOffDays.includes(6) && offSaturdaySet.has(dateStr)) : empOffDays.includes(dow);
+        // Resolve off days using period-bound assignment active on this specific date
+        const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
+        const isOff = dow === 6
+          ? (offDaysForDate.includes(6) && offSaturdaySet.has(dateStr))
+          : offDaysForDate.includes(dow);
         if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
         // Skip days after last working date (pro-rata separation — NOT LOP)
         if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
