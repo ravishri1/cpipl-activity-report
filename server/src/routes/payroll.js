@@ -565,8 +565,24 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       offDayAllowance = daysInMonth > 0 ? Math.round((offGrossBase / daysInMonth) * offDaysWorked) : 0;
     }
 
-    // Use components JSON when available (flexible salary structures), fall back to legacy fields
+    // Derive earnings breakdown from components JSON (source of truth) or fall back to legacy fields
     const earningComps = Array.isArray(sal.components) ? sal.components.filter(c => c.type === 'earning') : [];
+    const getComp = (...codes) => earningComps.filter(c => codes.includes(c.code)).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const KNOWN_CODES = ['BASIC','HRA','DA','SPECIAL_ALLOWANCE','MEDICAL_ALLOWANCE','CONVEYANCE','CONVEYANCE_ALLOWANCE'];
+    // Accumulate non-standard components (STATUTORY_BONUS, OTHER_ALLOWANCE, SUNDAY_ALLOWANCE, etc.) into otherAllowance
+    const otherComps = earningComps.filter(c => !KNOWN_CODES.includes(c.code));
+    const otherFromComps = otherComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const otherLabel = otherComps.length > 0 ? otherComps.map(c => c.name || c.code).join(', ') : null;
+
+    const payBasic  = earningComps.length > 0 ? getComp('BASIC')                          : sal.basic;
+    const payHra    = earningComps.length > 0 ? getComp('HRA')                             : sal.hra;
+    const payDa     = earningComps.length > 0 ? getComp('DA')                              : sal.da;
+    const paySpec   = earningComps.length > 0 ? getComp('SPECIAL_ALLOWANCE')               : sal.specialAllowance;
+    const payMed    = earningComps.length > 0 ? getComp('MEDICAL_ALLOWANCE')               : sal.medicalAllowance;
+    const payConv   = earningComps.length > 0 ? getComp('CONVEYANCE','CONVEYANCE_ALLOWANCE'): sal.conveyanceAllowance;
+    const payOther  = earningComps.length > 0 ? otherFromComps                             : sal.otherAllowance;
+    const payOtherLabel = earningComps.length > 0 ? (otherLabel || sal.otherAllowanceLabel) : sal.otherAllowanceLabel;
+
     const grossBase = earningComps.length > 0
       ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
       : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
@@ -578,10 +594,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const payslip = await req.prisma.payslip.create({
       data: {
         userId: sal.userId, month, year,
-        basic: sal.basic, hra: sal.hra, da: sal.da,
-        specialAllowance: sal.specialAllowance, medicalAllowance: sal.medicalAllowance,
-        conveyanceAllowance: sal.conveyanceAllowance, otherAllowance: sal.otherAllowance,
-        otherAllowanceLabel: sal.otherAllowanceLabel, grossEarnings,
+        basic: payBasic, hra: payHra, da: payDa,
+        specialAllowance: paySpec, medicalAllowance: payMed,
+        conveyanceAllowance: payConv, otherAllowance: payOther,
+        otherAllowanceLabel: payOtherLabel, grossEarnings,
         employerPf: sal.employerPf, employerEsi: sal.employerEsi,
         employeePf: isIntern ? 0 : sal.employeePf, employeeEsi: isIntern ? 0 : sal.employeeEsi,
         professionalTax: isIntern ? 0 : sal.professionalTax, tds: sal.tds,
