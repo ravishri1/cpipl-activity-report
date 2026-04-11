@@ -241,7 +241,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
 
   const salaries = await req.prisma.salaryStructure.findMany({
-    where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd } } },
+    where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } } },
     include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
@@ -671,7 +671,7 @@ router.get('/process-check', requireActiveEmployee, requireAdmin, asyncHandler(a
   const monthEnd = `${year}-${mon}-${String(new Date(parseInt(year), parseInt(mon), 0).getDate()).padStart(2, '0')}`;
 
   const activeEmployees = await req.prisma.user.findMany({
-    where: { isActive: true, companyId: parseInt(companyId), dateOfJoining: { lte: monthEnd } },
+    where: { isActive: true, companyId: parseInt(companyId), dateOfJoining: { lte: monthEnd }, employeeId: { not: null } },
     select: { id: true, name: true, employeeId: true, isAttendanceExempt: true, salaryStructure: { select: { id: true, stopSalaryProcessing: true } } },
   });
 
@@ -909,7 +909,7 @@ router.get('/pay-register', requireActiveEmployee, requireAdmin, asyncHandler(as
 // GET /api/payroll/pending-salary?companyId=&month= — active employees with no salary structure (admin)
 router.get('/pending-salary', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const { companyId, month } = req.query;
-  const where = { isActive: true, salaryStructure: null };
+  const where = { isActive: true, salaryStructure: null, employeeId: { not: null } };
   if (companyId) where.companyId = parseInt(companyId);
   if (month) {
     const [year, mon] = month.split('-');
