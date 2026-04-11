@@ -255,6 +255,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
   const globalHolidayDates = new Set(holidays.map(h => h.date));
 
+  // Department holiday blocks for this month
+  const deptHolidayBlocks = await req.prisma.departmentHolidayBlock.findMany({
+    where: { companyId: parseInt(companyId), date: { startsWith: month } },
+  });
+  const deptBlockMap = {};
+  for (const b of deptHolidayBlocks) {
+    if (!deptBlockMap[b.department]) deptBlockMap[b.department] = new Set();
+    deptBlockMap[b.department].add(b.date);
+  }
+
   // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls
   const branchHolidayCache = {};
   const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
@@ -282,7 +292,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   // Pre-fetch weekly off map for all employees
   const allUserIds = activeSalaries.map(s => s.userId);
-  const weeklyOffMap = await getWeeklyOffMap(allUserIds, req.prisma);
+  const weeklyOffMap = await getWeeklyOffMap(allUserIds, req.prisma, month);
 
   // Pre-fetch off-day allowance eligible employees for this month
   const eligibleOffDay = await req.prisma.offDayAllowanceEligibility.findMany({
@@ -306,6 +316,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     if (sal.user.branchId && branchHolidayCache[sal.user.branchId]) {
       branchHolidayCache[sal.user.branchId].forEach(d => mergedHolidays.add(d));
     }
+    // Remove department-blocked holidays for this employee
+    const deptBlocks = deptBlockMap[sal.user.department] || new Set();
+    deptBlocks.forEach(d => mergedHolidays.delete(d));
     const workingDays = calcWorkingDays(mergedHolidays);
 
     // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──

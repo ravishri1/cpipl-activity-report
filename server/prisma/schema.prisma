@@ -256,6 +256,7 @@ model User {
   // ── Weekly Off Pattern ──
   weeklyOffPatternId        Int?
   weeklyOffPattern          WeeklyOffPattern?  @relation("UserWeeklyOff", fields: [weeklyOffPatternId], references: [id])
+  weeklyOffAssignments      WeeklyOffAssignment[] @relation("WeeklyOffAssignments")
 
   // ── Portal Credentials ──
   portalCredentials         PortalCredential[] @relation("CredentialAssignee")
@@ -570,6 +571,37 @@ model WeeklyOffPattern {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   users     User[]   @relation("UserWeeklyOff")
+  assignments WeeklyOffAssignment[]
+}
+
+// Date-ranged weekly off assignments (per employee OR per department)
+model WeeklyOffAssignment {
+  id             Int               @id @default(autoincrement())
+  patternId      Int
+  effectiveFrom  String            // "2025-04-01"
+  effectiveTo    String?           // null = ongoing
+  userId         Int?              // set for individual assignment
+  department     String?           // set for department-wide assignment
+  companyId      Int
+  createdAt      DateTime          @default(now())
+
+  pattern   WeeklyOffPattern @relation(fields: [patternId], references: [id])
+  user      User?            @relation("WeeklyOffAssignments", fields: [userId], references: [id])
+  company   Company          @relation(fields: [companyId], references: [id])
+}
+
+// Block holidays from applying to specific departments
+model DepartmentHolidayBlock {
+  id            Int      @id @default(autoincrement())
+  department    String   // "Logistic", "Accounts_Finance", etc.
+  companyId     Int
+  date          String   // "2025-04-14" — the holiday date to block
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([department, companyId, date])
 }
 
 model Education {
@@ -680,6 +712,8 @@ model Company {
   contracts        CompanyContract[]
   branches         Branch[]
   saturdayPolicies SaturdayPolicy[]
+  weeklyOffAssignments    WeeklyOffAssignment[]
+  departmentHolidayBlocks DepartmentHolidayBlock[]
 }
 
 // ═══════════════════════════════════════════════

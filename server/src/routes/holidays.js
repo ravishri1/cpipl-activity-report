@@ -235,6 +235,97 @@ router.delete('/weekly-off-patterns/:id/users/:userId', requireAdmin, asyncHandl
   res.json({ message: 'Employee removed from pattern (will use default Sat+Sun)' });
 }));
 
+// ── WeeklyOffAssignment routes ──────────────────────────────────────────
+
+// GET /weekly-off-assignments?companyId=1&month=2025-04
+router.get('/weekly-off-assignments', requireAdmin, asyncHandler(async (req, res) => {
+  const { companyId, month } = req.query;
+  if (!companyId) throw badRequest('companyId required');
+  const where = { companyId: parseInt(companyId) };
+  if (month) {
+    where.effectiveFrom = { lte: `${month}-31` };
+    where.OR = [{ effectiveTo: null }, { effectiveTo: { gte: `${month}-01` } }];
+  }
+  const assignments = await req.prisma.weeklyOffAssignment.findMany({
+    where,
+    include: { pattern: true, user: { select: { id: true, name: true, employeeId: true, department: true } } },
+    orderBy: { effectiveFrom: 'desc' },
+  });
+  res.json(assignments);
+}));
+
+// POST /weekly-off-assignments
+router.post('/weekly-off-assignments', requireAdmin, asyncHandler(async (req, res) => {
+  const { patternId, effectiveFrom, effectiveTo, userId, department, companyId } = req.body;
+  if (!patternId || !effectiveFrom || !companyId) throw badRequest('patternId, effectiveFrom, companyId required');
+  if (!userId && !department) throw badRequest('Either userId or department required');
+  const assignment = await req.prisma.weeklyOffAssignment.create({
+    data: {
+      patternId: parseInt(patternId),
+      effectiveFrom,
+      effectiveTo: effectiveTo || null,
+      userId: userId ? parseInt(userId) : null,
+      department: department || null,
+      companyId: parseInt(companyId),
+    },
+    include: { pattern: true, user: { select: { id: true, name: true, employeeId: true, department: true } } },
+  });
+  res.status(201).json(assignment);
+}));
+
+// PUT /weekly-off-assignments/:id
+router.put('/weekly-off-assignments/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { effectiveFrom, effectiveTo, patternId } = req.body;
+  const assignment = await req.prisma.weeklyOffAssignment.update({
+    where: { id },
+    data: {
+      ...(effectiveFrom && { effectiveFrom }),
+      effectiveTo: effectiveTo || null,
+      ...(patternId && { patternId: parseInt(patternId) }),
+    },
+    include: { pattern: true },
+  });
+  res.json(assignment);
+}));
+
+// DELETE /weekly-off-assignments/:id
+router.delete('/weekly-off-assignments/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  await req.prisma.weeklyOffAssignment.delete({ where: { id } });
+  res.json({ success: true });
+}));
+
+// ── DepartmentHolidayBlock routes ────────────────────────────────────────
+
+// GET /dept-holiday-blocks?companyId=1
+router.get('/dept-holiday-blocks', requireAdmin, asyncHandler(async (req, res) => {
+  const { companyId } = req.query;
+  if (!companyId) throw badRequest('companyId required');
+  const blocks = await req.prisma.departmentHolidayBlock.findMany({
+    where: { companyId: parseInt(companyId) },
+    orderBy: [{ department: 'asc' }, { date: 'desc' }],
+  });
+  res.json(blocks);
+}));
+
+// POST /dept-holiday-blocks
+router.post('/dept-holiday-blocks', requireAdmin, asyncHandler(async (req, res) => {
+  const { department, companyId, date, reason } = req.body;
+  if (!department || !companyId || !date) throw badRequest('department, companyId, date required');
+  const block = await req.prisma.departmentHolidayBlock.create({
+    data: { department, companyId: parseInt(companyId), date, reason: reason || null },
+  });
+  res.status(201).json(block);
+}));
+
+// DELETE /dept-holiday-blocks/:id
+router.delete('/dept-holiday-blocks/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseInt(req.params.id);
+  await req.prisma.departmentHolidayBlock.delete({ where: { id } });
+  res.json({ success: true });
+}));
+
 // ═══════════════════════════════════════════════
 // Holiday CRUD — Param-based routes (/:id) MUST be LAST
 // ═══════════════════════════════════════════════

@@ -250,6 +250,7 @@ function HolidayFormModal({ holiday, onClose, onSaved }) {
 
 // ─── Weekly Off Tab ─────────────────────────────────────────────────────────
 function WeeklyOffTab() {
+  const [subTab, setSubTab] = useState('patterns'); // 'patterns' | 'assignments' | 'blocks'
   const [patterns, setPatterns] = useState([]);
   const [unassigned, setUnassigned] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -380,6 +381,33 @@ function WeeklyOffTab() {
           These affect attendance, leave calculations, muster, and roster views.
         </div>
       </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        {[
+          { key: 'patterns', label: 'Patterns' },
+          { key: 'assignments', label: 'Assignments (Date Range)' },
+          { key: 'blocks', label: 'Holiday Blocks' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setSubTab(t.key)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${subTab === t.key ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ASSIGNMENTS sub-tab */}
+      {subTab === 'assignments' && (
+        <WeeklyOffAssignmentsPanel patterns={patterns} />
+      )}
+
+      {/* HOLIDAY BLOCKS sub-tab */}
+      {subTab === 'blocks' && (
+        <DepartmentHolidayBlocksPanel />
+      )}
+
+      {/* PATTERNS sub-tab */}
+      {subTab === 'patterns' && <>
 
       {/* Header with Add button */}
       <div className="flex items-center justify-between">
@@ -554,6 +582,348 @@ function WeeklyOffTab() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      </>}
+    </div>
+  );
+}
+
+// ─── Weekly Off Assignments Panel ────────────────────────────────────────────
+const DAY_NAMES_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function WeeklyOffAssignmentsPanel({ patterns }) {
+  const [companyId, setCompanyId] = useState(1);
+  const [companies, setCompanies] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' });
+
+  useEffect(() => {
+    api.get('/companies').then(r => { setCompanies(r.data || []); }).catch(() => {});
+    api.get('/users').then(r => {
+      const active = (r.data || []).filter(u => u.isActive);
+      setEmployees(active);
+      const depts = [...new Set(active.map(u => u.department).filter(Boolean))].sort();
+      setDepartments(depts);
+    }).catch(() => {});
+  }, []);
+
+  const fetchAssignments = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/holidays/weekly-off-assignments?companyId=${companyId}`);
+      setAssignments(res.data || []);
+    } catch { } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchAssignments(); }, [companyId]);
+
+  const handleSave = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const payload = {
+        patternId: parseInt(form.patternId),
+        effectiveFrom: form.effectiveFrom,
+        effectiveTo: form.effectiveTo || null,
+        companyId,
+        userId: form.targetType === 'employee' ? parseInt(form.userId) : null,
+        department: form.targetType === 'department' ? form.department : null,
+      };
+      if (editingId) {
+        await api.put(`/holidays/weekly-off-assignments/${editingId}`, payload);
+      } else {
+        await api.post('/holidays/weekly-off-assignments', payload);
+      }
+      setMsg({ type: 'success', text: 'Saved!' });
+      setShowForm(false); setEditingId(null);
+      setForm({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' });
+      fetchAssignments();
+    } catch (e) {
+      setMsg({ type: 'error', text: e.response?.data?.message || 'Save failed' });
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Remove this assignment?')) return;
+    try { await api.delete(`/holidays/weekly-off-assignments/${id}`); fetchAssignments(); } catch { }
+  };
+
+  const patternDays = (p) => {
+    try { return JSON.parse(p.days).map(d => DAY_NAMES_SHORT[d]).join('+'); } catch { return p.name; }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <select value={companyId} onChange={e => setCompanyId(parseInt(e.target.value))}
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <span className="text-xs text-slate-500">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''}</span>
+        </div>
+        <button onClick={() => { setShowForm(true); setEditingId(null); setMsg(null); setForm({ patternId: '', effectiveFrom: '', effectiveTo: '', targetType: 'employee', userId: '', department: '' }); }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+          <span>+</span> Add Assignment
+        </button>
+      </div>
+
+      {msg && <div className={`px-3 py-2 rounded-lg text-xs font-medium ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>{msg.text}</div>}
+
+      {showForm && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-slate-700">{editingId ? 'Edit' : 'New'} Assignment</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Pattern *</label>
+              <select value={form.patternId} onChange={e => setForm(f => ({ ...f, patternId: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select pattern</option>
+                {patterns.map(p => <option key={p.id} value={p.id}>{p.name} ({patternDays(p)})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Apply To *</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setForm(f => ({ ...f, targetType: 'employee', department: '' }))}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition ${form.targetType === 'employee' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+                  Employee
+                </button>
+                <button type="button" onClick={() => setForm(f => ({ ...f, targetType: 'department', userId: '' }))}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition ${form.targetType === 'department' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}>
+                  Department
+                </button>
+              </div>
+            </div>
+          </div>
+          {form.targetType === 'employee' ? (
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Employee *</label>
+              <select value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select employee</option>
+                {employees.map(u => <option key={u.id} value={u.id}>{u.name} ({u.employeeId || '—'}) {u.department ? `· ${u.department}` : ''}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Department *</label>
+              <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select department</option>
+                {departments.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Effective From *</label>
+              <input type="date" value={form.effectiveFrom} onChange={e => setForm(f => ({ ...f, effectiveFrom: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Effective To (blank = ongoing)</label>
+              <input type="date" value={form.effectiveTo} onChange={e => setForm(f => ({ ...f, effectiveTo: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving || !form.patternId || !form.effectiveFrom || (form.targetType === 'employee' ? !form.userId : !form.department)}
+              className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
+            </button>
+            <button onClick={() => { setShowForm(false); setEditingId(null); }}
+              className="px-4 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-xs text-slate-400 text-center py-6">Loading...</p>
+      ) : assignments.length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-6">No date-ranged assignments — all employees use their profile pattern or default (Sat+Sun)</p>
+      ) : (
+        <div className="space-y-2">
+          {assignments.map(a => (
+            <div key={a.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-700">
+                    {a.userId ? (a.user?.name || `User ${a.userId}`) : `Dept: ${a.department}`}
+                  </span>
+                  <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                    {a.pattern?.name} ({patternDays(a.pattern)})
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {a.effectiveFrom} → {a.effectiveTo || 'ongoing'}
+                  </span>
+                </div>
+                {a.userId && a.user?.department && <p className="text-[10px] text-slate-400 mt-0.5">{a.user.employeeId} · {a.user.department}</p>}
+              </div>
+              <button onClick={() => { setForm({ patternId: String(a.patternId), effectiveFrom: a.effectiveFrom, effectiveTo: a.effectiveTo || '', targetType: a.userId ? 'employee' : 'department', userId: a.userId ? String(a.userId) : '', department: a.department || '' }); setEditingId(a.id); setShowForm(true); setMsg(null); }}
+                className="text-xs text-blue-600 hover:underline shrink-0">Edit</button>
+              <button onClick={() => handleDelete(a.id)} className="text-xs text-red-500 hover:underline shrink-0">Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DepartmentHolidayBlocksPanel() {
+  const [companyId, setCompanyId] = useState(1);
+  const [companies, setCompanies] = useState([]);
+  const [blocks, setBlocks] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [form, setForm] = useState({ department: '', date: '', reason: '' });
+
+  useEffect(() => {
+    api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+    api.get('/users').then(r => {
+      const depts = [...new Set((r.data || []).filter(u => u.isActive && u.department).map(u => u.department))].sort();
+      setDepartments(depts);
+    }).catch(() => {});
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [bRes, hRes] = await Promise.all([
+        api.get(`/holidays/dept-holiday-blocks?companyId=${companyId}`),
+        api.get('/holidays'),
+      ]);
+      setBlocks(bRes.data || []);
+      setHolidays((hRes.data || []).sort((a, b) => a.date.localeCompare(b.date)));
+    } catch { } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchData(); }, [companyId]);
+
+  const handleSave = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      await api.post('/holidays/dept-holiday-blocks', { ...form, companyId });
+      setMsg({ type: 'success', text: 'Holiday blocked for department!' });
+      setShowForm(false);
+      setForm({ department: '', date: '', reason: '' });
+      fetchData();
+    } catch (e) {
+      setMsg({ type: 'error', text: e.response?.data?.message || 'Failed' });
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Remove this holiday block?')) return;
+    try { await api.delete(`/holidays/dept-holiday-blocks/${id}`); fetchData(); } catch { }
+  };
+
+  const grouped = blocks.reduce((acc, b) => {
+    if (!acc[b.department]) acc[b.department] = [];
+    acc[b.department].push(b);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+        <strong>Holiday Blocks</strong> — Mark specific holidays as working days for a department. Those employees will not get the day off and absence will count as LOP.
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <select value={companyId} onChange={e => setCompanyId(parseInt(e.target.value))}
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <button onClick={() => { setShowForm(true); setMsg(null); setForm({ department: '', date: '', reason: '' }); }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700">
+          + Block Holiday
+        </button>
+      </div>
+
+      {msg && <div className={`px-3 py-2 rounded-lg text-xs font-medium ${msg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>{msg.text}</div>}
+
+      {showForm && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-slate-700">Block Holiday for Department</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Department *</label>
+              <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Select department</option>
+                {departments.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Holiday Date *</label>
+              <select value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Pick a holiday</option>
+                {holidays.map(h => <option key={h.id} value={h.date}>{h.date} — {h.name}</option>)}
+                <option value="__custom">Custom date...</option>
+              </select>
+              {form.date === '__custom' && (
+                <input type="date" onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Reason (optional)</label>
+            <input type="text" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+              placeholder="e.g. Dispatch team working on Diwali"
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving || !form.department || !form.date || form.date === '__custom'}
+              className="px-4 py-1.5 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50">
+              {saving ? 'Saving...' : 'Block Holiday'}
+            </button>
+            <button onClick={() => setShowForm(false)}
+              className="px-4 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-xs text-slate-400 text-center py-6">Loading...</p>
+      ) : Object.keys(grouped).length === 0 ? (
+        <p className="text-xs text-slate-400 text-center py-6">No holiday blocks — all departments observe all holidays</p>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(grouped).map(([dept, deptBlocks]) => (
+            <div key={dept} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
+                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">{dept}</span>
+                <span className="text-xs text-slate-400 ml-2">{deptBlocks.length} holiday{deptBlocks.length !== 1 ? 's' : ''} blocked</span>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {deptBlocks.map(b => (
+                  <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-xs font-medium text-red-600 font-mono">{b.date}</span>
+                    {b.reason && <span className="text-xs text-slate-500 flex-1">{b.reason}</span>}
+                    {!b.reason && <span className="flex-1" />}
+                    <button onClick={() => handleDelete(b.id)} className="text-xs text-red-500 hover:underline">Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
