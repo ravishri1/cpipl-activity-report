@@ -314,6 +314,7 @@ export default function Sidebar({ isOpen, onClose }) {
         { to: '/admin/payroll',          label: 'Payroll',          icon: CreditCard },
         { to: '/admin/salary-advances', label: 'Salary Advances',  icon: Wallet },
         { to: '/admin/salary-setup',   label: 'Salary Setup',     icon: Banknote },
+        { to: '/admin/payroll-settings', label: 'Payroll Rules',  icon: Settings },
         { to: '/admin/expense-claims', label: 'Expense Claims',   icon: Receipt },
       ],
     },
