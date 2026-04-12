@@ -6,6 +6,8 @@ import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import { Settings, Plus, Trash2, Save } from 'lucide-react';
 
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 const DEFAULT_RULES = {
   pf: { employeeRate: 0.12, employerRate: 0.12, wageCap: 15000, maxMonthly: 1800 },
   esi: { employeeRate: 0.0075, employerRate: 0.0325, grossCeiling: 21000 },
@@ -19,6 +21,7 @@ const DEFAULT_RULES = {
     ],
     februaryTopUp: 100,
   },
+  lwf: { employeeAmount: 12, employerAmount: 36, months: [6, 12] },
   lop: { divisor: 30 },
 };
 
@@ -76,6 +79,7 @@ export default function PayrollSettings() {
   const [maleSlabs, setMaleSlabs] = useState(DEFAULT_RULES.pt.maleSlabs);
   const [femaleSlabs, setFemaleSlabs] = useState(DEFAULT_RULES.pt.femaleSlabs);
   const [februaryTopUp, setFebruaryTopUp] = useState(DEFAULT_RULES.pt.februaryTopUp);
+  const [lwf, setLwf] = useState(DEFAULT_RULES.lwf);
   const [lopDivisor, setLopDivisor] = useState(DEFAULT_RULES.lop.divisor);
 
   useEffect(() => {
@@ -89,6 +93,7 @@ export default function PayrollSettings() {
       if (savedRules.pt.femaleSlabs) setFemaleSlabs(savedRules.pt.femaleSlabs);
       if (savedRules.pt.februaryTopUp != null) setFebruaryTopUp(savedRules.pt.februaryTopUp);
     }
+    if (savedRules.lwf) setLwf({ ...DEFAULT_RULES.lwf, ...savedRules.lwf });
     if (savedRules.lop?.divisor != null) setLopDivisor(savedRules.lop.divisor);
   }, [savedRules]);
 
@@ -114,6 +119,11 @@ export default function PayrollSettings() {
         maleSlabs: maleSlabs.map(parseSlab),
         femaleSlabs: femaleSlabs.map(parseSlab),
         februaryTopUp: parseFloat(februaryTopUp) || 0,
+      },
+      lwf: {
+        employeeAmount: parseFloat(lwf.employeeAmount) || 0,
+        employerAmount: parseFloat(lwf.employerAmount) || 0,
+        months: lwf.months,
       },
       lop: { divisor: parseInt(lopDivisor) || 30 },
     };
@@ -252,6 +262,55 @@ export default function PayrollSettings() {
               Set to ₹0 to disable.
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* LWF Section */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700">Labour Welfare Fund (LWF)</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            LWF applies <strong>only to ESIC-covered employees</strong>. If ESIC is removed at contribution period start, LWF is also removed automatically.
+            Contribution periods: Apr–Sep and Oct–Mar.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Employee Deduction (₹)</label>
+            <input type="number" min="0" className={inputCls}
+              value={lwf.employeeAmount}
+              onChange={e => setLwf(l => ({ ...l, employeeAmount: e.target.value }))} />
+            <p className="text-xs text-slate-400 mt-1">Maharashtra: ₹12</p>
+          </div>
+          <div>
+            <label className={labelCls}>Employer Contribution (₹)</label>
+            <input type="number" min="0" className={inputCls}
+              value={lwf.employerAmount}
+              onChange={e => setLwf(l => ({ ...l, employerAmount: e.target.value }))} />
+            <p className="text-xs text-slate-400 mt-1">Maharashtra: ₹36</p>
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Applicable Months</label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {MONTH_LABELS.map((label, i) => {
+              const monthNum = i + 1;
+              const checked = (lwf.months || []).includes(monthNum);
+              return (
+                <button key={monthNum} type="button"
+                  onClick={() => setLwf(l => ({
+                    ...l,
+                    months: checked
+                      ? l.months.filter(m => m !== monthNum)
+                      : [...(l.months || []), monthNum].sort((a, b) => a - b),
+                  }))}
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400'}`}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">Maharashtra: June & December only</p>
         </div>
       </div>
 

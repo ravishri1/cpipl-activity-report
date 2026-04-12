@@ -950,6 +950,10 @@ model Payslip {
   fnfHoldAmount        Float    @default(0)            // amount held (shown in books, not paid yet)
   fnfHoldNote          String?                         // "Separation hold: 15 days (Jun 1–15)"
 
+  // Labour Welfare Fund (LWF) — only in June & December, only if ESIC-covered
+  lwfEmployee          Float    @default(0)            // employee LWF deduction
+  lwfEmployer          Float    @default(0)            // employer LWF contribution
+
   status               String   @default("draft")     // draft, generated, published
   generatedAt          DateTime?
   publishedAt          DateTime?

@@ -5,7 +5,7 @@ const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { parseId, requireFields } = require('../utils/validate');
 const { getWeeklyOffMap } = require('../services/attendance/weeklyOffHelper');
 const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../utils/saturdayPolicyHelper');
-const { DEFAULT_PAYROLL_RULES, calcStatutory } = require('../utils/payrollRules');
+const { DEFAULT_PAYROLL_RULES, calcStatutory, calcLWF, getEsicPeriodStartMonth } = require('../utils/payrollRules');
 
 const router = express.Router();
 router.use(authenticate);
@@ -624,7 +624,37 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const perDaySalary = lopDivisor > 0 ? grossBase / lopDivisor : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
-    // Compute statutory deductions from payroll rules (not stored salary structure values)
+    // ── ESIC Contribution Period Rule ─────────────────────────────────────────
+    // Contribution periods: Apr–Sep (starts Apr) | Oct–Mar (starts Oct)
+    // Rule: if employee was ESIC-covered at the period START, they stay covered
+    // for the entire 6-month period — even if gross later exceeds the ceiling.
+    // Re-evaluated only at the next period start.
+    const esicCeiling = (payrollRules.esi || DEFAULT_PAYROLL_RULES.esi).grossCeiling || 21000;
+    const esicPeriodStart = getEsicPeriodStartMonth(year, monthNum);
+    let esicEligible;
+    if (esicPeriodStart === month) {
+      // This IS the period start month — determine eligibility by current gross
+      esicEligible = grossBase > 0 && grossBase <= esicCeiling;
+    } else {
+      // Mid-period — check if ESIC was deducted in the period start payslip
+      const periodStartPayslip = await req.prisma.payslip.findFirst({
+        where: { userId: sal.userId, month: esicPeriodStart },
+        select: { employeeEsi: true },
+      });
+      if (periodStartPayslip !== null) {
+        esicEligible = (periodStartPayslip.employeeEsi || 0) > 0;
+      } else {
+        // No period-start payslip yet — fall back to ceiling check
+        esicEligible = grossBase > 0 && grossBase <= esicCeiling;
+      }
+    }
+
+    // ── LWF (Labour Welfare Fund) ──────────────────────────────────────────────
+    // Applies only to ESIC-covered employees, only in June & December
+    const lwfRules = (payrollRules.lwf || DEFAULT_PAYROLL_RULES.lwf);
+    const { lwfEmployee, lwfEmployer } = calcLWF(esicEligible, monthNum, isIntern, lwfRules);
+
+    // ── Statutory Deductions ───────────────────────────────────────────────────
     // For mid-month separation: prorate the gross base for statutory so PF/ESI/PT
     // reflect only the earned portion (avoids over-deducting on unearned days).
     const isMidMonthSeparation = !!(separation?.lastWorkingDate?.startsWith(month));
@@ -634,8 +664,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const statutoryBasic = isMidMonthSeparation && lopDivisor > 0
       ? Math.round(payBasic * presentDays / lopDivisor)
       : payBasic;
-    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum);
-    const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds);
+    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum, esicEligible);
+    const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds + lwfEmployee);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
     const payslip = await req.prisma.payslip.create({
@@ -648,6 +678,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         employerPf: statutory.employerPf, employerEsi: statutory.employerEsi,
         employeePf: statutory.employeePf, employeeEsi: statutory.employeeEsi,
         professionalTax: statutory.professionalTax, tds: sal.tds,
+        lwfEmployee, lwfEmployer,
         otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
         totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
