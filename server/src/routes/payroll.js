@@ -285,8 +285,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   for (const b of deptHolidayBlocks) {
     if (!deptBlockMap[b.department]) deptBlockMap[b.department] = new Set();
     // Expand date range into individual dates within this month
-    const cur = new Date(b.dateFrom + 'T00:00:00');
-    const end = new Date(b.dateTo + 'T00:00:00');
+    const cur = new Date(b.dateFrom + 'T00:00:00Z');
+    const end = new Date(b.dateTo + 'T00:00:00Z');
     while (cur <= end) {
       const ds = cur.toISOString().slice(0, 10);
       if (ds.startsWith(month)) deptBlockMap[b.department].add(ds);
@@ -449,8 +449,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const lopDatesSet = new Set();    // LOP leave days (deducted like absent)
     for (const lr of approvedLeaves) {
       const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
-      const cur = new Date(lr.startDate + 'T00:00:00');
-      const end = new Date(lr.endDate + 'T00:00:00');
+      const cur = new Date(lr.startDate + 'T00:00:00Z');
+      const end = new Date(lr.endDate + 'T00:00:00Z');
       while (cur <= end) {
         const ds = cur.toISOString().slice(0, 10);
         if (ds.startsWith(month)) {
