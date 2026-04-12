@@ -263,7 +263,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   const salaries = await req.prisma.salaryStructure.findMany({
     where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } } },
-    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -634,7 +634,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const statutoryBasic = isMidMonthSeparation && lopDivisor > 0
       ? Math.round(payBasic * presentDays / lopDivisor)
       : payBasic;
-    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules);
+    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum);
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 

@@ -69,7 +69,7 @@ async function main() {
         select: {
           id: true, name: true, employeeId: true, isActive: true,
           isAttendanceExempt: true, department: true, dateOfJoining: true,
-          branchId: true, employeeType: true,
+          branchId: true, employeeType: true, gender: true,
         },
       },
     },
@@ -264,7 +264,7 @@ async function main() {
     );
     const statBase  = isMidMonthSep ? Math.round(grossBase * presentDays / LOP_DIVISOR) : grossBase;
     const statBasic = isMidMonthSep ? Math.round(payBasic  * presentDays / LOP_DIVISOR) : payBasic;
-    const statutory = calcStatutory(statBase, statBasic, sal.ptExempt || false, isIntern, payrollRules);
+    const statutory = calcStatutory(statBase, statBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, MONTH_NUM);
 
     const tds = sal.tds || 0;
     const totalDeductions = isIntern

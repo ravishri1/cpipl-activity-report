@@ -9,12 +9,63 @@ import { Settings, Plus, Trash2, Save } from 'lucide-react';
 const DEFAULT_RULES = {
   pf: { employeeRate: 0.12, employerRate: 0.12, wageCap: 15000, maxMonthly: 1800 },
   esi: { employeeRate: 0.0075, employerRate: 0.0325, grossCeiling: 21000 },
-  pt: { slabs: [{ minGross: 7500, maxGross: 10000, amount: 75 }, { minGross: 10001, maxGross: null, amount: 200 }] },
+  pt: {
+    maleSlabs: [
+      { minGross: 7501, maxGross: 10000, amount: 175 },
+      { minGross: 10001, maxGross: null, amount: 200 },
+    ],
+    femaleSlabs: [
+      { minGross: 25001, maxGross: null, amount: 200 },
+    ],
+    februaryTopUp: 100,
+  },
   lop: { divisor: 30 },
 };
 
 function pct(val) { return val != null ? (parseFloat(val) * 100).toFixed(4).replace(/\.?0+$/, '') : ''; }
 function rate(val) { return val != null ? parseFloat((parseFloat(val) / 100).toFixed(6)) : 0; }
+
+function SlabTable({ slabs, onChange, onAdd, onRemove, label }) {
+  const inputCls = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-medium text-slate-700">{label}</h4>
+        <button onClick={onAdd}
+          className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+          <Plus className="w-3 h-3" /> Add Slab
+        </button>
+      </div>
+      {slabs.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-3 border border-dashed border-slate-200 rounded-lg">
+          No slabs — PT will be ₹0 for this gender.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-2 text-xs font-medium text-slate-500 px-1 mb-1">
+            <span>Min Gross (₹)</span><span>Max Gross (₹)</span><span>PT Amount (₹)</span><span></span>
+          </div>
+          <div className="space-y-2">
+            {slabs.map((slab, i) => (
+              <div key={i} className="grid grid-cols-4 gap-2 items-center">
+                <input type="number" className={inputCls} placeholder="7501"
+                  value={slab.minGross ?? ''} onChange={e => onChange(i, 'minGross', e.target.value)} />
+                <input type="number" className={inputCls} placeholder="Leave blank = no limit"
+                  value={slab.maxGross ?? ''} onChange={e => onChange(i, 'maxGross', e.target.value === '' ? null : e.target.value)} />
+                <input type="number" className={inputCls} placeholder="200"
+                  value={slab.amount ?? ''} onChange={e => onChange(i, 'amount', e.target.value)} />
+                <button onClick={() => onRemove(i)}
+                  className="flex items-center justify-center w-8 h-8 text-red-500 hover:bg-red-50 rounded-lg">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function PayrollSettings() {
   const { data: savedRules, loading, error: fetchErr } = useFetch('/api/settings/payroll-rules', null);
@@ -22,30 +73,48 @@ export default function PayrollSettings() {
 
   const [pf, setPf] = useState(DEFAULT_RULES.pf);
   const [esi, setEsi] = useState(DEFAULT_RULES.esi);
-  const [slabs, setSlabs] = useState(DEFAULT_RULES.pt.slabs);
+  const [maleSlabs, setMaleSlabs] = useState(DEFAULT_RULES.pt.maleSlabs);
+  const [femaleSlabs, setFemaleSlabs] = useState(DEFAULT_RULES.pt.femaleSlabs);
+  const [februaryTopUp, setFebruaryTopUp] = useState(DEFAULT_RULES.pt.februaryTopUp);
   const [lopDivisor, setLopDivisor] = useState(DEFAULT_RULES.lop.divisor);
 
   useEffect(() => {
     if (!savedRules) return;
     if (savedRules.pf) setPf(savedRules.pf);
     if (savedRules.esi) setEsi(savedRules.esi);
-    if (savedRules.pt?.slabs) setSlabs(savedRules.pt.slabs);
+    if (savedRules.pt) {
+      // Support both new (maleSlabs/femaleSlabs) and legacy (slabs) format
+      if (savedRules.pt.maleSlabs) setMaleSlabs(savedRules.pt.maleSlabs);
+      else if (savedRules.pt.slabs) setMaleSlabs(savedRules.pt.slabs); // migrate legacy
+      if (savedRules.pt.femaleSlabs) setFemaleSlabs(savedRules.pt.femaleSlabs);
+      if (savedRules.pt.februaryTopUp != null) setFebruaryTopUp(savedRules.pt.februaryTopUp);
+    }
     if (savedRules.lop?.divisor != null) setLopDivisor(savedRules.lop.divisor);
   }, [savedRules]);
 
-  const updateSlab = (i, field, val) => {
-    setSlabs(prev => prev.map((s, idx) =>
+  const updateSlab = (setter) => (i, field, val) => {
+    setter(prev => prev.map((s, idx) =>
       idx === i ? { ...s, [field]: val === '' || val === null ? null : parseFloat(val) } : s
     ));
   };
-  const addSlab = () => setSlabs(prev => [...prev, { minGross: 0, maxGross: null, amount: 0 }]);
-  const removeSlab = (i) => setSlabs(prev => prev.filter((_, idx) => idx !== i));
+  const addSlab = (setter) => () => setter(prev => [...prev, { minGross: 0, maxGross: null, amount: 0 }]);
+  const removeSlab = (setter) => (i) => setter(prev => prev.filter((_, idx) => idx !== i));
+
+  const parseSlab = (s) => ({
+    minGross: parseFloat(s.minGross) || 0,
+    maxGross: s.maxGross === '' || s.maxGross === null || isNaN(s.maxGross) ? null : parseFloat(s.maxGross),
+    amount: parseFloat(s.amount) || 0,
+  });
 
   const handleSave = async () => {
     const payload = {
       pf: { ...pf, wageCap: parseFloat(pf.wageCap), maxMonthly: parseFloat(pf.maxMonthly) },
       esi: { ...esi, grossCeiling: parseFloat(esi.grossCeiling) },
-      pt: { slabs: slabs.map(s => ({ minGross: parseFloat(s.minGross) || 0, maxGross: s.maxGross === '' || s.maxGross === null || isNaN(s.maxGross) ? null : parseFloat(s.maxGross), amount: parseFloat(s.amount) || 0 })) },
+      pt: {
+        maleSlabs: maleSlabs.map(parseSlab),
+        femaleSlabs: femaleSlabs.map(parseSlab),
+        februaryTopUp: parseFloat(februaryTopUp) || 0,
+      },
       lop: { divisor: parseInt(lopDivisor) || 30 },
     };
     try {
@@ -137,38 +206,52 @@ export default function PayrollSettings() {
       </div>
 
       {/* PT Section */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-700">Professional Tax (PT) Slabs</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Highest matching slab is applied. Set PT=0 amount to disable a range. Mark employee as PT-exempt in their salary structure to skip PT entirely.</p>
-          </div>
-          <button onClick={addSlab}
-            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
-            <Plus className="w-3 h-3" /> Add Slab
-          </button>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700">Professional Tax (PT) Slabs</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Slabs are gender-aware. Highest matching slab is applied. Set amount to ₹0 to make a range tax-free.
+            Mark employee as PT-exempt in their salary structure to skip PT entirely.
+          </p>
         </div>
-        <div className="space-y-2">
-          <div className="grid grid-cols-4 gap-2 text-xs font-medium text-slate-500 px-1">
-            <span>Min Gross (₹)</span><span>Max Gross (₹)</span><span>PT Amount (₹)</span><span></span>
-          </div>
-          {slabs.map((slab, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2 items-center">
-              <input type="number" className={inputCls} placeholder="7500"
-                value={slab.minGross ?? ''} onChange={e => updateSlab(i, 'minGross', e.target.value)} />
-              <input type="number" className={inputCls} placeholder="Leave blank = no limit"
-                value={slab.maxGross ?? ''} onChange={e => updateSlab(i, 'maxGross', e.target.value === '' ? null : e.target.value)} />
-              <input type="number" className={inputCls} placeholder="200"
-                value={slab.amount ?? ''} onChange={e => updateSlab(i, 'amount', e.target.value)} />
-              <button onClick={() => removeSlab(i)}
-                className="flex items-center justify-center w-8 h-8 text-red-500 hover:bg-red-50 rounded-lg">
-                <Trash2 className="w-4 h-4" />
-              </button>
+
+        {/* Male Slabs */}
+        <div className="border border-slate-100 rounded-lg p-4 bg-blue-50/30">
+          <SlabTable
+            label="👨 Male Slabs"
+            slabs={maleSlabs}
+            onChange={updateSlab(setMaleSlabs)}
+            onAdd={addSlab(setMaleSlabs)}
+            onRemove={removeSlab(setMaleSlabs)}
+          />
+        </div>
+
+        {/* Female Slabs */}
+        <div className="border border-slate-100 rounded-lg p-4 bg-pink-50/30">
+          <SlabTable
+            label="👩 Female Slabs"
+            slabs={femaleSlabs}
+            onChange={updateSlab(setFemaleSlabs)}
+            onAdd={addSlab(setFemaleSlabs)}
+            onRemove={removeSlab(setFemaleSlabs)}
+          />
+        </div>
+
+        {/* February Top-Up */}
+        <div className="border border-amber-100 rounded-lg p-4 bg-amber-50/30">
+          <h4 className="text-sm font-medium text-slate-700 mb-1">February Top-Up (₹)</h4>
+          <div className="flex items-center gap-4">
+            <div className="w-40">
+              <input type="number" min="0" className={inputCls}
+                value={februaryTopUp}
+                onChange={e => setFebruaryTopUp(e.target.value)} />
             </div>
-          ))}
-          {slabs.length === 0 && (
-            <p className="text-sm text-slate-400 text-center py-3">No slabs — PT will be 0 for all employees.</p>
-          )}
+            <p className="text-xs text-slate-500">
+              Extra PT charged in February only.<br />
+              Example: ₹100 → a ₹200 slab becomes ₹300 in Feb (Maharashtra rule).
+              Set to ₹0 to disable.
+            </p>
+          </div>
         </div>
       </div>
 
