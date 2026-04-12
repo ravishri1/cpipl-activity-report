@@ -423,7 +423,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──
     // These are employees added to the attendance exception list (isAttendanceExempt = true).
     // No biometric required, no LOP deduction, no leave impact on payroll.
-    let presentDays = 0, lopDays = 0;
+    let presentDays = 0, lopDays = 0, lopFromLeave = 0;
     const today = new Date().toISOString().slice(0, 10);
     const isIntern = sal.user.employeeType === 'intern';
     let attendances = [];
@@ -443,21 +443,33 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
         endDate: { gte: `${month}-01` },
       },
-      select: { startDate: true, endDate: true, leaveType: { select: { code: true } } },
+      select: { startDate: true, endDate: true, days: true, session: true, leaveType: { select: { code: true } } },
     });
     const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
-    const lopDatesSet = new Set();    // LOP leave days (deducted like absent)
+    const lopDatesSet = new Set();    // LOP leave date range (blocks attendance double-count)
+
+    // LOP days from leave requests: use lr.days directly (calendar days as filed).
+    // Standard Indian HR practice: deduct for full LOP period including weekends/holidays.
+    let lopFromLeave = 0;
     for (const lr of approvedLeaves) {
       const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
       const cur = new Date(lr.startDate + 'T00:00:00Z');
       const end = new Date(lr.endDate + 'T00:00:00Z');
+      // Only count leave days that fall within this payroll month
+      let daysInMonth_ = 0;
       while (cur <= end) {
         const ds = cur.toISOString().slice(0, 10);
         if (ds.startsWith(month)) {
-          if (isLop) lopDatesSet.add(ds);
+          if (isLop) { lopDatesSet.add(ds); daysInMonth_++; }
           else leaveDatesSet.add(ds);
         }
         cur.setDate(cur.getDate() + 1);
+      }
+      if (isLop && daysInMonth_ > 0) {
+        // Proportion of lr.days that fall in this month (for multi-month leaves)
+        const totalDays = parseFloat(lr.days) || 0;
+        const totalRange = Math.max(1, Math.round((new Date(lr.endDate + 'T00:00:00Z') - new Date(lr.startDate + 'T00:00:00Z')) / 86400000) + 1);
+        lopFromLeave += Math.round((daysInMonth_ / totalRange) * totalDays * 2) / 2; // round to 0.5
       }
     }
 
@@ -480,8 +492,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         const dow = new Date(year, monthNum - 1, d).getDay();
         // Resolve off days using period-bound assignment active on this specific date
         const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
+        // Saturday off: determined by company Saturday policy (Shift model has no weeklyOffDays).
+        // Other days: from shift assignment (default [0] = Sunday only).
         const isOff = dow === 6
-          ? (offDaysForDate.includes(6) && offSaturdaySet.has(dateStr))
+          ? offSaturdaySet.has(dateStr)
           : offDaysForDate.includes(dow);
         if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
         // Skip days after last working date (pro-rata separation — NOT LOP)
@@ -493,7 +507,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         if (joinDateStr && dateStr < joinDateStr) continue;
         const status = attMap[dateStr];
         if (lopDatesSet.has(dateStr)) {
-          lopDays += 1; // LOP leave = deduction (same as absent)
+          // LOP leave date: skip from attendance (already counted via lopFromLeave)
         } else if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
           presentDays += 1; // Approved paid leave = paid day
         } else if (status === 'present') {
@@ -512,6 +526,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       }
     }
     } // end of attendance-exempt else block
+
+    // Add LOP days from leave requests (calendar days) to attendance-based LOP
+    if (!sal.user.isAttendanceExempt) {
+      lopDays += lopFromLeave;
+    }
 
     // ── Pro-rata for mid-month separation ──────────────────────────────────────
     // When lastWorkingDate falls within this month, treat all calendar days
