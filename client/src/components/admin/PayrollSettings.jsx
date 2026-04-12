@@ -71,7 +71,7 @@ function SlabTable({ slabs, onChange, onAdd, onRemove, label }) {
 }
 
 export default function PayrollSettings() {
-  const { data: savedRules, loading, error: fetchErr } = useFetch('/api/settings/payroll-rules', null);
+  const { data: savedRules, loading, error: fetchErr } = useFetch('/settings/payroll-rules', null);
   const { execute, loading: saving, error: saveErr, success } = useApi();
 
   const [pf, setPf] = useState(DEFAULT_RULES.pf);
@@ -128,7 +128,7 @@ export default function PayrollSettings() {
       lop: { divisor: parseInt(lopDivisor) || 30 },
     };
     try {
-      await execute(() => api.put('/api/settings/payroll-rules', payload), 'Payroll rules saved!');
+      await execute(() => api.put('/settings/payroll-rules', payload), 'Payroll rules saved!');
     } catch { /* useApi handles error */ }
   };
 
