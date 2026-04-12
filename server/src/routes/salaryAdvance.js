@@ -96,6 +96,66 @@ router.get('/my', asyncHandler(async (req, res) => {
 
 // ─── Admin / Manager Routes ───────────────────────────────────────
 
+// POST /admin-create — Admin creates advance directly on behalf of employee (released state)
+router.post('/admin-create', requireAdmin, asyncHandler(async (req, res) => {
+  requireFields(req.body, 'userId', 'amount', 'reason', 'repaymentMonths', 'repaymentStart');
+  const { userId, amount, reason, repaymentMonths, repaymentStart, releaseMode, releaseNote } = req.body;
+
+  const targetUserId = parseInt(userId);
+  if (!targetUserId) throw badRequest('Invalid userId');
+  if (parseFloat(amount) <= 0) throw badRequest('Amount must be positive');
+  const months = parseInt(repaymentMonths);
+  if (months < 1 || months > 12) throw badRequest('Repayment months must be between 1 and 12');
+  if (!/^\d{4}-\d{2}$/.test(repaymentStart)) throw badRequest('repaymentStart must be YYYY-MM');
+
+  const targetUser = await req.prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, name: true, employeeId: true },
+  });
+  if (!targetUser) throw badRequest('Employee not found');
+
+  // Warn if active advance already exists (but admin can override)
+  const existing = await req.prisma.salaryAdvance.findFirst({
+    where: { userId: targetUserId, status: { in: ['pending', 'approved', 'released', 'repaying'] } },
+  });
+  if (existing) throw badRequest(`${targetUser.name} already has an active salary advance (id=${existing.id}, status=${existing.status}). Close it first.`);
+
+  const disbursedAmount = parseFloat(amount);
+  const advance = await req.prisma.salaryAdvance.create({
+    data: {
+      userId: targetUserId,
+      amount: disbursedAmount,
+      approvedAmount: disbursedAmount,
+      reason,
+      repaymentMonths: months,
+      repaymentStart,
+      status: 'released',
+      approvedBy: req.user.id,
+      approvedAt: new Date(),
+      releasedBy: req.user.id,
+      releasedAt: new Date(),
+      releaseMode: releaseMode || 'bank_transfer',
+      releaseNote: releaseNote || null,
+    },
+  });
+
+  await createRepaymentSchedule(req.prisma, advance.id, disbursedAmount, months, repaymentStart);
+
+  // Notify the employee
+  notifyUsers(req.prisma, {
+    userIds: [targetUserId], type: 'salary_advance',
+    title: 'Salary Advance Added 💰',
+    message: `Admin has added a salary advance of ₹${disbursedAmount}. Repayment of ₹${Math.round(disbursedAmount / months)}/month starts ${repaymentStart}.`,
+    link: '/payroll/advance',
+  });
+
+  const created = await req.prisma.salaryAdvance.findUnique({
+    where: { id: advance.id },
+    include: { repayments: { orderBy: { month: 'asc' } } },
+  });
+  res.status(201).json(created);
+}));
+
 // GET /pending — Pending approvals
 router.get('/pending', asyncHandler(async (req, res) => {
   const where = { status: 'pending' };

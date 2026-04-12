@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import {
   Wallet, Clock, CheckCircle, XCircle, Banknote, Send, RotateCcw,
-  ChevronDown, ChevronUp, Loader2, Search, Filter, X, AlertTriangle,
-  CalendarDays, IndianRupee, Users,
+  ChevronDown, ChevronUp, Loader2, Search, X, AlertTriangle,
+  IndianRupee, Plus,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -42,6 +42,11 @@ const getCurrentMonth = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const DEFAULT_CREATE_FORM = {
+  userId: '', amount: '', reason: '', repaymentMonths: '1',
+  repaymentStart: getCurrentMonth(), releaseMode: 'bank_transfer', releaseNote: '',
+};
+
 export default function SalaryAdvanceManager() {
   const [tab, setTab] = useState('pending'); // pending | all
   const [statusFilter, setStatusFilter] = useState('');
@@ -53,9 +58,12 @@ export default function SalaryAdvanceManager() {
   const [approvedAmount, setApprovedAmount] = useState('');
   const [releaseForm, setReleaseForm] = useState({ releaseMode: 'bank_transfer', repaymentStart: getCurrentMonth(), releaseNote: '' });
   const [disbursementFile, setDisbursementFile] = useState(null);
+  const [createModal, setCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState(DEFAULT_CREATE_FORM);
 
   const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } = useFetch('/salary-advances/pending', []);
   const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch('/salary-advances/all', []);
+  const { data: employees } = useFetch('/users', []);
   const { execute, loading: acting, error: actErr, success, clearMessages } = useApi();
 
   const refetch = useCallback(() => { refetchPending(); refetchAll(); }, [refetchPending, refetchAll]);
@@ -93,6 +101,23 @@ export default function SalaryAdvanceManager() {
 
   const closeReview = () => { setReviewModal(null); setReviewNote(''); setApprovedAmount(''); clearMessages(); };
   const closeRelease = () => { setReleaseModal(null); setDisbursementFile(null); clearMessages(); };
+  const closeCreate = () => { setCreateModal(false); setCreateForm(DEFAULT_CREATE_FORM); clearMessages(); };
+
+  const handleCreate = async () => {
+    try {
+      await execute(() => api.post('/salary-advances/admin-create', {
+        userId: parseInt(createForm.userId),
+        amount: parseFloat(createForm.amount),
+        reason: createForm.reason.trim(),
+        repaymentMonths: parseInt(createForm.repaymentMonths),
+        repaymentStart: createForm.repaymentStart,
+        releaseMode: createForm.releaseMode,
+        releaseNote: createForm.releaseNote.trim() || undefined,
+      }), 'Salary advance created and repayment schedule set!');
+      closeCreate();
+      refetch();
+    } catch {}
+  };
 
   const displayList = tab === 'pending' ? pending : all.filter(a => {
     if (statusFilter && a.status !== statusFilter) return false;
@@ -114,14 +139,20 @@ export default function SalaryAdvanceManager() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-violet-100 rounded-xl">
-          <Wallet className="w-6 h-6 text-violet-600" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-violet-100 rounded-xl">
+            <Wallet className="w-6 h-6 text-violet-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Salary Advances</h1>
+            <p className="text-sm text-slate-500">Review, approve, and track employee salary advances</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Salary Advances</h1>
-          <p className="text-sm text-slate-500">Review, approve, and track employee salary advances</p>
-        </div>
+        <button onClick={() => setCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700">
+          <Plus className="w-4 h-4" /> Add Advance
+        </button>
       </div>
 
       {(actErr || pendingErr || allErr) && <AlertMessage type="error" message={actErr || pendingErr || allErr} />}
@@ -252,6 +283,122 @@ export default function SalaryAdvanceManager() {
                 className={`flex items-center gap-2 px-5 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 ${reviewModal.action === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
                 {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {reviewModal.action === 'approved' ? 'Approve' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Create Advance Modal */}
+      {createModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={closeCreate} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-violet-500" /> Add Salary Advance
+              </h3>
+              <button onClick={closeCreate}><X className="w-5 h-5 text-slate-400" /></button>
+            </div>
+
+            <p className="text-xs text-slate-500 -mt-2">
+              Creates an advance directly in disbursed state with a repayment schedule. Deduction auto-applies on payslip generation.
+            </p>
+
+            {actErr && <AlertMessage type="error" message={actErr} />}
+
+            {/* Employee */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Employee *</label>
+              <select value={createForm.userId} onChange={e => setCreateForm(f => ({ ...f, userId: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <option value="">Select employee…</option>
+                {(employees || [])
+                  .filter(u => u.employeeId && u.isActive)
+                  .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                  .map(u => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Amount */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹) *</label>
+              <input type="number" min="1" value={createForm.amount}
+                onChange={e => setCreateForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="e.g. 15000"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Reason *</label>
+              <input type="text" value={createForm.reason}
+                onChange={e => setCreateForm(f => ({ ...f, reason: e.target.value }))}
+                placeholder="e.g. Medical emergency, personal need…"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+
+            {/* Repayment months + start */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Repayment Months *</label>
+                <select value={createForm.repaymentMonths}
+                  onChange={e => setCreateForm(f => ({ ...f, repaymentMonths: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                    <option key={n} value={n}>{n} month{n > 1 ? 's' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Repayment Starts *</label>
+                <input type="month" value={createForm.repaymentStart}
+                  onChange={e => setCreateForm(f => ({ ...f, repaymentStart: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </div>
+
+            {/* Preview */}
+            {createForm.amount && createForm.repaymentMonths && (
+              <div className="p-3 bg-violet-50 rounded-lg border border-violet-100 text-xs text-violet-700">
+                ₹{Math.round(parseFloat(createForm.amount) / parseInt(createForm.repaymentMonths))} / month × {createForm.repaymentMonths} month{parseInt(createForm.repaymentMonths) > 1 ? 's' : ''} starting {createForm.repaymentStart}
+              </div>
+            )}
+
+            {/* Release mode + note */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+                <select value={createForm.releaseMode}
+                  onChange={e => setCreateForm(f => ({ ...f, releaseMode: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Note</label>
+                <input type="text" value={createForm.releaseNote}
+                  onChange={e => setCreateForm(f => ({ ...f, releaseNote: e.target.value }))}
+                  placeholder="Optional remark"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-700 flex gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              Advance will be marked as disbursed immediately. Deduction applies automatically during payslip generation for the selected repayment month(s).
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={closeCreate} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancel</button>
+              <button onClick={handleCreate}
+                disabled={acting || !createForm.userId || !createForm.amount || !createForm.reason.trim() || !createForm.repaymentStart}
+                className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Create Advance
               </button>
             </div>
           </div>
