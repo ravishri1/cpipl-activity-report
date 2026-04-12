@@ -28,6 +28,7 @@ const PolicyManager = lazy(() => import('./components/admin/PolicyManager'));
 const PolicyScorecard = lazy(() => import('./components/admin/PolicyScorecard'));
 const SalaryStructure = lazy(() => import('./components/admin/SalaryStructure'));
 const PayrollDashboard = lazy(() => import('./components/admin/PayrollDashboard'));
+const PayrollSettings = lazy(() => import('./components/admin/PayrollSettings'));
 const SalaryAdvanceManager = lazy(() => import('./components/admin/SalaryAdvanceManager'));
 const MyPayslips = lazy(() => import('./components/payroll/MyPayslips'));
 const SalaryAdvance = lazy(() => import('./components/payroll/SalaryAdvance'));
@@ -230,6 +231,7 @@ function AppRoutes() {
                   <Route path="/admin/payroll" element={<SeparatedRoute><AdminRoute><PayrollDashboard /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/salary-advances" element={<SeparatedRoute><AdminRoute><SalaryAdvanceManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/salary-setup" element={<SeparatedRoute><AdminRoute><SalaryStructure /></AdminRoute></SeparatedRoute>} />
+                  <Route path="/admin/payroll-settings" element={<SeparatedRoute><AdminRoute><PayrollSettings /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/holidays" element={<SeparatedRoute><AdminRoute><HolidayManager /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/shifts" element={<SeparatedRoute><AdminRoute><ShiftManagement /></AdminRoute></SeparatedRoute>} />
                   <Route path="/admin/shift-roster" element={<SeparatedRoute><AdminRoute><ShiftRoster /></AdminRoute></SeparatedRoute>} />

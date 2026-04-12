@@ -123,6 +123,8 @@ export default function SalaryStructure() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [salaryForm, setSalaryForm] = useState({ ...emptySalary });
+  const [ptExempt, setPtExempt] = useState(false);
+  const [payrollRules, setPayrollRules] = useState(null); // loaded once on mount
   const [formLoading, setFormLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState(null);
@@ -226,6 +228,11 @@ export default function SalaryStructure() {
     fetchComponents();
   }, [fetchComponents]);
 
+  // Fetch payroll rules once on mount — used for auto-calc preview
+  useEffect(() => {
+    api.get('/settings/payroll-rules').then(r => setPayrollRules(r.data)).catch(() => {});
+  }, []);
+
   // ─── Filtered employees ───
   // Auto-apply "missing salary" filter from URL param (?filter=missing)
   const filterMissing = searchParams.get('filter') === 'missing';
@@ -247,28 +254,49 @@ export default function SalaryStructure() {
     );
   }, [employees, searchQuery, filterMissing, pendingSalary]);
 
-  // ─── Calculations (earnings from components; deductions auto-calculated) ───
+  // ─── Calculations (earnings from components; deductions from payroll rules) ───
   const calculations = useMemo(() => {
+    const r = payrollRules;
     const ctcAnnual = parseFloat(salaryForm.ctcAnnual) || 0;
     const ctcMonthly = ctcAnnual / 12;
     const basic = parseFloat(selectedComponents.find(c => c.code === 'BASIC')?.amount) || 0;
     const grossEarnings = selectedComponents
       .filter(c => c.type === 'earning')
       .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
-    // CTC components (employer-side, not part of employee net pay)
     const variablePay = parseFloat(salaryForm.variablePay) || 0;
     const medicalPremium = parseFloat(salaryForm.medicalPremium) || 0;
-    // Auto-calculated statutory deductions — not manually entered by HR
-    const employeePf = basic > 0 ? Math.min(Math.round(basic * 0.12), 1800) : 0;
-    const employerPf = employeePf; // Employer PF = same as employee PF
-    const employeeEsi = grossEarnings > 0 && grossEarnings <= 21000 ? Math.round(grossEarnings * 0.0075) : 0;
-    const professionalTax = grossEarnings > 10000 ? 200 : grossEarnings >= 7500 ? 75 : 0;
+
+    // PF — from rules
+    const pfRate = r?.pf?.employeeRate ?? 0.12;
+    const pfCap = r?.pf?.wageCap ?? 15000;
+    const pfMax = r?.pf?.maxMonthly ?? 1800;
+    const pfBase = Math.min(basic, pfCap);
+    const employeePf = basic > 0 ? Math.min(Math.round(pfBase * pfRate), pfMax) : 0;
+    const employerPf = basic > 0 ? Math.min(Math.round(pfBase * (r?.pf?.employerRate ?? 0.12)), pfMax) : 0;
+
+    // ESI — from rules
+    const esiCeiling = r?.esi?.grossCeiling ?? 21000;
+    const employeeEsi = grossEarnings > 0 && grossEarnings <= esiCeiling
+      ? Math.round(grossEarnings * (r?.esi?.employeeRate ?? 0.0075)) : 0;
+    const employerEsi = grossEarnings > 0 && grossEarnings <= esiCeiling
+      ? Math.round(grossEarnings * (r?.esi?.employerRate ?? 0.0325)) : 0;
+
+    // PT — from rules slabs; 0 if ptExempt
+    let professionalTax = 0;
+    if (!ptExempt && grossEarnings > 0) {
+      const slabs = r?.pt?.slabs ?? [{ minGross: 7500, maxGross: 10000, amount: 75 }, { minGross: 10001, maxGross: null, amount: 200 }];
+      for (const slab of slabs) {
+        const inRange = grossEarnings >= slab.minGross && (slab.maxGross === null || slab.maxGross === undefined || grossEarnings <= slab.maxGross);
+        if (inRange) professionalTax = slab.amount;
+      }
+    }
+
     const tds = parseFloat(salaryForm.tds) || 0;
     const totalDeductions = employeePf + employeeEsi + professionalTax + tds;
     const netPayMonthly = grossEarnings - totalDeductions;
     const ctcFromComponents = grossEarnings + variablePay + medicalPremium + employerPf;
-    return { ctcAnnual, ctcMonthly, grossEarnings, variablePay, medicalPremium, employeePf, employerPf, employeeEsi, professionalTax, tds, totalDeductions, netPayMonthly, ctcFromComponents };
-  }, [salaryForm.ctcAnnual, salaryForm.tds, salaryForm.variablePay, salaryForm.medicalPremium, selectedComponents]);
+    return { ctcAnnual, ctcMonthly, grossEarnings, variablePay, medicalPremium, employeePf, employerPf, employeeEsi, employerEsi, professionalTax, tds, totalDeductions, netPayMonthly, ctcFromComponents };
+  }, [salaryForm.ctcAnnual, salaryForm.tds, salaryForm.variablePay, salaryForm.medicalPremium, selectedComponents, payrollRules, ptExempt]);
 
   // ──────────────────────────────────────────────
   // Employee Salary tab functions (existing)
@@ -283,7 +311,7 @@ export default function SalaryStructure() {
     setShowRevisions(false);
     setRevisions([]);
     setSalaryForm({ ...emptySalary });
-
+    setPtExempt(false);
     setSelectedComponents([]);
     setAddDropdownType(null);
 
@@ -301,6 +329,7 @@ export default function SalaryStructure() {
             : new Date().toISOString().split('T')[0],
           notes: d.notes ?? '',
         });
+        setPtExempt(d.ptExempt || false);
         // Only load earning components — deductions are auto-calculated
         const allComps = Array.isArray(d.components) && d.components.length > 0
           ? d.components
@@ -405,6 +434,7 @@ export default function SalaryStructure() {
       employeeEsi: calculations.employeeEsi,
       professionalTax: calculations.professionalTax,
       tds: parseFloat(salaryForm.tds) || 0,
+      ptExempt,
       effectiveFrom: salaryForm.effectiveFrom,
       notes: salaryForm.notes || '',
       // Only earnings in components — deductions are system-calculated
@@ -913,9 +943,8 @@ export default function SalaryStructure() {
                 </h3>
                 <div className="space-y-2">
                   {[
-                    { label: 'Employee PF', value: calculations.employeePf, note: calculations.employeePf === 1800 ? 'Capped @ ₹15K ceiling' : '12% of Basic' },
-                    { label: 'Employee ESI', value: calculations.employeeEsi, note: calculations.employeeEsi === 0 ? 'N/A (Gross > ₹21K)' : '0.75% of Gross' },
-                    { label: 'Professional Tax', value: calculations.professionalTax, note: 'Maharashtra slab' },
+                    { label: 'Employee PF', value: calculations.employeePf, note: calculations.employeePf === 1800 ? 'Capped @ wage ceiling' : `${((payrollRules?.pf?.employeeRate ?? 0.12) * 100).toFixed(0)}% of Basic` },
+                    { label: 'Employee ESI', value: calculations.employeeEsi, note: calculations.employeeEsi === 0 ? 'N/A (Gross > ceiling)' : `${((payrollRules?.esi?.employeeRate ?? 0.0075) * 100).toFixed(2)}% of Gross` },
                   ].map(({ label, value, note }) => (
                     <div key={label} className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
                       <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -924,6 +953,21 @@ export default function SalaryStructure() {
                       <span className="text-xs text-slate-400">{note}</span>
                     </div>
                   ))}
+
+                  {/* PT — with exempt toggle */}
+                  <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">
+                    <Lock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                    <span className="text-xs font-medium text-slate-700 flex-1">Professional Tax</span>
+                    <span className={`text-sm font-semibold ${ptExempt ? 'text-slate-400 line-through' : 'text-red-700'}`}>
+                      {formatCurrency(calculations.professionalTax)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPtExempt(v => !v)}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-colors ${ptExempt ? 'bg-green-50 border-green-300 text-green-700' : 'bg-slate-50 border-slate-300 text-slate-500'}`}>
+                      {ptExempt ? '✓ Exempt' : 'Exempt?'}
+                    </button>
+                  </div>
 
                   {/* TDS — editable since it depends on employee's tax declaration */}
                   <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-2">

@@ -1125,6 +1125,7 @@ const CHECKLIST_ITEMS = [
   { id: 'publish_payslips',label: 'Publish Payslips',             desc: 'Make payslips visible to employees on their portal',    link: '/admin/payroll',           category: 'process' },
   { id: 'statutory',       label: 'Statutory Compliance',         desc: 'Download PF ECR, ESIC return and PT challan',           link: '/admin/payroll',           category: 'statutory' },
   { id: 'lock_payroll',    label: 'Lock Payroll',                 desc: 'Lock the month so no further changes can be made',      link: '/admin/payroll',           category: 'statutory' },
+  { id: 'payroll_rules',   label: 'Payroll Rules',                desc: 'Configure PF, ESI, PT slabs, LOP divisor used in payroll generation', link: '/admin/payroll-settings', category: 'setup' },
 ];
 
 const CATEGORY_COLORS = {

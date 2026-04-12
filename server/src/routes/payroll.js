@@ -5,6 +5,7 @@ const { badRequest, notFound, forbidden } = require('../utils/httpErrors');
 const { parseId, requireFields } = require('../utils/validate');
 const { getWeeklyOffMap } = require('../services/attendance/weeklyOffHelper');
 const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../utils/saturdayPolicyHelper');
+const { DEFAULT_PAYROLL_RULES, calcStatutory } = require('../utils/payrollRules');
 
 const router = express.Router();
 router.use(authenticate);
@@ -87,6 +88,7 @@ router.put('/salary/:userId', requireActiveEmployee, requireAdmin, asyncHandler(
     netPayMonthly,
     effectiveFrom: d.effectiveFrom || null,
     notes: d.notes || null,
+    ptExempt: d.ptExempt === true || d.ptExempt === 'true',
     // Flexible components JSON — THIS is what the UI reads back
     components: d.components && d.components.length > 0 ? d.components : null,
   };
@@ -385,6 +387,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     return [0, 6];
   }
 
+  // Fetch payroll rules from settings (falls back to defaults if not configured)
+  const rulesRow = await req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } });
+  const payrollRules = rulesRow ? (() => { try { return JSON.parse(rulesRow.value); } catch { return DEFAULT_PAYROLL_RULES; } })() : DEFAULT_PAYROLL_RULES;
+  const lopDivisor = payrollRules.lop?.divisor > 0 ? payrollRules.lop.divisor : daysInMonth;
+
   // Pre-fetch off-day allowance eligible employees for this month
   const eligibleOffDay = await req.prisma.offDayAllowanceEligibility.findMany({
     where: {
@@ -513,7 +520,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
     const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
 
-    const perDaySalary = daysInMonth > 0 ? sal.ctcMonthly / daysInMonth : 0;
+    const perDaySalary = lopDivisor > 0 ? sal.ctcMonthly / lopDivisor : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
     // Fetch approved expenses flagged for salary settlement (not yet settled)
@@ -587,8 +594,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
       : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
     const grossEarnings = grossBase + reimbursements + offDayAllowance;
-    // Interns: no PF, no ESI, no PT, no Mediclaim deductions
-    const totalDeductions = isIntern ? sal.tds : (sal.employeePf + sal.employeeEsi + sal.professionalTax + sal.tds);
+
+    // Compute statutory deductions from payroll rules (not stored salary structure values)
+    const statutory = calcStatutory(grossBase, payBasic, sal.ptExempt || false, isIntern, payrollRules);
+    const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
     const payslip = await req.prisma.payslip.create({
@@ -598,9 +607,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         specialAllowance: paySpec, medicalAllowance: payMed,
         conveyanceAllowance: payConv, otherAllowance: payOther,
         otherAllowanceLabel: payOtherLabel, grossEarnings,
-        employerPf: sal.employerPf, employerEsi: sal.employerEsi,
-        employeePf: isIntern ? 0 : sal.employeePf, employeeEsi: isIntern ? 0 : sal.employeeEsi,
-        professionalTax: isIntern ? 0 : sal.professionalTax, tds: sal.tds,
+        employerPf: statutory.employerPf, employerEsi: statutory.employerEsi,
+        employeePf: statutory.employeePf, employeeEsi: statutory.employeeEsi,
+        professionalTax: statutory.professionalTax, tds: sal.tds,
         otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
         totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
