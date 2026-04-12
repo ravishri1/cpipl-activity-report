@@ -513,6 +513,15 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
     } // end of attendance-exempt else block
 
+    // ── Pro-rata for mid-month separation ──────────────────────────────────────
+    // When lastWorkingDate falls within this month, treat all calendar days
+    // beyond LWD as LOP-equivalent so lopDeduction correctly reduces pay to
+    // the fraction actually earned. Uses lopDivisor (30) not actual working days.
+    if (separation?.lastWorkingDate && separation.lastWorkingDate.startsWith(month) && !sal.user.isAttendanceExempt) {
+      const separationDeductDays = Math.max(0, lopDivisor - presentDays - lopDays);
+      lopDays += separationDeductDays;
+    }
+
     // Fetch one-time payroll deductions for this employee/month
     const oneTimeDeductions = await req.prisma.payrollDeduction.findMany({
       where: { userId: sal.userId, month, payslipId: null },
@@ -597,7 +606,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const lopDeduction = Math.round(perDaySalary * lopDays);
 
     // Compute statutory deductions from payroll rules (not stored salary structure values)
-    const statutory = calcStatutory(grossBase, payBasic, sal.ptExempt || false, isIntern, payrollRules);
+    // For mid-month separation: prorate the gross base for statutory so PF/ESI/PT
+    // reflect only the earned portion (avoids over-deducting on unearned days).
+    const isMidMonthSeparation = !!(separation?.lastWorkingDate?.startsWith(month));
+    const statutoryBase = isMidMonthSeparation && lopDivisor > 0
+      ? Math.round(grossBase * presentDays / lopDivisor)
+      : grossBase;
+    const statutoryBasic = isMidMonthSeparation && lopDivisor > 0
+      ? Math.round(payBasic * presentDays / lopDivisor)
+      : payBasic;
+    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules);
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds);
     const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
