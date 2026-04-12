@@ -520,9 +520,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
     const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
 
-    const perDaySalary = lopDivisor > 0 ? sal.ctcMonthly / lopDivisor : 0;
-    const lopDeduction = Math.round(perDaySalary * lopDays);
-
     // Fetch approved expenses flagged for salary settlement (not yet settled)
     const pendingReimbursements = await req.prisma.expenseClaim.findMany({
       where: { userId: sal.userId, status: 'approved', settleOnSalary: true, settlementMonth: null },
@@ -594,6 +591,10 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
       : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
     const grossEarnings = grossBase + reimbursements + offDayAllowance;
+
+    // LOP per-day rate = grossBase / divisor (NOT ctcMonthly — CTC includes employer contributions)
+    const perDaySalary = lopDivisor > 0 ? grossBase / lopDivisor : 0;
+    const lopDeduction = Math.round(perDaySalary * lopDays);
 
     // Compute statutory deductions from payroll rules (not stored salary structure values)
     const statutory = calcStatutory(grossBase, payBasic, sal.ptExempt || false, isIntern, payrollRules);
