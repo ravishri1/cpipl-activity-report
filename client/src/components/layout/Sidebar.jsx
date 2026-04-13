@@ -239,6 +239,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/attendance',       label: 'Team Attendance',  icon: CheckSquare },
     { to: '/admin/leave-requests',   label: 'Leave Requests',   icon: ClipboardCheck },
     { to: '/admin/expense-claims',   label: 'Expense Claims',   icon: Receipt },
+    { to: '/admin/separations',      label: 'Separations',      icon: UserMinus },
   ];
 
   const peopleGroups = [
