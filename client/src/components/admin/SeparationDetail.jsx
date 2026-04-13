@@ -616,6 +616,26 @@ export default function SeparationDetail() {
             </div>
           </div>
 
+          {/* ── Next Step CTA — always visible, context-aware ── */}
+          {sep.status === 'notice_period' && (
+            <div className={`rounded-xl p-5 border ${today >= lwd ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-200'}`}>
+              <h3 className={`text-base font-semibold mb-1 ${today >= lwd ? 'text-green-800' : 'text-amber-800'}`}>
+                {today >= lwd ? '✅ Notice Period Complete — Ready for Clearance' : `⏳ Notice Period in Progress — LWD: ${lwd}`}
+              </h3>
+              <p className={`text-sm mb-3 ${today >= lwd ? 'text-green-700' : 'text-amber-700'}`}>
+                {today >= lwd
+                  ? 'LWD has passed. Start the clearance stage to complete the separation checklist.'
+                  : 'Wait until LWD passes before starting clearance. Use "Recalculate LWD" if employee took leave.'}
+              </p>
+              {today >= lwd && (
+                <button onClick={handleStartClearance} disabled={acting}
+                  className="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                  {acting ? 'Starting...' : '🚀 Start Clearance Stage'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Manager Action (if pending_manager) */}
           {sep.status === 'pending_manager' && (
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
