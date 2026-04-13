@@ -253,7 +253,7 @@ router.put('/overview/locks', requireAdmin, asyncHandler(async (req, res) => {
 
 // POST /generate — Generate payslips for a month (admin)
 router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
-  const { month, companyId } = req.body;
+  const { month, companyId, userId: targetUserId } = req.body;
   if (!month) throw badRequest('Month is required (format: YYYY-MM)');
   if (!companyId) throw badRequest('companyId is required — payroll must be processed per company');
 
@@ -261,8 +261,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
 
+  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } };
+  if (targetUserId) userWhere.id = parseInt(targetUserId);
+
   const salaries = await req.prisma.salaryStructure.findMany({
-    where: { user: { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } } },
+    where: { user: userWhere },
     include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
@@ -407,7 +410,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const existing = await req.prisma.payslip.findUnique({
       where: { userId_month: { userId: sal.userId, month } },
     });
-    if (existing) { results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' }); continue; }
+    // Skip published payslips — don't overwrite payslips already sent to employees
+    if (existing?.status === 'published') {
+      results.push({ userId: sal.userId, status: 'skipped', reason: 'already published' });
+      continue;
+    }
+    // If regenerating an existing (unpublished) payslip, unlink deductions/additions first
+    if (existing) {
+      await req.prisma.payrollDeduction.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
+      await req.prisma.payrollAddition.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
+    }
 
     // Merge global + branch holidays for this employee
     const mergedHolidays = new Set(globalHolidayDates);
@@ -678,28 +690,29 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds + lwfEmployee);
     const netPay = Math.round(grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
-    const payslip = await req.prisma.payslip.create({
-      data: {
-        userId: sal.userId, month, year,
-        basic: payBasic, hra: payHra, da: payDa,
-        specialAllowance: paySpec, medicalAllowance: payMed,
-        conveyanceAllowance: payConv, otherAllowance: payOther,
-        otherAllowanceLabel: payOtherLabel, grossEarnings,
-        employerPf: statutory.employerPf, employerEsi: statutory.employerEsi,
-        employeePf: statutory.employeePf, employeeEsi: statutory.employeeEsi,
-        professionalTax: statutory.professionalTax, tds: sal.tds,
-        lwfEmployee, lwfEmployer,
-        otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
-        otherAdditions: oneTimeAdditionTotal, otherAdditionsLabel: oneTimeAdditionLabel,
-        totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
-        netPay, workingDays, presentDays, lopDays, lopDeduction,
-        reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
-        companyName: sal.user.company?.name || null,
-        designation: sal.user.designation || null,
-        dateOfJoining: sal.user.dateOfJoining || null,
-        status: 'generated', generatedAt: new Date(),
-      },
-    });
+    const payslipData = {
+      userId: sal.userId, month, year,
+      basic: payBasic, hra: payHra, da: payDa,
+      specialAllowance: paySpec, medicalAllowance: payMed,
+      conveyanceAllowance: payConv, otherAllowance: payOther,
+      otherAllowanceLabel: payOtherLabel, grossEarnings,
+      employerPf: statutory.employerPf, employerEsi: statutory.employerEsi,
+      employeePf: statutory.employeePf, employeeEsi: statutory.employeeEsi,
+      professionalTax: statutory.professionalTax, tds: sal.tds,
+      lwfEmployee, lwfEmployer,
+      otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
+      otherAdditions: oneTimeAdditionTotal, otherAdditionsLabel: oneTimeAdditionLabel,
+      totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
+      netPay, workingDays, presentDays, lopDays, lopDeduction,
+      reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
+      companyName: sal.user.company?.name || null,
+      designation: sal.user.designation || null,
+      dateOfJoining: sal.user.dateOfJoining || null,
+      status: 'generated', generatedAt: new Date(),
+    };
+    const payslip = existing
+      ? await req.prisma.payslip.update({ where: { id: existing.id }, data: payslipData })
+      : await req.prisma.payslip.create({ data: payslipData });
 
     // Mark those expenses as settled in this month
     if (pendingReimbursements.length > 0) {
@@ -744,7 +757,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       });
     }
 
-    results.push({ userId: sal.userId, status: 'generated', netPay, reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked });
+    results.push({ userId: sal.userId, status: existing ? 'updated' : 'generated', netPay, reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked });
   }
 
   // Add stopped employees to results

@@ -784,12 +784,14 @@ const StatutoryReport = ({ month }) => {
 };
 
 // ─── Process Payroll Wizard ──────────────────────────────────────────────────
-function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
+function ProcessPayrollWizard({ month, companyId, targetUserId, targetUserName, onClose, onDone }) {
   const [step, setStep] = useState(1); // 1=checklist, 2=scanning, 3=review, 4=confirm, 5=generating, 6=done
   const [checks, setChecks] = useState(null);
   const [scanErr, setScanErr] = useState(null);
   const [generateResult, setGenerateResult] = useState(null);
   const [genErr, setGenErr] = useState(null);
+
+  const scopeLabel = targetUserId ? `for ${targetUserName}` : 'for all employees';
 
   // Step 2: scan (triggered manually after checklist)
   const runScan = () => {
@@ -802,7 +804,8 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   const runGenerate = async () => {
     setStep(5);
     try {
-      const r = await api.post('/payroll/generate', { month, companyId });
+      const body = { month, companyId, ...(targetUserId ? { userId: targetUserId } : {}) };
+      const r = await api.post('/payroll/generate', body);
       setGenerateResult(r.data);
       setStep(6);
       onDone?.();
@@ -829,9 +832,10 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
   const warnings = (checks?.checks || []).filter(c => c.status === 'warning');
   const hasBlocking = warnings.length > 0;
 
-  // Generated count from results
-  const genCount   = generateResult?.results?.filter(r => r.status === 'generated').length || 0;
-  const skipCount  = generateResult?.results?.filter(r => r.status === 'skipped').length || 0;
+  // Generated/updated/skipped counts from results
+  const genCount     = generateResult?.results?.filter(r => r.status === 'generated').length || 0;
+  const updatedCount = generateResult?.results?.filter(r => r.status === 'updated').length || 0;
+  const skipCount    = generateResult?.results?.filter(r => r.status === 'skipped').length || 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -844,7 +848,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-800">Process Payroll</h2>
-              <p className="text-xs text-slate-400">{formatMonthDisplay(month)}</p>
+              <p className="text-xs text-slate-400">{formatMonthDisplay(month)} · {targetUserId ? targetUserName : 'All Employees'}</p>
             </div>
           </div>
           {step !== 5 && (
@@ -950,7 +954,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
 
                   {checks.summary.existingPayslips > 0 && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-                      ℹ️ <strong>{checks.summary.existingPayslips} payslips already generated</strong> — existing ones will be skipped. Only new employees will be added.
+                      ℹ️ <strong>{checks.summary.existingPayslips} payslips already generated</strong> — unpublished ones will be <strong>recalculated &amp; updated</strong>. Published ones are protected.
                     </div>
                   )}
                 </>
@@ -962,7 +966,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
           {step === 4 && checks && (
             <div className="space-y-4">
               <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
-                <p className="text-sm font-bold text-blue-800 mb-3">Ready to generate payslips for {formatMonthDisplay(month)}</p>
+                <p className="text-sm font-bold text-blue-800 mb-3">Ready to process payslips for {formatMonthDisplay(month)} {scopeLabel}</p>
                 <div className="space-y-2 text-xs text-blue-700">
                   <div className="flex justify-between">
                     <span>Employees to process</span>
@@ -999,7 +1003,7 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
                   ⚠️ There are <strong>{warnings.length} warning(s)</strong> — you can still proceed but review them first.
                 </div>
               )}
-              <p className="text-xs text-slate-400 text-center">This will generate payslips. Existing ones will be skipped.</p>
+              <p className="text-xs text-slate-400 text-center">Unpublished payslips will be recalculated. Published payslips are protected.</p>
             </div>
           )}
 
@@ -1034,10 +1038,11 @@ function ProcessPayrollWizard({ month, companyId, onClose, onDone }) {
                 <>
                   <div className="text-5xl">🎉</div>
                   <div className="text-center">
-                    <p className="text-sm font-bold text-green-700">Payslips Generated!</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      <span className="font-semibold text-green-600">{genCount} generated</span>
-                      {skipCount > 0 && <span className="text-slate-400"> · {skipCount} skipped</span>}
+                    <p className="text-sm font-bold text-green-700">Payslips Processed!</p>
+                    <p className="text-xs text-slate-500 mt-1 space-x-2">
+                      {genCount > 0 && <span className="font-semibold text-green-600">{genCount} new</span>}
+                      {updatedCount > 0 && <span className="font-semibold text-blue-600">{updatedCount} updated</span>}
+                      {skipCount > 0 && <span className="text-slate-400">{skipCount} skipped</span>}
                     </p>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-xs text-green-700 text-center">
@@ -1392,10 +1397,17 @@ export default function PayrollDashboard() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showDeductions, setShowDeductions] = useState(false);
   const [showAdditions, setShowAdditions] = useState(false);
+  const [generateTargetUserId, setGenerateTargetUserId] = useState(''); // '' = all employees
+  const [salaryListEmployees, setSalaryListEmployees] = useState([]);
 
   // Load companies on mount
   useEffect(() => {
     api.get('/companies').then(r => setCompanies(r.data || [])).catch(() => {});
+  }, []);
+
+  // Load employees for per-employee generate selector
+  useEffect(() => {
+    api.get('/payroll/salary-list').then(r => setSalaryListEmployees(r.data || [])).catch(() => {});
   }, []);
 
   const showToast = useCallback((message, type = 'info') => {
@@ -1482,6 +1494,7 @@ export default function PayrollDashboard() {
     try {
       const response = await api.post('/payroll/generate', {
         month: selectedMonth,
+        ...(generateTargetUserId ? { userId: parseInt(generateTargetUserId) } : {}),
       });
       showToast(
         response.data?.message ||
@@ -1602,6 +1615,8 @@ export default function PayrollDashboard() {
         <ProcessPayrollWizard
           month={selectedMonth}
           companyId={selectedCompanyId}
+          targetUserId={generateTargetUserId ? parseInt(generateTargetUserId) : null}
+          targetUserName={generateTargetUserId ? (salaryListEmployees.find(e => e.id === parseInt(generateTargetUserId))?.name || '') : ''}
           onClose={() => { setWizardOpen(false); fetchPayslips(); fetchOverview(); setActiveTab('payslips'); }}
           onDone={() => { fetchPayslips(); fetchOverview(); }}
         />
@@ -1868,13 +1883,26 @@ export default function PayrollDashboard() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setWizardOpen(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Play className="w-4 h-4" />
-                  Process Payroll
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={generateTargetUserId}
+                    onChange={e => setGenerateTargetUserId(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    title="Process payroll for all employees or a specific one"
+                  >
+                    <option value="">All Employees</option>
+                    {salaryListEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeId || 'N/A'})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setWizardOpen(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Play className="w-4 h-4" />
+                    Process Payroll
+                  </button>
+                </div>
               </div>
 
               {/* Two Column Layout */}
