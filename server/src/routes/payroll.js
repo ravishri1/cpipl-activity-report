@@ -261,7 +261,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
 
-  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } };
+  // Exclude employees whose account was created after the payroll month ends
+  // (prevents re-joined employees getting double payslips for past months)
+  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, createdAt: { lte: new Date(monthEnd + 'T23:59:59.999Z') }, employeeId: { not: null } };
   if (targetUserId) userWhere.id = parseInt(targetUserId);
 
   const salaries = await req.prisma.salaryStructure.findMany({
