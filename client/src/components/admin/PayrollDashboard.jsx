@@ -1402,6 +1402,7 @@ export default function PayrollDashboard() {
   const [processCheck, setProcessCheck] = useState(null);
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
+  const [salaryRegisterDownloading, setSalaryRegisterDownloading] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showDeductions, setShowDeductions] = useState(false);
   const [showAdditions, setShowAdditions] = useState(false);
@@ -1494,6 +1495,20 @@ export default function PayrollDashboard() {
       showToast('NEFT export failed — ensure payslips are published first', 'error');
     } finally {
       setNeftExporting(false);
+    }
+  };
+
+  const handleSalaryRegister = async () => {
+    setSalaryRegisterDownloading(true);
+    try {
+      const res = await api.get(`/payroll/salary-register-csv?month=${selectedMonth}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a'); a.href = url; a.download = `salary-register-${selectedMonth}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showToast('Salary register download failed — ensure payslips exist for this month', 'error');
+    } finally {
+      setSalaryRegisterDownloading(false);
     }
   };
 
@@ -2261,6 +2276,14 @@ export default function PayrollDashboard() {
               >
                 {neftExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                 NEFT Export
+              </button>
+              <button
+                onClick={handleSalaryRegister}
+                disabled={salaryRegisterDownloading}
+                className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                {salaryRegisterDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Salary Register
               </button>
               <button
                 onClick={() => setShowAdditions(true)}

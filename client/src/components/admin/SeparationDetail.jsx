@@ -26,8 +26,8 @@ export default function SeparationDetail() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const { data: sep, loading, error: fetchErr, refetch } = useFetch(`/api/separation/${id}`, null);
-  const { data: fnfPreview, loading: fnfLoading, error: fnfErr, refetch: refetchFnF } = useFetch(`/api/separation/${id}/fnf-preview`, null);
+  const { data: sep, loading, error: fetchErr, refetch } = useFetch(`/separation/${id}`, null);
+  const { data: fnfPreview, loading: fnfLoading, error: fnfErr, refetch: refetchFnF } = useFetch(`/separation/${id}/fnf-preview`, null);
   const { execute, loading: acting, error: actErr, success } = useApi();
 
   const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '' });
@@ -47,7 +47,7 @@ export default function SeparationDetail() {
 
   const handleManagerAction = async () => {
     try {
-      await execute(() => api.put(`/api/separation/${id}/manager-action`, mgForm), 'Action recorded.');
+      await execute(() => api.put(`/separation/${id}/manager-action`, mgForm), 'Action recorded.');
       refetch();
     } catch {}
   };
@@ -55,28 +55,28 @@ export default function SeparationDetail() {
   const handleHRConfirm = async () => {
     if (!hrForm.lastWorkingDate) return alert('Please set the official Last Working Day.');
     try {
-      await execute(() => api.put(`/api/separation/${id}/hr-confirm`, { ...hrForm, type: hrForm.type || sep.type }), 'LWD confirmed. Leaves blocked. Checklist created.');
+      await execute(() => api.put(`/separation/${id}/hr-confirm`, { ...hrForm, type: hrForm.type || sep.type }), 'LWD confirmed. Leaves blocked. Checklist created.');
       refetch();
     } catch {}
   };
 
   const handleRecalcLWD = async () => {
     try {
-      await execute(() => api.put(`/api/separation/${id}/notice-update`), null);
+      await execute(() => api.put(`/separation/${id}/notice-update`), null);
       refetch();
     } catch {}
   };
 
   const handleStartClearance = async () => {
     try {
-      await execute(() => api.post(`/api/separation/${id}/start-clearance`), 'Clearance stage started.');
+      await execute(() => api.post(`/separation/${id}/start-clearance`), 'Clearance stage started.');
       refetch();
     } catch {}
   };
 
   const handleChecklistUpdate = async (checklistId, status, remarks) => {
     try {
-      await execute(() => api.put(`/api/separation/${id}/checklist/${checklistId}`, { status, remarks }), null);
+      await execute(() => api.put(`/separation/${id}/checklist/${checklistId}`, { status, remarks }), null);
       refetch();
     } catch {}
   };
@@ -88,7 +88,7 @@ export default function SeparationDetail() {
       overriddenBy: fnfOverrides[idx] !== undefined ? 1 : 0,
     }));
     try {
-      await execute(() => api.post(`/api/separation/${id}/fnf-save`, { items }), 'FnF saved.');
+      await execute(() => api.post(`/separation/${id}/fnf-save`, { items }), 'FnF saved.');
       refetch();
     } catch {}
   };
@@ -96,7 +96,7 @@ export default function SeparationDetail() {
   const handleFnFApprove = async () => {
     if (!window.confirm('Approve the Full & Final Settlement? This will notify the employee.')) return;
     try {
-      await execute(() => api.post(`/api/separation/${id}/fnf-approve`), 'FnF approved!');
+      await execute(() => api.post(`/separation/${id}/fnf-approve`), 'FnF approved!');
       refetch();
     } catch {}
   };
@@ -104,14 +104,14 @@ export default function SeparationDetail() {
   const handleReleaseSalary = async () => {
     if (!window.confirm(`Release the held salary for ${sep.user?.name}? This will notify the employee.`)) return;
     try {
-      await execute(() => api.post(`/api/separation/${id}/release-salary`), 'Salary released!');
+      await execute(() => api.post(`/separation/${id}/release-salary`), 'Salary released!');
       refetch();
     } catch {}
   };
 
   const handleGenerateDocs = async () => {
     try {
-      await execute(() => api.post(`/api/separation/${id}/generate-documents`), 'Documents generated!');
+      await execute(() => api.post(`/separation/${id}/generate-documents`), 'Documents generated!');
       refetch();
     } catch {}
   };
@@ -119,7 +119,7 @@ export default function SeparationDetail() {
   const handleComplete = async () => {
     if (!window.confirm('Complete this separation? This will activate the Alumni Portal for the employee.')) return;
     try {
-      await execute(() => api.post(`/api/separation/${id}/complete`), 'Separation completed!');
+      await execute(() => api.post(`/separation/${id}/complete`), 'Separation completed!');
       navigate('/admin/separations');
     } catch {}
   };

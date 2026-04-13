@@ -29,7 +29,7 @@ const PIPELINE_STEPS = [
 ];
 
 export default function MyResignation() {
-  const { data: sep, loading, error: fetchErr, refetch } = useFetch('/api/separation/my', null);
+  const { data: sep, loading, error: fetchErr, refetch } = useFetch('/separation/my', null);
   const { execute, loading: submitting, error: submitErr, success } = useApi();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ reason: '', preferredLWD: '' });
@@ -37,7 +37,7 @@ export default function MyResignation() {
   const handleSubmitResignation = async () => {
     if (!window.confirm('Are you sure you want to submit your resignation? This action will be sent to your manager for approval.')) return;
     try {
-      await execute(() => api.post('/api/separation/resign', form), 'Resignation submitted successfully!');
+      await execute(() => api.post('/separation/resign', form), 'Resignation submitted successfully!');
       refetch();
       setShowForm(false);
       setForm({ reason: '', preferredLWD: '' });
@@ -47,7 +47,7 @@ export default function MyResignation() {
   const handleWithdraw = async () => {
     if (!window.confirm('Are you sure you want to withdraw your resignation?')) return;
     try {
-      await execute(() => api.delete(`/api/separation/${sep.id}`), 'Resignation withdrawn.');
+      await execute(() => api.delete(`/separation/${sep.id}`), 'Resignation withdrawn.');
       refetch();
     } catch {}
   };

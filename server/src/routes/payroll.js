@@ -948,6 +948,93 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
   res.json(payslips);
 }));
 
+// GET /salary-register-csv?month=YYYY-MM — Download salary register as CSV
+router.get('/salary-register-csv', requireAdmin, asyncHandler(async (req, res) => {
+  const { month } = req.query;
+  if (!month) throw badRequest('month is required (YYYY-MM)');
+
+  const payslips = await req.prisma.payslip.findMany({
+    where: { month },
+    include: {
+      user: {
+        select: {
+          name: true, employeeId: true, department: true, location: true,
+          designation: true, dateOfJoining: true, gender: true,
+        },
+      },
+    },
+    orderBy: { user: { employeeId: 'asc' } },
+  });
+
+  if (payslips.length === 0) {
+    throw badRequest(`No payslips found for ${month}`);
+  }
+
+  // Collect all earning/deduction component keys (dynamic columns)
+  const earningKeys = new Set();
+  const deductionKeys = new Set();
+  for (const ps of payslips) {
+    if (Array.isArray(ps.earnings)) ps.earnings.forEach(c => earningKeys.add(c.name));
+    if (Array.isArray(ps.deductions)) ps.deductions.forEach(c => deductionKeys.add(c.name));
+  }
+  const eKeys = [...earningKeys];
+  const dKeys = [...deductionKeys];
+
+  // Build CSV
+  const headers = [
+    'Sr. No.', 'Employee ID', 'Employee Name', 'Department', 'Designation', 'Location',
+    'Date of Joining', 'Work Days', 'LOP Days', 'Off Days Worked',
+    ...eKeys,
+    'Off Day Allowance', 'Gross Earnings',
+    'PF (Employee)', 'ESI (Employee)', 'Professional Tax',
+    ...dKeys.filter(k => !['PF', 'ESI', 'PT', 'Professional Tax'].includes(k)),
+    'Salary Advance Deduction', 'Total Deductions', 'Net Pay',
+  ];
+
+  const rows = payslips.map((ps, idx) => {
+    const earningMap = {};
+    if (Array.isArray(ps.earnings)) ps.earnings.forEach(c => { earningMap[c.name] = c.amount || 0; });
+    const deductionMap = {};
+    if (Array.isArray(ps.deductions)) ps.deductions.forEach(c => { deductionMap[c.name] = c.amount || 0; });
+
+    const otherDeductions = dKeys.filter(k => !['PF', 'ESI', 'PT', 'Professional Tax'].includes(k));
+
+    return [
+      idx + 1,
+      ps.user?.employeeId || '',
+      ps.user?.name || '',
+      ps.user?.department || '',
+      ps.user?.designation || '',
+      ps.user?.location || '',
+      ps.user?.dateOfJoining || '',
+      ps.workDays || 0,
+      ps.lopDays || 0,
+      ps.offDaysWorked || 0,
+      ...eKeys.map(k => earningMap[k] || 0),
+      ps.offDayAllowance || 0,
+      ps.grossEarnings || 0,
+      ps.employeePf || 0,
+      ps.employeeEsi || 0,
+      ps.professionalTax || 0,
+      ...otherDeductions.map(k => deductionMap[k] || 0),
+      ps.salaryAdvanceDeduction || 0,
+      ps.totalDeductions || 0,
+      ps.netPay || 0,
+    ];
+  });
+
+  const escape = v => `"${String(v).replace(/"/g, '""')}"`;
+  const csvLines = [
+    headers.map(escape).join(','),
+    ...rows.map(r => r.map(escape).join(',')),
+  ];
+  const csv = csvLines.join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="salary-register-${month}.csv"`);
+  res.send(csv);
+}));
+
 // GET /my-payslips — Own payslips
 router.get('/my-payslips', asyncHandler(async (req, res) => {
   const payslips = await req.prisma.payslip.findMany({

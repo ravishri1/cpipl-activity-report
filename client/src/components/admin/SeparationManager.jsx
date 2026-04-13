@@ -30,6 +30,45 @@ const PIPELINE_COLS = [
 
 const ACTIVE_STATUSES = ['pending_manager', 'pending_hr', 'notice_period', 'clearance', 'fnf_pending', 'fnf_approved'];
 
+// Historical separation records — one-time import
+const HISTORICAL_SEPARATIONS = [
+  { employeeName: 'Vishal gharte',                    separationDate: '2025-04-25', settlementDate: '2025-08-28', resignationDate: '2025-04-23' },
+  { employeeName: 'Divyash Chandegra',                separationDate: '2025-07-31', settlementDate: '2025-08-31', resignationDate: '2025-07-01' },
+  { employeeName: 'Suraj Hate',                       separationDate: '2025-05-09', settlementDate: '2025-06-30', resignationDate: '2025-04-10' },
+  { employeeName: 'Sameer Bhandvilkar',               separationDate: '2025-06-14', settlementDate: '2025-08-07', resignationDate: '2025-05-01' },
+  { employeeName: 'Yashshree Kotian',                 separationDate: '2025-06-26', settlementDate: '2025-08-31', resignationDate: '2025-05-20' },
+  { employeeName: 'Shubham Arya',                     separationDate: '2025-06-19', settlementDate: '2025-08-07', resignationDate: '2025-06-06' },
+  { employeeName: 'Anil Gautam',                      separationDate: '2025-07-31', settlementDate: '2025-07-31', resignationDate: '2025-07-31' },
+  { employeeName: 'Rahul Dixit',                      separationDate: '2025-07-31', settlementDate: '2025-07-31', resignationDate: '2025-07-31' },
+  { employeeName: 'Anil Kumar',                       separationDate: '2025-07-31', settlementDate: '2025-07-31', resignationDate: '2025-07-31' },
+  { employeeName: 'Pankaj kumar',                     separationDate: '2025-10-25', settlementDate: '2025-12-11', resignationDate: '2025-07-28' },
+  { employeeName: 'Badal mishra',                     separationDate: '2025-07-14', settlementDate: '2025-08-31', resignationDate: '2025-05-16' },
+  { employeeName: 'Pritesh Varose',                   separationDate: '2025-07-14', settlementDate: '2025-07-31', resignationDate: '2025-06-16' },
+  { employeeName: 'Mansi Thummar',                    separationDate: '2025-07-31', settlementDate: '2025-08-11', resignationDate: '2025-07-18' },
+  { employeeName: 'Viraj Savner',                     separationDate: '2025-07-25', settlementDate: '2025-08-11', resignationDate: '2025-06-24' },
+  { employeeName: 'Samiksha Dhuri',                   separationDate: '2025-07-21', settlementDate: '2025-08-11', resignationDate: '2025-06-21' },
+  { employeeName: 'Shikha Shukla',                    separationDate: '2025-07-21', settlementDate: '2025-08-11', resignationDate: '2025-06-23' },
+  { employeeName: 'Kaustubh Gaikwad',                 separationDate: '2025-07-31', settlementDate: '2025-08-11', resignationDate: '2025-07-03' },
+  { employeeName: 'Daniel Sunil Das Kuzhivila',       separationDate: '2025-07-15', settlementDate: '2025-08-11', resignationDate: '2025-07-09' },
+  { employeeName: 'Aashutosh Shailendra Patil',       separationDate: '2025-07-23', settlementDate: '2025-08-11', resignationDate: '2025-06-23' },
+  { employeeName: 'Nikhil Thorat',                    separationDate: '2025-06-30', settlementDate: '2025-08-31', resignationDate: '2025-05-05' },
+  { employeeName: 'Rajendra Ghuge',                   separationDate: '2025-08-30', settlementDate: null,         resignationDate: '2025-08-14' },
+  { employeeName: 'Rajan Saroj',                      separationDate: '2025-08-08', settlementDate: '2025-10-31', resignationDate: '2025-07-08' },
+  { employeeName: 'Abhishek Yadav',                   separationDate: '2025-08-08', settlementDate: '2025-09-10', resignationDate: '2025-07-08' },
+  { employeeName: 'Prashant Kumar Vishwakarma',       separationDate: '2025-08-08', settlementDate: '2025-09-10', resignationDate: '2025-07-10' },
+  { employeeName: 'Pratik Singh',                     separationDate: '2025-09-09', settlementDate: '2025-11-08', resignationDate: '2025-08-22' },
+  { employeeName: 'Pradnya Vaidya',                   separationDate: '2025-10-31', settlementDate: null,         resignationDate: '2025-09-08' },
+  { employeeName: 'Lavita Fernandes',                 separationDate: '2025-10-18', settlementDate: null,         resignationDate: '2025-10-14' },
+  { employeeName: 'Sagar Stavarmath',                 separationDate: '2025-10-10', settlementDate: '2025-11-28', resignationDate: '2025-09-08' },
+  { employeeName: 'Suraj Parab',                      separationDate: '2025-11-11', settlementDate: '2025-12-29', resignationDate: '2025-09-11' },
+  { employeeName: 'Swapnil Parab',                    separationDate: '2025-12-31', settlementDate: '2026-02-19', resignationDate: '2025-11-18' },
+  { employeeName: 'Abhilasha Jaiswal',                separationDate: '2025-12-29', settlementDate: '2026-02-13', resignationDate: '2025-10-29' },
+  { employeeName: 'Rupali Sharma',                    separationDate: '2025-12-11', settlementDate: null,         resignationDate: 'Absconded' },
+  { employeeName: 'Abhishek Sawant',                  separationDate: '2026-01-07', settlementDate: '2026-02-24', resignationDate: '2025-10-04' },
+  { employeeName: 'Ajeet Yadav',                      separationDate: '2026-01-17', settlementDate: null,         resignationDate: 'Terminated' },
+  { employeeName: 'Shailesh Naik',                    separationDate: '2026-03-31', settlementDate: null,         resignationDate: '2026-01-10' },
+];
+
 export default function SeparationManager() {
   const navigate = useNavigate();
   const [view, setView] = useState('pipeline');
@@ -37,10 +76,12 @@ export default function SeparationManager() {
   const [showInitiateForm, setShowInitiateForm] = useState(false);
   const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
 
-  const { data: separations, loading, error: fetchErr, refetch } = useFetch('/api/separation', []);
+  const { data: separations, loading, error: fetchErr, refetch } = useFetch('/separation', []);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const { execute, loading: saving, error: saveErr, success } = useApi();
+  const [importResult, setImportResult] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   const filtered = filter === 'active'
     ? separations.filter(s => ACTIVE_STATUSES.includes(s.status))
@@ -53,7 +94,7 @@ export default function SeparationManager() {
     if (users.length === 0) {
       setUsersLoading(true);
       try {
-        const res = await api.get('/api/users?fields=id,name,employeeId,department,employmentStatus,isActive');
+        const res = await api.get('/users?fields=id,name,employeeId,department,employmentStatus,isActive');
         setUsers(res.data || []);
       } catch {
         // ignore — dropdown will be empty
@@ -66,7 +107,7 @@ export default function SeparationManager() {
   const handleInitiate = async () => {
     if (!form.userId) return;
     try {
-      await execute(() => api.post('/api/separation', { ...form, userId: parseInt(form.userId) }), 'Separation initiated.');
+      await execute(() => api.post('/separation', { ...form, userId: parseInt(form.userId) }), 'Separation initiated.');
       refetch();
       setShowInitiateForm(false);
       setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
@@ -75,6 +116,20 @@ export default function SeparationManager() {
 
   const byStatus = (status) => filtered.filter(s => s.status === status);
   const today = new Date().toISOString().slice(0, 10);
+
+  const handleImport = async (records) => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await api.post('/separation/bulk-import', { records });
+      setImportResult(res.data);
+      refetch();
+    } catch (err) {
+      setImportResult({ message: err.response?.data?.error || 'Import failed', errors: [] });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-5">
@@ -89,6 +144,15 @@ export default function SeparationManager() {
             className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">
             {view === 'pipeline' ? '📋 List View' : '🗂 Pipeline View'}
           </button>
+          <button
+            onClick={() => {
+              if (!window.confirm('Import 35 historical separation records? Existing records will be skipped.')) return;
+              handleImport(HISTORICAL_SEPARATIONS);
+            }}
+            disabled={importing}
+            className="border border-blue-300 text-blue-700 px-3 py-2 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50">
+            {importing ? 'Importing…' : '⬆ Import History'}
+          </button>
           <button onClick={openInitiateForm}
             className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">
             + Initiate Separation
@@ -102,6 +166,17 @@ export default function SeparationManager() {
       {fetchErr && <AlertMessage type="error" message={fetchErr} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
+      {importResult && (
+        <div className={`rounded-lg px-4 py-3 text-sm border ${importResult.errors?.length ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+          <strong>{importResult.message}</strong>
+          {importResult.errors?.length > 0 && (
+            <ul className="mt-1 list-disc list-inside text-xs space-y-0.5">
+              {importResult.errors.map((e, i) => <li key={i}>{e.name}: {e.error}</li>)}
+            </ul>
+          )}
+          <button onClick={() => setImportResult(null)} className="ml-4 text-xs underline opacity-70">Dismiss</button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

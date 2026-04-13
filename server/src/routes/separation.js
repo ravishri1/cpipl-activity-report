@@ -930,6 +930,125 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Resignation withdrawn successfully.' });
 }));
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BULK IMPORT — historical separation records (admin only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/separation/bulk-import
+// Body: { records: [{ employeeName, separationDate, settlementDate, resignationDate, type }] }
+// separationDate  = LWD (last working day)
+// settlementDate  = FnF paid date, or null/"Not Yet Settle"
+// resignationDate = date resignation was submitted, or "Absconded"/"Terminated"
+router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
+  const { records } = req.body;
+  if (!Array.isArray(records) || records.length === 0) {
+    throw badRequest('records array is required');
+  }
+
+  const results = { created: 0, skipped: 0, errors: [] };
+
+  for (const rec of records) {
+    try {
+      const { employeeName, separationDate, settlementDate, resignationDate } = rec;
+      if (!employeeName || !separationDate) {
+        results.errors.push({ name: employeeName, error: 'employeeName and separationDate are required' });
+        continue;
+      }
+
+      // Find employee by name (case-insensitive, partial match)
+      const user = await req.prisma.user.findFirst({
+        where: { name: { contains: employeeName.trim(), mode: 'insensitive' } },
+      });
+      if (!user) {
+        results.errors.push({ name: employeeName, error: 'Employee not found' });
+        continue;
+      }
+
+      // Skip if already has an active/completed separation
+      const existing = await req.prisma.separation.findUnique({ where: { userId: user.id } });
+      if (existing) {
+        results.skipped++;
+        continue;
+      }
+
+      // Determine type
+      const isAbsconded = typeof resignationDate === 'string' && resignationDate.toLowerCase().includes('abscond');
+      const isTerminated = typeof resignationDate === 'string' && resignationDate.toLowerCase().includes('terminat');
+      const type = isAbsconded ? 'absconding' : isTerminated ? 'termination' : 'resignation';
+
+      // Determine requestDate (resignation submitted date)
+      let requestDate = separationDate; // fallback
+      if (resignationDate && !isAbsconded && !isTerminated) {
+        // Parse DD-MMM-YY or D-Mon-YY format
+        const d = new Date(resignationDate);
+        if (!isNaN(d)) requestDate = d.toISOString().slice(0, 10);
+      }
+
+      // Parse separation date
+      const lwdDate = new Date(separationDate);
+      if (isNaN(lwdDate)) {
+        results.errors.push({ name: employeeName, error: `Invalid separationDate: ${separationDate}` });
+        continue;
+      }
+      const lwd = lwdDate.toISOString().slice(0, 10);
+
+      // Parse settlement date
+      let fnfPaidOn = null;
+      const isSettled = settlementDate && typeof settlementDate === 'string'
+        && !settlementDate.toLowerCase().includes('not yet')
+        && settlementDate.trim() !== '';
+      if (isSettled) {
+        const sd = new Date(settlementDate);
+        if (!isNaN(sd)) fnfPaidOn = sd.toISOString().slice(0, 10);
+      }
+
+      // Determine status
+      const status = fnfPaidOn ? 'completed' : 'fnf_pending';
+
+      await req.prisma.separation.create({
+        data: {
+          userId: user.id,
+          type,
+          requestDate,
+          lastWorkingDate: lwd,
+          expectedLWD: lwd,
+          adjustedLWD: lwd,
+          preferredLWD: lwd,
+          status,
+          initiatedBy: isAbsconded || isTerminated ? 'hr' : 'employee',
+          processedBy: req.user.id,
+          fnfPaidOn,
+          fnfApprovedAt: fnfPaidOn,
+          salaryReleased: !!fnfPaidOn,
+          salaryReleasedAt: fnfPaidOn,
+          completedAt: fnfPaidOn ? new Date(fnfPaidOn) : null,
+          hrConfirmedAt: requestDate,
+          hrConfirmedBy: req.user.id,
+          leavesBlocked: true,
+        },
+      });
+
+      // Update user employment status
+      await req.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          employmentStatus: isAbsconded ? 'absconding' : 'separated',
+          isActive: false,
+        },
+      });
+
+      results.created++;
+    } catch (err) {
+      results.errors.push({ name: rec.employeeName, error: err.message });
+    }
+  }
+
+  res.json({
+    message: `Import complete: ${results.created} created, ${results.skipped} skipped`,
+    ...results,
+  });
+}));
+
 // ─── private helper: create default clearance checklist ──────────────────────
 async function _createChecklist(prisma, separationId) {
   await prisma.separationChecklist.createMany({
