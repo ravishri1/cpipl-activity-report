@@ -683,13 +683,19 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         }
       }
 
-      // Count off days where employee was present (biometric punch OR admin-confirmed override)
+      // Count off days where employee was present:
+      // Priority: biometric punch (checkIn) > admin override > daily report muster (EOD submitted)
+      // Muster fallback: if no biometric record but employee submitted a daily report that day, count as worked
       const attMap = {};
       for (const att of attendances) { attMap[att.date] = att; }
+      const offDayReportDates = dailyReportMap.get(sal.userId) || new Set();
       for (const date of offDatesInMonth) {
         const rec = attMap[date];
-        // Count if: biometric checkIn exists OR admin explicitly overrode attendance (admin-confirmed presence)
-        if (rec && rec.status === 'present' && (rec.checkIn !== null || rec.adminOverride === true)) offDaysWorked++;
+        if (rec && rec.status === 'present' && (rec.checkIn !== null || rec.adminOverride === true)) {
+          offDaysWorked++; // Biometric present or admin-confirmed
+        } else if (!rec && offDayReportDates.has(date)) {
+          offDaysWorked++; // No biometric but EOD report submitted = employee worked that off-day
+        }
       }
 
       // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
