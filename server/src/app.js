@@ -73,6 +73,10 @@ const { asyncHandler } = require('./utils/asyncHandler');
 
 const app = express();
 
+// Trust Vercel/Cloudflare proxy — required for express-rate-limit to correctly
+// read client IPs from X-Forwarded-For header (avoids ERR_ERL_UNEXPECTED_X_FORWARDED_FOR)
+app.set('trust proxy', 1);
+
 // Use a single Prisma instance (important for serverless)
 let prisma;
 if (!global.__prisma) {
