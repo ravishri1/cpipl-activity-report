@@ -651,7 +651,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       const eligibility = eligibleOffDay.find(e => e.userId === sal.userId);
       const weeklyOffs = weeklyOffMap.get(sal.userId) || [0, 6];
 
-      // Identify off days in month: weekends (per shift) + holidays
+      // Identify off days in month: pure weekly-off days only (NOT holidays — those are separate)
+      // Reason: if a day is a public holiday, working on it is "holiday allowance" territory,
+      // not "off-day allowance". Counting both inflates the allowance.
       const offDatesInMonth = [];
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
@@ -661,21 +663,22 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         const isWeeklyOff = dow === 6
           ? (weeklyOffs.includes(6) && offSaturdaySet.has(dateStr))
           : weeklyOffs.includes(dow);
+        // Skip holidays — a Sunday that is also a public holiday is NOT counted as a worked off-day
         const isHoliday = mergedHolidays.has(dateStr);
 
-        if ((isWeeklyOff || isHoliday) && dateStr >= eligibility.eligibleFrom &&
+        if (isWeeklyOff && !isHoliday && dateStr >= eligibility.eligibleFrom &&
             (!eligibility.eligibleTo || dateStr <= eligibility.eligibleTo)) {
           offDatesInMonth.push(dateStr);
         }
       }
 
-      // Count off days where employee was present with actual biometric punch
+      // Count off days where employee was present (biometric punch OR admin-confirmed override)
       const attMap = {};
       for (const att of attendances) { attMap[att.date] = att; }
       for (const date of offDatesInMonth) {
         const rec = attMap[date];
-        // Require actual biometric punch (checkIn not null) — present without punch is not counted
-        if (rec && rec.status === 'present' && rec.checkIn !== null) offDaysWorked++;
+        // Count if: biometric checkIn exists OR admin explicitly overrode attendance (admin-confirmed presence)
+        if (rec && rec.status === 'present' && (rec.checkIn !== null || rec.adminOverride === true)) offDaysWorked++;
       }
 
       // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
