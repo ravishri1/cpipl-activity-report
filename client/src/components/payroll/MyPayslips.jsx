@@ -346,7 +346,7 @@ function PayslipDetail({ payslip, onBack }) {
     { label: 'TDS / Income Tax', value: payslip.tds },
     { label: 'LOP Deduction', value: payslip.lopDeduction },
     { label: 'Salary Advance Recovery', value: payslip.salaryAdvanceDeduction },
-    { label: 'Other Deductions', value: payslip.otherDeductions },
+    { label: payslip.otherDeductionsLabel || 'Other Deductions', value: payslip.otherDeductions },
   ].filter((item) => item.value && item.value > 0);
 
   const maxRows = Math.max(earnings.length, deductions.length);

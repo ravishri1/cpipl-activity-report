@@ -205,7 +205,7 @@ const PayslipDetail = ({ payslip }) => {
     { label: 'ESI', value: payslip.employeeEsi },
     { label: 'Professional Tax (PT)', value: payslip.professionalTax },
     { label: 'TDS / Income Tax', value: payslip.tds },
-    { label: 'Other Deductions', value: payslip.otherDeductions },
+    { label: payslip.otherDeductionsLabel || 'Other Deductions', value: payslip.otherDeductions },
     { label: 'LOP Deduction', value: payslip.lopDeduction, highlight: true },
   ];
 
