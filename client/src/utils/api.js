@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
+  timeout: 30000, // 30s — prevents infinite spinner if server hangs
 });
 
 // Clerk token will be set dynamically
