@@ -236,7 +236,7 @@ router.put('/:id/manager-action', asyncHandler(async (req, res) => {
 // PUT /api/separation/:id/hr-confirm
 router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { lastWorkingDate, type, noticePeriodWaiver, hrNote } = req.body;
+  const { lastWorkingDate, type, noticePeriodWaiver, hrNote, waiveLeaveExtension, salaryHoldDays } = req.body;
   if (!lastWorkingDate) throw badRequest('lastWorkingDate (final LWD) is required.');
 
   const sep = await req.prisma.separation.findUnique({
@@ -247,7 +247,8 @@ router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
   if (!['pending_hr', 'pending_manager'].includes(sep.status)) throw badRequest('Separation is not in a state for HR confirmation.');
 
   const today = new Date().toISOString().slice(0, 10);
-  const salaryHoldUntil = addDays(lastWorkingDate, 45);
+  const holdDays = (salaryHoldDays !== undefined && salaryHoldDays !== null) ? parseInt(salaryHoldDays) : 45;
+  const salaryHoldUntil = holdDays > 0 ? addDays(lastWorkingDate, holdDays) : lastWorkingDate;
 
   await req.prisma.separation.update({
     where: { id },
@@ -262,6 +263,8 @@ router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
       leavesBlocked: true,
       leavesBlockedAt: new Date(),
       salaryHoldUntil,
+      salaryHoldDays: holdDays,
+      ...(waiveLeaveExtension ? { leaveDaysDuringNotice: 0 } : {}), // waive any pending notice extension
     },
   });
 
@@ -412,13 +415,18 @@ router.put('/:id/checklist/:checklistId', requireAdmin, asyncHandler(async (req,
 // POST /api/separation/:id/start-clearance
 router.post('/:id/start-clearance', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
+  const { force } = req.body; // force: true = HR override, bypass LWD date check
   const sep = await req.prisma.separation.findUnique({ where: { id }, include: { user: true } });
   if (!sep) throw notFound('Separation');
   if (sep.status !== 'notice_period') throw badRequest('Employee must be in notice period before clearance.');
 
   const today = new Date().toISOString().slice(0, 10);
   const lwdToCheck = sep.adjustedLWD || sep.lastWorkingDate;
-  if (today < lwdToCheck) throw badRequest(`Cannot start clearance before LWD (${lwdToCheck}).`);
+  const isHistorical = sep.requestDate && sep.requestDate < '2026-04-01'; // pre-Apr-2026 records bypass date checks
+
+  if (!force && !isHistorical && today < lwdToCheck) {
+    throw badRequest(`Cannot start clearance before LWD (${lwdToCheck}). Use HR Override to bypass.`);
+  }
 
   await req.prisma.separation.update({ where: { id }, data: { status: 'clearance' } });
   res.json({ message: 'Clearance stage started. Complete all checklist items to proceed to FnF.' });

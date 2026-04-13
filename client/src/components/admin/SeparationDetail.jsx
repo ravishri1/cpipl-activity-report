@@ -32,9 +32,13 @@ export default function SeparationDetail() {
   const { execute, loading: acting, error: actErr, success } = useApi();
   const [seedingTemplates, setSeedingTemplates] = useState(false);
 
-  const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '' });
+  const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '', waiveLeaveExtension: false, salaryHoldDays: 45 });
   const [mgForm, setMgForm] = useState({ action: 'approve', managerNote: '', managerProposedLWD: '' });
   const [fnfOverrides, setFnfOverrides] = useState({});
+  const [fnfExcluded, setFnfExcluded] = useState({}); // index → true = excluded from FnF
+  const [fnfCustomItems, setFnfCustomItems] = useState([]); // [{label, amount, component}]
+  const [showCustomItemForm, setShowCustomItemForm] = useState(false);
+  const [customItemDraft, setCustomItemDraft] = useState({ label: '', amount: '', type: 'earning' });
   const [fnfItems, setFnfItems] = useState(null);
 
   if (loading) return <LoadingSpinner />;
@@ -73,9 +77,9 @@ export default function SeparationDetail() {
     } catch {}
   };
 
-  const handleStartClearance = async () => {
+  const handleStartClearance = async (force = false) => {
     try {
-      await execute(() => api.post(`/separation/${id}/start-clearance`), 'Clearance stage started.');
+      await execute(() => api.post(`/separation/${id}/start-clearance`, { force }), 'Clearance stage started.');
       refetch();
     } catch {}
   };
@@ -88,11 +92,24 @@ export default function SeparationDetail() {
   };
 
   const handleFnFSave = async () => {
-    const items = (fnfItems || fnfPreview?.items || []).map((item, idx) => ({
-      ...item,
-      amount: parseFloat(fnfOverrides[idx] ?? item.amount),
-      overriddenBy: fnfOverrides[idx] !== undefined ? 1 : 0,
+    const baseItems = (fnfItems || fnfPreview?.items || [])
+      .filter((_, idx) => !fnfExcluded[idx]) // remove excluded items
+      .map((item, origIdx) => {
+        const actualIdx = (fnfItems || fnfPreview?.items || []).indexOf(item);
+        return {
+          ...item,
+          amount: parseFloat(fnfOverrides[actualIdx] ?? item.amount),
+          overriddenBy: (fnfOverrides[actualIdx] !== undefined || fnfExcluded[actualIdx]) ? 1 : 0,
+        };
+      });
+    const customMapped = fnfCustomItems.map(ci => ({
+      component: ci.type === 'deduction' ? 'custom_deduction' : 'custom_earning',
+      label: ci.label,
+      amount: ci.type === 'deduction' ? -Math.abs(parseFloat(ci.amount)) : Math.abs(parseFloat(ci.amount)),
+      autoCalculated: false,
+      overriddenBy: 1,
     }));
+    const items = [...baseItems, ...customMapped];
     try {
       await execute(() => api.post(`/separation/${id}/fnf-save`, { items }), 'FnF saved.');
       refetch();
@@ -378,31 +395,94 @@ export default function SeparationDetail() {
                     <div><span className="font-medium">LWD:</span> {fnfPreview.lastWorkingDate}</div>
                   </div>
 
-                  <div className="space-y-2 mb-4">
+                  <p className="text-xs text-gray-400 mb-2">✏️ Edit amount · ✕ Remove item · All changes are HR overrides</p>
+
+                  <div className="space-y-1 mb-4">
                     {fnfPreview.items?.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-700">{item.label}</p>
+                      <div key={idx} className={`flex items-center gap-2 py-2 border-b border-gray-100 last:border-0 ${fnfExcluded[idx] ? 'opacity-40' : ''}`}>
+                        {/* Exclude toggle */}
+                        <button
+                          title={fnfExcluded[idx] ? 'Include this item' : 'Exclude this item'}
+                          onClick={() => setFnfExcluded(e => ({ ...e, [idx]: !e[idx] }))}
+                          className={`w-6 h-6 rounded flex items-center justify-center text-xs flex-shrink-0 border ${fnfExcluded[idx] ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'}`}>
+                          {fnfExcluded[idx] ? '+' : '✕'}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm text-gray-700 ${fnfExcluded[idx] ? 'line-through' : ''}`}>{item.label}</p>
                           {item.note && <p className="text-xs text-gray-400 mt-0.5">{item.note}</p>}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded ${item.component === 'notice_recovery' || item.component === 'asset_deduction' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs px-2 py-0.5 rounded hidden sm:block ${item.component === 'notice_recovery' || item.component === 'asset_deduction' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                             {item.component.replace(/_/g, ' ')}
                           </span>
                           <input
                             type="number"
-                            className="w-28 text-right border border-gray-200 rounded px-2 py-1 text-sm font-medium focus:ring-1 focus:ring-blue-500"
+                            disabled={fnfExcluded[idx]}
+                            className="w-28 text-right border border-gray-200 rounded px-2 py-1 text-sm font-medium focus:ring-1 focus:ring-blue-500 disabled:opacity-40"
                             value={fnfOverrides[idx] !== undefined ? fnfOverrides[idx] : item.amount}
                             onChange={e => setFnfOverrides(o => ({ ...o, [idx]: e.target.value }))}
                           />
                         </div>
                       </div>
                     ))}
+
+                    {/* Custom items */}
+                    {fnfCustomItems.map((ci, ci_idx) => (
+                      <div key={`custom-${ci_idx}`} className="flex items-center gap-2 py-2 border-b border-blue-100 bg-blue-50 rounded px-2">
+                        <button onClick={() => setFnfCustomItems(list => list.filter((_, i) => i !== ci_idx))}
+                          className="w-6 h-6 rounded bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 flex items-center justify-center text-xs flex-shrink-0">✕</button>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-blue-800 font-medium">{ci.label}</p>
+                          <p className="text-xs text-blue-500">Custom — HR added</p>
+                        </div>
+                        <span className={`text-sm font-semibold ${ci.type === 'deduction' ? 'text-red-600' : 'text-green-700'}`}>
+                          {ci.type === 'deduction' ? '−' : '+'}₹{Math.abs(parseFloat(ci.amount || 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
+                  {/* Add Custom Item */}
+                  {showCustomItemForm ? (
+                    <div className="border border-blue-200 rounded-lg p-3 mb-4 bg-blue-50 space-y-2">
+                      <p className="text-xs font-semibold text-blue-800">Add Custom Line Item</p>
+                      <input type="text" placeholder="Description (e.g. Gratuity, Bonus, Deduction)" className="w-full border border-blue-200 rounded px-2 py-1 text-sm"
+                        value={customItemDraft.label} onChange={e => setCustomItemDraft(d => ({ ...d, label: e.target.value }))} />
+                      <div className="flex gap-2">
+                        <select className="border border-blue-200 rounded px-2 py-1 text-sm" value={customItemDraft.type}
+                          onChange={e => setCustomItemDraft(d => ({ ...d, type: e.target.value }))}>
+                          <option value="earning">+ Earning</option>
+                          <option value="deduction">− Deduction</option>
+                        </select>
+                        <input type="number" placeholder="Amount ₹" className="flex-1 border border-blue-200 rounded px-2 py-1 text-sm"
+                          value={customItemDraft.amount} onChange={e => setCustomItemDraft(d => ({ ...d, amount: e.target.value }))} />
+                        <button onClick={() => {
+                          if (!customItemDraft.label || !customItemDraft.amount) return;
+                          setFnfCustomItems(l => [...l, { ...customItemDraft }]);
+                          setCustomItemDraft({ label: '', amount: '', type: 'earning' });
+                          setShowCustomItemForm(false);
+                        }} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Add</button>
+                        <button onClick={() => setShowCustomItemForm(false)} className="border border-gray-300 text-gray-600 px-3 py-1 rounded text-sm">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setShowCustomItemForm(true)} className="mb-4 text-xs text-blue-600 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100">
+                      + Add custom line item (Gratuity / Bonus / Other)
+                    </button>
+                  )}
+
+                  {/* Net Total */}
                   <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-3 mb-4">
                     <span>Net FnF Payable</span>
-                    <span className="text-green-700">₹{fnfPreview.items?.reduce((s, item, idx) => s + parseFloat(fnfOverrides[idx] ?? item.amount), 0).toFixed(2)}</span>
+                    <span className={`${
+                      ((fnfPreview.items?.reduce((s, item, idx) => fnfExcluded[idx] ? s : s + parseFloat(fnfOverrides[idx] ?? item.amount), 0) || 0) +
+                       fnfCustomItems.reduce((s, ci) => s + (ci.type === 'deduction' ? -Math.abs(parseFloat(ci.amount||0)) : Math.abs(parseFloat(ci.amount||0))), 0)) >= 0
+                      ? 'text-green-700' : 'text-red-600'}`}>
+                      ₹{(
+                        (fnfPreview.items?.reduce((s, item, idx) => fnfExcluded[idx] ? s : s + parseFloat(fnfOverrides[idx] ?? item.amount), 0) || 0) +
+                        fnfCustomItems.reduce((s, ci) => s + (ci.type === 'deduction' ? -Math.abs(parseFloat(ci.amount||0)) : Math.abs(parseFloat(ci.amount||0))), 0)
+                      ).toFixed(2)}
+                    </span>
                   </div>
 
                   <div className="flex gap-3">
@@ -410,7 +490,7 @@ export default function SeparationDetail() {
                       {acting ? 'Saving...' : 'Save FnF'}
                     </button>
                     <button onClick={refetchFnF} disabled={fnfLoading} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
-                      Recalculate
+                      ↺ Recalculate
                     </button>
                   </div>
                 </>
@@ -620,19 +700,25 @@ export default function SeparationDetail() {
           {sep.status === 'notice_period' && (
             <div className={`rounded-xl p-5 border ${today >= lwd ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-200'}`}>
               <h3 className={`text-base font-semibold mb-1 ${today >= lwd ? 'text-green-800' : 'text-amber-800'}`}>
-                {today >= lwd ? '✅ Notice Period Complete — Ready for Clearance' : `⏳ Notice Period in Progress — LWD: ${lwd}`}
+                {today >= lwd ? '✅ Notice Period Complete — Ready for Clearance' : `⏳ Notice Period — LWD: ${lwd}`}
               </h3>
               <p className={`text-sm mb-3 ${today >= lwd ? 'text-green-700' : 'text-amber-700'}`}>
                 {today >= lwd
                   ? 'LWD has passed. Start the clearance stage to complete the separation checklist.'
-                  : 'Wait until LWD passes before starting clearance. Use "Recalculate LWD" if employee took leave.'}
+                  : `LWD not yet reached. For historical records or early exit, use HR Override below.`}
               </p>
-              {today >= lwd && (
-                <button onClick={handleStartClearance} disabled={acting}
-                  className="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                  {acting ? 'Starting...' : '🚀 Start Clearance Stage'}
+              <div className="flex gap-3 flex-wrap">
+                {today >= lwd && (
+                  <button onClick={() => handleStartClearance(false)} disabled={acting}
+                    className="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                    {acting ? 'Starting...' : '🚀 Start Clearance Stage'}
+                  </button>
+                )}
+                <button onClick={() => { if (window.confirm('HR Override: Start clearance before official LWD? This bypasses the date check.')) handleStartClearance(true); }} disabled={acting}
+                  className="border border-orange-400 text-orange-700 bg-orange-50 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-100 disabled:opacity-50">
+                  ⚡ HR Override — Force Start
                 </button>
-              )}
+              </div>
             </div>
           )}
 
@@ -662,24 +748,13 @@ export default function SeparationDetail() {
           {['pending_hr', 'pending_manager'].includes(sep.status) && (
             <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
               <h3 className="text-base font-semibold text-gray-800">HR Confirmation</h3>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
-                <strong>What happens when you confirm:</strong>
-                <ul className="mt-1 space-y-0.5 list-disc list-inside">
-                  <li>Official LWD is locked</li>
-                  <li>All pending leave requests are cancelled</li>
-                  <li>New leave requests blocked for this employee</li>
-                  <li>Clearance checklist auto-created</li>
-                  <li>45-day salary hold start date calculated</li>
-                  <li>Employee notified via email with all rules</li>
-                </ul>
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Official Last Working Day *</label>
                   <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={hrForm.lastWorkingDate || sep.managerProposedLWD || sep.preferredLWD || sep.expectedLWD || ''}
                     onChange={e => setHrForm(f => ({ ...f, lastWorkingDate: e.target.value }))} />
-                  {sep.expectedLWD && <p className="text-xs text-gray-400 mt-1">Expected: {sep.expectedLWD}</p>}
+                  {sep.expectedLWD && <p className="text-xs text-gray-400 mt-1">Expected (30-day notice): {sep.expectedLWD}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Separation Type</label>
@@ -691,8 +766,28 @@ export default function SeparationDetail() {
                   </select>
                 </div>
               </div>
+
+              {/* HR Overrides */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-3">
+                <p className="text-xs font-semibold text-orange-800 uppercase tracking-wide">⚙ HR Override Options</p>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" className="mt-0.5" checked={hrForm.waiveLeaveExtension}
+                    onChange={e => setHrForm(f => ({ ...f, waiveLeaveExtension: e.target.checked }))} />
+                  <span className="text-sm text-orange-800">
+                    <strong>Waive notice extension</strong> — Employee left on exact LWD with no delay, even if leaves were taken during notice period
+                  </span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-orange-800 font-medium whitespace-nowrap">Salary hold days:</label>
+                  <input type="number" min="0" max="90" className="w-20 border border-orange-300 rounded px-2 py-1 text-sm"
+                    value={hrForm.salaryHoldDays}
+                    onChange={e => setHrForm(f => ({ ...f, salaryHoldDays: e.target.value }))} />
+                  <span className="text-xs text-orange-600">(default 45 days; set 0 to release salary immediately)</span>
+                </div>
+              </div>
+
               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="HR note (optional)" value={hrForm.hrNote} onChange={e => setHrForm(f => ({ ...f, hrNote: e.target.value }))} />
-              <button onClick={handleHRConfirm} disabled={acting || !hrForm.lastWorkingDate}
+              <button onClick={handleHRConfirm} disabled={acting}
                 className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 {acting ? 'Confirming...' : '✅ Confirm LWD & Block Leaves'}
               </button>
