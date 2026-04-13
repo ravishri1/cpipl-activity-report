@@ -431,13 +431,22 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         where: { payslipId: existing.id },
         select: { id: true, advanceId: true },
       });
-      if (linkedRepayments.length > 0) {
+      // Also reset orphaned repayments (deducted but payslipId never set — from a prior code bug where payslipId wasn't stored)
+      const orphanedRepayments = await req.prisma.salaryAdvanceRepayment.findMany({
+        where: { advance: { userId: sal.userId }, month, status: 'deducted', payslipId: null },
+        select: { id: true, advanceId: true },
+      });
+      const allToReset = [
+        ...linkedRepayments,
+        ...orphanedRepayments.filter(o => !linkedRepayments.find(l => l.id === o.id)),
+      ];
+      if (allToReset.length > 0) {
         await req.prisma.salaryAdvanceRepayment.updateMany({
-          where: { id: { in: linkedRepayments.map(r => r.id) } },
+          where: { id: { in: allToReset.map(r => r.id) } },
           data: { status: 'pending', payslipId: null, deductedAt: null },
         });
         // Reopen advance if it was closed (repayments not yet fully settled after reset)
-        const advanceIds = [...new Set(linkedRepayments.map(r => r.advanceId))];
+        const advanceIds = [...new Set(allToReset.map(r => r.advanceId))];
         await req.prisma.salaryAdvance.updateMany({
           where: { id: { in: advanceIds }, status: 'closed' },
           data: { status: 'released', closedAt: null },
@@ -820,11 +829,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       });
     }
 
-    // Mark advance repayments as deducted and update advance status
+    // Mark advance repayments as deducted and link to payslip (payslipId enables clean reset on regeneration)
     if (advanceRepayments.length > 0) {
       await req.prisma.salaryAdvanceRepayment.updateMany({
         where: { id: { in: advanceRepayments.map(r => r.id) } },
-        data: { status: 'deducted', deductedAt: new Date() },
+        data: { status: 'deducted', deductedAt: new Date(), payslipId: payslip.id },
       });
       // Check if all repayments done → close the advance
       for (const repayment of advanceRepayments) {
