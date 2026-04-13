@@ -289,6 +289,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     userPatternRows,
     rulesRow,
     eligibleOffDay,
+    dailyReportRows,
   ] = await Promise.all([
     req.prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
     req.prisma.departmentHolidayBlock.findMany({
@@ -313,10 +314,22 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       where: { eligibleFrom: { lte: `${month}-31` }, OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }] },
       select: { userId: true, eligibleFrom: true, eligibleTo: true },
     }),
+    // Daily reports = attendance muster fallback: if employee submitted EOD report, they were present
+    req.prisma.dailyReport.findMany({
+      where: { userId: { in: allUserIds }, reportDate: { startsWith: month } },
+      select: { userId: true, reportDate: true },
+    }),
   ]);
 
   // Build lookup structures from parallel results
   const globalHolidayDates = new Set(holidays.map(h => h.date));
+
+  // Daily report map: userId → Set of reportDate strings (muster fallback for missing biometric)
+  const dailyReportMap = new Map();
+  for (const dr of dailyReportRows) {
+    if (!dailyReportMap.has(dr.userId)) dailyReportMap.set(dr.userId, new Set());
+    dailyReportMap.get(dr.userId).add(dr.reportDate);
+  }
 
   const deptBlockMap = {};
   for (const b of deptHolidayBlocks) {
@@ -525,10 +538,44 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         if (isLop && daysInMonth_ > 0) lopFromLeave += daysInMonth_;
       }
 
+      const dailyReportDates = dailyReportMap.get(sal.userId) || new Set();
+
       if (attendances.length === 0 && leaveDatesSet.size === 0 && lopDatesSet.size === 0 && !separation) {
-        // No data at all → assume full attendance (fallback for missing biometric)
-        presentDays = workingDays;
-        lopDays = 0;
+        // No biometric/leave data at all → use daily report muster as fallback
+        // Count each working day: present if report submitted, else assume present (fully absent employees have no reports either)
+        let reportBasedPresent = 0;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+          const dow = new Date(year, monthNum - 1, d).getDay();
+          const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
+          const isOff = dow === 6 ? offSaturdaySet.has(dateStr) : offDaysForDate.includes(dow);
+          if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
+          const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
+          if (joinDateStr && dateStr < joinDateStr) continue;
+          reportBasedPresent++;
+        }
+        if (dailyReportDates.size > 0) {
+          // Use daily reports as muster: count only working days with a submitted report
+          presentDays = 0; lopDays = 0;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+            const dow = new Date(year, monthNum - 1, d).getDay();
+            const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
+            const isOff = dow === 6 ? offSaturdaySet.has(dateStr) : offDaysForDate.includes(dow);
+            if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
+            const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
+            if (joinDateStr && dateStr < joinDateStr) continue;
+            if (dailyReportDates.has(dateStr)) {
+              presentDays += 1;
+            } else {
+              lopDays += 1;
+            }
+          }
+        } else {
+          // No biometric and no daily reports → assume full attendance
+          presentDays = reportBasedPresent;
+          lopDays = 0;
+        }
       } else {
         const attMap = {};
         for (const att of attendances) { attMap[att.date] = att.status; }
@@ -561,8 +608,12 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           } else if (status === 'absent') {
             lopDays += 1;
           } else if (!status && attendances.length > 0) {
-            // Working day with no record (and biometric data exists) = LOP
-            lopDays += 1;
+            // Working day with no biometric record — check attendance muster (daily report)
+            if (dailyReportDates.has(dateStr)) {
+              presentDays += 1; // EOD report submitted = employee was present
+            } else {
+              lopDays += 1; // No biometric + no report = LOP
+            }
           } else if (!status) {
             // No records at all for this employee yet = treat as present
             presentDays += 1;
