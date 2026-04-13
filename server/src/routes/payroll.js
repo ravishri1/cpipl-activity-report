@@ -521,11 +521,19 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     } else {
       const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
       const lopDatesSet = new Set();    // LOP leave date range (blocks attendance double-count)
+      const halfLopDatesSet = new Set(); // half-day LOP dates (employee worked the other half)
 
-      // LOP days from leave requests: count only working days (exclude weekly-offs, off-Saturdays, holidays).
-      // Sundays and off-days inside LOP period are not deducted — consistent with off-day allowance logic.
+      // LOP days from leave requests: count only working days (exclude weekly-offs, holidays).
+      // Two Saturday rules:
+      //   Full-day LOP: use employee's weeklyOffPattern — if Saturday is in pattern, ALL Saturdays excluded.
+      //     (Multi-day LOP ranges starting on Saturday shouldn't charge LOP for that Saturday if it's their off day)
+      //   Half-day LOP: use company Saturday policy (offSaturdaySet) — if it's a working Saturday, half-day LOP counts 0.5.
+      //     (HR specifically entered a half-day LOP for a working Saturday → it's intentional and should count)
+      // Half-day sessions (first_half / second_half): count 0.5 per working day, not 1.
       for (const lr of approvedLeaves) {
         const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
+        const isHalfDay = lr.session === 'first_half' || lr.session === 'second_half';
+        const increment = isHalfDay ? 0.5 : 1;
         const cur = new Date(lr.startDate + 'T00:00:00Z');
         const end = new Date(lr.endDate + 'T00:00:00Z');
         let daysInMonth_ = 0;
@@ -535,12 +543,15 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
             const isHol = mergedHolidays.has(ds);
             if (isLop) {
               lopDatesSet.add(ds);
+              if (isHalfDay) halfLopDatesSet.add(ds);
               // Only count as LOP if it's a working day — skip weekly-offs and holidays
               const dayOfWeek = cur.getUTCDay();
+              // Saturday rule: full-day LOP uses weeklyOffPattern (Sat in pattern = off for all Sats)
+              //                half-day LOP uses offSaturdaySet (working Sat half-days count)
               const isOffDay = dayOfWeek === 6
-                ? offSaturdaySet.has(ds)
+                ? (isHalfDay ? offSaturdaySet.has(ds) : getOffDaysForDate(sal.userId, ds).includes(6))
                 : getOffDaysForDate(sal.userId, ds).includes(dayOfWeek);
-              if (!isHol && !isOffDay) daysInMonth_++;
+              if (!isHol && !isOffDay) daysInMonth_ += increment;
             } else {
               leaveDatesSet.add(ds);
             }
@@ -610,7 +621,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           if (joinDateStr && dateStr < joinDateStr) continue;
           const status = attMap[dateStr];
           if (lopDatesSet.has(dateStr)) {
-            // LOP leave date: skip from attendance (already counted via lopFromLeave)
+            // LOP leave date: attendance already counted via lopFromLeave.
+            // For half-day LOP, credit 0.5 presentDays for the half the employee worked.
+            if (halfLopDatesSet.has(dateStr)) presentDays += 0.5;
           } else if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
             presentDays += 1; // Approved paid leave = paid day
           } else if (status === 'present') {
