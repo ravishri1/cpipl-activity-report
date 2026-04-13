@@ -273,21 +273,54 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures for this company');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
-
-  // Global holidays for the month
-  const holidays = await req.prisma.holiday.findMany({ where: { date: { startsWith: month } } });
-  const globalHolidayDates = new Set(holidays.map(h => h.date));
-
-  // Department holiday blocks overlapping this month — build per-dept set of blocked dates
   const monthStart = `${month}-01`;
   const monthEndStr = `${month}-${String(daysInMonth).padStart(2, '0')}`;
-  const deptHolidayBlocks = await req.prisma.departmentHolidayBlock.findMany({
-    where: { companyId: parseInt(companyId), dateFrom: { lte: monthEndStr }, dateTo: { gte: monthStart } },
-  });
+  const allUserIds = activeSalaries.map(s => s.userId);
+  const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
+
+  // ── Parallel pre-fetch: run all independent DB queries at once ──────────────
+  const [
+    holidays,
+    deptHolidayBlocks,
+    branchHolidayRows,
+    saturdayPolicy,
+    weeklyOffMap,
+    allAssignments,
+    userPatternRows,
+    rulesRow,
+    eligibleOffDay,
+  ] = await Promise.all([
+    req.prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
+    req.prisma.departmentHolidayBlock.findMany({
+      where: { companyId: parseInt(companyId), dateFrom: { lte: monthEndStr }, dateTo: { gte: monthStart } },
+    }),
+    uniqueBranchIds.length > 0
+      ? req.prisma.branchHoliday.findMany({ where: { branchId: { in: uniqueBranchIds }, date: { startsWith: month } } })
+      : Promise.resolve([]),
+    getSaturdayPolicyForMonth(parseInt(companyId), month, req.prisma),
+    getWeeklyOffMap(allUserIds, req.prisma, month),
+    req.prisma.weeklyOffAssignment.findMany({
+      where: { effectiveFrom: { lte: monthEndStr }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: monthStart } }] },
+      include: { pattern: { select: { days: true } } },
+      orderBy: { effectiveFrom: 'asc' },
+    }),
+    req.prisma.user.findMany({
+      where: { id: { in: allUserIds } },
+      select: { id: true, department: true, weeklyOffPattern: { select: { days: true } } },
+    }),
+    req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } }),
+    req.prisma.offDayAllowanceEligibility.findMany({
+      where: { eligibleFrom: { lte: `${month}-31` }, OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }] },
+      select: { userId: true, eligibleFrom: true, eligibleTo: true },
+    }),
+  ]);
+
+  // Build lookup structures from parallel results
+  const globalHolidayDates = new Set(holidays.map(h => h.date));
+
   const deptBlockMap = {};
   for (const b of deptHolidayBlocks) {
     if (!deptBlockMap[b.department]) deptBlockMap[b.department] = new Set();
-    // Expand date range into individual dates within this month
     const cur = new Date(b.dateFrom + 'T00:00:00Z');
     const end = new Date(b.dateTo + 'T00:00:00Z');
     while (cur <= end) {
@@ -297,48 +330,14 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     }
   }
 
-  // Pre-fetch branch holidays for the month — cache by branchId to avoid redundant DB calls
   const branchHolidayCache = {};
-  const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
-  for (const branchId of uniqueBranchIds) {
-    const bh = await req.prisma.branchHoliday.findMany({ where: { branchId, date: { startsWith: month } } });
-    branchHolidayCache[branchId] = new Set(bh.map(h => h.date));
+  for (const bh of branchHolidayRows) {
+    if (!branchHolidayCache[bh.branchId]) branchHolidayCache[bh.branchId] = new Set();
+    branchHolidayCache[bh.branchId].add(bh.date);
   }
 
-  // Load Saturday policy for this company and month
-  const saturdayPolicy = await getSaturdayPolicyForMonth(parseInt(companyId), month, req.prisma);
   const offSaturdaySet = saturdayPolicy ? buildOffSaturdaySet(month, saturdayPolicy.saturdayType) : buildOffSaturdaySet(month, 'all');
 
-  // Helper: compute working days per employee — uses period-bound off-day resolution
-  // NOTE: getOffDaysForDate is defined after allAssignments are loaded (below)
-  // This closure captures getOffDaysForDate which is defined in the same scope
-  const calcWorkingDays = (holidaySet, userId) => {
-    let count = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = `${month}-${String(d).padStart(2, '0')}`;
-      const dow = new Date(year, monthNum - 1, d).getDay();
-      const offDaysForDate = getOffDaysForDate ? getOffDaysForDate(userId, date) : (weeklyOffMap.get(userId) || [0, 6]);
-      const isOff = dow === 6 ? (offDaysForDate.includes(6) && offSaturdaySet.has(date)) : offDaysForDate.includes(dow);
-      if (!isOff && !holidaySet.has(date)) count++;
-    }
-    return count;
-  };
-
-  // Pre-fetch weekly off map for all employees
-  const allUserIds = activeSalaries.map(s => s.userId);
-  const weeklyOffMap = await getWeeklyOffMap(allUserIds, req.prisma, month);
-
-  // Pre-fetch ALL WeeklyOffAssignments (individual + dept) overlapping this month
-  // Used for per-date off-day resolution inside the payroll loop
-  const allAssignments = await req.prisma.weeklyOffAssignment.findMany({
-    where: {
-      effectiveFrom: { lte: monthEndStr },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: monthStart } }],
-    },
-    include: { pattern: { select: { days: true } } },
-    orderBy: { effectiveFrom: 'asc' },
-  });
-  // Per-user: sorted individual assignments (asc so last-matching wins)
   const userAssignmentMap = new Map();
   const deptAssignmentMap = new Map();
   for (const a of allAssignments) {
@@ -350,17 +349,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       deptAssignmentMap.get(a.department).push(a);
     }
   }
-  // User-level pattern fallback
-  const userPatternRows = await req.prisma.user.findMany({
-    where: { id: { in: allUserIds } },
-    select: { id: true, department: true, weeklyOffPattern: { select: { days: true } } },
-  });
   const userPatternMap = new Map(userPatternRows.map(u => [u.id, u]));
+
+  const payrollRules = rulesRow ? (() => { try { return JSON.parse(rulesRow.value); } catch { return DEFAULT_PAYROLL_RULES; } })() : DEFAULT_PAYROLL_RULES;
+  const lopDivisor = payrollRules.lop?.divisor > 0 ? payrollRules.lop.divisor : daysInMonth;
+
+  const offDayEligibleUserIds = new Set(eligibleOffDay.map(e => e.userId));
 
   // Per-date off-day resolver: checks period-bound assignments first, then fallbacks
   function getOffDaysForDate(userId, dateStr) {
     const parseD = s => { try { return JSON.parse(s); } catch { return null; } };
-    // 1. Individual assignment active on this specific date
     const indivList = userAssignmentMap.get(userId) || [];
     for (let i = indivList.length - 1; i >= 0; i--) {
       const a = indivList[i];
@@ -369,7 +367,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         if (days) return days;
       }
     }
-    // 2. Department assignment active on this specific date
     const u = userPatternMap.get(userId);
     if (u?.department) {
       const deptList = deptAssignmentMap.get(u.department) || [];
@@ -381,29 +378,25 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         }
       }
     }
-    // 3. Legacy pattern on User
     if (u?.weeklyOffPattern?.days) {
       const days = parseD(u.weeklyOffPattern.days);
       if (days) return days;
     }
-    // 4. Default: Sun + Sat
     return [0, 6];
   }
 
-  // Fetch payroll rules from settings (falls back to defaults if not configured)
-  const rulesRow = await req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } });
-  const payrollRules = rulesRow ? (() => { try { return JSON.parse(rulesRow.value); } catch { return DEFAULT_PAYROLL_RULES; } })() : DEFAULT_PAYROLL_RULES;
-  const lopDivisor = payrollRules.lop?.divisor > 0 ? payrollRules.lop.divisor : daysInMonth;
-
-  // Pre-fetch off-day allowance eligible employees for this month
-  const eligibleOffDay = await req.prisma.offDayAllowanceEligibility.findMany({
-    where: {
-      eligibleFrom: { lte: `${month}-31` },
-      OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }],
-    },
-    select: { userId: true, eligibleFrom: true, eligibleTo: true },
-  });
-  const offDayEligibleUserIds = new Set(eligibleOffDay.map(e => e.userId));
+  // Helper: compute working days per employee
+  const calcWorkingDays = (holidaySet, userId) => {
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${month}-${String(d).padStart(2, '0')}`;
+      const dow = new Date(year, monthNum - 1, d).getDay();
+      const offDaysForDate = getOffDaysForDate(userId, date);
+      const isOff = dow === 6 ? (offDaysForDate.includes(6) && offSaturdaySet.has(date)) : offDaysForDate.includes(dow);
+      if (!isOff && !holidaySet.has(date)) count++;
+    }
+    return count;
+  };
 
   const results = [];
   for (const sal of activeSalaries) {
