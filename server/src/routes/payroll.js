@@ -651,9 +651,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       const eligibility = eligibleOffDay.find(e => e.userId === sal.userId);
       const weeklyOffs = weeklyOffMap.get(sal.userId) || [0, 6];
 
-      // Identify off days in month: pure weekly-off days only (NOT holidays — those are separate)
-      // Reason: if a day is a public holiday, working on it is "holiday allowance" territory,
-      // not "off-day allowance". Counting both inflates the allowance.
+      // Identify off days in month: weekly-off days + location holidays
+      // mergedHolidays is already branch/location-specific (global + branch holidays, minus dept blocks)
+      // so each employee only gets off-day allowance for holidays applicable to their location
       const offDatesInMonth = [];
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
@@ -663,10 +663,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         const isWeeklyOff = dow === 6
           ? (weeklyOffs.includes(6) && offSaturdaySet.has(dateStr))
           : weeklyOffs.includes(dow);
-        // Skip holidays — a Sunday that is also a public holiday is NOT counted as a worked off-day
         const isHoliday = mergedHolidays.has(dateStr);
 
-        if (isWeeklyOff && !isHoliday && dateStr >= eligibility.eligibleFrom &&
+        if ((isWeeklyOff || isHoliday) && dateStr >= eligibility.eligibleFrom &&
             (!eligibility.eligibleTo || dateStr <= eligibility.eligibleTo)) {
           offDatesInMonth.push(dateStr);
         }
