@@ -1496,6 +1496,7 @@ export default function PayrollDashboard() {
     try {
       const response = await api.post('/payroll/generate', {
         month: selectedMonth,
+        companyId: selectedCompanyId,
         ...(generateTargetUserId ? { userId: parseInt(generateTargetUserId) } : {}),
       });
       showToast(
