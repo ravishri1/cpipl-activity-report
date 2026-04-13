@@ -28,7 +28,9 @@ export default function SeparationDetail() {
 
   const { data: sep, loading, error: fetchErr, refetch } = useFetch(`/separation/${id}`, null);
   const { data: fnfPreview, loading: fnfLoading, error: fnfErr, refetch: refetchFnF } = useFetch(`/separation/${id}/fnf-preview`, null);
+  const { data: sepLetters, loading: lettersLoading, error: lettersErr, refetch: refetchLetters } = useFetch(`/separation/${id}/letters`, []);
   const { execute, loading: acting, error: actErr, success } = useApi();
+  const [seedingTemplates, setSeedingTemplates] = useState(false);
 
   const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '' });
   const [mgForm, setMgForm] = useState({ action: 'approve', managerNote: '', managerProposedLWD: '' });
@@ -109,12 +111,7 @@ export default function SeparationDetail() {
     } catch {}
   };
 
-  const handleGenerateDocs = async () => {
-    try {
-      await execute(() => api.post(`/separation/${id}/generate-documents`), 'Documents generated!');
-      refetch();
-    } catch {}
-  };
+  // handleGenerateDocs is in the Letters tab section below
 
   const handleComplete = async () => {
     if (!window.confirm('Complete this separation? This will activate the Alumni Portal for the employee.')) return;
@@ -124,11 +121,41 @@ export default function SeparationDetail() {
     } catch {}
   };
 
+  const handleGenerateDocuments = async () => {
+    try {
+      await execute(() => api.post(`/separation/${id}/generate-documents`), 'Letters generated successfully!');
+      refetch();
+      refetchLetters();
+    } catch {}
+  };
+
+  const handleSeedTemplates = async () => {
+    setSeedingTemplates(true);
+    try {
+      await api.post('/letters/seed-separation-templates');
+      alert('Templates created. Now click "Generate Letters" to generate for this employee.');
+    } catch (e) {
+      alert('Error: ' + (e?.response?.data?.error || e.message));
+    } finally {
+      setSeedingTemplates(false);
+    }
+  };
+
+  const handleDownload = (letterId, format, name) => {
+    const a = document.createElement('a');
+    a.href = `/api/letters/${letterId}/${format}`;
+    a.download = `${name}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const tabs = [
     { key: 'overview', label: 'Overview' },
     { key: 'checklist', label: `Checklist ${sep.checklist?.length ? `(${sep.checklistProgress?.done || 0}/${sep.checklistProgress?.total || 0})` : ''}` },
     { key: 'fnf', label: 'Full & Final' },
     { key: 'salary', label: 'Salary Hold' },
+    ...(sep.type === 'resignation' ? [{ key: 'letters', label: `Letters ${sepLetters?.length ? `(${sepLetters.length})` : ''}` }] : []),
     { key: 'actions', label: 'Actions' },
   ];
 
@@ -460,6 +487,103 @@ export default function SeparationDetail() {
         </div>
       )}
 
+      {/* ── Tab: Letters ─────────────────────────────────────────────────── */}
+      {activeTab === 'letters' && sep.type === 'resignation' && (
+        <div className="space-y-4">
+          {lettersErr && <AlertMessage type="error" message={lettersErr} />}
+
+          {/* Generate section */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-800">Separation Letters</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSeedTemplates}
+                  disabled={seedingTemplates}
+                  className="text-xs border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  title="Create default Experience & Relieving Letter templates if not already present"
+                >
+                  {seedingTemplates ? 'Creating...' : '⚙ Init Templates'}
+                </button>
+                <button
+                  onClick={handleGenerateDocuments}
+                  disabled={acting}
+                  className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {acting ? 'Generating...' : sep.documentsGenerated ? '↺ Regenerate Letters' : '📄 Generate Letters'}
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Experience Letter and Relieving Letter are generated for resigned employees only.
+              Both can be downloaded as PDF or Word (.docx).
+            </p>
+            {sep.documentsGeneratedAt && (
+              <p className="text-xs text-green-600 mt-2">
+                ✅ Last generated: {new Date(sep.documentsGeneratedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+
+          {/* Letters list */}
+          {lettersLoading ? (
+            <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>
+          ) : sepLetters?.length === 0 ? (
+            <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-8 text-center">
+              <p className="text-gray-400 text-2xl mb-2">📄</p>
+              <p className="text-gray-500 text-sm font-medium">No letters generated yet</p>
+              <p className="text-gray-400 text-xs mt-1">Click "Generate Letters" above to create Experience and Relieving Letters</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sepLetters.map(letter => (
+                <div key={letter.id} className="bg-white border border-gray-200 rounded-xl p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          letter.letterType === 'experience' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {letter.letterType === 'experience' ? '🎓 Experience Letter' : '✉️ Relieving Letter'}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          Generated {new Date(letter.generatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {letter.generatedByUser && ` by ${letter.generatedByUser.name}`}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400">Template: {letter.template?.name}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDownload(letter.id, 'pdf', `${letter.letterType}_${sep.user?.name?.replace(/\s+/g, '_') || 'employee'}`)}
+                        className="flex items-center gap-1 bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-100"
+                      >
+                        ⬇ PDF
+                      </button>
+                      <button
+                        onClick={() => handleDownload(letter.id, 'docx', `${letter.letterType}_${sep.user?.name?.replace(/\s+/g, '_') || 'employee'}`)}
+                        className="flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-100"
+                      >
+                        ⬇ Word
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Letter preview */}
+                  <details className="mt-3">
+                    <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 select-none">▸ Preview letter content</summary>
+                    <div
+                      className="mt-3 bg-gray-50 rounded-lg p-4 text-sm border border-gray-100 max-h-64 overflow-y-auto"
+                      dangerouslySetInnerHTML={{ __html: letter.content }}
+                    />
+                  </details>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Tab: Actions ──────────────────────────────────────────────────── */}
       {activeTab === 'actions' && (
         <div className="space-y-4">
@@ -568,12 +692,15 @@ export default function SeparationDetail() {
           )}
 
           {/* Generate Documents */}
-          {['fnf_approved', 'completed', 'clearance', 'fnf_pending'].includes(sep.status) && (
+          {['fnf_approved', 'completed', 'clearance', 'fnf_pending'].includes(sep.status) && sep.type === 'resignation' && (
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h3 className="text-base font-semibold text-gray-800 mb-2">Generate Documents</h3>
-              <p className="text-sm text-gray-500 mb-3">Generates Relieving Letter and Experience Letter from templates. Documents are saved to employee's Google Drive folder and made available in Alumni Portal.</p>
-              <button onClick={handleGenerateDocs} disabled={acting || sep.documentsGenerated} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-                {sep.documentsGenerated ? '✅ Documents Already Generated' : acting ? 'Generating...' : '📄 Generate Relieving + Experience Letter'}
+              <p className="text-sm text-gray-500 mb-3">
+                Experience Letter and Relieving Letter are available in the <strong>Letters tab</strong> above.
+                {sep.documentsGenerated && ' ✅ Already generated.'}
+              </p>
+              <button onClick={() => setActiveTab('letters')} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
+                📄 Go to Letters Tab
               </button>
             </div>
           )}

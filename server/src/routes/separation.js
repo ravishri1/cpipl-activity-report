@@ -714,43 +714,57 @@ router.post('/:id/generate-documents', requireAdmin, asyncHandler(async (req, re
   const id = parseId(req.params.id);
   const sep = await req.prisma.separation.findUnique({
     where: { id },
-    include: { user: { select: { id: true, name: true, email: true, designation: true, department: true, dateOfJoining: true, employeeId: true } } },
+    include: {
+      user: {
+        include: { company: true, salaryStructure: true },
+      },
+    },
   });
   if (!sep) throw notFound('Separation');
+  if (sep.type !== 'resignation') throw badRequest('Letters can only be generated for resigned employees.');
 
   const user = sep.user;
   const lwd = sep.adjustedLWD || sep.lastWorkingDate;
 
-  // Find or create letter templates
-  let relievingTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'relieving_letter', isActive: true } });
-  let experienceTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'experience_letter', isActive: true } });
+  // Helpers (same logic as letters.js)
+  function getSalutation(gender) {
+    if (!gender) return 'Mr./Ms.';
+    return gender.toLowerCase() === 'female' ? 'Ms.' : 'Mr.';
+  }
+  function renderContent(content, ph) {
+    let out = content;
+    for (const [k, v] of Object.entries(ph)) out = out.split(k).join(v);
+    return out;
+  }
 
-  const generatedLetters = [];
-
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const salutation = getSalutation(user.gender);
   const placeholders = {
-    employee_name: user.name,
-    employee_id: user.employeeId || '',
-    designation: user.designation || '',
-    department: user.department || '',
-    joining_date: user.dateOfJoining || '',
-    last_working_date: lwd || '',
-    date: new Date().toISOString().slice(0, 10),
+    '{{name}}': user.name || '', '{{salutation}}': salutation,
+    '{{employeeId}}': user.employeeId || '', '{{designation}}': user.designation || '',
+    '{{department}}': user.department || '', '{{dateOfJoining}}': user.dateOfJoining || '',
+    '{{joiningDate}}': user.dateOfJoining || '', '{{email}}': user.email || '',
+    '{{lwd}}': lwd || '', '{{lastWorkingDate}}': lwd || '',
+    '{{company.name}}': user.company?.name || '', '{{company.address}}': user.company?.address || '',
+    '{{company.city}}': user.company?.city || '', '{{company.state}}': user.company?.state || '',
+    '{{date}}': dateStr,
   };
 
-  for (const [template, letterType] of [[relievingTemplate, 'relieving_letter'], [experienceTemplate, 'experience_letter']]) {
-    if (!template) { generatedLetters.push({ type: letterType, status: 'skipped', reason: 'Template not found. Create template in Letters module first.' }); continue; }
+  const relievingTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'relieving', isActive: true } });
+  const experienceTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'experience', isActive: true } });
+
+  const generatedLetters = [];
+  for (const [template, letterType] of [[experienceTemplate, 'experience'], [relievingTemplate, 'relieving']]) {
+    if (!template) {
+      generatedLetters.push({ type: letterType, status: 'skipped', reason: 'Template not found. Run POST /api/letters/seed-separation-templates first.' });
+      continue;
+    }
     try {
+      const renderedContent = renderContent(template.content, placeholders);
       const letter = await req.prisma.generatedLetter.create({
-        data: {
-          userId: user.id,
-          templateId: template.id,
-          generatedBy: req.user.id,
-          placeholders: JSON.stringify(placeholders),
-          status: 'generated',
-          generatedAt: new Date(),
-        },
+        data: { userId: user.id, templateId: template.id, letterType, content: renderedContent, generatedBy: req.user.id },
       });
-      generatedLetters.push({ type: letterType, status: 'generated', letterId: letter.id });
+      generatedLetters.push({ type: letterType, status: 'generated', letterId: letter.id, templateName: template.name });
     } catch (e) {
       generatedLetters.push({ type: letterType, status: 'error', reason: e.message });
     }
@@ -1047,6 +1061,21 @@ router.post('/bulk-import', requireAdmin, asyncHandler(async (req, res) => {
     message: `Import complete: ${results.created} created, ${results.skipped} skipped`,
     ...results,
   });
+}));
+
+// GET /:id/letters — Get experience/relieving letters for a separation (admin or self)
+router.get('/:id/letters', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const sep = await req.prisma.separation.findUnique({ where: { id }, select: { userId: true, type: true } });
+  if (!sep) throw notFound('Separation');
+  if (!isAdminRole(req.user) && req.user.id !== sep.userId) throw forbidden();
+
+  const letters = await req.prisma.generatedLetter.findMany({
+    where: { userId: sep.userId, letterType: { in: ['experience', 'relieving'] } },
+    include: { template: { select: { id: true, name: true, type: true } }, generatedByUser: { select: { id: true, name: true } } },
+    orderBy: { generatedAt: 'desc' },
+  });
+  res.json(letters);
 }));
 
 // ─── private helper: create default clearance checklist ──────────────────────
