@@ -261,9 +261,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const monthNum = parseInt(month.split('-')[1]);
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
 
-  // Exclude employees whose account was created after the payroll month ends
-  // (prevents re-joined employees getting double payslips for past months)
-  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, createdAt: { lte: new Date(monthEnd + 'T23:59:59.999Z') }, employeeId: { not: null } };
+  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } };
   if (targetUserId) userWhere.id = parseInt(targetUserId);
 
   const salaries = await req.prisma.salaryStructure.findMany({
@@ -778,7 +776,20 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
     // LOP per-day rate = grossBase / divisor (NOT ctcMonthly — CTC includes employer contributions)
     const perDaySalary = lopDivisor > 0 ? grossBase / lopDivisor : 0;
-    const lopDeduction = Math.round(perDaySalary * lopDays);
+    // Per-component LOP prorating: floor each component's earned amount, then deduct the difference
+    // This matches Excel's per-component floor calculation and avoids fractional rupee differences
+    let lopDeduction;
+    if (lopDays > 0 && lopDivisor > 0) {
+      if (earningComps.length > 0) {
+        const workingDays = lopDivisor - lopDays;
+        const proratedBase = earningComps.reduce((s, c) => s + Math.round(parseFloat(c.amount || 0) * workingDays / lopDivisor), 0);
+        lopDeduction = grossBase - proratedBase;
+      } else {
+        lopDeduction = perDaySalary * lopDays;
+      }
+    } else {
+      lopDeduction = 0;
+    }
 
     // ── ESIC Contribution Period Rule ─────────────────────────────────────────
     // Contribution periods: Apr–Sep (starts Apr) | Oct–Mar (starts Oct)
@@ -811,14 +822,14 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // reflect only the earned portion (avoids over-deducting on unearned days).
     const isMidMonthSeparation = !!(separation?.lastWorkingDate?.startsWith(month));
     const statutoryBase = isMidMonthSeparation && lopDivisor > 0
-      ? Math.round(grossBase * presentDays / lopDivisor)
+      ? grossBase * presentDays / lopDivisor
       : Math.max(0, grossEarnings - lopDeduction);
     const statutoryBasic = lopDivisor > 0
-      ? Math.round(payBasic * (lopDivisor - lopDays) / lopDivisor)
+      ? payBasic * (lopDivisor - lopDays) / lopDivisor
       : payBasic;
     const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum, esicEligible);
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds + lwfEmployee);
-    const netPay = Math.round(grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
+    const netPay = grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal;
 
     const payslipData = {
       userId: sal.userId, month, year,

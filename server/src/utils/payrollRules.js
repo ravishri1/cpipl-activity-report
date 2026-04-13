@@ -138,8 +138,8 @@ function calcStatutory(grossBase, payBasic, ptExempt, isIntern, rules, gender, m
   const pt  = r.pt  || DEFAULT_PAYROLL_RULES.pt;
 
   const pfBase     = Math.min(payBasic || 0, pf.wageCap || 15000);
-  const employeePf = Math.min(Math.round(pfBase * (pf.employeeRate || 0.12)), pf.maxMonthly || 1800);
-  const employerPf = Math.min(Math.round(pfBase * (pf.employerRate || 0.12)), pf.maxMonthly || 1800);
+  const employeePf = Math.min(pfBase * (pf.employeeRate || 0.12), pf.maxMonthly || 1800);
+  const employerPf = Math.min(pfBase * (pf.employerRate || 0.12), pf.maxMonthly || 1800);
 
   // ESIC eligibility:
   // If esicEligibleOverride is explicitly provided (true/false), use it —
@@ -149,8 +149,9 @@ function calcStatutory(grossBase, payBasic, ptExempt, isIntern, rules, gender, m
     ? esicEligibleOverride
     : (grossBase > 0 && grossBase <= (esi.grossCeiling || 21000));
 
-  const employeeEsi = esiApplies ? Math.round(grossBase * (esi.employeeRate || 0.0075)) : 0;
-  const employerEsi = esiApplies ? Math.round(grossBase * (esi.employerRate || 0.0325)) : 0;
+  // Use Math.ceil for ESI — matches statutory rounding (any fraction of rupee rounds up)
+  const employeeEsi = esiApplies ? Math.ceil(grossBase * (esi.employeeRate || 0.0075)) : 0;
+  const employerEsi = esiApplies ? Math.ceil(grossBase * (esi.employerRate || 0.0325)) : 0;
 
   const professionalTax = ptExempt ? 0 : calcPT(grossBase, pt, gender || null, monthNum || null);
 
