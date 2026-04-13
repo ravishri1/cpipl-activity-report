@@ -810,7 +810,7 @@ function ProcessPayrollWizard({ month, companyId, targetUserId, targetUserName, 
       setStep(6);
       onDone?.();
     } catch (e) {
-      setGenErr(e.response?.data?.message || 'Generation failed');
+      setGenErr(e.response?.data?.message || e.response?.data?.error || (e.code === 'ECONNABORTED' ? 'Request timed out — try again' : 'Generation failed'));
       setStep(6);
     }
   };
