@@ -513,6 +513,11 @@ app.get('/api/health', asyncHandler(async (req, res) => {
   });
 }));
 
+// 404 handler for unmatched /api/* routes — returns JSON instead of hanging
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
 // Global error handler (must be after all routes)
 app.use(errorHandler);
 
