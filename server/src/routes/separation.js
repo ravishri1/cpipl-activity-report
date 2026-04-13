@@ -429,7 +429,23 @@ router.post('/:id/start-clearance', requireAdmin, asyncHandler(async (req, res) 
   }
 
   await req.prisma.separation.update({ where: { id }, data: { status: 'clearance' } });
-  res.json({ message: 'Clearance stage started. Complete all checklist items to proceed to FnF.' });
+
+  // Auto-create clearance checklist if it doesn't exist (handles historical records)
+  const existing = await req.prisma.separationChecklist.count({ where: { separationId: id } });
+  if (existing === 0) await _createChecklist(req.prisma, id);
+
+  res.json({ message: 'Clearance stage started. Checklist created. Complete all checklist items to proceed to FnF.' });
+}));
+
+// POST /:id/create-checklist — manually create checklist (for historical records where it was skipped)
+router.post('/:id/create-checklist', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const sep = await req.prisma.separation.findUnique({ where: { id } });
+  if (!sep) throw notFound('Separation');
+  await req.prisma.separationChecklist.deleteMany({ where: { separationId: id } }); // reset and recreate
+  await _createChecklist(req.prisma, id);
+  const checklist = await req.prisma.separationChecklist.findMany({ where: { separationId: id }, orderBy: { sortOrder: 'asc' } });
+  res.json({ message: 'Checklist created.', checklist });
 }));
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -447,12 +463,24 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
 
   const user = sep.user;
   const ss = user.salaryStructure;
-  if (!ss) throw badRequest('Employee has no salary structure. Please set up salary first.');
-
-  const grossMonthly = ss.grossEarnings || (ss.basic + ss.hra + ss.da + ss.specialAllowance + ss.medicalAllowance + ss.conveyanceAllowance + ss.otherAllowance);
-  const dailyRate = Math.round((grossMonthly / 30) * 100) / 100;
   const lwd = sep.adjustedLWD || sep.lastWorkingDate;
   if (!lwd) throw badRequest('Last working date is not set. HR must confirm LWD first.');
+
+  // If no salary structure, return manual-entry mode (HR fills all amounts themselves)
+  if (!ss) {
+    return res.json({
+      employeeId: user.employeeId, employeeName: user.name,
+      designation: user.designation, department: user.department,
+      lastWorkingDate: lwd, grossMonthly: 0, dailyRate: 0,
+      items: [],
+      netFnF: 0,
+      manualMode: true,
+      note: 'No salary structure found for this employee. All FnF line items must be entered manually using "+ Add custom line item".',
+    });
+  }
+
+  const grossMonthly = ss.grossEarnings || (ss.basic + ss.hra + ss.da + ss.specialAllowance + ss.medicalAllowance + ss.conveyanceAllowance + ss.otherAllowance) || 0;
+  const dailyRate = Math.round((grossMonthly / 30) * 100) / 100;
 
   const items = [];
 
@@ -760,6 +788,9 @@ router.post('/:id/generate-documents', requireAdmin, asyncHandler(async (req, re
 
   const relievingTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'relieving', isActive: true } });
   const experienceTemplate = await req.prisma.letterTemplate.findFirst({ where: { type: 'experience', isActive: true } });
+
+  // Delete old experience/relieving letters for this user before regenerating (prevents duplicates)
+  await req.prisma.generatedLetter.deleteMany({ where: { userId: user.id, letterType: { in: ['experience', 'relieving'] } } });
 
   const generatedLetters = [];
   for (const [template, letterType] of [[experienceTemplate, 'experience'], [relievingTemplate, 'relieving']]) {
