@@ -4,7 +4,7 @@
  */
 
 const { getWeeklyOffMap, DEFAULT_OFF_DAYS } = require('./weeklyOffHelper');
-const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../../utils/saturdayPolicyHelper');
+const { getSaturdaySetsForMonth } = require('../../utils/saturdayPolicy');
 
 const GRACE_MINUTES = 15;
 
@@ -47,7 +47,7 @@ async function getAttendanceMuster(month, department, location, prisma) {
   const [users, attendances, holidays, leaves, shiftAssignments, regularizations] = await Promise.all([
     prisma.user.findMany({
       where: userWhere,
-      select: { id: true, name: true, employeeId: true, department: true, location: true },
+      select: { id: true, name: true, employeeId: true, department: true, location: true, companyId: true },
       orderBy: { name: 'asc' },
     }),
     prisma.attendance.findMany({
@@ -114,28 +114,17 @@ async function getAttendanceMuster(month, department, location, prisma) {
   }
 
   // Batch-fetch weekly off patterns for all employees
-  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma, month);
+  const weeklyOffMap = await getWeeklyOffMap(users.map(u => u.id), prisma);
 
-  // Fetch company IDs for users and load per-company Saturday policy
-  const usersWithCompany = await prisma.user.findMany({
-    where: { id: { in: users.map(u => u.id) } },
-    select: { id: true, companyId: true },
-  });
-  const userCompanyMap = {};
-  for (const u of usersWithCompany) userCompanyMap[u.id] = u.companyId;
-
-  // Build per-company offSaturdaySet cache for this month
-  const satCache = {};
-  const getOffSatSet = async (companyId) => {
-    if (!satCache[companyId]) {
-      const pol = await getSaturdayPolicyForMonth(companyId || 0, month, prisma);
-      satCache[companyId] = pol ? buildOffSaturdaySet(month, pol.saturdayType) : buildOffSaturdaySet(month, 'all');
-    }
-    return satCache[companyId];
-  };
-  // Pre-warm cache for all companies present
-  const uniqueCompanyIds = [...new Set(Object.values(userCompanyMap))];
-  for (const cid of uniqueCompanyIds) await getOffSatSet(cid);
+  // Fetch Saturday policies per company for this month
+  const uniqueCompanyIds = [...new Set(users.map(u => u.companyId).filter(Boolean))];
+  const satSets = await getSaturdaySetsForMonth(uniqueCompanyIds, year, mon, prisma);
+  // Default set for users without a company (use 'all' — every Saturday off)
+  const defaultSatSet = new Set();
+  // Collect all off-Saturdays for the primary company (for UI header display)
+  const primaryCompanyId = uniqueCompanyIds[0] || null;
+  const primarySatSet = primaryCompanyId ? (satSets.get(primaryCompanyId) || defaultSatSet) : defaultSatSet;
+  const offSaturdayDates = [...primarySatSet].sort();
 
   // Build employee rows
   const employees = users.map(user => {
@@ -144,14 +133,14 @@ async function getAttendanceMuster(month, department, location, prisma) {
     const shift = shiftMap[user.id] || null;
     const shiftStartMins = shift ? parseTimeToMinutes(shift.startTime) : null;
     const userOffDays = weeklyOffMap.get(user.id) || DEFAULT_OFF_DAYS;
-    const offSatSet = satCache[userCompanyMap[user.id]] || satCache[0] || new Set();
+    const userSatSet = user.companyId ? (satSets.get(user.companyId) || defaultSatSet) : primarySatSet;
 
     for (const di of dayInfo) {
       const att = attMap[user.id]?.[di.date];
       const isHoliday = !!holidayMap[di.date];
-      // Saturday: off only if in weekly pattern AND in Saturday policy set
+      // For Saturday: also check company Saturday policy (only specific Saturdays are off)
       const isWeekend = di.dow === 6
-        ? (userOffDays.includes(6) && offSatSet.has(di.date))
+        ? (userOffDays.includes(6) && userSatSet.has(di.date))
         : userOffDays.includes(di.dow);
       const leaveCode = leaveMap[user.id]?.[di.date] || null;
       const isFuture = di.date > today;
@@ -279,6 +268,7 @@ async function getAttendanceMuster(month, department, location, prisma) {
     totalEmployees: employees.length,
     allLocations,
     allDepartments,
+    offSaturdayDates, // array of 'YYYY-MM-DD' strings for off Saturdays (per primary company policy)
   };
 }
 

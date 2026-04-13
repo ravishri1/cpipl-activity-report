@@ -23,10 +23,9 @@ const CELL_COLORS = {
   other:    'bg-slate-100 text-slate-500',
 };
 
-// Day header colors (weekend in red)
+// Day header colors (Sundays always red; Saturdays depend on policy)
 const DAY_HEADER_COLORS = {
-  0: 'text-red-400',   // Sun
-  6: 'text-red-400',   // Sat
+  0: 'text-red-400',   // Sun — always off
 };
 
 // Session status options for admin
@@ -75,6 +74,9 @@ export default function AttendanceMuster() {
   const [editCell, setEditCell] = useState(null);
   const [editForm, setEditForm] = useState({ session1: 'P', session2: 'P', remark: '' });
   const [exportingYear, setExportingYear] = useState(false);
+  // Local Saturday override: { 'YYYY-MM-DD': 'working' | 'off' }
+  // Does NOT affect DB records or salary — display only
+  const [satOverrides, setSatOverrides] = useState({});
   const { execute: execUpdate, loading: updating, error: updateErr, success: updateSuccess, clearMessages } = useApi();
   const tableRef = useRef(null);
 
@@ -83,6 +85,30 @@ export default function AttendanceMuster() {
     const [y, m] = month.split('-').map(Number);
     const d = new Date(y, m - 1 + delta, 1);
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    setSatOverrides({}); // clear overrides when navigating months
+  };
+
+  // Toggle a Saturday between working/off (display only — does not affect salary)
+  const toggleSaturdayOverride = (date, isPolicyOff) => {
+    setSatOverrides(prev => {
+      const current = prev[date];
+      if (current === undefined) {
+        // No override yet → flip from policy state
+        return { ...prev, [date]: isPolicyOff ? 'working' : 'off' };
+      }
+      // Already overridden → remove override (revert to policy)
+      const next = { ...prev };
+      delete next[date];
+      return next;
+    });
+  };
+
+  // Determine effective Saturday state for a date (considering override)
+  const isSaturdayOff = (date, offSaturdayDates) => {
+    const override = satOverrides[date];
+    if (override === 'working') return false;
+    if (override === 'off') return true;
+    return offSaturdayDates ? offSaturdayDates.includes(date) : true;
   };
 
   // Fetch muster data
@@ -453,8 +479,12 @@ export default function AttendanceMuster() {
                       Employee
                     </th>
                     {data.dayInfo.map(di => {
-                      const isWeekend = di.dow === 0 || di.dow === 6;
+                      const isSunday = di.dow === 0;
+                      const isSaturday = di.dow === 6;
                       const isHoliday = !!data.holidays[di.date];
+                      const satOff = isSaturday && isSaturdayOff(di.date, data.offSaturdayDates);
+                      const isWeekend = isSunday || satOff;
+                      const hasOverride = isSaturday && satOverrides[di.date] !== undefined;
                       return (
                         <th
                           key={di.date}
@@ -465,9 +495,27 @@ export default function AttendanceMuster() {
                         >
                           <div className="leading-tight">
                             <span className="block text-[10px]">{di.day}</span>
-                            <span className={`block text-[9px] font-medium ${DAY_HEADER_COLORS[di.dow] || 'text-slate-400'}`}>
+                            <span className={`block text-[9px] font-medium ${
+                              isSunday ? 'text-red-400' : satOff ? 'text-red-400' : isSaturday ? 'text-emerald-600' : (DAY_HEADER_COLORS[di.dow] || 'text-slate-400')
+                            }`}>
                               {di.dayName}
                             </span>
+                            {/* Saturday override toggle */}
+                            {isSaturday && (
+                              <button
+                                onClick={e => { e.stopPropagation(); toggleSaturdayOverride(di.date, isSaturdayOff(di.date, data.offSaturdayDates) && !satOverrides[di.date]); }}
+                                className={`block mx-auto mt-0.5 text-[8px] leading-none px-1 py-0.5 rounded font-bold ${
+                                  hasOverride
+                                    ? 'bg-amber-400 text-white'
+                                    : satOff
+                                      ? 'bg-slate-300 text-slate-500 hover:bg-emerald-200 hover:text-emerald-700'
+                                      : 'bg-slate-200 text-slate-400 hover:bg-red-200 hover:text-red-600'
+                                }`}
+                                title={satOff ? 'Mark as working Saturday' : 'Mark as off Saturday'}
+                              >
+                                {satOff ? 'OFF' : 'W'}
+                              </button>
+                            )}
                           </div>
                         </th>
                       );
@@ -503,12 +551,26 @@ export default function AttendanceMuster() {
                         const dayData = emp.days[di.date];
                         if (!dayData) return <td key={di.date} className="border-r border-slate-100 px-0.5 py-1 text-center">-</td>;
 
+                        // Apply Saturday override (display-only, no DB change)
+                        // If Saturday is overridden to 'working' and this cell is 'OFF' → show as 'A'
+                        // If Saturday is overridden to 'off' and this cell is not already set → show as 'OFF'
+                        // Cells with actual 'present' status (P) are NEVER changed
+                        let effectiveDayData = dayData;
+                        if (di.dow === 6 && satOverrides[di.date]) {
+                          const override = satOverrides[di.date];
+                          if (override === 'working' && dayData.color === 'off' && dayData.display === 'OFF') {
+                            effectiveDayData = { ...dayData, display: 'A', color: 'absent' };
+                          } else if (override === 'off' && dayData.color !== 'present' && dayData.color !== 'off') {
+                            effectiveDayData = { ...dayData, display: 'OFF', color: 'off' };
+                          }
+                        }
+
                         // Admin override → pink background to clearly distinguish forced entries
-                        const cellColor = dayData.adminOverride
+                        const cellColor = effectiveDayData.adminOverride
                           ? 'bg-pink-100 text-pink-800'
-                          : (CELL_COLORS[dayData.color] || CELL_COLORS.other);
-                        const isEditable = dayData.color !== 'off' && dayData.color !== 'holiday' && dayData.color !== 'future';
-                        const indicators = getCellIndicators(dayData);
+                          : (CELL_COLORS[effectiveDayData.color] || CELL_COLORS.other);
+                        const isEditable = effectiveDayData.color !== 'off' && effectiveDayData.color !== 'holiday' && effectiveDayData.color !== 'future';
+                        const indicators = getCellIndicators(effectiveDayData);
 
                         return (
                           <td
@@ -517,16 +579,16 @@ export default function AttendanceMuster() {
                             className={`border-r border-slate-100 px-0 py-0.5 text-center font-bold select-none transition-all ${cellColor} ${
                               isEditable ? 'cursor-pointer hover:ring-2 hover:ring-inset hover:ring-blue-400' : ''
                             } ${indicators}`}
-                            title={cellTooltip(emp, dayData, di.date)}
+                            title={cellTooltip(emp, effectiveDayData, di.date)}
                           >
                             <div className="relative">
-                              <span className="text-[10px] leading-tight block">{dayData.display}</span>
+                              <span className="text-[10px] leading-tight block">{effectiveDayData.display}</span>
                               {/* Late dot indicator */}
-                              {dayData.isLate && !dayData.isRegularized && (
+                              {effectiveDayData.isLate && !effectiveDayData.isRegularized && (
                                 <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
                               )}
                               {/* Regularized check */}
-                              {dayData.isRegularized && (
+                              {effectiveDayData.isRegularized && (
                                 <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full" />
                               )}
                             </div>
