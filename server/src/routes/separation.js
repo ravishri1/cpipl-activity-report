@@ -563,13 +563,13 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
   // 5. Pending expense claims (approved, not yet reimbursed)
   const pendingClaims = await req.prisma.expenseClaim.findMany({
     where: { userId: user.id, status: 'approved' },
-    select: { id: true, title: true, totalAmount: true, submittedAt: true },
+    select: { id: true, title: true, amount: true, createdAt: true },
   });
   for (const claim of pendingClaims) {
     items.push({
       component: 'expense_claim',
       label: `Expense reimbursement: ${claim.title}`,
-      amount: claim.totalAmount || 0,
+      amount: claim.amount || 0,
       autoCalculated: true,
     });
   }

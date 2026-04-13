@@ -944,6 +944,23 @@ export default function SeparationDetail() {
           )}
         </div>
       )}
+
+      {/* ── Universal Next Tab Button ─────────────────────────────────────── */}
+      {(() => {
+        const currentIdx = tabs.findIndex(t => t.key === activeTab);
+        const nextTab = tabs[currentIdx + 1];
+        if (!nextTab) return null;
+        return (
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => setActiveTab(nextTab.key)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-900 transition-colors"
+            >
+              Next: {nextTab.label.replace(/ \(.*\)/, '')} <span>→</span>
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
