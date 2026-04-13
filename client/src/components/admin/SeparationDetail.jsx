@@ -336,23 +336,25 @@ export default function SeparationDetail() {
             return (
               <div key={dept} className="mb-5">
                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{dept}</h4>
-                <div className="space-y-2">
-                  {items.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
-                      <div className="flex gap-1">
-                        {['pending', 'done', 'na'].map(s => (
-                          <button key={s}
-                            onClick={() => handleChecklistUpdate(item.id, s, item.remarks)}
-                            disabled={acting}
-                            className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${item.status === s ? CHECKLIST_STATUS_COLOR[s] + ' ring-1 ring-current' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
-                            {s === 'pending' ? '⏳' : s === 'done' ? '✅' : '➖'}
-                          </button>
-                        ))}
+                <div className="space-y-1">
+                  {items.map(item => {
+                    const isDone = item.status === 'done';
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => !acting && handleChecklistUpdate(item.id, isDone ? 'pending' : 'done', item.remarks)}
+                        className={`flex items-center gap-3 py-2.5 px-3 rounded-lg border cursor-pointer transition-all select-none
+                          ${isDone ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
+                      >
+                        <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 transition-all
+                          ${isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
+                          {isDone && <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <span className={`flex-1 text-sm ${isDone ? 'line-through text-gray-400' : 'text-gray-700'}`}>{item.task}</span>
+                        {item.completedBy && <span className="text-xs text-gray-400">{item.completedBy.name}</span>}
                       </div>
-                      <span className={`flex-1 text-sm ${item.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>{item.task}</span>
-                      {item.completedBy && <span className="text-xs text-gray-400">{item.completedBy.name}</span>}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -363,6 +365,61 @@ export default function SeparationDetail() {
               Start Clearance Stage
             </button>
           )}
+
+          {/* Progress bar + Proceed to FnF — shown when clearance is active */}
+          {sep.status === 'clearance' && sep.checklist?.length > 0 && (() => {
+            const total = sep.checklist.length;
+            const done = sep.checklist.filter(c => c.status === 'done').length;
+            const pending = sep.checklist.filter(c => c.status !== 'done').length;
+            const pct = Math.round((done / total) * 100);
+            const allClear = pending === 0;
+            return (
+              <div className="mt-5 border-t border-gray-100 pt-4 space-y-3">
+                {/* Progress bar */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-600">Checklist Progress</span>
+                    <span className="text-xs font-semibold text-gray-700">{done}/{total} items cleared</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-500 ${allClear ? 'bg-green-500' : 'bg-purple-500'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {!allClear && (
+                    <p className="text-xs text-amber-600 mt-1.5">
+                      ⚠️ {pending} item{pending > 1 ? 's' : ''} not checked — click each row to mark done.
+                    </p>
+                  )}
+                </div>
+
+                {/* Proceed button — only when all items are done/na */}
+                {allClear ? (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-green-800">✅ All clearance items done!</p>
+                      <p className="text-xs text-green-600 mt-0.5">You can now proceed to calculate and approve the Full &amp; Final settlement.</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('fnf')}
+                      className="flex-shrink-0 bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors whitespace-nowrap shadow-sm"
+                    >
+                      Proceed to FnF →
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    disabled
+                    className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg text-sm font-medium cursor-not-allowed"
+                    title="Complete all checklist items first"
+                  >
+                    Proceed to Full &amp; Final → ({pending} unchecked)
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
