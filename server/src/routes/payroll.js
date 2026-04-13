@@ -427,10 +427,27 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       results.push({ userId: sal.userId, status: 'skipped', reason: 'already published' });
       continue;
     }
-    // If regenerating a specific employee's existing (unpublished) payslip, unlink old deductions/additions first
+    // If regenerating a specific employee's existing (unpublished) payslip, unlink and reset all linked records
     if (existing && targetUserId) {
       await req.prisma.payrollDeduction.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
       await req.prisma.payrollAddition.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
+      // Reset advance repayments linked to this payslip → back to pending so they're re-deducted on regeneration
+      const linkedRepayments = await req.prisma.salaryAdvanceRepayment.findMany({
+        where: { payslipId: existing.id },
+        select: { id: true, advanceId: true },
+      });
+      if (linkedRepayments.length > 0) {
+        await req.prisma.salaryAdvanceRepayment.updateMany({
+          where: { id: { in: linkedRepayments.map(r => r.id) } },
+          data: { status: 'pending', payslipId: null, deductedAt: null },
+        });
+        // Reopen advance if it was closed (repayments not yet fully settled after reset)
+        const advanceIds = [...new Set(linkedRepayments.map(r => r.advanceId))];
+        await req.prisma.salaryAdvance.updateMany({
+          where: { id: { in: advanceIds }, status: 'closed' },
+          data: { status: 'released', closedAt: null },
+        });
+      }
     }
 
     // Merge global + branch holidays for this employee
