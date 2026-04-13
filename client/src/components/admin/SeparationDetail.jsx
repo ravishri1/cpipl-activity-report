@@ -162,13 +162,23 @@ export default function SeparationDetail() {
     }
   };
 
-  const handleDownload = (letterId, format, name) => {
-    const a = document.createElement('a');
-    a.href = `/api/letters/${letterId}/${format}`;
-    a.download = `${name}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownload = async (letterId, format, name) => {
+    try {
+      const mimeType = format === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const response = await api.get(`/letters/${letterId}/${format}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: mimeType }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Download failed: ' + (e?.response?.data?.error || e.message));
+    }
   };
 
   const tabs = [
