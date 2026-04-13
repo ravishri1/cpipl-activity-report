@@ -805,12 +805,12 @@ function ProcessPayrollWizard({ month, companyId, targetUserId, targetUserName, 
     setStep(5);
     try {
       const body = { month, companyId, ...(targetUserId ? { userId: targetUserId } : {}) };
-      const r = await api.post('/payroll/generate', body);
+      const r = await api.post('/payroll/generate', body, { timeout: 120000 }); // 2-min timeout for payroll generate
       setGenerateResult(r.data);
       setStep(6);
       onDone?.();
     } catch (e) {
-      setGenErr(e.response?.data?.message || e.response?.data?.error || (e.code === 'ECONNABORTED' ? 'Request timed out — try again' : 'Generation failed'));
+      setGenErr(e.response?.data?.message || e.response?.data?.error || (e.code === 'ECONNABORTED' ? 'Timed out — server is still processing, check Payslips tab in 30s' : 'Generation failed — ' + (e.message || 'unknown error')));
       setStep(6);
     }
   };
