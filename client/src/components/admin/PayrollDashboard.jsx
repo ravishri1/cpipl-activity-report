@@ -43,10 +43,12 @@ import {
   ExternalLink,
   ListChecks,
   SkipForward,
+  Plus,
 } from 'lucide-react';
 import api from '../../utils/api';
 import OffDayAllowanceManager from './OffDayAllowanceManager';
 import PayrollDeductions from './PayrollDeductions';
+import PayrollAdditions from './PayrollAdditions';
 
 const formatCurrency = (amount) => {
   if (amount == null || isNaN(amount)) return '₹0';
@@ -195,6 +197,7 @@ const PayslipDetail = ({ payslip }) => {
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
     { label: 'Other Allowances', value: payslip.otherAllowance },
     { label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance },
+    { label: payslip.otherAdditionsLabel || 'Special Addition', value: payslip.otherAdditions },
   ];
 
   const deductions = [
@@ -1388,6 +1391,7 @@ export default function PayrollDashboard() {
   const [neftExporting, setNeftExporting] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showDeductions, setShowDeductions] = useState(false);
+  const [showAdditions, setShowAdditions] = useState(false);
 
   // Load companies on mount
   useEffect(() => {
@@ -1579,6 +1583,13 @@ export default function PayrollDashboard() {
       )}
 
       {/* One-Time Payroll Deductions Modal */}
+      {showAdditions && (
+        <PayrollAdditions
+          month={selectedMonth}
+          onClose={() => setShowAdditions(false)}
+        />
+      )}
+
       {showDeductions && (
         <PayrollDeductions
           month={selectedMonth}
@@ -2213,6 +2224,13 @@ export default function PayrollDashboard() {
               >
                 {neftExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                 NEFT Export
+              </button>
+              <button
+                onClick={() => setShowAdditions(true)}
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Additions
               </button>
               <button
                 onClick={() => setShowDeductions(true)}

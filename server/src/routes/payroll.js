@@ -448,28 +448,29 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
     const lopDatesSet = new Set();    // LOP leave date range (blocks attendance double-count)
 
-    // LOP days from leave requests: use lr.days directly (calendar days as filed).
-    // Standard Indian HR practice: deduct for full LOP period including weekends/holidays.
+    // LOP days from leave requests: count only working days (exclude weekly-offs, off-Saturdays, holidays).
+    // Sundays and off-days inside LOP period are not deducted — consistent with off-day allowance logic.
     let lopFromLeave = 0;
     for (const lr of approvedLeaves) {
       const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
       const cur = new Date(lr.startDate + 'T00:00:00Z');
       const end = new Date(lr.endDate + 'T00:00:00Z');
-      // Only count leave days that fall within this payroll month
       let daysInMonth_ = 0;
       while (cur <= end) {
         const ds = cur.toISOString().slice(0, 10);
         if (ds.startsWith(month)) {
-          if (isLop) { lopDatesSet.add(ds); daysInMonth_++; }
-          else leaveDatesSet.add(ds);
+          const isHol = mergedHolidays.has(ds);
+          if (isLop) {
+            lopDatesSet.add(ds);
+            if (!isHol) daysInMonth_++; // all calendar days except holidays count as LOP
+          } else {
+            leaveDatesSet.add(ds);
+          }
         }
         cur.setDate(cur.getDate() + 1);
       }
       if (isLop && daysInMonth_ > 0) {
-        // Proportion of lr.days that fall in this month (for multi-month leaves)
-        const totalDays = parseFloat(lr.days) || 0;
-        const totalRange = Math.max(1, Math.round((new Date(lr.endDate + 'T00:00:00Z') - new Date(lr.startDate + 'T00:00:00Z')) / 86400000) + 1);
-        lopFromLeave += Math.round((daysInMonth_ / totalRange) * totalDays * 2) / 2; // round to 0.5
+        lopFromLeave += daysInMonth_;
       }
     }
 
@@ -548,6 +549,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
     const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
 
+    // Fetch one-time payroll additions for this employee/month
+    const oneTimeAdditions = await req.prisma.payrollAddition.findMany({
+      where: { userId: sal.userId, month, payslipId: null },
+    });
+    const oneTimeAdditionTotal = oneTimeAdditions.reduce((s, a) => s + a.amount, 0);
+    const oneTimeAdditionLabel = oneTimeAdditions.map(a => a.label).join(', ') || null;
+
     // Fetch approved expenses flagged for salary settlement (not yet settled)
     const pendingReimbursements = await req.prisma.expenseClaim.findMany({
       where: { userId: sal.userId, status: 'approved', settleOnSalary: true, settlementMonth: null },
@@ -582,11 +590,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         }
       }
 
-      // Count off days where employee was present
+      // Count off days where employee was present with actual biometric punch
       const attMap = {};
-      for (const att of attendances) { attMap[att.date] = att.status; }
+      for (const att of attendances) { attMap[att.date] = att; }
       for (const date of offDatesInMonth) {
-        if (attMap[date] === 'present') offDaysWorked++;
+        const rec = attMap[date];
+        // Require actual biometric punch (checkIn not null) — present without punch is not counted
+        if (rec && rec.status === 'present' && rec.checkIn !== null) offDaysWorked++;
       }
 
       // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
@@ -660,13 +670,13 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const isMidMonthSeparation = !!(separation?.lastWorkingDate?.startsWith(month));
     const statutoryBase = isMidMonthSeparation && lopDivisor > 0
       ? Math.round(grossBase * presentDays / lopDivisor)
-      : grossBase;
-    const statutoryBasic = isMidMonthSeparation && lopDivisor > 0
-      ? Math.round(payBasic * presentDays / lopDivisor)
+      : Math.max(0, grossEarnings - lopDeduction);
+    const statutoryBasic = lopDivisor > 0
+      ? Math.round(payBasic * (lopDivisor - lopDays) / lopDivisor)
       : payBasic;
     const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum, esicEligible);
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds + lwfEmployee);
-    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
+    const netPay = Math.round(grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
     const payslip = await req.prisma.payslip.create({
       data: {
@@ -680,6 +690,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         professionalTax: statutory.professionalTax, tds: sal.tds,
         lwfEmployee, lwfEmployer,
         otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
+        otherAdditions: oneTimeAdditionTotal, otherAdditionsLabel: oneTimeAdditionLabel,
         totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
         netPay, workingDays, presentDays, lopDays, lopDeduction,
         reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
@@ -721,6 +732,14 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     if (oneTimeDeductions.length > 0) {
       await req.prisma.payrollDeduction.updateMany({
         where: { id: { in: oneTimeDeductions.map(d => d.id) }, payslipId: null },
+        data: { payslipId: payslip.id },
+      });
+    }
+
+    // Link one-time additions to payslip
+    if (oneTimeAdditions.length > 0) {
+      await req.prisma.payrollAddition.updateMany({
+        where: { id: { in: oneTimeAdditions.map(a => a.id) }, payslipId: null },
         data: { payslipId: payslip.id },
       });
     }
@@ -2080,6 +2099,53 @@ router.delete('/deductions/:id', requireAdmin, asyncHandler(async (req, res) => 
   if (!d) throw notFound('Deduction');
   if (d.payslipId) throw badRequest('Cannot delete — payslip already generated. Delete the payslip first.');
   await req.prisma.payrollDeduction.delete({ where: { id } });
+  res.json({ success: true });
+}));
+
+// ── One-Time Payroll Additions ───────────────────────────────────────────────
+
+// GET /additions?month=YYYY-MM&userId=X
+router.get('/additions', requireAdmin, asyncHandler(async (req, res) => {
+  const { month, userId } = req.query;
+  const where = {};
+  if (month) where.month = month;
+  if (userId) where.userId = parseId(userId);
+  const additions = await req.prisma.payrollAddition.findMany({
+    where,
+    include: {
+      user: { select: { name: true, employeeId: true } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(additions);
+}));
+
+// POST /additions
+router.post('/additions', requireAdmin, asyncHandler(async (req, res) => {
+  const { userId, month, amount, label, reason } = req.body;
+  requireFields(req.body, 'userId', 'month', 'amount', 'label');
+  const a = await req.prisma.payrollAddition.create({
+    data: {
+      userId: parseInt(userId),
+      month,
+      amount: parseFloat(amount),
+      label,
+      reason: reason || null,
+      createdById: req.user.id,
+    },
+    include: { user: { select: { name: true, employeeId: true } } },
+  });
+  res.status(201).json(a);
+}));
+
+// DELETE /additions/:id
+router.delete('/additions/:id', requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const a = await req.prisma.payrollAddition.findUnique({ where: { id } });
+  if (!a) throw notFound('Addition');
+  if (a.payslipId) throw badRequest('Cannot delete — payslip already generated. Delete the payslip first.');
+  await req.prisma.payrollAddition.delete({ where: { id } });
   res.json({ success: true });
 }));
 
