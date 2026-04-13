@@ -15,12 +15,12 @@ export default function PayrollDeductions({ month, onClose }) {
   const [showForm, setShowForm] = useState(false);
 
   const { data: deductions, loading, error: fetchErr, refetch } = useFetch(
-    `/api/payroll/deductions?month=${month}`,
+    `/payroll/deductions?month=${month}`,
     []
   );
 
   const { data: employees, loading: empLoading, error: empErr } = useFetch(
-    '/api/payroll/salary-list',
+    '/payroll/salary-list',
     []
   );
 
@@ -32,7 +32,7 @@ export default function PayrollDeductions({ month, onClose }) {
     if (!form.userId || !form.label || !form.amount) return;
     try {
       await execute(
-        () => api.post('/api/payroll/deductions', {
+        () => api.post('/payroll/deductions', {
           userId: parseInt(form.userId),
           month,
           amount: parseFloat(form.amount),
@@ -52,7 +52,7 @@ export default function PayrollDeductions({ month, onClose }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this deduction?')) return;
     try {
-      await execute(() => api.delete(`/api/payroll/deductions/${id}`), 'Deduction deleted');
+      await execute(() => api.delete(`/payroll/deductions/${id}`), 'Deduction deleted');
       refetch();
     } catch {
       // error displayed by useApi

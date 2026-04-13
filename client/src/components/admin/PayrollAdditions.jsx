@@ -15,12 +15,12 @@ export default function PayrollAdditions({ month, onClose }) {
   const [showForm, setShowForm] = useState(false);
 
   const { data: additions, loading, error: fetchErr, refetch } = useFetch(
-    `/api/payroll/additions?month=${month}`,
+    `/payroll/additions?month=${month}`,
     []
   );
 
   const { data: employees, loading: empLoading, error: empErr } = useFetch(
-    '/api/payroll/salary-list',
+    '/payroll/salary-list',
     []
   );
 
@@ -32,7 +32,7 @@ export default function PayrollAdditions({ month, onClose }) {
     if (!form.userId || !form.label || !form.amount) return;
     try {
       await execute(
-        () => api.post('/api/payroll/additions', {
+        () => api.post('/payroll/additions', {
           userId: parseInt(form.userId),
           month,
           amount: parseFloat(form.amount),
@@ -52,7 +52,7 @@ export default function PayrollAdditions({ month, onClose }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this addition?')) return;
     try {
-      await execute(() => api.delete(`/api/payroll/additions/${id}`), 'Addition deleted');
+      await execute(() => api.delete(`/payroll/additions/${id}`), 'Addition deleted');
       refetch();
     } catch {
       // error displayed by useApi
