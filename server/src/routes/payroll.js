@@ -416,19 +416,14 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const existing = await req.prisma.payslip.findUnique({
       where: { userId_month: { userId: sal.userId, month } },
     });
-    // When processing ALL employees: skip existing payslips (only add new ones — fast)
-    // When targeting a SPECIFIC employee: recalculate and update the existing payslip
-    if (existing && !targetUserId) {
-      results.push({ userId: sal.userId, status: 'skipped', reason: 'already exists' });
-      continue;
-    }
     // Skip published payslips always — don't overwrite payslips already sent to employees
     if (existing?.status === 'published') {
       results.push({ userId: sal.userId, status: 'skipped', reason: 'already published' });
       continue;
     }
-    // If regenerating a specific employee's existing (unpublished) payslip, unlink and reset all linked records
-    if (existing && targetUserId) {
+    // If regenerating an existing (unpublished) payslip — whether bulk or single — unlink and reset all linked records
+    // so deductions/additions/advances are re-evaluated fresh
+    if (existing) {
       await req.prisma.payrollDeduction.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
       await req.prisma.payrollAddition.updateMany({ where: { payslipId: existing.id }, data: { payslipId: null } });
       // Reset advance repayments linked to this payslip → back to pending so they're re-deducted on regeneration

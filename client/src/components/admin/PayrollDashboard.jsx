@@ -960,7 +960,7 @@ function ProcessPayrollWizard({ month, companyId, targetUserId, targetUserName, 
 
                   {checks.summary.existingPayslips > 0 && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-                      ℹ️ <strong>{checks.summary.existingPayslips} payslips already generated</strong> — {targetUserId ? 'will be recalculated & updated' : 'will be skipped (only new employees added)'}. Published ones are always protected.
+                      ℹ️ <strong>{checks.summary.existingPayslips} payslips already generated</strong> — will be recalculated & updated. Published ones are always protected.
                     </div>
                   )}
                 </>
@@ -1010,7 +1010,7 @@ function ProcessPayrollWizard({ month, companyId, targetUserId, targetUserName, 
                 </div>
               )}
               <p className="text-xs text-slate-400 text-center">
-                {targetUserId ? 'Existing payslip will be recalculated & updated.' : 'Existing payslips skipped — only new employees added.'} Published payslips are always protected.
+                Existing payslips will be recalculated & updated. Published payslips are always protected.
               </p>
             </div>
           )}
