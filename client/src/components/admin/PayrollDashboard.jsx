@@ -195,7 +195,7 @@ const PayslipDetail = ({ payslip }) => {
     { label: 'Special Allowance', value: payslip.specialAllowance },
     { label: 'Medical Allowance', value: payslip.medicalAllowance },
     { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
-    { label: 'Other Allowances', value: payslip.otherAllowance },
+    { label: payslip.otherAllowanceLabel || 'Other Allowances', value: payslip.otherAllowance },
     { label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance },
     { label: payslip.otherAdditionsLabel || 'Special Addition', value: payslip.otherAdditions },
   ];
