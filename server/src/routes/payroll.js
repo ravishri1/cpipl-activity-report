@@ -510,7 +510,12 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
             const isHol = mergedHolidays.has(ds);
             if (isLop) {
               lopDatesSet.add(ds);
-              if (!isHol) daysInMonth_++; // all calendar days except holidays count as LOP
+              // Only count as LOP if it's a working day — skip weekly-offs and holidays
+              const dayOfWeek = cur.getUTCDay();
+              const isOffDay = dayOfWeek === 6
+                ? offSaturdaySet.has(ds)
+                : getOffDaysForDate(sal.userId, ds).includes(dayOfWeek);
+              if (!isHol && !isOffDay) daysInMonth_++;
             } else {
               leaveDatesSet.add(ds);
             }
@@ -600,7 +605,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${month}-${String(d).padStart(2, '0')}`;
         const dow = new Date(year, monthNum - 1, d).getDay();
-        const isWeeklyOff = weeklyOffs.includes(dow);
+        // For Saturday: only count as off-day if it falls on an off-Saturday per company Saturday policy
+        // (prevents counting working Saturdays like 1st/3rd when policy is "2nd_4th only")
+        const isWeeklyOff = dow === 6
+          ? (weeklyOffs.includes(6) && offSaturdaySet.has(dateStr))
+          : weeklyOffs.includes(dow);
         const isHoliday = mergedHolidays.has(dateStr);
 
         if ((isWeeklyOff || isHoliday) && dateStr >= eligibility.eligibleFrom &&
