@@ -327,16 +327,22 @@ function PayslipCard({ payslip, onView }) {
 
 /* ---------- Payslip Detail View ---------- */
 function PayslipDetail({ payslip, onBack }) {
+  // Use earningsBreakdown (per-component) if available, else fall back to legacy fields
+  const earningsBreakdown = Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0
+    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: c.amount }))
+    : [
+        { label: 'Basic Salary', value: payslip.basic },
+        { label: 'House Rent Allowance', value: payslip.hra },
+        { label: 'Dearness Allowance', value: payslip.da },
+        { label: 'Special Allowance', value: payslip.specialAllowance },
+        { label: 'Medical Allowance', value: payslip.medicalAllowance },
+        { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
+        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: payslip.otherAllowance },
+      ];
   const earnings = [
-    { label: 'Basic Salary', value: payslip.basic },
-    { label: 'House Rent Allowance', value: payslip.hra },
-    { label: 'Dearness Allowance', value: payslip.da },
-    { label: 'Special Allowance', value: payslip.specialAllowance },
-    { label: 'Medical Allowance', value: payslip.medicalAllowance },
-    { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
-    { label: payslip.otherAllowanceLabel || 'Other Allowances', value: payslip.otherAllowance },
-    { label: 'Reimbursements', value: payslip.reimbursements },
-    { label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance },
+    ...earningsBreakdown,
+    ...(payslip.reimbursements > 0 ? [{ label: 'Reimbursements', value: payslip.reimbursements }] : []),
+    ...(payslip.offDayAllowance > 0 ? [{ label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
   ].filter((item) => item.value && item.value > 0);
 
   const deductions = [

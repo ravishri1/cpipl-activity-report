@@ -634,6 +634,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const otherComps = earningComps.filter(c => !KNOWN_CODES.includes(c.code));
     const otherFromComps = otherComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
     const otherLabel = otherComps.length > 0 ? otherComps.map(c => c.name || c.code).join(', ') : null;
+    // Full per-component breakdown for display (each component as a separate line)
+    const earningsBreakdown = earningComps.map(c => ({ code: c.code, name: c.name || c.code, amount: parseFloat(c.amount) || 0 }));
 
     const payBasic  = earningComps.length > 0 ? getComp('BASIC')                          : sal.basic;
     const payHra    = earningComps.length > 0 ? getComp('HRA')                             : sal.hra;
@@ -698,7 +700,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       basic: payBasic, hra: payHra, da: payDa,
       specialAllowance: paySpec, medicalAllowance: payMed,
       conveyanceAllowance: payConv, otherAllowance: payOther,
-      otherAllowanceLabel: payOtherLabel, grossEarnings,
+      otherAllowanceLabel: payOtherLabel, earningsBreakdown, grossEarnings,
       employerPf: statutory.employerPf, employerEsi: statutory.employerEsi,
       employeePf: statutory.employeePf, employeeEsi: statutory.employeeEsi,
       professionalTax: statutory.professionalTax, tds: sal.tds,

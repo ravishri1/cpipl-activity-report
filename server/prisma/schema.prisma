@@ -958,6 +958,9 @@ model Payslip {
   lwfEmployee          Float    @default(0)            // employee LWF deduction
   lwfEmployer          Float    @default(0)            // employer LWF contribution
 
+  // Full per-component earnings breakdown (array of {code,name,amount}) — used for display
+  earningsBreakdown    Json?                           // [{code,name,amount}] each earning component separately
+
   status               String   @default("draft")     // draft, generated, published
   generatedAt          DateTime?
   publishedAt          DateTime?
