@@ -27,6 +27,16 @@ function isOffSaturdayDate(dateStr, saturdayType) {
     const idx = saturdays.indexOf(day);
     return idx === 1 || idx === 3; // 2nd or 4th Saturday
   }
+  if (saturdayType === '2nd') {
+    const saturdays = getSaturdaysInMonth(year, mon);
+    const idx = saturdays.indexOf(day);
+    return idx === 1; // 2nd Saturday only
+  }
+  if (saturdayType === '1st_3rd') {
+    const saturdays = getSaturdaysInMonth(year, mon);
+    const idx = saturdays.indexOf(day);
+    return idx === 0 || idx === 2; // 1st or 3rd Saturday
+  }
   return true; // default safe
 }
 

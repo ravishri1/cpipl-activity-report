@@ -725,17 +725,19 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       }
 
       // Count off days where employee was present:
-      // Priority: biometric punch (checkIn) > admin override > daily report muster (EOD submitted)
-      // Muster fallback: if no biometric record but employee submitted a daily report that day, count as worked
+      // 1. Attendance record with status='present' (biometric, admin-marked, or bulk-imported) → worked
+      // 2. No attendance record but EOD muster (daily report) submitted → worked
+      // Note: do NOT require checkIn or adminOverride — biometric sync often imports status='present'
+      //       without a checkIn timestamp; the status itself is authoritative.
       const attMap = {};
       for (const att of attendances) { attMap[att.date] = att; }
       const offDayReportDates = dailyReportMap.get(sal.userId) || new Set();
       for (const date of offDatesInMonth) {
         const rec = attMap[date];
-        if (rec && rec.status === 'present' && (rec.checkIn !== null || rec.adminOverride === true)) {
-          offDaysWorked++; // Biometric present or admin-confirmed
+        if (rec && rec.status === 'present') {
+          offDaysWorked++; // Any 'present' record = employee worked that off-day
         } else if (!rec && offDayReportDates.has(date)) {
-          offDaysWorked++; // No biometric but EOD report submitted = employee worked that off-day
+          offDaysWorked++; // No attendance record but EOD muster submitted = employee worked
         }
       }
 
