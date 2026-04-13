@@ -546,6 +546,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         const cur = new Date(lr.startDate + 'T00:00:00Z');
         const end = new Date(lr.endDate + 'T00:00:00Z');
         let daysInMonth_ = 0;
+        let prevWorkingLopSeen = false; // tracks if a working LOP day was seen before current day in range
         while (cur <= end) {
           const ds = cur.toISOString().slice(0, 10);
           if (ds.startsWith(month)) {
@@ -553,14 +554,32 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
             if (isLop) {
               lopDatesSet.add(ds);
               if (isHalfDay) halfLopDatesSet.add(ds);
-              // Only count as LOP if it's a working day — skip weekly-offs and holidays
+              // LOP divisor = lopDivisor = daysInMonth (30 for April) — calendar-day denominator.
+              // Since the denominator includes off-Saturdays and other weekly-off days, we must
+              // also count them in the numerator. Only Sundays and holidays are excluded (Sundays
+              // are the universal weekly off; holidays are paid days off that break the deduction).
+              //
+              // Sandwich rule (Sundays/holidays): if a Sunday or holiday falls between two
+              // non-Sunday, non-holiday LOP days in the same range, count it as 1 LOP day too.
               const dayOfWeek = cur.getUTCDay();
-              // Saturday rule: full-day LOP uses weeklyOffPattern (Sat in pattern = off for all Sats)
-              //                half-day LOP uses offSaturdaySet (working Sat half-days count)
-              const isOffDay = dayOfWeek === 6
-                ? (isHalfDay ? offSaturdaySet.has(ds) : getOffDaysForDate(sal.userId, ds).includes(6))
-                : getOffDaysForDate(sal.userId, ds).includes(dayOfWeek);
-              if (!isHol && !isOffDay) daysInMonth_ += increment;
+              const isSunday = dayOfWeek === 0;
+              if (!isHol && !isSunday) {
+                // Working or off-Saturday (or any weekday) — counts as LOP day
+                daysInMonth_ += increment;
+                prevWorkingLopSeen = true;
+              } else if (prevWorkingLopSeen) {
+                // Sunday or holiday in range — check sandwich: is there a non-Sunday/non-holiday day ahead?
+                const peek = new Date(cur.getTime());
+                peek.setDate(peek.getDate() + 1);
+                let hasLopDayAfter = false;
+                while (peek <= end) {
+                  const peekDow = peek.getUTCDay();
+                  const peekDs = peek.toISOString().slice(0, 10);
+                  if (peekDow !== 0 && !mergedHolidays.has(peekDs)) { hasLopDayAfter = true; break; }
+                  peek.setDate(peek.getDate() + 1);
+                }
+                if (hasLopDayAfter) daysInMonth_ += 1; // sandwich Sunday/holiday = full LOP day
+              }
             } else {
               leaveDatesSet.add(ds);
             }
@@ -991,6 +1010,16 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
 }));
 
 // PUT /payslip/:id/publish — Publish single payslip (admin)
+// DELETE /payslip/:id — Delete a single payslip (admin, generated status only)
+router.delete('/payslip/:id', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const payslip = await req.prisma.payslip.findUnique({ where: { id }, select: { id: true, status: true } });
+  if (!payslip) throw notFound('Payslip');
+  if (payslip.status === 'published') throw badRequest('Cannot delete a published payslip. Unpublish it first.');
+  await req.prisma.payslip.delete({ where: { id } });
+  res.json({ message: 'Payslip deleted' });
+}));
+
 router.put('/payslip/:id/publish', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const payslip = await req.prisma.payslip.update({
