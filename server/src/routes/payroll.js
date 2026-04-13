@@ -431,153 +431,161 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // Working days uses per-date off resolution (period-bound assignments)
     const workingDays = calcWorkingDays(mergedHolidays, sal.userId);
 
-    // ── Attendance-exempt employees: always full salary, skip all LOP/leave/attendance logic ──
-    // These are employees added to the attendance exception list (isAttendanceExempt = true).
-    // No biometric required, no LOP deduction, no leave impact on payroll.
-    let presentDays = 0, lopDays = 0, lopFromLeave = 0;
     const today = new Date().toISOString().slice(0, 10);
     const isIntern = sal.user.employeeType === 'intern';
-    let attendances = [];
+    const isExempt = sal.user.isAttendanceExempt;
 
-    if (sal.user.isAttendanceExempt) {
+    // Compute ESIC period start sync — needed for parallel query below
+    const esicCeiling = (payrollRules.esi || DEFAULT_PAYROLL_RULES.esi).grossCeiling || 21000;
+    const esicPeriodStart = getEsicPeriodStartMonth(year, monthNum);
+
+    // ── Parallel per-employee data fetch: all 8 queries at once ─────────────────
+    // Attendance-exempt employees skip biometric/leave queries (Promise.resolve shortcircuit).
+    // ESIC period-start payslip check is included here to avoid a sequential await later.
+    const [
+      attendances,
+      approvedLeaves,
+      separation,
+      oneTimeDeductions,
+      oneTimeAdditions,
+      pendingReimbursements,
+      advanceRepayments,
+      esicPeriodStartPayslip,
+    ] = await Promise.all([
+      isExempt ? Promise.resolve([]) : req.prisma.attendance.findMany({
+        where: { userId: sal.userId, date: { startsWith: month } },
+      }),
+      isExempt ? Promise.resolve([]) : req.prisma.leaveRequest.findMany({
+        where: {
+          userId: sal.userId, status: 'approved',
+          startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
+          endDate: { gte: `${month}-01` },
+        },
+        select: { startDate: true, endDate: true, days: true, session: true, leaveType: { select: { code: true } } },
+      }),
+      isExempt ? Promise.resolve(null) : req.prisma.separation.findFirst({
+        where: { userId: sal.userId, lastWorkingDate: { startsWith: month } },
+        select: { lastWorkingDate: true },
+      }),
+      req.prisma.payrollDeduction.findMany({
+        where: { userId: sal.userId, month, payslipId: null },
+      }),
+      req.prisma.payrollAddition.findMany({
+        where: { userId: sal.userId, month, payslipId: null },
+      }),
+      req.prisma.expenseClaim.findMany({
+        where: { userId: sal.userId, status: 'approved', settleOnSalary: true, settlementMonth: null },
+        select: { id: true, amount: true, title: true },
+      }),
+      req.prisma.salaryAdvanceRepayment.findMany({
+        where: { month, status: 'pending', advance: { userId: sal.userId, status: { in: ['released', 'repaying'] } } },
+      }),
+      esicPeriodStart !== month ? req.prisma.payslip.findFirst({
+        where: { userId: sal.userId, month: esicPeriodStart },
+        select: { employeeEsi: true },
+      }) : Promise.resolve(null),
+    ]);
+
+    // ── Attendance & Leave calculation ────────────────────────────────────────
+    // Attendance-exempt employees: always full salary — no LOP/leave/biometric logic.
+    let presentDays = 0, lopDays = 0, lopFromLeave = 0;
+
+    if (isExempt) {
       presentDays = workingDays;
       lopDays = 0;
     } else {
-    attendances = await req.prisma.attendance.findMany({
-      where: { userId: sal.userId, date: { startsWith: month } },
-    });
+      const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
+      const lopDatesSet = new Set();    // LOP leave date range (blocks attendance double-count)
 
-    // Fetch approved leaves for this month — separate LOP (deduction) from paid leaves
-    const approvedLeaves = await req.prisma.leaveRequest.findMany({
-      where: {
-        userId: sal.userId, status: 'approved',
-        startDate: { lte: `${month}-${String(daysInMonth).padStart(2, '0')}` },
-        endDate: { gte: `${month}-01` },
-      },
-      select: { startDate: true, endDate: true, days: true, session: true, leaveType: { select: { code: true } } },
-    });
-    const leaveDatesSet = new Set();  // paid leave days (PL, COF, CF, etc.)
-    const lopDatesSet = new Set();    // LOP leave date range (blocks attendance double-count)
+      // LOP days from leave requests: count only working days (exclude weekly-offs, off-Saturdays, holidays).
+      // Sundays and off-days inside LOP period are not deducted — consistent with off-day allowance logic.
+      for (const lr of approvedLeaves) {
+        const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
+        const cur = new Date(lr.startDate + 'T00:00:00Z');
+        const end = new Date(lr.endDate + 'T00:00:00Z');
+        let daysInMonth_ = 0;
+        while (cur <= end) {
+          const ds = cur.toISOString().slice(0, 10);
+          if (ds.startsWith(month)) {
+            const isHol = mergedHolidays.has(ds);
+            if (isLop) {
+              lopDatesSet.add(ds);
+              if (!isHol) daysInMonth_++; // all calendar days except holidays count as LOP
+            } else {
+              leaveDatesSet.add(ds);
+            }
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+        if (isLop && daysInMonth_ > 0) lopFromLeave += daysInMonth_;
+      }
 
-    // LOP days from leave requests: count only working days (exclude weekly-offs, off-Saturdays, holidays).
-    // Sundays and off-days inside LOP period are not deducted — consistent with off-day allowance logic.
-    let lopFromLeave = 0;
-    for (const lr of approvedLeaves) {
-      const isLop = isIntern || lr.leaveType?.code === 'LOP'; // Interns: all leave = LOP
-      const cur = new Date(lr.startDate + 'T00:00:00Z');
-      const end = new Date(lr.endDate + 'T00:00:00Z');
-      let daysInMonth_ = 0;
-      while (cur <= end) {
-        const ds = cur.toISOString().slice(0, 10);
-        if (ds.startsWith(month)) {
-          const isHol = mergedHolidays.has(ds);
-          if (isLop) {
-            lopDatesSet.add(ds);
-            if (!isHol) daysInMonth_++; // all calendar days except holidays count as LOP
-          } else {
-            leaveDatesSet.add(ds);
+      if (attendances.length === 0 && leaveDatesSet.size === 0 && lopDatesSet.size === 0 && !separation) {
+        // No data at all → assume full attendance (fallback for missing biometric)
+        presentDays = workingDays;
+        lopDays = 0;
+      } else {
+        const attMap = {};
+        for (const att of attendances) { attMap[att.date] = att.status; }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${month}-${String(d).padStart(2, '0')}`;
+          const dow = new Date(year, monthNum - 1, d).getDay();
+          // Resolve off days using period-bound assignment active on this specific date
+          const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
+          // Saturday off: determined by company Saturday policy (Shift model has no weeklyOffDays).
+          // Other days: from shift assignment (default [0] = Sunday only).
+          const isOff = dow === 6
+            ? offSaturdaySet.has(dateStr)
+            : offDaysForDate.includes(dow);
+          if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
+          // Skip days after last working date (pro-rata separation — NOT LOP)
+          if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) continue;
+          // Skip days before employee's date of joining (mid-month joiners)
+          const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
+          if (joinDateStr && dateStr < joinDateStr) continue;
+          const status = attMap[dateStr];
+          if (lopDatesSet.has(dateStr)) {
+            // LOP leave date: skip from attendance (already counted via lopFromLeave)
+          } else if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
+            presentDays += 1; // Approved paid leave = paid day
+          } else if (status === 'present') {
+            presentDays += 1;
+          } else if (status === 'half_day') {
+            presentDays += 0.5; lopDays += 0.5;
+          } else if (status === 'absent') {
+            lopDays += 1;
+          } else if (!status && attendances.length > 0) {
+            // Working day with no record (and biometric data exists) = LOP
+            lopDays += 1;
+          } else if (!status) {
+            // No records at all for this employee yet = treat as present
+            presentDays += 1;
           }
         }
-        cur.setDate(cur.getDate() + 1);
       }
-      if (isLop && daysInMonth_ > 0) {
-        lopFromLeave += daysInMonth_;
-      }
-    }
 
-    // Check if employee was separated mid-month (pro-rata)
-    const separation = await req.prisma.separation.findFirst({
-      where: { userId: sal.userId, lastWorkingDate: { startsWith: month } },
-      select: { lastWorkingDate: true },
-    });
-
-    if (attendances.length === 0 && leaveDatesSet.size === 0 && lopDatesSet.size === 0 && !separation) {
-      // No data at all → assume full attendance (fallback for missing biometric)
-      presentDays = workingDays;
-      lopDays = 0;
-    } else {
-      const attMap = {};
-      for (const att of attendances) { attMap[att.date] = att.status; }
-
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${month}-${String(d).padStart(2, '0')}`;
-        const dow = new Date(year, monthNum - 1, d).getDay();
-        // Resolve off days using period-bound assignment active on this specific date
-        const offDaysForDate = getOffDaysForDate(sal.userId, dateStr);
-        // Saturday off: determined by company Saturday policy (Shift model has no weeklyOffDays).
-        // Other days: from shift assignment (default [0] = Sunday only).
-        const isOff = dow === 6
-          ? offSaturdaySet.has(dateStr)
-          : offDaysForDate.includes(dow);
-        if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
-        // Skip days after last working date (pro-rata separation — NOT LOP)
-        if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) {
-          continue;
-        }
-        // Skip days before employee's date of joining (mid-month joiners)
-        const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
-        if (joinDateStr && dateStr < joinDateStr) continue;
-        const status = attMap[dateStr];
-        if (lopDatesSet.has(dateStr)) {
-          // LOP leave date: skip from attendance (already counted via lopFromLeave)
-        } else if (leaveDatesSet.has(dateStr) || status === 'on_leave') {
-          presentDays += 1; // Approved paid leave = paid day
-        } else if (status === 'present') {
-          presentDays += 1;
-        } else if (status === 'half_day') {
-          presentDays += 0.5; lopDays += 0.5;
-        } else if (status === 'absent') {
-          lopDays += 1;
-        } else if (!status && attendances.length > 0) {
-          // Working day with no record (and biometric data exists) = LOP
-          lopDays += 1;
-        } else if (!status) {
-          // No records at all for this employee yet = treat as present
-          presentDays += 1;
-        }
-      }
-    }
-    } // end of attendance-exempt else block
-
-    // Add LOP days from leave requests (calendar days) to attendance-based LOP
-    if (!sal.user.isAttendanceExempt) {
+      // Add LOP days from leave requests (calendar days) to attendance-based LOP
       lopDays += lopFromLeave;
+
+      // ── Pro-rata for mid-month separation ──────────────────────────────────────
+      // When lastWorkingDate falls within this month, treat all calendar days
+      // beyond LWD as LOP-equivalent so lopDeduction correctly reduces pay to
+      // the fraction actually earned. Uses lopDivisor (30) not actual working days.
+      if (separation?.lastWorkingDate && separation.lastWorkingDate.startsWith(month)) {
+        const separationDeductDays = Math.max(0, lopDivisor - presentDays - lopDays);
+        lopDays += separationDeductDays;
+      }
     }
 
-    // ── Pro-rata for mid-month separation ──────────────────────────────────────
-    // When lastWorkingDate falls within this month, treat all calendar days
-    // beyond LWD as LOP-equivalent so lopDeduction correctly reduces pay to
-    // the fraction actually earned. Uses lopDivisor (30) not actual working days.
-    if (separation?.lastWorkingDate && separation.lastWorkingDate.startsWith(month) && !sal.user.isAttendanceExempt) {
-      const separationDeductDays = Math.max(0, lopDivisor - presentDays - lopDays);
-      lopDays += separationDeductDays;
-    }
-
-    // Fetch one-time payroll deductions for this employee/month
-    const oneTimeDeductions = await req.prisma.payrollDeduction.findMany({
-      where: { userId: sal.userId, month, payslipId: null },
-    });
+    // ── Totals from parallel-fetched data ────────────────────────────────────
     const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
     const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
 
-    // Fetch one-time payroll additions for this employee/month
-    const oneTimeAdditions = await req.prisma.payrollAddition.findMany({
-      where: { userId: sal.userId, month, payslipId: null },
-    });
     const oneTimeAdditionTotal = oneTimeAdditions.reduce((s, a) => s + a.amount, 0);
     const oneTimeAdditionLabel = oneTimeAdditions.map(a => a.label).join(', ') || null;
 
-    // Fetch approved expenses flagged for salary settlement (not yet settled)
-    const pendingReimbursements = await req.prisma.expenseClaim.findMany({
-      where: { userId: sal.userId, status: 'approved', settleOnSalary: true, settlementMonth: null },
-      select: { id: true, amount: true, title: true },
-    });
     const reimbursements = pendingReimbursements.reduce((sum, e) => sum + e.amount, 0);
-
-    // Fetch pending salary advance repayments for this month
-    const advanceRepayments = await req.prisma.salaryAdvanceRepayment.findMany({
-      where: { month, status: 'pending', advance: { userId: sal.userId, status: { in: ['released', 'repaying'] } } },
-    });
     const salaryAdvanceDeduction = advanceRepayments.reduce((sum, r) => sum + r.amount, 0);
 
     // ── Off-Day Allowance ──────────────────────────────────────────────────
@@ -650,20 +658,16 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     // Rule: if employee was ESIC-covered at the period START, they stay covered
     // for the entire 6-month period — even if gross later exceeds the ceiling.
     // Re-evaluated only at the next period start.
-    const esicCeiling = (payrollRules.esi || DEFAULT_PAYROLL_RULES.esi).grossCeiling || 21000;
-    const esicPeriodStart = getEsicPeriodStartMonth(year, monthNum);
+    // esicCeiling and esicPeriodStart already computed above (used in parallel fetch).
+    // esicPeriodStartPayslip was fetched in parallel (null when period start = this month).
     let esicEligible;
     if (esicPeriodStart === month) {
       // This IS the period start month — determine eligibility by current gross
       esicEligible = grossBase > 0 && grossBase <= esicCeiling;
     } else {
-      // Mid-period — check if ESIC was deducted in the period start payslip
-      const periodStartPayslip = await req.prisma.payslip.findFirst({
-        where: { userId: sal.userId, month: esicPeriodStart },
-        select: { employeeEsi: true },
-      });
-      if (periodStartPayslip !== null) {
-        esicEligible = (periodStartPayslip.employeeEsi || 0) > 0;
+      // Mid-period — use the period-start payslip fetched in parallel above
+      if (esicPeriodStartPayslip !== null) {
+        esicEligible = (esicPeriodStartPayslip.employeeEsi || 0) > 0;
       } else {
         // No period-start payslip yet — fall back to ceiling check
         esicEligible = grossBase > 0 && grossBase <= esicCeiling;
