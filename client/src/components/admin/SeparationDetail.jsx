@@ -55,9 +55,13 @@ export default function SeparationDetail() {
   };
 
   const handleHRConfirm = async () => {
-    if (!hrForm.lastWorkingDate) return alert('Please set the official Last Working Day.');
+    const lwd = hrForm.lastWorkingDate || sep.managerProposedLWD || sep.preferredLWD || sep.expectedLWD;
+    if (!lwd) return alert('Please set the official Last Working Day.');
     try {
-      await execute(() => api.put(`/separation/${id}/hr-confirm`, { ...hrForm, type: hrForm.type || sep.type }), 'LWD confirmed. Leaves blocked. Checklist created.');
+      await execute(
+        () => api.put(`/separation/${id}/hr-confirm`, { ...hrForm, lastWorkingDate: lwd, type: hrForm.type || sep.type }),
+        'LWD confirmed. Leaves blocked. Checklist created.'
+      );
       refetch();
     } catch {}
   };
