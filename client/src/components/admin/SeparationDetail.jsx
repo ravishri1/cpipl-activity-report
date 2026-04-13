@@ -675,6 +675,35 @@ export default function SeparationDetail() {
               ))}
             </div>
           )}
+
+          {/* Next step banner — shown after letters are generated */}
+          {sepLetters?.length > 0 && (
+            <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-green-800">✅ Letters ready — what's next?</p>
+                <p className="text-xs text-green-600 mt-0.5">
+                  {!sep.fnfNetAmount
+                    ? 'Go to Full & Final tab to calculate and save the settlement amount.'
+                    : !sep.fnfApprovedAt
+                    ? 'FnF calculated. Go to Full & Final tab to approve it.'
+                    : !sep.salaryReleased
+                    ? 'FnF approved. Release salary when hold period ends.'
+                    : 'All done — complete the separation from Actions tab.'}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab(
+                  !sep.fnfNetAmount || !sep.fnfApprovedAt ? 'fnf' :
+                  !sep.salaryReleased ? 'salary' : 'actions'
+                )}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap ml-4"
+              >
+                {!sep.fnfNetAmount ? '→ Full & Final' :
+                 !sep.fnfApprovedAt ? '→ Approve FnF' :
+                 !sep.salaryReleased ? '→ Salary Hold' : '→ Complete'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

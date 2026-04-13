@@ -1078,12 +1078,17 @@ router.get('/:id/letters', asyncHandler(async (req, res) => {
   if (!sep) throw notFound('Separation');
   if (!isAdminRole(req.user) && req.user.id !== sep.userId) throw forbidden();
 
-  const letters = await req.prisma.generatedLetter.findMany({
+  const all = await req.prisma.generatedLetter.findMany({
     where: { userId: sep.userId, letterType: { in: ['experience', 'relieving'] } },
     include: { template: { select: { id: true, name: true, type: true } }, generatedByUser: { select: { id: true, name: true } } },
     orderBy: { generatedAt: 'desc' },
   });
-  res.json(letters);
+  // Return only the latest of each type (experience + relieving)
+  const latest = {};
+  for (const l of all) {
+    if (!latest[l.letterType]) latest[l.letterType] = l;
+  }
+  res.json(Object.values(latest));
 }));
 
 // ─── private helper: create default clearance checklist ──────────────────────

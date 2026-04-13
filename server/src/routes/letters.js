@@ -244,23 +244,14 @@ router.get('/:id/pdf', asyncHandler(async (req, res) => {
   if (!letter) throw notFound('Letter');
   if (!isAdminRole(req.user) && req.user.id !== letter.userId) throw forbidden('Access denied.');
 
-  const PdfPrinter = require('pdfmake');
-  const fontsPath = path.join(__dirname, '../../../node_modules/pdfmake/fonts/Roboto');
-  const fonts = {
-    Roboto: {
-      normal: path.join(fontsPath, 'Roboto-Regular.ttf'),
-      bold: path.join(fontsPath, 'Roboto-Medium.ttf'),
-      italics: path.join(fontsPath, 'Roboto-Italic.ttf'),
-      bolditalics: path.join(fontsPath, 'Roboto-MediumItalic.ttf'),
-    },
-  };
-  const printer = new PdfPrinter(fonts);
+  const PDFDocument = require('pdfkit');
 
-  // Strip HTML tags and convert to plain text paragraphs
+  // Strip HTML to plain text
   const plainText = letter.content
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/div>/gi, '\n')
+    .replace(/<strong>(.*?)<\/strong>/gi, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -268,31 +259,34 @@ router.get('/:id/pdf', asyncHandler(async (req, res) => {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"');
 
-  const lines = plainText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const lines = plainText.split('\n').map(l => l.trim());
 
-  const content = lines.map(line => ({
-    text: line,
-    margin: [0, 4, 0, 0],
-    fontSize: 12,
-  }));
+  const safeName = (letter.user?.name || 'employee').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
 
-  const docDefinition = {
-    pageMargins: [60, 60, 60, 60],
-    content,
-    defaultStyle: { font: 'Roboto', fontSize: 12, lineHeight: 1.5 },
-  };
-
-  const pdfDoc = printer.createPdfKitDocument(docDefinition);
+  // Build PDF in memory using pdfkit (uses built-in Helvetica — no font files needed)
+  const doc = new PDFDocument({ margin: 60, size: 'A4' });
   const chunks = [];
-  pdfDoc.on('data', chunk => chunks.push(chunk));
-  pdfDoc.on('end', () => {
-    const pdfBuffer = Buffer.concat(chunks);
-    const safeName = (letter.user?.name || 'employee').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${letter.letterType}_${safeName}.pdf"`);
-    res.send(pdfBuffer);
+  doc.on('data', chunk => chunks.push(chunk));
+
+  await new Promise((resolve) => {
+    doc.on('end', resolve);
+
+    for (const line of lines) {
+      if (!line) {
+        doc.moveDown(0.5);
+      } else {
+        const isBold = line === 'TO WHOM IT MAY CONCERN' || line.startsWith('Subject:') ||
+          line.startsWith('For ') || line === 'Authorized Signatory' || line === '___________________________';
+        doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica').fontSize(11).text(line, { lineGap: 4 });
+      }
+    }
+    doc.end();
   });
-  pdfDoc.end();
+
+  const pdfBuffer = Buffer.concat(chunks);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${letter.letterType}_${safeName}.pdf"`);
+  res.send(pdfBuffer);
 }));
 
 // GET /:id/docx — Download letter as Word document
