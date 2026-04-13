@@ -327,23 +327,7 @@ export default function SeparationDetail() {
           </div>
 
           {!sep.checklist?.length && (
-            <div className="text-center py-6">
-              <p className="text-gray-400 text-2xl mb-2">📋</p>
-              <p className="text-gray-500 font-medium text-sm">No checklist yet</p>
-              <p className="text-gray-400 text-xs mt-1 mb-4">For historical records, click below to create the standard clearance checklist.</p>
-              <button
-                onClick={async () => {
-                  try {
-                    await execute(() => api.post(`/separation/${id}/create-checklist`), 'Checklist created.');
-                    refetch();
-                  } catch {}
-                }}
-                disabled={acting}
-                className="bg-purple-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
-              >
-                {acting ? 'Creating...' : '📋 Create Clearance Checklist'}
-              </button>
-            </div>
+            <EmptyState icon="📋" title="No checklist yet" subtitle="Checklist is created automatically when clearance starts. Refresh the page if it hasn't appeared." />
           )}
 
           {['IT', 'Admin', 'Finance', 'Manager', 'HR'].map(dept => {
@@ -415,8 +399,13 @@ export default function SeparationDetail() {
 
               {!fnfPreview && !fnfLoading && <p className="text-sm text-gray-500">Set the final LWD first to calculate FnF.</p>}
               {fnfPreview?.manualMode && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
-                  ⚠️ <strong>Manual mode:</strong> No salary structure found for this employee. Use <em>"+ Add custom line item"</em> below to manually enter all FnF components (last month salary, leave encashment, etc.).
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-800">
+                  ⚠️ No salary structure or payslip found. All amounts are ₹0 — override each item directly or add custom items below.
+                </div>
+              )}
+              {fnfPreview && !fnfPreview.manualMode && fnfPreview.salarySource === 'payslip' && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 mb-3 text-xs text-blue-700">
+                  ℹ️ Gross calculated from latest payslip (no salary structure). Override amounts if needed.
                 </div>
               )}
 

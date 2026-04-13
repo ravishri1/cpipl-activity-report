@@ -466,21 +466,21 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
   const lwd = sep.adjustedLWD || sep.lastWorkingDate;
   if (!lwd) throw badRequest('Last working date is not set. HR must confirm LWD first.');
 
-  // If no salary structure, return manual-entry mode (HR fills all amounts themselves)
-  if (!ss) {
-    return res.json({
-      employeeId: user.employeeId, employeeName: user.name,
-      designation: user.designation, department: user.department,
-      lastWorkingDate: lwd, grossMonthly: 0, dailyRate: 0,
-      items: [],
-      netFnF: 0,
-      manualMode: true,
-      note: 'No salary structure found for this employee. All FnF line items must be entered manually using "+ Add custom line item".',
-    });
+  // Derive gross from salary structure, or fall back to latest payslip, or 0 (HR overrides)
+  let grossMonthly = 0;
+  let salarySource = 'none';
+  if (ss) {
+    grossMonthly = ss.grossEarnings || ((ss.basic||0) + (ss.hra||0) + (ss.da||0) + (ss.specialAllowance||0) + (ss.medicalAllowance||0) + (ss.conveyanceAllowance||0) + (ss.otherAllowance||0)) || 0;
+    salarySource = 'salary_structure';
   }
-
-  const grossMonthly = ss.grossEarnings || (ss.basic + ss.hra + ss.da + ss.specialAllowance + ss.medicalAllowance + ss.conveyanceAllowance + ss.otherAllowance) || 0;
-  const dailyRate = Math.round((grossMonthly / 30) * 100) / 100;
+  if (!grossMonthly) {
+    try {
+      const latestPayslip = await req.prisma.payslip.findFirst({ where: { userId: user.id }, orderBy: { month: 'desc' } });
+      if (latestPayslip?.grossEarnings) { grossMonthly = latestPayslip.grossEarnings; salarySource = 'payslip'; }
+    } catch {}
+  }
+  const manualMode = !grossMonthly;
+  const dailyRate = grossMonthly ? Math.round((grossMonthly / 30) * 100) / 100 : 0;
 
   const items = [];
 
@@ -593,7 +593,11 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
     salaryHoldBreakdown,
     totalHeldAmount: Math.round(totalHeldAmount * 100) / 100,
     salaryHoldUntil: sep.salaryHoldUntil,
-    note: 'Salary hold: last 30 days held in books, released 45 days after LWD. FnF processed after hold release.',
+    manualMode,
+    salarySource,
+    note: manualMode
+      ? 'No salary data found. Amounts are ₹0 — override each item or add custom items.'
+      : `Salary from ${salarySource === 'payslip' ? 'latest payslip' : 'salary structure'}. Override any amount or remove items as needed.`,
   });
 }));
 
@@ -951,6 +955,15 @@ router.get('/:id', requireAdmin, asyncHandler(async (req, res) => {
     },
   });
   if (!sep) throw notFound('Separation');
+
+  // Auto-create clearance checklist if status is clearance+ and checklist is empty
+  const CLEARANCE_STATUSES = ['clearance', 'fnf_pending', 'fnf_approved', 'completed'];
+  if (CLEARANCE_STATUSES.includes(sep.status) && sep.checklist.length === 0) {
+    await _createChecklist(req.prisma, id);
+    // Reload with checklist
+    const fresh = await req.prisma.separationChecklist.findMany({ where: { separationId: id }, orderBy: { sortOrder: 'asc' }, include: { assignedTo: { select: { id: true, name: true } }, completedBy: { select: { id: true, name: true } } } });
+    sep.checklist = fresh;
+  }
 
   const pendingAssets = await req.prisma.asset.findMany({
     where: { assignedTo: sep.userId, status: 'assigned', isMandatoryReturn: true },
