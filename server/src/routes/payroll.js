@@ -614,8 +614,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       for (const att of attendances) { attMap[att.date] = att; }
       for (const date of offDatesInMonth) {
         const rec = attMap[date];
-        // Require actual biometric punch (checkIn not null) — present without punch is not counted
-        if (rec && rec.status === 'present' && rec.checkIn !== null) offDaysWorked++;
+        // Count off-day if marked present (biometric punch OR admin override — both are valid)
+        if (rec && rec.status === 'present') offDaysWorked++;
       }
 
       // Formula: (Gross Salary / Total Days in Month) × Off Days Worked
