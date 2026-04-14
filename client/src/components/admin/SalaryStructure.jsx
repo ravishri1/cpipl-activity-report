@@ -135,8 +135,11 @@ export default function SalaryStructure() {
   const [lockCache, setLockCache] = useState({});   // { [userId]: boolean }
   const [pendingSalary, setPendingSalary] = useState([]);
 
-  // ─── Revise salary state ───
-  const [reviseEmployee, setReviseEmployee] = useState(null);
+  // ─── Revise mode inside salary modal ───
+  const [isReviseMode, setIsReviseMode] = useState(false);
+  const [reviseType, setReviseType] = useState('increment'); // 'increment' | 'decrement'
+  const [reviseBy, setReviseBy] = useState('percent');       // 'percent' | 'amount'
+  const [reviseValue, setReviseValue] = useState('');
 
   // ─── Flexible component picker state (salary modal) ───
   const [selectedComponents, setSelectedComponents] = useState([]);
@@ -303,7 +306,7 @@ export default function SalaryStructure() {
   // Employee Salary tab functions (existing)
   // ──────────────────────────────────────────────
 
-  const openSalaryModal = useCallback(async (employee) => {
+  const openSalaryModal = useCallback(async (employee, isRevise = false) => {
     setSelectedEmployee(employee);
     setShowModal(true);
     setFormLoading(true);
@@ -315,6 +318,10 @@ export default function SalaryStructure() {
     setPtExempt(false);
     setSelectedComponents([]);
     setAddDropdownType(null);
+    setIsReviseMode(isRevise);
+    setReviseValue('');
+    setReviseType('increment');
+    setReviseBy('percent');
 
     try {
       const res = await api.get(`/payroll/salary/${employee.id}`);
@@ -347,6 +354,27 @@ export default function SalaryStructure() {
     }
   }, []);
 
+  const applyReviseToForm = useCallback(() => {
+    const num = parseFloat(reviseValue) || 0;
+    if (num <= 0) return;
+    const sign = reviseType === 'decrement' ? -1 : 1;
+    const oldCtc = parseFloat(salaryForm.ctcAnnual) || 0;
+    let newCtc;
+    if (reviseBy === 'percent') {
+      newCtc = Math.round(oldCtc * (1 + sign * num / 100));
+    } else {
+      newCtc = Math.round(oldCtc + sign * num);
+    }
+    if (newCtc <= 0) return;
+    const ratio = oldCtc > 0 ? newCtc / oldCtc : 1;
+    setSalaryForm(prev => ({ ...prev, ctcAnnual: newCtc }));
+    setSelectedComponents(prev => prev.map(c => ({
+      ...c,
+      amount: Math.round((parseFloat(c.amount) || 0) * ratio),
+    })));
+    setReviseValue('');
+  }, [reviseValue, reviseType, reviseBy, salaryForm.ctcAnnual]);
+
   const closeModal = useCallback(() => {
     setShowModal(false);
     setSelectedEmployee(null);
@@ -354,6 +382,8 @@ export default function SalaryStructure() {
     setSaveMessage(null);
     setSelectedComponents([]);
     setAddDropdownType(null);
+    setIsReviseMode(false);
+    setReviseValue('');
   }, []);
 
   const handleChange = useCallback((e) => {
@@ -720,11 +750,11 @@ export default function SalaryStructure() {
                           )}
                         </button>
                       )}
-                      {/* Revise — opens increment/decrement modal */}
+                      {/* Revise — opens full form with increment/decrement panel */}
                       {hasCtc && !isLocked && (
                         <button
-                          onClick={() => setReviseEmployee({ ...emp, salaryStructure: { ctcAnnual: cachedCtc } })}
-                          title="Increment / Decrement salary"
+                          onClick={() => openSalaryModal(emp, true)}
+                          title="Revise salary (increment/decrement)"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 transition-colors duration-150"
                         >
                           <TrendingUp className="w-3.5 h-3.5" />
@@ -788,6 +818,59 @@ export default function SalaryStructure() {
             </div>
           ) : (
             <div className="px-6 py-5 space-y-5">
+              {/* ── Increment / Decrement panel (Revise mode only) ── */}
+              {isReviseMode && (
+                <div className="rounded-xl border-2 border-green-200 bg-green-50 p-4 space-y-3">
+                  <p className="text-xs font-semibold text-green-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5" /> Quick Adjust — Increment / Decrement
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Increment / Decrement toggle */}
+                    <button onClick={() => setReviseType('increment')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        reviseType === 'increment' ? 'border-green-500 bg-green-100 text-green-700' : 'border-slate-200 bg-white text-slate-500'
+                      }`}>
+                      <TrendingUp className="w-3.5 h-3.5" /> Increment
+                    </button>
+                    <button onClick={() => setReviseType('decrement')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        reviseType === 'decrement' ? 'border-red-400 bg-red-50 text-red-600' : 'border-slate-200 bg-white text-slate-500'
+                      }`}>
+                      <TrendingDown className="w-3.5 h-3.5" /> Decrement
+                    </button>
+                    {/* % / Amount toggle */}
+                    <button onClick={() => setReviseBy('percent')}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        reviseBy === 'percent' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'
+                      }`}>
+                      Percentage (%)
+                    </button>
+                    <button onClick={() => setReviseBy('amount')}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                        reviseBy === 'amount' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'
+                      }`}>
+                      Fixed Amount (₹)
+                    </button>
+                    {/* Value input */}
+                    <input
+                      type="number" min="0" value={reviseValue}
+                      onChange={e => setReviseValue(e.target.value)}
+                      placeholder={reviseBy === 'percent' ? 'e.g. 10' : 'e.g. 60000'}
+                      className="w-32 px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <button
+                      onClick={applyReviseToForm}
+                      disabled={!(parseFloat(reviseValue) > 0)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-lg text-xs font-medium transition-colors"
+                    >
+                      Apply to Components
+                    </button>
+                  </div>
+                  <p className="text-xs text-green-700">
+                    This scales CTC and all salary components proportionally. You can then fine-tune individual components below.
+                  </p>
+                </div>
+              )}
               {/* CTC Annual + Quick Fill */}
               <div className="flex items-end gap-3">
                 <div className="flex-1">
@@ -1744,190 +1827,7 @@ export default function SalaryStructure() {
       {renderModal()}
       {renderComponentModal()}
 
-      {/* Revise Salary Modal */}
-      {reviseEmployee && (
-        <ReviseSalaryModal
-          employee={reviseEmployee}
-          onClose={() => setReviseEmployee(null)}
-          onSaved={(newCtc) => {
-            setReviseEmployee(null);
-            setSalaryCache(prev => ({ ...prev, [reviseEmployee.id]: newCtc }));
-            setSaveMessage({ type: 'success', text: 'Salary revision applied successfully.' });
-            setTimeout(() => setSaveMessage(null), 4000);
-          }}
-        />
-      )}
     </div>
   );
 }
 
-// ─── Revise Salary Modal (Increment / Decrement) ───────────────────────────
-function ReviseSalaryModal({ employee, onClose, onSaved }) {
-  const currentCtc = employee.salaryStructure?.ctcAnnual || 0;
-  const [mode, setMode] = useState('increment');
-  const [valueType, setValueType] = useState('percent');
-  const [value, setValue] = useState('');
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
-  const [reason, setReason] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const numVal = parseFloat(value) || 0;
-  let newCtc = currentCtc;
-  if (numVal > 0) {
-    const signed = mode === 'decrement' ? -numVal : numVal;
-    newCtc = valueType === 'percent'
-      ? currentCtc * (1 + signed / 100)
-      : currentCtc + signed;
-  }
-  const diff = newCtc - currentCtc;
-  const diffPct = currentCtc > 0 ? (diff / currentCtc) * 100 : 0;
-
-  const handleApply = async () => {
-    if (!numVal || numVal <= 0) { setError('Enter a valid value greater than 0'); return; }
-    if (!effectiveFrom) { setError('Effective From date is required'); return; }
-    if (newCtc <= 0) { setError('New CTC must be positive'); return; }
-    setError(null);
-    setSaving(true);
-    try {
-      const payload = { userId: employee.id, effectiveFrom, reason };
-      if (valueType === 'percent') {
-        payload.changePercent = mode === 'decrement' ? -numVal : numVal;
-      } else {
-        payload.changeAmount = mode === 'decrement' ? -numVal : numVal;
-      }
-      await api.post('/payroll/increment', payload);
-      onSaved(newCtc);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to apply revision');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">Revise Salary</h3>
-            <p className="text-xs text-slate-400">
-              {employee.name} ({employee.employeeId}) · Current: {formatCurrency(currentCtc)}/yr
-            </p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg">
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
-          )}
-
-          {/* Mode Toggle */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Revision Type</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setMode('increment')}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
-                  mode === 'increment' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                }`}>
-                <TrendingUp className="w-4 h-4" /> Increment
-              </button>
-              <button onClick={() => setMode('decrement')}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
-                  mode === 'decrement' ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                }`}>
-                <TrendingDown className="w-4 h-4" /> Decrement
-              </button>
-            </div>
-          </div>
-
-          {/* Value Type */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Change By</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setValueType('percent')}
-                className={`py-2 rounded-lg border text-sm font-medium transition-all ${
-                  valueType === 'percent' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'
-                }`}>
-                Percentage (%)
-              </button>
-              <button onClick={() => setValueType('amount')}
-                className={`py-2 rounded-lg border text-sm font-medium transition-all ${
-                  valueType === 'amount' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'
-                }`}>
-                Fixed Amount (₹)
-              </button>
-            </div>
-          </div>
-
-          {/* Value Input */}
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              {valueType === 'percent' ? 'Percentage (%)' : 'Annual Amount (₹)'}
-            </label>
-            <input type="number" min="0" value={value} onChange={e => setValue(e.target.value)}
-              placeholder={valueType === 'percent' ? 'e.g. 10' : 'e.g. 60000'}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Live Preview */}
-          {numVal > 0 && (
-            <div className={`rounded-xl p-4 border-2 ${mode === 'increment' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Preview</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Current CTC (Annual)</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(currentCtc)}</span>
-                </div>
-                <div className={`flex justify-between font-medium ${mode === 'increment' ? 'text-green-700' : 'text-red-600'}`}>
-                  <span>{mode === 'increment' ? '+ Increment' : '− Decrement'}</span>
-                  <span>{mode === 'increment' ? '+' : '−'}{formatCurrency(Math.abs(diff))}</span>
-                </div>
-                <div className="border-t border-slate-200 pt-2 flex justify-between">
-                  <span className="font-semibold text-slate-700">New CTC (Annual)</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(newCtc)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>New Monthly (approx)</span>
-                  <span>{formatCurrency(newCtc / 12)}</span>
-                </div>
-                <div className={`text-center text-xs font-bold mt-1 ${mode === 'increment' ? 'text-green-700' : 'text-red-600'}`}>
-                  {mode === 'increment' ? '+' : ''}{diffPct.toFixed(2)}% change
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Effective From + Reason */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Effective From *</label>
-              <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
-              <input type="text" value={reason} onChange={e => setReason(e.target.value)}
-                placeholder="Annual appraisal..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-          <button onClick={handleApply} disabled={saving || numVal <= 0}
-            className={`flex items-center gap-2 px-5 py-2 text-white rounded-lg text-sm font-medium disabled:opacity-50 ${
-              mode === 'increment' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
-            }`}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === 'increment' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            {saving ? 'Applying...' : `Apply ${mode === 'increment' ? 'Increment' : 'Decrement'}`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
