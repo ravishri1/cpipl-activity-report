@@ -165,20 +165,57 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
 
   // Employee counts — filtered by company + joined by monthEnd
+  // Include separated employees who were still working during this month
   const totalActiveEmployees = await req.prisma.user.count({
-    where: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter },
+    where: {
+      dateOfJoining: { lte: monthEnd },
+      employeeId: { not: null },
+      ...companyFilter,
+      OR: [
+        { isActive: true },
+        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+      ],
+    },
   });
   const additions = await req.prisma.user.count({
-    where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd }, ...companyFilter },
+    where: {
+      dateOfJoining: { gte: monthStart, lte: monthEnd },
+      employeeId: { not: null },
+      ...companyFilter,
+      OR: [
+        { isActive: true },
+        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+      ],
+    },
   });
   const separations = await req.prisma.separation.count({
     where: { lastWorkingDate: { gte: monthStart, lte: monthEnd }, ...(companyId ? { user: { companyId } } : {}) },
   });
   const exclusions = await req.prisma.user.count({
-    where: { isActive: true, dateOfJoining: { lte: monthEnd }, salaryStructure: null, ...companyFilter },
+    where: {
+      dateOfJoining: { lte: monthEnd },
+      salaryStructure: null,
+      employeeId: { not: null },
+      ...companyFilter,
+      OR: [
+        { isActive: true },
+        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+      ],
+    },
   });
   const stoppedSalaryCount = await req.prisma.salaryStructure.count({
-    where: { stopSalaryProcessing: true, user: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter } },
+    where: {
+      stopSalaryProcessing: true,
+      user: {
+        dateOfJoining: { lte: monthEnd },
+        employeeId: { not: null },
+        ...companyFilter,
+        OR: [
+          { isActive: true },
+          { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+        ],
+      },
+    },
   });
 
   // Payslip status counts
