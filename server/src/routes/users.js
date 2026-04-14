@@ -483,6 +483,7 @@ router.get('/', authenticate, requireActiveEmployee, requireAdmin, asyncHandler(
       id: true, name: true, email: true, role: true, department: true,
       employeeId: true, designation: true, sectionPermissions: true,
       isActive: true, isHibernated: true, lastActivityAt: true, createdAt: true,
+      employmentStatus: true,
     },
     orderBy: { name: 'asc' },
   });

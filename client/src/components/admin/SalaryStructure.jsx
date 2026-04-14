@@ -154,7 +154,7 @@ export default function SalaryStructure() {
   const [componentSaving, setComponentSaving] = useState(false);
   const [componentMsg, setComponentMsg] = useState(null);
 
-  const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('active'); // 'all' | 'active' | 'separated' | 'terminated'
 
   // ─── Fetch employees ───
   const fetchEmployees = useCallback(async () => {
@@ -242,8 +242,14 @@ export default function SalaryStructure() {
 
   const filteredEmployees = useMemo(() => {
     let list = employees;
-    if (!showInactive) list = list.filter(e => e.isActive !== false);
-    // If ?filter=missing, show only employees without a salary structure
+    if (statusFilter === 'active') {
+      list = list.filter(e => e.isActive !== false && !['separated','terminated','absconding'].includes(e.employmentStatus));
+    } else if (statusFilter === 'separated') {
+      list = list.filter(e => e.employmentStatus === 'separated');
+    } else if (statusFilter === 'terminated') {
+      list = list.filter(e => ['terminated','absconding'].includes(e.employmentStatus));
+    }
+    // statusFilter === 'all' → no filter
     if (filterMissing) {
       const pendingIds = new Set(pendingSalary.map(e => e.id));
       list = list.filter(e => pendingIds.has(e.id));
@@ -256,7 +262,7 @@ export default function SalaryStructure() {
         (e.employeeId && e.employeeId.toLowerCase().includes(q)) ||
         (e.department && e.department.toLowerCase().includes(q))
     );
-  }, [employees, searchQuery, filterMissing, pendingSalary, showInactive]);
+  }, [employees, searchQuery, filterMissing, pendingSalary, statusFilter]);
 
   // ─── Calculations (earnings from components; deductions from payroll rules) ───
   const calculations = useMemo(() => {
@@ -694,7 +700,18 @@ export default function SalaryStructure() {
                     {emp.employeeId || '—'}
                   </td>
                   <td className="py-3 px-4">
-                    <div className="font-medium text-slate-800">{emp.name}</div>
+                    <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                      {emp.name}
+                      {emp.employmentStatus === 'separated' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Separated</span>
+                      )}
+                      {emp.employmentStatus === 'terminated' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Terminated</span>
+                      )}
+                      {emp.employmentStatus === 'absconding' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Absconding</span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-400">{emp.email}</div>
                   </td>
                   <td className="py-3 px-4 text-slate-600">{emp.department || '—'}</td>
@@ -1744,17 +1761,16 @@ export default function SalaryStructure() {
               </button>
             )}
           </div>
-          <button
-            onClick={() => setShowInactive(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
-              showInactive
-                ? 'bg-amber-50 border-amber-300 text-amber-700'
-                : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700'
-            }`}
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
           >
-            {showInactive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-            {showInactive ? 'All employees' : 'Active only'}
-          </button>
+            <option value="active">Active employees</option>
+            <option value="separated">Separated (resigned/retired)</option>
+            <option value="terminated">Terminated / Absconding</option>
+            <option value="all">All employees</option>
+          </select>
         </div>
 
         {/* Table */}
