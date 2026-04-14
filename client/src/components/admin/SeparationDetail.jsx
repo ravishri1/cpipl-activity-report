@@ -381,6 +381,8 @@ export default function SeparationDetail() {
               </div>
             </div>
             <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="HR note (optional)" value={hrForm.hrNote} onChange={e => setHrForm(f => ({ ...f, hrNote: e.target.value }))} />
+            {actErr && <AlertMessage type="error" message={actErr} />}
+            {success && <AlertMessage type="success" message={success} />}
             <button onClick={handleHRConfirm} disabled={acting} className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
               {acting ? 'Confirming...' : '✔ Confirm LWD & Block Leaves'}
             </button>
