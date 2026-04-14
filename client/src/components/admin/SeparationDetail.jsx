@@ -367,19 +367,25 @@ export default function SeparationDetail() {
               <div className="bg-gray-50 rounded-lg p-3"><span className="text-xs text-gray-500 block">Leave Days Taken</span><strong>{sep.leaveDaysDuringNotice || 0}</strong></div>
             </div>
             <p className="text-xs text-gray-500">Any leave during notice period automatically extends the LWD.</p>
-            <div className="flex gap-3 flex-wrap pt-1">
+            <div className="pt-1">
               {today >= lwd ? (
                 <button onClick={() => handleStartClearance(false)} disabled={acting}
-                  className="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                  {acting ? 'Starting...' : '🚀 Start Clearance →'}
+                  className="bg-green-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                  {acting ? 'Please wait...' : 'Proceed to Clearance →'}
                 </button>
               ) : (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">⏳ LWD not yet reached ({lwd}). Use HR Override for early exit.</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+                    ⏳ Last working day ({lwd}) is not yet reached. Employee is still serving notice period.
+                  </p>
+                  <button
+                    onClick={() => { if (window.confirm(`Employee's LWD is ${lwd} which has not passed yet. Start clearance early?`)) handleStartClearance(true); }}
+                    disabled={acting}
+                    className="bg-orange-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50">
+                    {acting ? 'Please wait...' : 'Employee Has Left Early — Start Clearance'}
+                  </button>
+                </div>
               )}
-              <button onClick={() => { if (window.confirm('HR Override: Start clearance before LWD?')) handleStartClearance(true); }} disabled={acting}
-                className="border border-orange-400 text-orange-700 bg-orange-50 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-orange-100 disabled:opacity-50">
-                ⚡ HR Override — Force Start
-              </button>
             </div>
           </div>
         )}
