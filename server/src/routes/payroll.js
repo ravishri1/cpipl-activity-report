@@ -339,6 +339,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     allAssignments,
     userPatternRows,
     rulesRow,
+    sandwichRow,
     eligibleOffDay,
     dailyReportRows,
   ] = await Promise.all([
@@ -361,6 +362,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       select: { id: true, department: true, weeklyOffPattern: { select: { days: true } } },
     }),
     req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } }),
+    req.prisma.setting.findUnique({ where: { key: 'sandwich_leave_enabled' } }),
     req.prisma.offDayAllowanceEligibility.findMany({
       where: { eligibleFrom: { lte: `${month}-31` }, OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }] },
       select: { userId: true, eligibleFrom: true, eligibleTo: true },
@@ -374,6 +376,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   // Build lookup structures from parallel results
   const globalHolidayDates = new Set(holidays.map(h => h.date));
+  const sandwichEnabled = sandwichRow?.value === 'true';
 
   // Daily report map: userId → Set of reportDate strings (muster fallback for missing biometric)
   const dailyReportMap = new Map();
@@ -712,11 +715,37 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           } else if (status === 'absent') {
             lopDays += 1;
           } else if (!status && attendances.length > 0) {
-            // Working day with no biometric record — check attendance muster (daily report)
+            // Working day with no biometric record
+            // Priority 1: check attendance muster (daily report)
             if (dailyReportDates.has(dateStr)) {
-              presentDays += 1; // EOD report submitted = employee was present
+              presentDays += 1; // EOD muster submitted = employee was present
+            } else if (sandwichEnabled) {
+              // Priority 2: sandwich policy — if previous AND next working day are both
+              // 'present' in biometric, treat this missing day as present (missed punch grace)
+              let prevPresent = false, nextPresent = false;
+              for (let pd = d - 1; pd >= 1; pd--) {
+                const pds = `${month}-${String(pd).padStart(2, '0')}`;
+                const pdow = new Date(year, monthNum - 1, pd).getDay();
+                const pOff = pdow === 6 ? offSaturdaySet.has(pds) : offDaysForDate.includes(pdow);
+                if (pOff || mergedHolidays.has(pds)) continue; // skip off/holiday, keep looking
+                prevPresent = attMap[pds] === 'present';
+                break;
+              }
+              for (let nd = d + 1; nd <= daysInMonth; nd++) {
+                const nds = `${month}-${String(nd).padStart(2, '0')}`;
+                const ndow = new Date(year, monthNum - 1, nd).getDay();
+                const nOff = ndow === 6 ? offSaturdaySet.has(nds) : offDaysForDate.includes(ndow);
+                if (nOff || mergedHolidays.has(nds)) continue; // skip off/holiday, keep looking
+                nextPresent = attMap[nds] === 'present';
+                break;
+              }
+              if (prevPresent && nextPresent) {
+                presentDays += 1; // Sandwiched between two present days → treat as present
+              } else {
+                lopDays += 1;
+              }
             } else {
-              lopDays += 1; // No biometric + no report = LOP
+              lopDays += 1; // No biometric + no report + sandwich off = LOP
             }
           } else if (!status) {
             // No records at all for this employee yet = treat as present
