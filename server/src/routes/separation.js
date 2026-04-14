@@ -498,50 +498,111 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
 
   const items = [];
 
-  // 1. Last month salary (days worked in final month) + statutory deductions
+  // 1. Last month salary — use generated payslip if available (has real attendance/LOP/advances/off-day)
+  //    Fall back to simple estimate (gross ÷ 30 × lwdDay) only if no payslip exists yet.
   const lwdDate = new Date(lwd);
   const lwdDay = lwdDate.getDate();
   const lwdMonth = lwdDate.getMonth() + 1; // 1-12 for PT slab
   const lastMonthStr = lwd.slice(0, 7); // "YYYY-MM"
 
-  const lastMonthGross = Math.round(dailyRate * lwdDay * 100) / 100;
-  items.push({
-    component: 'last_month_salary',
-    label: `Last month salary (${lastMonthStr}: ${lwdDay} days worked)`,
-    amount: lastMonthGross,
-    days: lwdDay,
-    dailyRate,
-    autoCalculated: true,
-  });
+  let lastMonthPayslip = null;
+  try {
+    lastMonthPayslip = await req.prisma.payslip.findUnique({
+      where: { userId_month: { userId: user.id, month: lastMonthStr } },
+    });
+  } catch {}
 
-  // Statutory deductions on last month salary (PF, ESI, PT)
-  if (ss && lastMonthGross > 0) {
-    const earnedBasic = Math.round((ss.basic || 0) * lwdDay / 30 * 100) / 100;
-    const statutory = calcStatutory(lastMonthGross, earnedBasic, ss.ptExempt || false, false, DEFAULT_PAYROLL_RULES, user.gender, lwdMonth, undefined);
-    if (statutory.employeePf > 0) {
+  if (lastMonthPayslip) {
+    // Use actual payslip — it already accounts for attendance, LOP, advances, off-day allowance
+    const earnedGross = (lastMonthPayslip.grossEarnings || 0) - (lastMonthPayslip.lopDeduction || 0);
+    const paidDays = lastMonthPayslip.presentDays ?? lastMonthPayslip.workingDays ?? lwdDay;
+    items.push({
+      component: 'last_month_salary',
+      label: `Last month salary (${lastMonthStr}: ${paidDays} paid days — from payslip)`,
+      amount: Math.round(earnedGross * 100) / 100,
+      autoCalculated: true,
+      note: `Gross earned ₹${earnedGross.toFixed(2)} from generated payslip (attendance + LOP + off-day already applied)`,
+    });
+    // PF, ESI, PT — use actual payslip values
+    if ((lastMonthPayslip.employeePf || 0) > 0) {
       items.push({
         component: 'pf_deduction',
         label: `Employee PF deduction (last month)`,
-        amount: -statutory.employeePf,
+        amount: -(lastMonthPayslip.employeePf || 0),
         autoCalculated: true,
-        note: `12% of earned basic ₹${earnedBasic.toFixed(0)}, max ₹1,800`,
+        note: 'From generated payslip',
       });
     }
-    if (statutory.employeeEsi > 0) {
+    if ((lastMonthPayslip.employeeEsi || 0) > 0) {
       items.push({
         component: 'esi_deduction',
         label: `Employee ESI deduction (last month)`,
-        amount: -statutory.employeeEsi,
+        amount: -(lastMonthPayslip.employeeEsi || 0),
         autoCalculated: true,
+        note: 'From generated payslip',
       });
     }
-    if (statutory.professionalTax > 0) {
+    if ((lastMonthPayslip.professionalTax || 0) > 0) {
       items.push({
         component: 'pt_deduction',
         label: `Professional Tax (last month)`,
-        amount: -statutory.professionalTax,
+        amount: -(lastMonthPayslip.professionalTax || 0),
         autoCalculated: true,
+        note: 'From generated payslip',
       });
+    }
+    if ((lastMonthPayslip.salaryAdvanceDeduction || 0) > 0) {
+      items.push({
+        component: 'advance_recovery',
+        label: `Salary advance recovery (last month)`,
+        amount: -(lastMonthPayslip.salaryAdvanceDeduction || 0),
+        autoCalculated: true,
+        note: 'From generated payslip',
+      });
+    }
+  } else {
+    // No payslip generated yet — estimate from salary structure (gross ÷ 30 × days)
+    const lastMonthGross = Math.round(dailyRate * lwdDay * 100) / 100;
+    items.push({
+      component: 'last_month_salary',
+      label: `Last month salary (${lastMonthStr}: ${lwdDay} days worked — estimated)`,
+      amount: lastMonthGross,
+      days: lwdDay,
+      dailyRate,
+      autoCalculated: true,
+      note: `⚠️ Payslip not yet generated for ${lastMonthStr}. This is an estimate (Gross ÷ 30 × ${lwdDay} days). Actual attendance, LOP, and advances not yet applied. Generate payslip first for accurate FnF.`,
+    });
+    // Estimated statutory deductions
+    if (ss && lastMonthGross > 0) {
+      const earnedBasic = Math.round((ss.basic || 0) * lwdDay / 30 * 100) / 100;
+      const statutory = calcStatutory(lastMonthGross, earnedBasic, ss.ptExempt || false, false, DEFAULT_PAYROLL_RULES, user.gender, lwdMonth, undefined);
+      if (statutory.employeePf > 0) {
+        items.push({
+          component: 'pf_deduction',
+          label: `Employee PF deduction (last month — estimated)`,
+          amount: -statutory.employeePf,
+          autoCalculated: true,
+          note: `12% of earned basic ₹${earnedBasic.toFixed(0)}, max ₹1,800. Estimated — generate payslip for exact amount.`,
+        });
+      }
+      if (statutory.employeeEsi > 0) {
+        items.push({
+          component: 'esi_deduction',
+          label: `Employee ESI deduction (last month — estimated)`,
+          amount: -statutory.employeeEsi,
+          autoCalculated: true,
+          note: 'Estimated — generate payslip for exact amount.',
+        });
+      }
+      if (statutory.professionalTax > 0) {
+        items.push({
+          component: 'pt_deduction',
+          label: `Professional Tax (last month — estimated)`,
+          amount: -statutory.professionalTax,
+          autoCalculated: true,
+          note: 'Estimated — generate payslip for exact amount.',
+        });
+      }
     }
   }
 
