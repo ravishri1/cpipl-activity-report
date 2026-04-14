@@ -18,15 +18,6 @@ const STATUS_META = {
   cancelled:       { label: 'Withdrawn',        color: 'bg-gray-100 text-gray-600' },
 };
 
-const PIPELINE_COLS = [
-  { key: 'pending_manager', label: 'Awaiting Manager', icon: '👤' },
-  { key: 'pending_hr',      label: 'Awaiting HR',      icon: '🏢' },
-  { key: 'notice_period',   label: 'Notice Period',    icon: '📅' },
-  { key: 'clearance',       label: 'Clearance',        icon: '✅' },
-  { key: 'fnf_pending',     label: 'FnF Pending',      icon: '💰' },
-  { key: 'fnf_approved',    label: 'FnF Approved',     icon: '✔️' },
-  { key: 'completed',       label: 'Completed',        icon: '🎓' },
-];
 
 const ACTIVE_STATUSES = ['pending_manager', 'pending_hr', 'notice_period', 'clearance', 'fnf_pending', 'fnf_approved'];
 
@@ -85,7 +76,6 @@ function fmt(dateStr) {
 
 export default function SeparationManager() {
   const navigate = useNavigate();
-  const [view, setView] = useState('pipeline');
   const [filter, setFilter] = useState('active');
   const [showInitiateForm, setShowInitiateForm] = useState(false);
   const [formStep, setFormStep] = useState(1); // 1 = employee info, 2 = HR date review
@@ -153,7 +143,6 @@ export default function SeparationManager() {
     } catch {}
   };
 
-  const byStatus = (status) => filtered.filter(s => s.status === status);
   const today = new Date().toISOString().slice(0, 10);
 
   const handleImport = async (records) => {
@@ -179,10 +168,6 @@ export default function SeparationManager() {
           <p className="text-sm text-gray-500 mt-1">Track and manage employee resignations and exit process</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setView(v => v === 'pipeline' ? 'list' : 'pipeline')}
-            className="border border-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm hover:bg-gray-50">
-            {view === 'pipeline' ? '📋 List View' : '🗂 Pipeline View'}
-          </button>
           <button
             onClick={() => {
               if (!window.confirm('Import 35 historical separation records? Existing records will be skipped.')) return;
@@ -382,158 +367,69 @@ export default function SeparationManager() {
         </div>
       )}
 
-      {/* Pipeline View */}
-      {view === 'pipeline' && (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-3 min-w-max">
-            {PIPELINE_COLS.map(col => {
-              const cards = byStatus(col.key);
-              return (
-                <div key={col.key} className="w-64 flex-shrink-0">
-                  <div className="flex items-center justify-between mb-2 px-1">
-                    <span className="text-sm font-semibold text-gray-700">{col.icon} {col.label}</span>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{loading ? '…' : cards.length}</span>
-                  </div>
-                  <div className="space-y-2 min-h-24">
-                    {loading ? (
-                      <div className="h-16 bg-gray-100 animate-pulse rounded-xl border border-dashed border-gray-200" />
-                    ) : cards.length === 0 ? (
-                      <div className="text-xs text-gray-400 text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">Empty</div>
-                    ) : (
-                      cards.map(s => <SepCard key={s.id} sep={s} today={today} onClick={() => navigate(`/admin/separations/${s.id}`)} />)
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* List View */}
-      {view === 'list' && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {filtered.length === 0 ? (
-            <EmptyState icon="📋" title="No separations found" subtitle="No records match the current filter." />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    {['Employee', 'Type', 'Status', 'Confirmed LWD', 'Notice Left', 'FnF', 'Salary Hold', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
-                    ))}
+      {/* List View — always shown */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400 text-sm">Loading...</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="📋" title="No separations found" subtitle="No records match the current filter." />
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                {['#', 'Employee', 'Type', 'Status', 'Resignation Date', 'Last Working Day', 'Settlement Date', 'FnF', 'Salary Hold', ''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((s, i) => {
+                const sm = STATUS_META[s.status] || { label: s.status, color: 'bg-gray-100 text-gray-600' };
+                const lwd = s.adjustedLWD || s.lastWorkingDate;
+                const holdDue = s.salaryHoldUntil && today >= s.salaryHoldUntil && !s.salaryReleased;
+                return (
+                  <tr key={s.id} className="hover:bg-blue-50 cursor-pointer transition-colors" onClick={() => navigate(`/admin/separations/${s.id}`)}>
+                    <td className="px-4 py-3 text-xs text-gray-400">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-800">{s.user?.name}</div>
+                      <div className="text-xs text-gray-400">{s.user?.employeeId} · {s.user?.department}</div>
+                    </td>
+                    <td className="px-4 py-3 capitalize text-gray-600 text-xs">{s.type}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${sm.color}`}>{sm.label}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{fmt(s.requestDate)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap font-medium">
+                      {lwd ? fmt(lwd) : '—'}
+                      {s.leaveDaysDuringNotice > 0 && <span className="text-amber-600 ml-1">+{s.leaveDaysDuringNotice}d</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{fmt(s.salaryHoldUntil) || '—'}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {s.fnfNetAmount != null
+                        ? <span className={s.fnfNetAmount >= 0 ? 'text-green-700' : 'text-red-600'}>₹{Math.abs(s.fnfNetAmount).toFixed(0)}</span>
+                        : '—'}
+                      {s.fnfApprovedAt && <span className="text-green-600 ml-1">✓</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {s.salaryHoldUntil
+                        ? s.salaryReleased
+                          ? <span className="text-green-600">✅ Released</span>
+                          : holdDue
+                          ? <span className="text-red-600 font-medium">⏰ Due</span>
+                          : <span className="text-amber-600">🔒 {fmt(s.salaryHoldUntil)}</span>
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-blue-600 text-xs hover:underline">View →</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filtered.map(s => {
-                    const sm = STATUS_META[s.status] || { label: s.status, color: 'bg-gray-100 text-gray-600' };
-                    const lwd = s.adjustedLWD || s.lastWorkingDate;
-                    const daysLeft = lwd ? Math.max(0, Math.round((new Date(lwd) - new Date(today)) / 86400000)) : null;
-                    const holdDue = s.salaryHoldUntil && today >= s.salaryHoldUntil && !s.salaryReleased;
-                    return (
-                      <tr key={s.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/separations/${s.id}`)}>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-800">{s.user?.name}</div>
-                          <div className="text-xs text-gray-400">{s.user?.employeeId} · {s.user?.department}</div>
-                        </td>
-                        <td className="px-4 py-3 capitalize text-gray-600 text-xs">{s.type}</td>
-                        <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${sm.color}`}>{sm.label}</span></td>
-                        <td className="px-4 py-3 text-gray-700 text-xs">{lwd || '—'}{s.leaveDaysDuringNotice > 0 && <span className="text-amber-600 ml-1">+{s.leaveDaysDuringNotice}d</span>}</td>
-                        <td className="px-4 py-3 text-xs">
-                          {s.status === 'notice_period' && daysLeft !== null
-                            ? <span className={daysLeft <= 3 ? 'text-red-600 font-medium' : daysLeft <= 7 ? 'text-orange-600' : 'text-gray-600'}>{daysLeft}d</span>
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {s.fnfTotal ? <span className="text-gray-700">₹{Math.abs(s.fnfTotal).toFixed(0)}</span> : '—'}
-                          {s.fnfApprovedAt && <span className="text-green-600 ml-1">✓</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {s.salaryHoldUntil
-                            ? s.salaryReleased
-                              ? <span className="text-green-600">✅ Released</span>
-                              : holdDue
-                              ? <span className="text-red-600 font-medium">⏰ Due</span>
-                              : <span className="text-amber-600">🔒 {s.salaryHoldUntil}</span>
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3"><span className="text-blue-600 text-xs hover:underline">View →</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SepCard({ sep, today, onClick }) {
-  const lwd = sep.adjustedLWD || sep.lastWorkingDate;
-  const daysLeft = lwd ? Math.max(0, Math.round((new Date(lwd) - new Date(today)) / 86400000)) : null;
-  const holdDue = sep.salaryHoldUntil && today >= sep.salaryHoldUntil && !sep.salaryReleased;
-
-  return (
-    <div onClick={onClick} className="bg-white rounded-xl border border-gray-200 p-3 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all group">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-600 flex-shrink-0">
-          {sep.user?.name?.charAt(0)?.toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-blue-700">{sep.user?.name}</p>
-          <p className="text-xs text-gray-400 truncate">{sep.user?.designation || sep.user?.department}</p>
-        </div>
-      </div>
-
-      <div className="space-y-1.5 text-xs">
-        <div className="flex justify-between text-gray-500">
-          <span>LWD</span>
-          <span className="font-medium text-gray-700">{lwd || 'TBD'}</span>
-        </div>
-
-        {sep.leaveDaysDuringNotice > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded px-2 py-1 text-amber-700 text-center">
-            ⚠️ Extended +{sep.leaveDaysDuringNotice}d (leave)
-          </div>
-        )}
-
-        {daysLeft !== null && sep.status === 'notice_period' && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">Days left</span>
-            <span className={`font-medium ${daysLeft <= 3 ? 'text-red-600' : daysLeft <= 7 ? 'text-orange-500' : 'text-gray-700'}`}>{daysLeft}d</span>
-          </div>
-        )}
-
-        {holdDue && (
-          <div className="bg-red-50 border border-red-200 rounded px-2 py-1 text-red-700 text-center font-medium">
-            ⏰ Salary release due!
-          </div>
-        )}
-
-        {!holdDue && sep.salaryHoldUntil && !sep.salaryReleased && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">Hold until</span>
-            <span className="text-amber-600 font-medium">{sep.salaryHoldUntil}</span>
-          </div>
-        )}
-
-        {sep.checklistProgress && sep.checklistProgress.total > 0 && (
-          <div>
-            <div className="flex justify-between text-gray-500 mb-0.5">
-              <span>Checklist</span>
-              <span>{sep.checklistProgress.done}/{sep.checklistProgress.total}</span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full transition-all"
-                style={{ width: `${(sep.checklistProgress.done / sep.checklistProgress.total) * 100}%` }} />
-            </div>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
   );
 }
+
