@@ -695,12 +695,47 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           const isOff = dow === 6
             ? offSaturdaySet.has(dateStr)
             : offDaysForDate.includes(dow);
-          if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
+          if (isOff || dateStr > today) continue;
           // Skip days after last working date (pro-rata separation — NOT LOP)
           if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) continue;
           // Skip days before employee's date of joining (mid-month joiners)
           const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
           if (joinDateStr && dateStr < joinDateStr) continue;
+
+          if (mergedHolidays.has(dateStr)) {
+            // Holiday clubbing: if this holiday is sandwiched between LOP/absent days,
+            // the employee can't take it free — it becomes LOP too.
+            if (sandwichEnabled) {
+              let prevLop = false, nextLop = false;
+              for (let pd = d - 1; pd >= 1; pd--) {
+                const pds = `${month}-${String(pd).padStart(2, '0')}`;
+                const pdow = new Date(year, monthNum - 1, pd).getDay();
+                const pOff = pdow === 6 ? offSaturdaySet.has(pds) : offDaysForDate.includes(pdow);
+                if (pOff || mergedHolidays.has(pds)) continue;
+                if (joinDateStr && pds < joinDateStr) continue;
+                prevLop = attMap[pds] === 'absent' || lopDatesSet.has(pds);
+                break;
+              }
+              for (let nd = d + 1; nd <= daysInMonth; nd++) {
+                const nds = `${month}-${String(nd).padStart(2, '0')}`;
+                const ndow = new Date(year, monthNum - 1, nd).getDay();
+                const nOff = ndow === 6 ? offSaturdaySet.has(nds) : offDaysForDate.includes(ndow);
+                if (nOff || mergedHolidays.has(nds)) continue;
+                if (separation?.lastWorkingDate && nds > separation.lastWorkingDate) continue;
+                nextLop = attMap[nds] === 'absent' || lopDatesSet.has(nds);
+                break;
+              }
+              if (prevLop && nextLop) {
+                lopDays += 1; // Holiday sandwiched between LOP days → LOP
+              } else {
+                presentDays += 1; // Normal holiday → paid
+              }
+            } else {
+              presentDays += 1; // Holiday = paid (no sandwich policy)
+            }
+            continue;
+          }
+
           const status = attMap[dateStr];
           if (lopDatesSet.has(dateStr)) {
             // LOP leave date: attendance already counted via lopFromLeave.
@@ -720,27 +755,29 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
             if (dailyReportDates.has(dateStr)) {
               presentDays += 1; // EOD muster submitted = employee was present
             } else if (sandwichEnabled) {
-              // Priority 2: sandwich policy — if previous AND next working day are both
-              // 'present' in biometric, treat this missing day as present (missed punch grace)
+              // Priority 2: biometric sandwich — prev AND next working day both present/on_leave
+              // (on_leave counts as working — approved leave is not a gap in attendance)
               let prevPresent = false, nextPresent = false;
               for (let pd = d - 1; pd >= 1; pd--) {
                 const pds = `${month}-${String(pd).padStart(2, '0')}`;
                 const pdow = new Date(year, monthNum - 1, pd).getDay();
                 const pOff = pdow === 6 ? offSaturdaySet.has(pds) : offDaysForDate.includes(pdow);
-                if (pOff || mergedHolidays.has(pds)) continue; // skip off/holiday, keep looking
-                prevPresent = attMap[pds] === 'present';
+                if (pOff || mergedHolidays.has(pds)) continue;
+                const ps = attMap[pds];
+                prevPresent = ps === 'present' || ps === 'on_leave' || leaveDatesSet.has(pds);
                 break;
               }
               for (let nd = d + 1; nd <= daysInMonth; nd++) {
                 const nds = `${month}-${String(nd).padStart(2, '0')}`;
                 const ndow = new Date(year, monthNum - 1, nd).getDay();
                 const nOff = ndow === 6 ? offSaturdaySet.has(nds) : offDaysForDate.includes(ndow);
-                if (nOff || mergedHolidays.has(nds)) continue; // skip off/holiday, keep looking
-                nextPresent = attMap[nds] === 'present';
+                if (nOff || mergedHolidays.has(nds)) continue;
+                const ns = attMap[nds];
+                nextPresent = ns === 'present' || ns === 'on_leave' || leaveDatesSet.has(nds);
                 break;
               }
               if (prevPresent && nextPresent) {
-                presentDays += 1; // Sandwiched between two present days → treat as present
+                presentDays += 1; // Sandwiched between two working days → treat as present
               } else {
                 lopDays += 1;
               }
