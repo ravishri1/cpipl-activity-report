@@ -165,15 +165,17 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
 
   // Employee counts — filtered by company + joined by monthEnd
-  // Include separated employees who were still working during this month
+  // Include employees who were actually working during this month:
+  // either no separation record, OR separation LWD >= monthStart (still on notice/working)
+  // Excludes employees whose LWD is before this month even if isActive flag is stale
   const totalActiveEmployees = await req.prisma.user.count({
     where: {
       dateOfJoining: { lte: monthEnd },
       employeeId: { not: null },
       ...companyFilter,
       OR: [
-        { isActive: true },
-        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+        { separation: null },
+        { separation: { lastWorkingDate: { gte: monthStart } } },
       ],
     },
   });
@@ -183,8 +185,8 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       employeeId: { not: null },
       ...companyFilter,
       OR: [
-        { isActive: true },
-        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+        { separation: null },
+        { separation: { lastWorkingDate: { gte: monthStart } } },
       ],
     },
   });
@@ -198,8 +200,8 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       employeeId: { not: null },
       ...companyFilter,
       OR: [
-        { isActive: true },
-        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+        { separation: null },
+        { separation: { lastWorkingDate: { gte: monthStart } } },
       ],
     },
   });
@@ -211,8 +213,8 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
         employeeId: { not: null },
         ...companyFilter,
         OR: [
-          { isActive: true },
-          { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+          { separation: null },
+          { separation: { lastWorkingDate: { gte: monthStart } } },
         ],
       },
     },
