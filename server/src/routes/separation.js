@@ -477,7 +477,13 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
   let grossMonthly = 0;
   let salarySource = 'none';
   if (ss) {
-    grossMonthly = ss.grossEarnings || ((ss.basic||0) + (ss.hra||0) + (ss.da||0) + (ss.specialAllowance||0) + (ss.medicalAllowance||0) + (ss.conveyanceAllowance||0) + (ss.otherAllowance||0)) || 0;
+    // Try grossEarnings field first, then sum individual fields,
+    // then sum earning components array (catches Statutory Bonus, Other Allowance etc.)
+    const fieldSum = (ss.basic||0) + (ss.hra||0) + (ss.da||0) + (ss.specialAllowance||0) + (ss.medicalAllowance||0) + (ss.conveyanceAllowance||0) + (ss.otherAllowance||0);
+    const componentSum = Array.isArray(ss.components)
+      ? ss.components.filter(c => c.type === 'earning').reduce((s, c) => s + (c.amount || 0), 0)
+      : 0;
+    grossMonthly = ss.grossEarnings || Math.max(fieldSum, componentSum) || 0;
     salarySource = 'salary_structure';
   }
   if (!grossMonthly) {
