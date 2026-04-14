@@ -3,6 +3,7 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
+const { calcStatutory, DEFAULT_PAYROLL_RULES } = require('../utils/payrollRules');
 
 const router = express.Router();
 router.use(authenticate);
@@ -497,18 +498,52 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
 
   const items = [];
 
-  // 1. Last month salary (days worked in final month)
+  // 1. Last month salary (days worked in final month) + statutory deductions
   const lwdDate = new Date(lwd);
   const lwdDay = lwdDate.getDate();
+  const lwdMonth = lwdDate.getMonth() + 1; // 1-12 for PT slab
   const lastMonthStr = lwd.slice(0, 7); // "YYYY-MM"
+
+  const lastMonthGross = Math.round(dailyRate * lwdDay * 100) / 100;
   items.push({
     component: 'last_month_salary',
     label: `Last month salary (${lastMonthStr}: ${lwdDay} days worked)`,
-    amount: Math.round(dailyRate * lwdDay * 100) / 100,
+    amount: lastMonthGross,
     days: lwdDay,
     dailyRate,
     autoCalculated: true,
   });
+
+  // Statutory deductions on last month salary (PF, ESI, PT)
+  if (ss && lastMonthGross > 0) {
+    const earnedBasic = Math.round((ss.basic || 0) * lwdDay / 30 * 100) / 100;
+    const statutory = calcStatutory(lastMonthGross, earnedBasic, ss.ptExempt || false, false, DEFAULT_PAYROLL_RULES, user.gender, lwdMonth, undefined);
+    if (statutory.employeePf > 0) {
+      items.push({
+        component: 'pf_deduction',
+        label: `Employee PF deduction (last month)`,
+        amount: -statutory.employeePf,
+        autoCalculated: true,
+        note: `12% of earned basic ₹${earnedBasic.toFixed(0)}, max ₹1,800`,
+      });
+    }
+    if (statutory.employeeEsi > 0) {
+      items.push({
+        component: 'esi_deduction',
+        label: `Employee ESI deduction (last month)`,
+        amount: -statutory.employeeEsi,
+        autoCalculated: true,
+      });
+    }
+    if (statutory.professionalTax > 0) {
+      items.push({
+        component: 'pt_deduction',
+        label: `Professional Tax (last month)`,
+        amount: -statutory.professionalTax,
+        autoCalculated: true,
+      });
+    }
+  }
 
   // 2. Leave encashment — PL balance × daily rate
   let plBalance = 0;

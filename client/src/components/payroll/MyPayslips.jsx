@@ -172,6 +172,8 @@ export default function MyPayslips() {
 
 /* ---------- Salary Summary ---------- */
 function SalarySummary({ payslip }) {
+  // Gross earned = full gross minus LOP deduction (greytHR style: what was actually earned)
+  const grossEarned = payslip.grossEarnings - (payslip.lopDeduction || 0);
   const stats = [
     {
       label: 'Monthly CTC',
@@ -180,8 +182,8 @@ function SalarySummary({ payslip }) {
       color: 'blue',
     },
     {
-      label: 'Gross Earnings',
-      value: formatCurrency(payslip.grossEarnings),
+      label: 'Gross Earned',
+      value: formatCurrency(grossEarned),
       icon: TrendingUp,
       color: 'emerald',
     },
@@ -288,27 +290,21 @@ function PayslipCard({ payslip, onView }) {
       {/* Small Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5 pb-4 border-b border-slate-100">
         <div>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider">
-            Gross
-          </p>
+          <p className="text-[11px] text-slate-400 uppercase tracking-wider">Gross Earned</p>
           <p className="text-sm font-semibold text-slate-700">
-            {formatCurrency(payslip.grossEarnings)}
+            {formatCurrency(payslip.grossEarnings - (payslip.lopDeduction || 0))}
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider">
-            Deductions
-          </p>
+          <p className="text-[11px] text-slate-400 uppercase tracking-wider">Deductions</p>
           <p className="text-sm font-semibold text-red-600">
-            {formatCurrency(payslip.totalDeductions)}
+            {formatCurrency((payslip.totalDeductions || 0) - (payslip.lopDeduction || 0))}
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider">
-            LOP Days
-          </p>
+          <p className="text-[11px] text-slate-400 uppercase tracking-wider">Paid Days</p>
           <p className="text-sm font-semibold text-slate-700">
-            {payslip.lopDays || 0}
+            {payslip.presentDays ?? payslip.paidDays ?? payslip.workingDays ?? '-'}
           </p>
         </div>
       </div>
@@ -327,30 +323,46 @@ function PayslipCard({ payslip, onView }) {
 
 /* ---------- Payslip Detail View ---------- */
 function PayslipDetail({ payslip, onBack }) {
-  // Use earningsBreakdown (per-component) if available, else fall back to legacy fields
-  const earningsBreakdown = Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0
-    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: c.amount }))
+  // greytHR-style: show each component as earned amount (prorated for paid days)
+  // e.g., Basic = 15,000 × 24.8/30 = 12,400 — LOP is baked in, not a separate line
+  const totalDays = payslip.workingDays || 30;
+  const paidDays = payslip.presentDays ?? payslip.paidDays ?? totalDays;
+  const earnFrac = totalDays > 0 ? paidDays / totalDays : 1;
+  const hasLop = (payslip.lopDays || 0) > 0;
+
+  const prorate = (amount) => {
+    if (!amount || !hasLop) return amount || 0;
+    return Math.round(amount * earnFrac);
+  };
+
+  // Build component list with prorated amounts
+  const rawComponents = Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0
+    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: prorate(c.amount) }))
     : [
-        { label: 'Basic Salary', value: payslip.basic },
-        { label: 'House Rent Allowance', value: payslip.hra },
-        { label: 'Dearness Allowance', value: payslip.da },
-        { label: 'Special Allowance', value: payslip.specialAllowance },
-        { label: 'Medical Allowance', value: payslip.medicalAllowance },
-        { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
-        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: payslip.otherAllowance },
+        { label: 'Basic Salary', value: prorate(payslip.basic) },
+        { label: 'House Rent Allowance', value: prorate(payslip.hra) },
+        { label: 'Dearness Allowance', value: prorate(payslip.da) },
+        { label: 'Special Allowance', value: prorate(payslip.specialAllowance) },
+        { label: 'Medical Allowance', value: prorate(payslip.medicalAllowance) },
+        { label: 'Conveyance Allowance', value: prorate(payslip.conveyanceAllowance) },
+        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: prorate(payslip.otherAllowance) },
       ];
+
   const earnings = [
-    ...earningsBreakdown,
+    ...rawComponents,
     ...(payslip.reimbursements > 0 ? [{ label: 'Reimbursements', value: payslip.reimbursements }] : []),
     ...(payslip.offDayAllowance > 0 ? [{ label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
   ].filter((item) => item.value && item.value > 0);
 
+  // Gross earned = sum of prorated components (same as grossEarnings - lopDeduction)
+  const grossEarned = earnings.reduce((s, e) => s + (e.value || 0), 0);
+
+  // Deductions: NO LOP line (it's already reflected in earned amounts above)
   const deductions = [
     { label: 'Employee PF', value: payslip.employeePf },
     { label: 'ESI', value: payslip.employeeEsi },
     { label: 'Professional Tax', value: payslip.professionalTax },
     { label: 'TDS / Income Tax', value: payslip.tds },
-    { label: 'LOP Deduction', value: payslip.lopDeduction },
     { label: 'Salary Advance Recovery', value: payslip.salaryAdvanceDeduction },
     { label: payslip.otherDeductionsLabel || 'Other Deductions', value: payslip.otherDeductions },
   ].filter((item) => item.value && item.value > 0);
@@ -441,31 +453,27 @@ function PayslipDetail({ payslip, onBack }) {
           </div>
         </div>
 
-        {/* Attendance Info */}
+        {/* Attendance Info — greytHR style: Paid / Total Days */}
         <div className="px-8 py-4 border-b border-slate-100">
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-500 font-medium mb-0.5">
-                Working Days
-              </p>
-              <p className="text-lg font-bold text-blue-700">
-                {payslip.workingDays ?? '-'}
-              </p>
+              <p className="text-xs text-blue-500 font-medium mb-0.5">Total Days</p>
+              <p className="text-lg font-bold text-blue-700">{payslip.workingDays ?? '-'}</p>
             </div>
             <div className="text-center p-3 bg-emerald-50 rounded-lg">
-              <p className="text-xs text-emerald-500 font-medium mb-0.5">
-                Present Days
-              </p>
+              <p className="text-xs text-emerald-500 font-medium mb-0.5">Paid Days</p>
               <p className="text-lg font-bold text-emerald-700">
-                {payslip.presentDays ?? payslip.paidDays ?? '-'}
+                {paidDays !== totalDays
+                  ? Number(paidDays).toFixed(1)
+                  : (payslip.presentDays ?? payslip.paidDays ?? totalDays)}
               </p>
             </div>
             <div className="text-center p-3 bg-amber-50 rounded-lg">
-              <p className="text-xs text-amber-500 font-medium mb-0.5">
-                LOP Days
-              </p>
+              <p className="text-xs text-amber-500 font-medium mb-0.5">LOP Days</p>
               <p className="text-lg font-bold text-amber-700">
-                {payslip.lopDays ?? 0}
+                {(payslip.lopDays || 0) % 1 === 0
+                  ? (payslip.lopDays || 0)
+                  : Number(payslip.lopDays || 0).toFixed(1)}
               </p>
             </div>
           </div>
@@ -520,10 +528,10 @@ function PayslipDetail({ payslip, onBack }) {
                   <tfoot>
                     <tr className="border-t-2 border-emerald-200 bg-emerald-50">
                       <td className="px-4 py-3 text-sm font-bold text-emerald-800">
-                        Gross Earnings
+                        Gross Earned
                       </td>
                       <td className="px-4 py-3 text-sm font-bold text-emerald-800 text-right">
-                        {formatCurrency(payslip.grossEarnings)}
+                        {formatCurrency(grossEarned)}
                       </td>
                     </tr>
                   </tfoot>

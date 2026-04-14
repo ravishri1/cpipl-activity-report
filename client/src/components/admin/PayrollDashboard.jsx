@@ -188,52 +188,58 @@ const Toast = ({ message, type, onClose }) => {
 const PayslipDetail = ({ payslip }) => {
   if (!payslip) return null;
 
+  // greytHR-style: prorate each component by paid days, no LOP deduction line
+  const totalDays = payslip.workingDays || 30;
+  const paidDays = payslip.presentDays ?? payslip.paidDays ?? totalDays;
+  const earnFrac = totalDays > 0 ? paidDays / totalDays : 1;
+  const hasLop = (payslip.lopDays || 0) > 0;
+  const prorate = (amount) => (!amount || !hasLop) ? (amount || 0) : Math.round(amount * earnFrac);
+
   // Use earningsBreakdown (per-component) if available, else fall back to legacy fields
   const earningsBreakdown = Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0
-    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: c.amount }))
+    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: prorate(c.amount) }))
     : [
-        { label: 'Basic Salary', value: payslip.basic },
-        { label: 'House Rent Allowance (HRA)', value: payslip.hra },
-        { label: 'Dearness Allowance (DA)', value: payslip.da },
-        { label: 'Special Allowance', value: payslip.specialAllowance },
-        { label: 'Medical Allowance', value: payslip.medicalAllowance },
-        { label: 'Conveyance Allowance', value: payslip.conveyanceAllowance },
-        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: payslip.otherAllowance },
+        { label: 'Basic Salary', value: prorate(payslip.basic) },
+        { label: 'House Rent Allowance (HRA)', value: prorate(payslip.hra) },
+        { label: 'Dearness Allowance (DA)', value: prorate(payslip.da) },
+        { label: 'Special Allowance', value: prorate(payslip.specialAllowance) },
+        { label: 'Medical Allowance', value: prorate(payslip.medicalAllowance) },
+        { label: 'Conveyance Allowance', value: prorate(payslip.conveyanceAllowance) },
+        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: prorate(payslip.otherAllowance) },
       ];
   const earnings = [
     ...earningsBreakdown,
     ...(payslip.offDayAllowance > 0 ? [{ label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
     { label: payslip.otherAdditionsLabel || 'Special Addition', value: payslip.otherAdditions },
   ];
+  const grossEarned = earnings.filter(e => e.value && e.value > 0).reduce((s, e) => s + e.value, 0);
 
+  // No LOP deduction line — it's baked into earned amounts above
   const deductions = [
     { label: 'Employee PF', value: payslip.employeePf },
     { label: 'ESI', value: payslip.employeeEsi },
     { label: 'Professional Tax (PT)', value: payslip.professionalTax },
     { label: 'TDS / Income Tax', value: payslip.tds },
     { label: payslip.otherDeductionsLabel || 'Other Deductions', value: payslip.otherDeductions },
-    { label: 'LOP Deduction', value: payslip.lopDeduction, highlight: true },
   ];
 
   return (
     <div className="bg-slate-50 border-t border-slate-200 px-6 py-5">
-      {/* Working Days Info */}
+      {/* Attendance Info — greytHR style */}
       <div className="flex flex-wrap gap-6 mb-5">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
           <span className="text-sm text-slate-600">
-            Working Days:{' '}
-            <span className="font-semibold text-slate-900">
-              {payslip.workingDays ?? '-'}
-            </span>
+            Total Days:{' '}
+            <span className="font-semibold text-slate-900">{totalDays}</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
           <CheckCircle className="w-4 h-4 text-green-500" />
           <span className="text-sm text-slate-600">
-            Present Days:{' '}
+            Paid Days:{' '}
             <span className="font-semibold text-slate-900">
-              {payslip.presentDays ?? '-'}
+              {paidDays % 1 === 0 ? paidDays : Number(paidDays).toFixed(1)}
             </span>
           </span>
         </div>
@@ -242,7 +248,7 @@ const PayslipDetail = ({ payslip }) => {
           <span className="text-sm text-slate-600">
             LOP Days:{' '}
             <span className="font-semibold text-red-600">
-              {payslip.lopDays ?? 0}
+              {(payslip.lopDays || 0) % 1 === 0 ? (payslip.lopDays || 0) : Number(payslip.lopDays || 0).toFixed(1)}
             </span>
           </span>
         </div>
@@ -276,10 +282,10 @@ const PayslipDetail = ({ payslip }) => {
             )}
             <div className="flex items-center justify-between px-4 py-3 bg-green-50">
               <span className="text-sm font-semibold text-green-800">
-                Gross Earnings
+                Gross Earned
               </span>
               <span className="text-sm font-bold text-green-800">
-                {formatCurrencyDecimal(payslip.grossEarnings)}
+                {formatCurrencyDecimal(grossEarned)}
               </span>
             </div>
           </div>
