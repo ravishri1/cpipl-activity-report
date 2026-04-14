@@ -32,15 +32,17 @@ export default function MyResignation() {
   const { data: sep, loading, error: fetchErr, refetch } = useFetch('/separation/my', null);
   const { execute, loading: submitting, error: submitErr, success } = useApi();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ reason: '', preferredLWD: '' });
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ reason: '', resignationDate: today, preferredLWD: '' });
 
   const handleSubmitResignation = async () => {
+    if (!form.reason.trim()) return alert('Please provide a reason for resignation.');
     if (!window.confirm('Are you sure you want to submit your resignation? This action will be sent to your manager for approval.')) return;
     try {
       await execute(() => api.post('/separation/resign', form), 'Resignation submitted successfully!');
       refetch();
       setShowForm(false);
-      setForm({ reason: '', preferredLWD: '' });
+      setForm({ reason: '', resignationDate: today, preferredLWD: '' });
     } catch {}
   };
 
@@ -84,6 +86,29 @@ export default function MyResignation() {
               <li>This cannot be undone after HR confirmation</li>
             </ul>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Resignation Date *</label>
+              <input
+                type="date"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+                value={form.resignationDate}
+                max={today}
+                onChange={e => setForm(f => ({ ...f, resignationDate: e.target.value }))}
+              />
+              <p className="text-xs text-gray-500 mt-1">Date you are formally submitting your resignation.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Last Working Day (optional)</label>
+              <input
+                type="date"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+                value={form.preferredLWD}
+                onChange={e => setForm(f => ({ ...f, preferredLWD: e.target.value }))}
+              />
+              <p className="text-xs text-gray-500 mt-1">HR will confirm the final date based on notice period.</p>
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Resignation *</label>
             <textarea
@@ -93,16 +118,6 @@ export default function MyResignation() {
               value={form.reason}
               onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Last Working Day (optional)</label>
-            <input
-              type="date"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
-              value={form.preferredLWD}
-              onChange={e => setForm(f => ({ ...f, preferredLWD: e.target.value }))}
-            />
-            <p className="text-xs text-gray-500 mt-1">Your notice period will be calculated from today. HR will confirm the final date.</p>
           </div>
           <div className="flex gap-3">
             <button onClick={handleSubmitResignation} disabled={submitting || !form.reason.trim()} className="bg-red-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
