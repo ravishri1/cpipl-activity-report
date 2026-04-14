@@ -587,6 +587,22 @@ function EmploymentTab({ profile, setProfile, form, editing, canEdit, isSelf, us
         {/* Current Position */}
         <Section title="Current Position" icon={Briefcase}>
           <Field icon={Shield} label="Employee ID" value={profile.employeeId} />
+          {/* Company — determines payroll, leave, and all HR module grouping */}
+          <div className="flex items-start gap-3">
+            <Building2 className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase text-slate-400 font-medium">Company</p>
+              {editing && canEdit ? (
+                <select value={form.companyId || ''} onChange={(e) => updateField('companyId', e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-sm mt-0.5 bg-white">
+                  <option value="">None</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <p className="text-sm text-slate-700">{profile.company ? profile.company.name : '—'}</p>
+              )}
+            </div>
+          </div>
           <Field icon={Briefcase} label="Designation" value={profile.designation}
             editing={editing && canEdit} onChange={(v) => updateField('designation', v)} editValue={form.designation} />
           <Field icon={Building2} label="Department" value={profile.department}
