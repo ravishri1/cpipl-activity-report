@@ -588,7 +588,7 @@ function PayslipDetail({ payslip, onBack }) {
                         Total Deductions
                       </td>
                       <td className="px-4 py-3 text-sm font-bold text-red-800 text-right">
-                        {formatCurrency(payslip.totalDeductions)}
+                        {formatCurrency(deductions.reduce((s, d) => s + (d.value || 0), 0))}
                       </td>
                     </tr>
                   </tfoot>
@@ -606,7 +606,7 @@ function PayslipDetail({ payslip, onBack }) {
                 Net Pay
               </p>
               <p className="text-xs text-slate-500">
-                (Gross Earnings - Total Deductions)
+                (Gross Earned - Total Deductions)
               </p>
             </div>
             <div className="text-right">

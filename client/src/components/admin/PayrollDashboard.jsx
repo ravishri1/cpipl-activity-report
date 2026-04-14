@@ -334,7 +334,7 @@ const PayslipDetail = ({ payslip }) => {
                 Total Deductions
               </span>
               <span className="text-sm font-bold text-red-800">
-                {formatCurrencyDecimal(payslip.totalDeductions)}
+                {formatCurrencyDecimal(deductions.filter(d => d.value && d.value > 0).reduce((s, d) => s + d.value, 0))}
               </span>
             </div>
           </div>
