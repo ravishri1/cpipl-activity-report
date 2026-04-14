@@ -165,59 +165,20 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const workingDays = payslips.length > 0 ? payslips[0].workingDays : daysInMonth;
 
   // Employee counts — filtered by company + joined by monthEnd
-  // Include employees who were actually working during this month:
-  // either no separation record, OR separation LWD >= monthStart (still on notice/working)
-  // Excludes employees whose LWD is before this month even if isActive flag is stale
   const totalActiveEmployees = await req.prisma.user.count({
-    where: {
-      dateOfJoining: { lte: monthEnd },
-      employeeId: { not: null },
-      ...companyFilter,
-      OR: [
-        { separation: null },
-        { separation: { lastWorkingDate: { gte: monthStart } } },
-      ],
-    },
+    where: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter },
   });
   const additions = await req.prisma.user.count({
-    where: {
-      dateOfJoining: { gte: monthStart, lte: monthEnd },
-      employeeId: { not: null },
-      ...companyFilter,
-      OR: [
-        { separation: null },
-        { separation: { lastWorkingDate: { gte: monthStart } } },
-      ],
-    },
+    where: { isActive: true, dateOfJoining: { gte: monthStart, lte: monthEnd }, ...companyFilter },
   });
   const separations = await req.prisma.separation.count({
     where: { lastWorkingDate: { gte: monthStart, lte: monthEnd }, ...(companyId ? { user: { companyId } } : {}) },
   });
   const exclusions = await req.prisma.user.count({
-    where: {
-      dateOfJoining: { lte: monthEnd },
-      salaryStructure: null,
-      employeeId: { not: null },
-      ...companyFilter,
-      OR: [
-        { separation: null },
-        { separation: { lastWorkingDate: { gte: monthStart } } },
-      ],
-    },
+    where: { isActive: true, dateOfJoining: { lte: monthEnd }, salaryStructure: null, ...companyFilter },
   });
   const stoppedSalaryCount = await req.prisma.salaryStructure.count({
-    where: {
-      stopSalaryProcessing: true,
-      user: {
-        dateOfJoining: { lte: monthEnd },
-        employeeId: { not: null },
-        ...companyFilter,
-        OR: [
-          { separation: null },
-          { separation: { lastWorkingDate: { gte: monthStart } } },
-        ],
-      },
-    },
+    where: { stopSalaryProcessing: true, user: { isActive: true, dateOfJoining: { lte: monthEnd }, ...companyFilter } },
   });
 
   // Payslip status counts
@@ -299,32 +260,20 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const year = parseInt(month.split('-')[0]);
   const monthNum = parseInt(month.split('-')[1]);
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
-  const monthStart = `${month}-01`;
 
-  // Include: currently active employees + separated employees whose LWD falls within or after this month
-  // This ensures resigned employees still get their final-month payslip generated automatically.
-  const userWhere = {
-    companyId: parseInt(companyId),
-    dateOfJoining: { lte: monthEnd },
-    employeeId: { not: null },
-    OR: [
-      { isActive: true },
-      // Separated but still working in this month (LWD >= month start)
-      { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
-    ],
-  };
+  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } };
   if (targetUserId) userWhere.id = parseInt(targetUserId);
 
   const salaries = await req.prisma.salaryStructure.findMany({
     where: { user: userWhere },
     include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true } } } } },
   });
-  // For separated employees: treat as "active" for payroll purposes if they worked this month
-  const activeSalaries = salaries.filter(s => !s.stopSalaryProcessing);
-  const stoppedSalaries = salaries.filter(s => s.stopSalaryProcessing);
-  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No employees with salary structures for this company worked in this month');
+  const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
+  const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
+  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures for this company');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const monthStart = `${month}-01`;
   const monthEndStr = `${month}-${String(daysInMonth).padStart(2, '0')}`;
   const allUserIds = activeSalaries.map(s => s.userId);
   const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
@@ -339,7 +288,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     allAssignments,
     userPatternRows,
     rulesRow,
-    sandwichRow,
     eligibleOffDay,
     dailyReportRows,
   ] = await Promise.all([
@@ -362,7 +310,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       select: { id: true, department: true, weeklyOffPattern: { select: { days: true } } },
     }),
     req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } }),
-    req.prisma.setting.findUnique({ where: { key: 'sandwich_leave_enabled' } }),
     req.prisma.offDayAllowanceEligibility.findMany({
       where: { eligibleFrom: { lte: `${month}-31` }, OR: [{ eligibleTo: null }, { eligibleTo: { gte: `${month}-01` } }] },
       select: { userId: true, eligibleFrom: true, eligibleTo: true },
@@ -376,7 +323,6 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   // Build lookup structures from parallel results
   const globalHolidayDates = new Set(holidays.map(h => h.date));
-  const sandwichEnabled = sandwichRow?.value === 'true';
 
   // Daily report map: userId → Set of reportDate strings (muster fallback for missing biometric)
   const dailyReportMap = new Map();
@@ -695,47 +641,12 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           const isOff = dow === 6
             ? offSaturdaySet.has(dateStr)
             : offDaysForDate.includes(dow);
-          if (isOff || dateStr > today) continue;
+          if (isOff || mergedHolidays.has(dateStr) || dateStr > today) continue;
           // Skip days after last working date (pro-rata separation — NOT LOP)
           if (separation?.lastWorkingDate && dateStr > separation.lastWorkingDate) continue;
           // Skip days before employee's date of joining (mid-month joiners)
           const joinDateStr = sal.user.dateOfJoining ? sal.user.dateOfJoining.slice(0, 10) : null;
           if (joinDateStr && dateStr < joinDateStr) continue;
-
-          if (mergedHolidays.has(dateStr)) {
-            // Holiday clubbing: if this holiday is sandwiched between LOP/absent days,
-            // the employee can't take it free — it becomes LOP too.
-            if (sandwichEnabled) {
-              let prevLop = false, nextLop = false;
-              for (let pd = d - 1; pd >= 1; pd--) {
-                const pds = `${month}-${String(pd).padStart(2, '0')}`;
-                const pdow = new Date(year, monthNum - 1, pd).getDay();
-                const pOff = pdow === 6 ? offSaturdaySet.has(pds) : offDaysForDate.includes(pdow);
-                if (pOff || mergedHolidays.has(pds)) continue;
-                if (joinDateStr && pds < joinDateStr) continue;
-                prevLop = attMap[pds] === 'absent' || lopDatesSet.has(pds);
-                break;
-              }
-              for (let nd = d + 1; nd <= daysInMonth; nd++) {
-                const nds = `${month}-${String(nd).padStart(2, '0')}`;
-                const ndow = new Date(year, monthNum - 1, nd).getDay();
-                const nOff = ndow === 6 ? offSaturdaySet.has(nds) : offDaysForDate.includes(ndow);
-                if (nOff || mergedHolidays.has(nds)) continue;
-                if (separation?.lastWorkingDate && nds > separation.lastWorkingDate) continue;
-                nextLop = attMap[nds] === 'absent' || lopDatesSet.has(nds);
-                break;
-              }
-              if (prevLop && nextLop) {
-                lopDays += 1; // Holiday sandwiched between LOP days → LOP
-              } else {
-                presentDays += 1; // Normal holiday → paid
-              }
-            } else {
-              presentDays += 1; // Holiday = paid (no sandwich policy)
-            }
-            continue;
-          }
-
           const status = attMap[dateStr];
           if (lopDatesSet.has(dateStr)) {
             // LOP leave date: attendance already counted via lopFromLeave.
@@ -750,39 +661,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
           } else if (status === 'absent') {
             lopDays += 1;
           } else if (!status && attendances.length > 0) {
-            // Working day with no biometric record
-            // Priority 1: check attendance muster (daily report)
+            // Working day with no biometric record — check attendance muster (daily report)
             if (dailyReportDates.has(dateStr)) {
-              presentDays += 1; // EOD muster submitted = employee was present
-            } else if (sandwichEnabled) {
-              // Priority 2: biometric sandwich — prev AND next working day both present/on_leave
-              // (on_leave counts as working — approved leave is not a gap in attendance)
-              let prevPresent = false, nextPresent = false;
-              for (let pd = d - 1; pd >= 1; pd--) {
-                const pds = `${month}-${String(pd).padStart(2, '0')}`;
-                const pdow = new Date(year, monthNum - 1, pd).getDay();
-                const pOff = pdow === 6 ? offSaturdaySet.has(pds) : offDaysForDate.includes(pdow);
-                if (pOff || mergedHolidays.has(pds)) continue;
-                const ps = attMap[pds];
-                prevPresent = ps === 'present' || ps === 'on_leave' || leaveDatesSet.has(pds);
-                break;
-              }
-              for (let nd = d + 1; nd <= daysInMonth; nd++) {
-                const nds = `${month}-${String(nd).padStart(2, '0')}`;
-                const ndow = new Date(year, monthNum - 1, nd).getDay();
-                const nOff = ndow === 6 ? offSaturdaySet.has(nds) : offDaysForDate.includes(ndow);
-                if (nOff || mergedHolidays.has(nds)) continue;
-                const ns = attMap[nds];
-                nextPresent = ns === 'present' || ns === 'on_leave' || leaveDatesSet.has(nds);
-                break;
-              }
-              if (prevPresent && nextPresent) {
-                presentDays += 1; // Sandwiched between two working days → treat as present
-              } else {
-                lopDays += 1;
-              }
+              presentDays += 1; // EOD report submitted = employee was present
             } else {
-              lopDays += 1; // No biometric + no report + sandwich off = LOP
+              lopDays += 1; // No biometric + no report = LOP
             }
           } else if (!status) {
             // No records at all for this employee yet = treat as present
@@ -865,6 +748,11 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
         : sal.basic + sal.hra + sal.da + sal.specialAllowance + sal.medicalAllowance + sal.conveyanceAllowance + sal.otherAllowance;
       offDayAllowance = daysInMonth > 0 ? Math.round((offGrossBase / daysInMonth) * offDaysWorked) : 0;
     }
+
+    // Weekly Off Allowance: stored as a salary component (code SUNDAY_ALLOWANCE)
+    // in the employee's salary structure — picked up automatically via earningComps below.
+    const weeklyOffAllowance = 0;
+    const weeklyOffDays = 0;
 
     // Derive earnings breakdown from components JSON (source of truth) or fall back to legacy fields
     const earningComps = Array.isArray(sal.components) ? sal.components.filter(c => c.type === 'earning') : [];
@@ -963,6 +851,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
       totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
       netPay, workingDays, presentDays, lopDays, lopDeduction,
       reimbursements, salaryAdvanceDeduction, offDayAllowance, offDaysWorked,
+      weeklyOffAllowance, weeklyOffDays,
       companyName: sal.user.company?.name || null,
       designation: sal.user.designation || null,
       dateOfJoining: sal.user.dateOfJoining || null,

@@ -21,6 +21,9 @@ const { PrismaClient } = require(path.join(__dirname, '../server/node_modules/@p
 const { DEFAULT_PAYROLL_RULES, calcStatutory } = require(
   path.join(__dirname, '../server/src/utils/payrollRules')
 );
+const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require(
+  path.join(__dirname, '../server/src/utils/saturdayPolicyHelper')
+);
 
 const prisma = new PrismaClient();
 
@@ -84,6 +87,7 @@ async function generateMonth(companyId, month) {
     sandwichRow,
     allDailyReports,
     allRepayments,
+    saturdayPolicy,
   ] = await Promise.all([
     prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
     prisma.separation.findMany({
@@ -118,6 +122,7 @@ async function generateMonth(companyId, month) {
       where: { month, status: 'pending', advance: { userId: { in: allUserIds }, status: { in: ['repaying', 'released'] } } },
       include: { advance: { select: { userId: true } } },
     }),
+    getSaturdayPolicyForMonth(companyId, month, prisma),
   ]);
 
   const existingPayslipUserIds = new Set(allPayslips.map(p => p.userId));
@@ -126,6 +131,7 @@ async function generateMonth(companyId, month) {
   const payrollRules = rulesRow ? (() => { try { return JSON.parse(rulesRow.value); } catch { return DEFAULT_PAYROLL_RULES; } })() : DEFAULT_PAYROLL_RULES;
   const lopDivisor = payrollRules.lop?.divisor > 0 ? payrollRules.lop.divisor : daysInMonth;
   const sandwichEnabled = sandwichRow?.value === 'true';
+  const offSaturdaySet = buildOffSaturdaySet(month, saturdayPolicy?.saturdayType || 'all');
 
   // Build daily report map: userId → Set of reportDate strings (muster fallback)
   const dailyReportMap = new Map();

@@ -942,6 +942,10 @@ model Payslip {
   offDayAllowance          Float    @default(0)           // extra pay for working on off days/holidays
   offDaysWorked            Int      @default(0)           // number of off/holiday days worked
 
+  // Weekly Off Allowance (Sunday / off-Saturday CTC component)
+  weeklyOffAllowance       Float    @default(0)           // daily-rate pay for weekly off days (Sundays + off-Saturdays)
+  weeklyOffDays            Int      @default(0)           // number of weekly-off days credited this month
+
   // Attendance
   workingDays          Int      @default(0)
   presentDays          Float    @default(0)

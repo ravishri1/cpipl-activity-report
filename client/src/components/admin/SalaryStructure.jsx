@@ -152,13 +152,14 @@ export default function SalaryStructure() {
   const [componentSaving, setComponentSaving] = useState(false);
   const [componentMsg, setComponentMsg] = useState(null);
 
+  const [showInactive, setShowInactive] = useState(false);
+
   // ─── Fetch employees ───
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get('/users');
-      const active = (res.data || []).filter((u) => u.isActive !== false);
-      setEmployees(active);
+      setEmployees(res.data || []);
     } catch (err) {
       console.error('Failed to fetch employees:', err);
     } finally {
@@ -239,6 +240,7 @@ export default function SalaryStructure() {
 
   const filteredEmployees = useMemo(() => {
     let list = employees;
+    if (!showInactive) list = list.filter(e => e.isActive !== false);
     // If ?filter=missing, show only employees without a salary structure
     if (filterMissing) {
       const pendingIds = new Set(pendingSalary.map(e => e.id));
@@ -252,7 +254,7 @@ export default function SalaryStructure() {
         (e.employeeId && e.employeeId.toLowerCase().includes(q)) ||
         (e.department && e.department.toLowerCase().includes(q))
     );
-  }, [employees, searchQuery, filterMissing, pendingSalary]);
+  }, [employees, searchQuery, filterMissing, pendingSalary, showInactive]);
 
   // ─── Calculations (earnings from components; deductions from payroll rules) ───
   const calculations = useMemo(() => {
@@ -1641,8 +1643,8 @@ export default function SalaryStructure() {
       {/* Search & Table Card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
         {/* Search Bar */}
-        <div className="px-4 py-3 border-b border-slate-100">
-          <div className="relative max-w-md">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-48 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
@@ -1660,6 +1662,17 @@ export default function SalaryStructure() {
               </button>
             )}
           </div>
+          <button
+            onClick={() => setShowInactive(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+              showInactive
+                ? 'bg-amber-50 border-amber-300 text-amber-700'
+                : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {showInactive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+            {showInactive ? 'All employees' : 'Active only'}
+          </button>
         </div>
 
         {/* Table */}
