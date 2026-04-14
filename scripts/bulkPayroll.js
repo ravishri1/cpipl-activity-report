@@ -202,7 +202,6 @@ async function generateMonth(companyId, month) {
           // the holiday is also LOP (employee can't take a free holiday inside an absent block).
           // If surrounded by paid-leave days the holiday stays paid (balance question, not salary).
           if (sandwichEnabled) {
-            const isLopOrAbsent = (s) => s === 'absent' || lopLeaveDates.has(s);
             let prevLop = false, nextLop = false;
             for (let pd = d - 1; pd >= 1; pd--) {
               const pds = `${month}-${String(pd).padStart(2, '0')}`;

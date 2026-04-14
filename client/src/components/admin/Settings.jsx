@@ -139,9 +139,9 @@ export default function Settings() {
           <div className="flex-1">
             <p className="text-sm font-medium text-slate-700">Sandwich Leave Policy</p>
             <p className="text-xs text-slate-500 mt-0.5">
-              When enabled, weekends &amp; holidays between two leave days are also counted as leave.
+              When enabled: (1) holidays sandwiched between LOP/absent days are also LOP — employee cannot take a free holiday inside an absent block. (2) A missed biometric punch between an approved leave day and a present day is treated as present.
               <br />
-              <span className="text-slate-400">Example: Leave on Fri + Mon → Sat &amp; Sun also counted = 4 days instead of 2</span>
+              <span className="text-slate-400">Example: Absent Fri → Holiday Sat → Absent Mon = Saturday also LOP. Or: PL ends Thu, missed punch Fri, Present Mon = Friday treated as present.</span>
             </p>
           </div>
           <button
