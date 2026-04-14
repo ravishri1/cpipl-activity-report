@@ -88,10 +88,7 @@ export default function SeparationManager() {
   const [view, setView] = useState('pipeline');
   const [filter, setFilter] = useState('active');
   const [showInitiateForm, setShowInitiateForm] = useState(false);
-  const [formStep, setFormStep] = useState('basic'); // 'basic' | 'lwd_review'
-  const [lwdChoice, setLwdChoice] = useState(null);  // null | 'confirm' | 'override'
-  const [settlementOverride, setSettlementOverride] = useState('');
-  const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
+  const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', settlementDate: '', reason: '' });
 
   const { data: separations, loading, error: fetchErr, refetch } = useFetch('/separation', []);
   const [users, setUsers] = useState([]);
@@ -100,14 +97,13 @@ export default function SeparationManager() {
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
 
-  // Derived: selected employee + auto-calculated LWD
+  // Derived: selected employee + auto-calculated dates
   const selectedUser = users.find(u => String(u.id) === String(form.userId));
   const noticeDays = selectedUser?.noticePeriodDays || 30;
   const autoLWD = form.requestDate ? addDaysStr(form.requestDate, noticeDays) : '';
-  const effectiveLWD = lwdChoice === 'override' ? (form.lastWorkingDate || '') : (lwdChoice === 'confirm' ? autoLWD : '');
-  // Settlement/hold date: HR override if set, else estimated LWD + 45 days
-  const salaryHoldUntilCalc = autoLWD ? addDaysStr(autoLWD, 45) : '';
-  const salaryHoldUntil = settlementOverride || salaryHoldUntilCalc;
+  const effectiveLWD = form.lastWorkingDate || autoLWD;
+  const autoSettlement = autoLWD ? addDaysStr(autoLWD, 45) : '';
+  const effectiveSettlement = form.settlementDate || autoSettlement;
   const lastMonthDays = effectiveLWD ? dayOfMonth(effectiveLWD) : null;
 
   const filtered = filter === 'active'
@@ -118,8 +114,6 @@ export default function SeparationManager() {
 
   const openInitiateForm = async () => {
     setShowInitiateForm(true);
-    setFormStep('basic');
-    setLwdChoice(null);
     if (users.length === 0) {
       setUsersLoading(true);
       try {
@@ -135,22 +129,11 @@ export default function SeparationManager() {
 
   const closeInitiateForm = () => {
     setShowInitiateForm(false);
-    setFormStep('basic');
-    setLwdChoice(null);
-    setSettlementOverride('');
-    setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
-  };
-
-  const handleNextToLWD = () => {
-    if (!form.userId || !form.requestDate) return;
-    setLwdChoice(null);
-    // Pre-fill settlement date with auto-calculated value so HR sees it and can change
-    setSettlementOverride(autoLWD ? addDaysStr(autoLWD, 45) : '');
-    setFormStep('lwd_review');
+    setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', settlementDate: '', reason: '' });
   };
 
   const handleInitiate = async () => {
-    if (!form.userId || !effectiveLWD) return;
+    if (!form.userId || !form.requestDate) return;
     const payload = {
       userId: parseInt(form.userId),
       type: form.type,
@@ -158,7 +141,7 @@ export default function SeparationManager() {
       reason: form.reason,
       lastWorkingDate: effectiveLWD,
       noticePeriodDays: noticeDays,
-      ...(settlementOverride ? { salaryHoldUntil: settlementOverride } : {}),
+      salaryHoldUntil: effectiveSettlement,
     };
     try {
       await execute(() => api.post('/separation', payload), 'Separation initiated.');
@@ -257,245 +240,117 @@ export default function SeparationManager() {
         ))}
       </div>
 
-      {/* Initiate Form — multi-step */}
+      {/* Initiate Form — single form, dates auto-calculate inline */}
       {showInitiateForm && (
         <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
+          <h2 className="text-base font-semibold text-gray-800">Initiate Separation</h2>
 
-          {/* Step indicator */}
-          <div className="flex items-center gap-2">
-            {['Basic Details', 'Confirm LWD', 'Submit'].map((label, i) => {
-              const stepIdx = formStep === 'basic' ? 0 : 1;
-              const done = i < stepIdx;
-              const active = i === stepIdx;
-              return (
-                <div key={label} className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
-                    ${done ? 'bg-green-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
-                    {done ? '✓' : i + 1}
-                  </div>
-                  <span className={`text-sm ${active ? 'font-semibold text-gray-800' : done ? 'text-green-700' : 'text-gray-400'}`}>{label}</span>
-                  {i < 2 && <div className="w-8 h-px bg-gray-200 mx-1" />}
-                </div>
-              );
-            })}
+          {/* Row 1: Employee + Type */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId}
+                onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} disabled={usersLoading}>
+                <option value="">{usersLoading ? 'Loading...' : 'Select employee...'}</option>
+                {users.filter(u => u.employmentStatus === 'active' || u.isActive).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.employeeId || 'No ID'}) — {u.department}</option>
+                ))}
+              </select>
+              {selectedUser && <p className="text-xs text-gray-400 mt-1">Notice period: <strong>{noticeDays} days</strong></p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                <option value="resignation">Resignation</option>
+                <option value="retirement">Retirement</option>
+                <option value="termination">Termination</option>
+                <option value="absconding">Absconding</option>
+              </select>
+            </div>
           </div>
 
-          {/* ── STEP 1: Basic Details ─────────────────────────────────────── */}
-          {formStep === 'basic' && (
-            <>
-              <h2 className="text-base font-semibold text-gray-800">Step 1 — Basic Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Row 2: Separation date → triggers auto-calc */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {form.type === 'resignation' ? 'Resignation Date' : 'Separation Date'} *
+            </label>
+            <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              value={form.requestDate} onChange={e => setForm(f => ({ ...f, requestDate: e.target.value, lastWorkingDate: '', settlementDate: '' }))} />
+          </div>
+
+          {/* Auto-calculated dates — shown as soon as employee + date are selected */}
+          {form.userId && form.requestDate && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4">
+              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Auto-Calculated Dates</p>
+
+              {/* LWD row */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId}
-                    onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} disabled={usersLoading}>
-                    <option value="">{usersLoading ? 'Loading employees...' : 'Select employee...'}</option>
-                    {users.filter(u => u.employmentStatus === 'active' || u.isActive).map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.employeeId || 'No ID'}) — {u.department}</option>
-                    ))}
-                  </select>
-                  {selectedUser && (
-                    <p className="text-xs text-gray-500 mt-1">Notice period: <strong>{noticeDays} days</strong></p>
-                  )}
+                  <p className="text-xs text-blue-600 mb-1">Estimated Last Working Date</p>
+                  <p className="text-base font-bold text-blue-800">{fmt(autoLWD)}</p>
+                  <p className="text-xs text-blue-400">{form.requestDate} + {noticeDays} days</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.type}
-                    onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                    <option value="resignation">Resignation</option>
-                    <option value="retirement">Retirement</option>
-                    <option value="termination">Termination</option>
-                    <option value="absconding">Absconding</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {form.type === 'resignation' ? 'Resignation Date' : 'Separation Date'} *
-                  </label>
-                  <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={form.requestDate} onChange={e => setForm(f => ({ ...f, requestDate: e.target.value }))} />
-                  {form.requestDate && selectedUser && (
-                    <p className="text-xs text-blue-600 mt-1">
-                      Auto LWD = {fmt(autoLWD)} ({noticeDays} days notice)
+                  <p className="text-xs text-blue-600 mb-1">Actual LWD <span className="font-normal text-gray-400">(override if different)</span></p>
+                  <input type="date" className="w-full border border-blue-300 rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
+                    value={form.lastWorkingDate || autoLWD}
+                    onChange={e => setForm(f => ({ ...f, lastWorkingDate: e.target.value === autoLWD ? '' : e.target.value, settlementDate: '' }))} />
+                  {form.lastWorkingDate && form.lastWorkingDate !== autoLWD && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      {(() => {
+                        const diff = Math.round((new Date(form.lastWorkingDate) - new Date(autoLWD)) / 86400000);
+                        return `${diff > 0 ? '+' : ''}${diff} days from estimated`;
+                      })()}
                     </p>
                   )}
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
-                  <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2}
-                    value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+              </div>
+
+              {/* Settlement row */}
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-blue-200">
+                <div>
+                  <p className="text-xs text-blue-600 mb-1">Estimated Settlement Date</p>
+                  <p className="text-base font-bold text-blue-800">{fmt(autoSettlement)}</p>
+                  <p className="text-xs text-blue-400">Est. LWD + 45 days</p>
                 </div>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={handleNextToLWD} disabled={!form.userId || !form.requestDate}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-                  Next: Review Last Working Date →
-                </button>
-                <button onClick={closeInitiateForm} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-              </div>
-            </>
-          )}
-
-          {/* ── STEP 2: LWD Review & Confirm ─────────────────────────────── */}
-          {formStep === 'lwd_review' && (
-            <>
-              <h2 className="text-base font-semibold text-gray-800">Step 2 — Confirm Last Working Date</h2>
-
-              {/* Employee summary */}
-              <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700 flex flex-wrap gap-5">
-                <span><strong>Employee:</strong> {selectedUser?.name} ({selectedUser?.employeeId})</span>
-                <span><strong>Type:</strong> <span className="capitalize">{form.type}</span></span>
-                <span><strong>{form.type === 'resignation' ? 'Resigned' : 'Separation'} on:</strong> {fmt(form.requestDate)}</span>
-                <span><strong>Notice:</strong> {noticeDays} days</span>
-              </div>
-
-              {/* Auto-calculated LWD box */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 space-y-1">
-                <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">System Calculated Last Working Date</p>
-                <p className="text-2xl font-bold text-blue-800">{fmt(autoLWD)}</p>
-                <p className="text-xs text-blue-500">{form.requestDate} + {noticeDays} days notice = {autoLWD}</p>
-              </div>
-
-              {/* LWD Confirmation question */}
-              {lwdChoice === null && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-700">Is <strong>{fmt(autoLWD)}</strong> the final Last Working Date?</p>
-                  <div className="flex gap-3">
-                    <button onClick={() => setLwdChoice('confirm')}
-                      className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700">
-                      ✅ Yes, {fmt(autoLWD)} is final
-                    </button>
-                    <button onClick={() => { setLwdChoice('override'); setForm(f => ({ ...f, lastWorkingDate: '' })); }}
-                      className="bg-amber-500 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-amber-600">
-                      ✏️ No, set a different date
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Confirmed with auto LWD */}
-              {lwdChoice === 'confirm' && (
-                <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 space-y-3">
-                  <p className="text-sm font-semibold text-green-800">✅ LWD Confirmed: {fmt(autoLWD)}</p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
-                    <div><p className="text-xs text-gray-400">Last Working Date</p><p className="font-semibold">{fmt(autoLWD)}</p></div>
-                    <div>
-                      <p className="text-xs text-gray-400">Settlement Date (hold until)</p>
-                      <p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p>
-                      <p className="text-xs text-gray-400">Est. LWD + 45 days</p>
-                    </div>
-                    <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
-                  </div>
-                  <div className="pt-2 border-t border-green-200 space-y-1">
-                    <p className="text-xs text-green-800 font-medium">Settlement (salary hold until) date:</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-green-100 rounded-lg px-3 py-2">
-                        <p className="text-xs text-green-600 mb-0.5">Estimated (Est. LWD + 45 days)</p>
-                        <p className="text-sm font-semibold text-green-800">{fmt(salaryHoldUntilCalc)}</p>
-                      </div>
-                      <div className="bg-white border border-green-300 rounded-lg px-3 py-2">
-                        <p className="text-xs text-green-600 mb-0.5">Actual (HR confirmed) — editable</p>
-                        <input type="date" className="w-full border border-green-200 rounded px-2 py-1 text-sm font-semibold"
-                          value={settlementOverride}
-                          onChange={e => setSettlementOverride(e.target.value)} />
-                        {settlementOverride && settlementOverride !== salaryHoldUntilCalc && (
-                          <p className="text-xs text-amber-600 mt-0.5">
-                            {(() => {
-                              const diff = Math.round((new Date(settlementOverride) - new Date(salaryHoldUntilCalc)) / 86400000);
-                              return `Modified by HR (${diff > 0 ? '+' : ''}${diff} days from estimated)`;
-                            })()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
-                  <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
-                </div>
-              )}
-
-              {/* Override with custom LWD */}
-              {lwdChoice === 'override' && (
-                <div className="space-y-3">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 space-y-3">
-                    <p className="text-sm font-semibold text-amber-800">✏️ Enter the agreed Last Working Date</p>
-                    <p className="text-xs text-amber-700">This date was agreed between HR and the employee. The system will treat it as the official LWD — no notice recovery penalty will be applied.</p>
-                    <div className="flex items-center gap-3">
-                      <input type="date" className="border border-amber-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400"
-                        value={form.lastWorkingDate}
-                        onChange={e => setForm(f => ({ ...f, lastWorkingDate: e.target.value }))} />
-                      {form.lastWorkingDate && (
-                        <span className="text-sm font-medium text-gray-700">{fmt(form.lastWorkingDate)}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {form.lastWorkingDate && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 space-y-3">
-                      <p className="text-sm font-semibold text-blue-800">Updated dates based on agreed LWD</p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
-                        <div><p className="text-xs text-gray-400">Agreed LWD (Actual)</p><p className="font-semibold text-blue-800">{fmt(form.lastWorkingDate)}</p></div>
-                        <div>
-                          <p className="text-xs text-gray-400">Settlement Date (hold until)</p>
-                          <p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p>
-                          <p className="text-xs text-gray-400">{settlementOverride ? 'HR override' : `Est. LWD (${fmt(autoLWD)}) + 45d`}</p>
-                        </div>
-                        <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
-                      </div>
-                      <div className="pt-2 border-t border-blue-200 space-y-1">
-                        <p className="text-xs text-blue-800 font-medium">Settlement (salary hold until) date:</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-blue-100 rounded-lg px-3 py-2">
-                            <p className="text-xs text-blue-600 mb-0.5">Estimated (Est. LWD + 45 days)</p>
-                            <p className="text-sm font-semibold text-blue-800">{fmt(salaryHoldUntilCalc)}</p>
-                            <p className="text-xs text-blue-400">Based on {fmt(autoLWD)}</p>
-                          </div>
-                          <div className="bg-white border border-blue-300 rounded-lg px-3 py-2">
-                            <p className="text-xs text-blue-600 mb-0.5">Actual (HR confirmed) — editable</p>
-                            <input type="date" className="w-full border border-blue-200 rounded px-2 py-1 text-sm font-semibold"
-                              value={settlementOverride}
-                              onChange={e => setSettlementOverride(e.target.value)} />
-                            {settlementOverride && settlementOverride !== salaryHoldUntilCalc && (
-                              <p className="text-xs text-amber-600 mt-0.5">
-                                {(() => {
-                                  const diff = Math.round((new Date(settlementOverride) - new Date(salaryHoldUntilCalc)) / 86400000);
-                                  return `Modified by HR (${diff > 0 ? '+' : ''}${diff} days from estimated)`;
-                                })()}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
-                      {autoLWD !== form.lastWorkingDate && (
-                        <p className="text-xs text-gray-400">
-                          (System had calculated {fmt(autoLWD)} — overridden by HR to {fmt(form.lastWorkingDate)})
-                        </p>
-                      )}
-                    </div>
+                <div>
+                  <p className="text-xs text-blue-600 mb-1">Actual Settlement Date <span className="font-normal text-gray-400">(override if different)</span></p>
+                  <input type="date" className="w-full border border-blue-300 rounded-lg px-3 py-1.5 text-sm font-semibold bg-white"
+                    value={form.settlementDate || autoSettlement}
+                    onChange={e => setForm(f => ({ ...f, settlementDate: e.target.value === autoSettlement ? '' : e.target.value }))} />
+                  {form.settlementDate && form.settlementDate !== autoSettlement && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      {(() => {
+                        const diff = Math.round((new Date(form.settlementDate) - new Date(autoSettlement)) / 86400000);
+                        return `${diff > 0 ? '+' : ''}${diff} days from estimated`;
+                      })()}
+                    </p>
                   )}
-
-                  <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
                 </div>
-              )}
-
-              {/* Submit row */}
-              <div className="flex gap-3 pt-2 border-t border-gray-100">
-                <button onClick={() => { setFormStep('basic'); setLwdChoice(null); }}
-                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
-                  ← Back
-                </button>
-                {lwdChoice && (lwdChoice === 'confirm' || (lwdChoice === 'override' && form.lastWorkingDate)) && (
-                  <button onClick={handleInitiate} disabled={saving}
-                    className="bg-red-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
-                    {saving ? 'Initiating...' : `Submit — ${form.type.charAt(0).toUpperCase() + form.type.slice(1)}`}
-                  </button>
-                )}
-                <button onClick={closeInitiateForm} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 ml-auto">Cancel</button>
               </div>
-            </>
+
+              {/* FnF preview */}
+              <p className="text-xs text-gray-500 pt-1 border-t border-blue-200">
+                FnF: Gross ÷ 30 × <strong>{lastMonthDays} days</strong> (days worked in final month based on actual LWD)
+              </p>
+            </div>
           )}
 
+          {/* Reason */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2}
+              value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={handleInitiate} disabled={saving || !form.userId || !form.requestDate}
+              className="bg-red-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+              {saving ? 'Initiating...' : 'Initiate Separation'}
+            </button>
+            <button onClick={closeInitiateForm} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          </div>
         </div>
       )}
 
