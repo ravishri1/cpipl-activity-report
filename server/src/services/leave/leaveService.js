@@ -227,11 +227,19 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId, {
   }
 
   // Sandwich leave: count ALL calendar days (weekends/holidays included)
+  // This represents the total leave-period length — balance is charged for all these days.
   if (sandwichLeave) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
-    return totalDays;
+    const start = new Date(startDate + 'T00:00:00Z');
+    const end   = new Date(endDate   + 'T00:00:00Z');
+    // Count all days EXCEPT pure Sundays (Sundays are universally skipped in payroll)
+    // Off-Saturdays and company holidays within the range ARE counted.
+    let total = 0;
+    const cur = new Date(start);
+    while (cur <= end) {
+      if (cur.getUTCDay() !== 0) total++; // skip Sundays only
+      cur.setDate(cur.getDate() + 1);
+    }
+    return total;
   }
 
   const start = new Date(startDate);
@@ -255,6 +263,42 @@ async function calculateLeaveDays(startDate, endDate, session, prisma, userId, {
   }
 
   return days;
+}
+
+/**
+ * Get off/holiday dates (excluding Sundays) within a leave period.
+ * Used to identify which days become auto-LOP under sandwich policy.
+ */
+async function getSandwichOffDates(startDate, endDate, prisma, userId) {
+  const u = userId ? await prisma.user.findUnique({ where: { id: userId }, select: { location: true } }) : null;
+  const userLocation = u?.location || null;
+  const holidayLocationFilter = userLocation
+    ? { OR: [{ location: userLocation }, { location: 'All' }] }
+    : {};
+  const baseOffDays = userId ? await getUserWeeklyOffDays(userId, prisma) : DEFAULT_OFF_DAYS;
+  const SAT_OFF_CUTOFF = '2026-02-01';
+
+  const holidays = await prisma.holiday.findMany({
+    where: { date: { gte: startDate, lte: endDate }, ...holidayLocationFilter },
+    select: { date: true },
+  });
+  const holidayDates = new Set(holidays.map(h => h.date));
+
+  const offDates = [];
+  const cur = new Date(startDate + 'T00:00:00Z');
+  const end = new Date(endDate   + 'T00:00:00Z');
+  while (cur <= end) {
+    const ds  = cur.toISOString().slice(0, 10);
+    const dow = cur.getUTCDay();
+    if (dow !== 0) { // skip Sundays — they are always salary-neutral
+      const offDays = ds < SAT_OFF_CUTOFF ? baseOffDays.filter(d => d !== 6) : baseOffDays;
+      if (offDays.includes(dow) || holidayDates.has(ds)) {
+        offDates.push(ds);
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return offDates; // sorted ascending
 }
 
 /**
@@ -485,7 +529,14 @@ async function applyLeave(userId, data, prisma) {
   const sandwichSetting = await prisma.setting.findUnique({ where: { key: 'sandwich_leave_enabled' } });
   const sandwichLeave = sandwichSetting?.value === 'true';
 
-  const days = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId, { sandwichLeave });
+  // calendarDays = working days + off/holiday days within the range (sandwich counts them all)
+  // workingDays  = working days only (used to verify minimum balance requirement)
+  const calendarDays = await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId, { sandwichLeave });
+  const workingDays  = sandwichLeave
+    ? await calculateLeaveDays(startDate, endDate, effectiveSession, prisma, userId, { sandwichLeave: false })
+    : calendarDays;
+  let days = calendarDays; // may be reduced below when balance is insufficient for off-days
+
   if (days <= 0) {
     throw new Error('Selected dates have no working days (all weekends/holidays).');
   }
@@ -557,6 +608,11 @@ async function applyLeave(userId, data, prisma) {
   // PL credited this year + CF backup (only when PL runs dry)
   const totalPool = credited + cfBackup;
 
+  // offDates: off/holiday dates (non-Sunday) within the leave range — needed for auto-LOP
+  const offDates      = (sandwichLeave && !isLOP) ? await getSandwichOffDates(startDate, endDate, prisma, userId) : [];
+  const sandwichedOff = offDates.length; // extra days on top of working days
+  let autoLopDates    = []; // off-dates that will become auto-approved LOP (not charged from PL balance)
+
   let available;
   if (!isLOP) {
     if (onProbation && balance.probationAllowance !== null && balance.probationAllowance !== undefined) {
@@ -564,22 +620,40 @@ async function applyLeave(userId, data, prisma) {
       const usable = Math.min(balance.probationAllowance, credited);
       available = Math.max(usable - actualUsed, 0);
 
-      if (available < days) {
+      if (available < workingDays) {
         const probEndStr = user.probationEndDate || 'confirmation';
         throw new Error(
           `You are on probation. Only ${balance.probationAllowance} ${leaveType.name} leave(s) can be used during probation. ` +
-          `Available: ${available.toFixed(1)}, Requested: ${days}. ` +
+          `Available: ${available.toFixed(1)}, Requested: ${workingDays}. ` +
           `Remaining leaves will be unlocked after ${probEndStr}.`
         );
       }
+      // Can cover working days — check if off-days can also be covered
+      if (sandwichedOff > 0 && available < calendarDays) {
+        // Balance covers working days but not all off-days; off-days beyond balance → auto-LOP
+        const balanceForOff = Math.floor(available - workingDays);
+        autoLopDates = offDates.slice(balanceForOff); // last N off-dates become LOP
+        days = available; // charge what's available from PL balance
+      }
     } else {
       available = Math.max(totalPool - actualUsed, 0);
-      if (available < days) {
+
+      if (available < workingDays) {
+        // Not even enough for working days — hard error
         const cfNote = cfBackup > 0 ? ` (includes ${cfBackup.toFixed(1)} days CF carry-forward)` : '';
         throw new Error(
-          `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}${cfNote}, Requested: ${days}`
+          `Insufficient ${leaveType.name} balance. Available: ${available.toFixed(1)}${cfNote}, Required: ${workingDays} working day(s)`
         );
       }
+
+      if (sandwichedOff > 0 && available < calendarDays) {
+        // Balance covers working days but not all sandwiched off/holiday days.
+        // Charge PL for what's available; remaining off-days become auto-approved LOP.
+        const balanceForOff = Math.floor(available - workingDays); // whole-day off-days covered by spare PL
+        autoLopDates = offDates.slice(balanceForOff); // off-dates not covered by balance
+        days = workingDays + balanceForOff; // PL days actually charged from balance
+      }
+      // If available >= calendarDays: days stays as calendarDays (all charged from PL) — no LOP needed
     }
   }
 
@@ -603,7 +677,45 @@ async function applyLeave(userId, data, prisma) {
     },
   });
 
-  return request;
+  // Auto-create approved LOP requests for sandwiched off/holiday days that exceeded PL balance.
+  // These are system-generated (no manual application needed) and auto-approved immediately.
+  if (autoLopDates.length > 0) {
+    const lopType = await prisma.leaveType.findFirst({ where: { code: 'LOP', isActive: true } });
+    if (lopType) {
+      // Group contiguous off-dates into ranges to minimise the number of extra records
+      const blocks = [];
+      let blockStart = autoLopDates[0], blockEnd = autoLopDates[0];
+      for (let i = 1; i < autoLopDates.length; i++) {
+        const prev = new Date(autoLopDates[i - 1] + 'T00:00:00Z');
+        const curr = new Date(autoLopDates[i]     + 'T00:00:00Z');
+        prev.setDate(prev.getDate() + 1);
+        if (prev.getTime() === curr.getTime()) {
+          blockEnd = autoLopDates[i]; // extend current block
+        } else {
+          blocks.push({ start: blockStart, end: blockEnd });
+          blockStart = blockEnd = autoLopDates[i];
+        }
+      }
+      blocks.push({ start: blockStart, end: blockEnd });
+
+      for (const block of blocks) {
+        await prisma.leaveRequest.create({
+          data: {
+            userId,
+            leaveTypeId: lopType.id,
+            startDate:   block.start,
+            endDate:     block.end,
+            days:        autoLopDates.filter(d => d >= block.start && d <= block.end).length,
+            session:     'full_day',
+            reason:      `Auto LOP — sandwich policy (off/holiday day within leave period, no PL balance available)`,
+            status:      'approved',
+          },
+        });
+      }
+    }
+  }
+
+  return { ...request, autoLopDates };
 }
 
 /**
@@ -637,6 +749,19 @@ async function reviewLeave(requestId, reviewerId, status, reviewNote, prisma) {
       user: { select: { name: true, email: true } },
     },
   });
+
+  // If rejected, remove any auto-LOP requests that were created alongside this leave
+  if (status === 'rejected') {
+    await prisma.leaveRequest.deleteMany({
+      where: {
+        userId:    request.userId,
+        status:    'approved',
+        startDate: { gte: request.startDate },
+        endDate:   { lte: request.endDate },
+        reason:    { startsWith: 'Auto LOP — sandwich policy' },
+      },
+    });
+  }
 
   // If approved, deduct from balance and sync attendance records
   if (status === 'approved') {
@@ -711,6 +836,17 @@ async function cancelLeave(requestId, userId, prisma) {
   await prisma.leaveRequest.update({
     where: { id: requestId },
     data: { status: 'cancelled' },
+  });
+
+  // Remove any auto-LOP sandwich requests created alongside this leave
+  await prisma.leaveRequest.deleteMany({
+    where: {
+      userId:    request.userId,
+      status:    'approved',
+      startDate: { gte: request.startDate },
+      endDate:   { lte: request.endDate },
+      reason:    { startsWith: 'Auto LOP — sandwich policy' },
+    },
   });
 
   if (wasApproved) {

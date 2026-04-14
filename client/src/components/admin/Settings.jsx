@@ -139,9 +139,9 @@ export default function Settings() {
           <div className="flex-1">
             <p className="text-sm font-medium text-slate-700">Sandwich Leave Policy</p>
             <p className="text-xs text-slate-500 mt-0.5">
-              When enabled: (1) holidays sandwiched between LOP/absent days are also LOP — employee cannot take a free holiday inside an absent block. (2) A missed biometric punch between an approved leave day and a present day is treated as present.
+              When enabled, off-days and holidays within a leave period are automatically included as leave days. If PL/COF balance covers them, they are charged from balance; if not, they become LOP automatically — no attendance muster needed.
               <br />
-              <span className="text-slate-400">Example: Absent Fri → Holiday Sat → Absent Mon = Saturday also LOP. Or: PL ends Thu, missed punch Fri, Present Mon = Friday treated as present.</span>
+              <span className="text-slate-400">Example: Apply PL Thu–Mon → Sat counted as 1 PL day (or auto-LOP if no balance). Holiday between two absent days → also LOP.</span>
             </p>
           </div>
           <button
