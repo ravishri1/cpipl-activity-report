@@ -519,20 +519,12 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
     note: 'Formula: Gross ÷ 30 × PL balance days',
   });
 
-  // 3. Notice period recovery / buyout
+  // 3. Notice period buyout (termination only — company waives remaining notice)
+  // NOTE: Notice *recovery* is intentionally NOT auto-added. When HR confirms the LWD
+  // (lastWorkingDate), it is treated as a mutually agreed date — no penalty applies.
+  // If HR wants to deduct notice recovery, they can add it as a custom item.
   const expectedLWD = sep.expectedLWD;
-  if (expectedLWD && lwd < expectedLWD) {
-    const shortDays = daysBetween(lwd, expectedLWD);
-    items.push({
-      component: 'notice_recovery',
-      label: `Notice period recovery (${shortDays} days short-served)`,
-      amount: -Math.round(dailyRate * shortDays * 100) / 100, // deduction
-      days: shortDays,
-      dailyRate,
-      autoCalculated: true,
-      note: `Employee left ${shortDays} days before completing notice period`,
-    });
-  } else if (expectedLWD && lwd > expectedLWD && sep.type === 'termination') {
+  if (expectedLWD && lwd > expectedLWD && sep.type === 'termination') {
     const extraDays = daysBetween(expectedLWD, lwd);
     items.push({
       component: 'notice_buyout',
@@ -580,6 +572,16 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
 
   const netFnF = items.reduce((sum, i) => sum + i.amount, 0);
 
+  // Historical: records initiated before April 2026 bypass the 45-day hold check
+  const isHistorical = !!(sep.requestDate && sep.requestDate < '2026-04-01');
+
+  // Salary hold info — which payslip month shows "On Hold"
+  const lwdMonthStr = lwd.slice(0, 7); // "YYYY-MM"
+  const salaryReleaseDate = sep.salaryHoldUntil || addDays(lwd, 45);
+  const formula = grossMonthly
+    ? `Gross ₹${grossMonthly.toFixed(2)} ÷ 30 = ₹${dailyRate.toFixed(2)}/day`
+    : null;
+
   res.json({
     employeeId: user.employeeId,
     employeeName: user.name,
@@ -588,11 +590,15 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
     lastWorkingDate: lwd,
     grossMonthly,
     dailyRate,
+    formula,
     items,
     netFnF: Math.round(netFnF * 100) / 100,
     salaryHoldBreakdown,
     totalHeldAmount: Math.round(totalHeldAmount * 100) / 100,
-    salaryHoldUntil: sep.salaryHoldUntil,
+    salaryHoldUntil: salaryReleaseDate,
+    lwdMonth: lwdMonthStr,
+    salaryReleaseDate,
+    isHistorical,
     manualMode,
     salarySource,
     note: manualMode

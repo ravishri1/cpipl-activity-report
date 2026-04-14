@@ -481,11 +481,29 @@ export default function SeparationDetail() {
                       ⚠️ No salary structure found. Amounts are ₹0 — override each item or add custom items.
                     </div>
                   )}
+                  {fnfPreview?.isHistorical && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3 text-sm text-purple-800">
+                      📋 Historical record — this separation was initiated before April 2026. The 45-day salary hold check is bypassed; HR can override amounts freely.
+                    </div>
+                  )}
                   {fnfPreview && (
-                    <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600 flex gap-6">
-                      <span><strong>Gross:</strong> ₹{fnfPreview.grossMonthly?.toFixed(2)}</span>
-                      <span><strong>Daily Rate:</strong> ₹{fnfPreview.dailyRate?.toFixed(2)}</span>
-                      <span><strong>LWD:</strong> {fnfPreview.lastWorkingDate}</span>
+                    <div className="bg-gray-50 rounded-lg p-3 mb-3 text-xs text-gray-600 space-y-1">
+                      <div className="flex flex-wrap gap-6">
+                        <span><strong>LWD:</strong> {fnfPreview.lastWorkingDate}</span>
+                        <span><strong>Gross Monthly:</strong> ₹{fnfPreview.grossMonthly?.toFixed(2)}</span>
+                        <span><strong>Daily Rate:</strong> ₹{fnfPreview.dailyRate?.toFixed(2)}/day</span>
+                      </div>
+                      {fnfPreview.formula && (
+                        <p className="text-indigo-700 font-medium">Formula: {fnfPreview.formula}</p>
+                      )}
+                      {fnfPreview.lwdMonth && (
+                        <p className="text-blue-700">
+                          Salary for <strong>{fnfPreview.lwdMonth}</strong> will appear in payslip with <strong>"On Hold"</strong> status until{' '}
+                          <strong>{fnfPreview.salaryReleaseDate}</strong> (45 days after LWD).
+                          {fnfPreview.isHistorical && ' For historical records, HR can release immediately.'}
+                        </p>
+                      )}
+                      <p className="text-orange-600 text-xs">Note: Notice period recovery is not auto-deducted — LWD confirmed by HR is treated as the mutually agreed date. Add a custom deduction below if recovery applies.</p>
                     </div>
                   )}
 
