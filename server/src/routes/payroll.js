@@ -260,20 +260,32 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const year = parseInt(month.split('-')[0]);
   const monthNum = parseInt(month.split('-')[1]);
   const monthEnd = `${month}-${String(new Date(year, monthNum, 0).getDate()).padStart(2, '0')}`;
+  const monthStart = `${month}-01`;
 
-  const userWhere = { companyId: parseInt(companyId), isActive: true, dateOfJoining: { lte: monthEnd }, employeeId: { not: null } };
+  // Include: currently active employees + separated employees whose LWD falls within or after this month
+  // This ensures resigned employees still get their final-month payslip generated automatically.
+  const userWhere = {
+    companyId: parseInt(companyId),
+    dateOfJoining: { lte: monthEnd },
+    employeeId: { not: null },
+    OR: [
+      { isActive: true },
+      // Separated but still working in this month (LWD >= month start)
+      { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+    ],
+  };
   if (targetUserId) userWhere.id = parseInt(targetUserId);
 
   const salaries = await req.prisma.salaryStructure.findMany({
     where: { user: userWhere },
     include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true } } } } },
   });
-  const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
-  const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
-  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No active employees with salary structures for this company');
+  // For separated employees: treat as "active" for payroll purposes if they worked this month
+  const activeSalaries = salaries.filter(s => !s.stopSalaryProcessing);
+  const stoppedSalaries = salaries.filter(s => s.stopSalaryProcessing);
+  if (activeSalaries.length === 0 && stoppedSalaries.length === 0) throw badRequest('No employees with salary structures for this company worked in this month');
 
   const daysInMonth = new Date(year, monthNum, 0).getDate();
-  const monthStart = `${month}-01`;
   const monthEndStr = `${month}-${String(daysInMonth).padStart(2, '0')}`;
   const allUserIds = activeSalaries.map(s => s.userId);
   const uniqueBranchIds = [...new Set(activeSalaries.map(s => s.user.branchId).filter(Boolean))];
