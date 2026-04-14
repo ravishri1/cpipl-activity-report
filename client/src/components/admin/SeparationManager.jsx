@@ -386,14 +386,28 @@ export default function SeparationManager() {
                     </div>
                     <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                   </div>
-                  <div className="flex items-center gap-3 pt-1 border-t border-green-200 flex-wrap">
-                    <label className="text-xs text-green-800 font-medium whitespace-nowrap">Settlement (hold until) date:</label>
-                    <input type="date" className="border border-green-300 rounded px-2 py-1 text-sm"
-                      value={settlementOverride}
-                      onChange={e => setSettlementOverride(e.target.value)} />
-                    <span className="text-xs text-green-600">
-                      {settlementOverride !== salaryHoldUntilCalc ? 'Modified by HR' : 'Auto: Est. LWD + 45 days'}
-                    </span>
+                  <div className="pt-2 border-t border-green-200 space-y-1">
+                    <p className="text-xs text-green-800 font-medium">Settlement (salary hold until) date:</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-green-100 rounded-lg px-3 py-2">
+                        <p className="text-xs text-green-600 mb-0.5">Estimated (Est. LWD + 45 days)</p>
+                        <p className="text-sm font-semibold text-green-800">{fmt(salaryHoldUntilCalc)}</p>
+                      </div>
+                      <div className="bg-white border border-green-300 rounded-lg px-3 py-2">
+                        <p className="text-xs text-green-600 mb-0.5">Actual (HR confirmed) — editable</p>
+                        <input type="date" className="w-full border border-green-200 rounded px-2 py-1 text-sm font-semibold"
+                          value={settlementOverride}
+                          onChange={e => setSettlementOverride(e.target.value)} />
+                        {settlementOverride && settlementOverride !== salaryHoldUntilCalc && (
+                          <p className="text-xs text-amber-600 mt-0.5">
+                            {(() => {
+                              const diff = Math.round((new Date(settlementOverride) - new Date(salaryHoldUntilCalc)) / 86400000);
+                              return `Modified by HR (${diff > 0 ? '+' : ''}${diff} days from estimated)`;
+                            })()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
                   <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
@@ -428,14 +442,29 @@ export default function SeparationManager() {
                         </div>
                         <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                       </div>
-                      <div className="flex items-center gap-3 pt-1 border-t border-blue-200 flex-wrap">
-                        <label className="text-xs text-blue-800 font-medium whitespace-nowrap">Settlement (hold until) date:</label>
-                        <input type="date" className="border border-blue-300 rounded px-2 py-1 text-sm"
-                          value={settlementOverride}
-                          onChange={e => setSettlementOverride(e.target.value)} />
-                        <span className="text-xs text-blue-600">
-                          {settlementOverride !== salaryHoldUntilCalc ? 'Modified by HR' : 'Auto: Est. LWD + 45 days'}
-                        </span>
+                      <div className="pt-2 border-t border-blue-200 space-y-1">
+                        <p className="text-xs text-blue-800 font-medium">Settlement (salary hold until) date:</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-blue-100 rounded-lg px-3 py-2">
+                            <p className="text-xs text-blue-600 mb-0.5">Estimated (Est. LWD + 45 days)</p>
+                            <p className="text-sm font-semibold text-blue-800">{fmt(salaryHoldUntilCalc)}</p>
+                            <p className="text-xs text-blue-400">Based on {fmt(autoLWD)}</p>
+                          </div>
+                          <div className="bg-white border border-blue-300 rounded-lg px-3 py-2">
+                            <p className="text-xs text-blue-600 mb-0.5">Actual (HR confirmed) — editable</p>
+                            <input type="date" className="w-full border border-blue-200 rounded px-2 py-1 text-sm font-semibold"
+                              value={settlementOverride}
+                              onChange={e => setSettlementOverride(e.target.value)} />
+                            {settlementOverride && settlementOverride !== salaryHoldUntilCalc && (
+                              <p className="text-xs text-amber-600 mt-0.5">
+                                {(() => {
+                                  const diff = Math.round((new Date(settlementOverride) - new Date(salaryHoldUntilCalc)) / 86400000);
+                                  return `Modified by HR (${diff > 0 ? '+' : ''}${diff} days from estimated)`;
+                                })()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
                       {autoLWD !== form.lastWorkingDate && (

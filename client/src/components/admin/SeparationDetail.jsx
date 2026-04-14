@@ -354,16 +354,30 @@ export default function SeparationDetail() {
                   onChange={e => { setHrForm(f => ({ ...f, salaryHoldDays: e.target.value, salaryHoldUntil: '' })); }} />
                 <span className="text-xs text-orange-600">(default 45 days from est. LWD; set 0 for immediate)</span>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-sm text-orange-800 font-medium whitespace-nowrap">Settlement (hold until) date:</label>
-                <input type="date" className="border border-orange-300 rounded px-2 py-1 text-sm"
-                  value={hrForm.salaryHoldUntil || sep.salaryHoldUntil || ''}
-                  onChange={e => setHrForm(f => ({ ...f, salaryHoldUntil: e.target.value }))} />
-                <span className="text-xs text-orange-600">
-                  {hrForm.salaryHoldUntil && hrForm.salaryHoldUntil !== sep.salaryHoldUntil
-                    ? 'Modified by HR'
-                    : `Auto: Est. LWD (${sep.expectedLWD}) + 45 days`}
-                </span>
+              <div className="space-y-2">
+                <p className="text-sm text-orange-800 font-medium">Settlement (salary hold until) date:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-orange-100 rounded-lg px-3 py-2">
+                    <p className="text-xs text-orange-600 mb-0.5">Estimated (Est. LWD + 45 days)</p>
+                    <p className="text-sm font-semibold text-orange-800">{sep.salaryHoldUntil || '—'}</p>
+                    <p className="text-xs text-orange-500">Est. LWD: {sep.expectedLWD}</p>
+                  </div>
+                  <div className="bg-white border border-orange-300 rounded-lg px-3 py-2">
+                    <p className="text-xs text-orange-600 mb-0.5">Actual (HR confirmed) — editable</p>
+                    <input type="date" className="w-full border border-orange-200 rounded px-2 py-1 text-sm font-semibold"
+                      value={hrForm.salaryHoldUntil || sep.salaryHoldUntil || ''}
+                      onChange={e => setHrForm(f => ({ ...f, salaryHoldUntil: e.target.value }))} />
+                    {hrForm.salaryHoldUntil && hrForm.salaryHoldUntil !== sep.salaryHoldUntil && (
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        Modified by HR
+                        {(() => {
+                          const diff = Math.round((new Date(hrForm.salaryHoldUntil) - new Date(sep.salaryHoldUntil)) / 86400000);
+                          return diff !== 0 ? ` (${diff > 0 ? '+' : ''}${diff} days from estimated)` : '';
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="HR note (optional)" value={hrForm.hrNote} onChange={e => setHrForm(f => ({ ...f, hrNote: e.target.value }))} />
