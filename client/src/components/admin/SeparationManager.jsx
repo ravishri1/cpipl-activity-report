@@ -104,7 +104,8 @@ export default function SeparationManager() {
   const noticeDays = selectedUser?.noticePeriodDays || 30;
   const autoLWD = form.requestDate ? addDaysStr(form.requestDate, noticeDays) : '';
   const effectiveLWD = lwdChoice === 'override' ? (form.lastWorkingDate || '') : (lwdChoice === 'confirm' ? autoLWD : '');
-  const salaryHoldUntil = effectiveLWD ? addDaysStr(effectiveLWD, 45) : '';
+  // Settlement/hold date always based on estimated LWD (autoLWD), not override
+  const salaryHoldUntil = autoLWD ? addDaysStr(autoLWD, 45) : '';
   const lastMonthDays = effectiveLWD ? dayOfMonth(effectiveLWD) : null;
 
   const filtered = filter === 'active'
@@ -400,11 +401,12 @@ export default function SeparationManager() {
                     <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 space-y-3">
                       <p className="text-sm font-semibold text-blue-800">Updated dates based on agreed LWD</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
-                        <div><p className="text-xs text-gray-400">Agreed LWD</p><p className="font-semibold text-blue-800">{fmt(form.lastWorkingDate)}</p></div>
-                        <div><p className="text-xs text-gray-400">Salary Hold Until</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
+                        <div><p className="text-xs text-gray-400">Agreed LWD (Actual)</p><p className="font-semibold text-blue-800">{fmt(form.lastWorkingDate)}</p></div>
+                        <div><p className="text-xs text-gray-400">Settlement Date (Est. LWD + 45d)</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
                         <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                       </div>
                       <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
+                      <p className="text-xs text-amber-700">Settlement date = estimated LWD ({fmt(autoLWD)}) + 45 days</p>
                       {autoLWD !== form.lastWorkingDate && (
                         <p className="text-xs text-gray-400">
                           (System had calculated {fmt(autoLWD)} — overridden by HR to {fmt(form.lastWorkingDate)})

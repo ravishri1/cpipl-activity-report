@@ -248,7 +248,11 @@ router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
 
   const today = new Date().toISOString().slice(0, 10);
   const holdDays = (salaryHoldDays !== undefined && salaryHoldDays !== null) ? parseInt(salaryHoldDays) : 45;
-  const salaryHoldUntil = holdDays > 0 ? addDays(lastWorkingDate, holdDays) : lastWorkingDate;
+  // Settlement date is always based on the system-estimated LWD (expectedLWD),
+  // not the agreed/override LWD. Even if the employee leaves early by mutual
+  // agreement, the company holds salary until the originally expected last day + holdDays.
+  const holdBase = sep.expectedLWD || lastWorkingDate;
+  const salaryHoldUntil = holdDays > 0 ? addDays(holdBase, holdDays) : holdBase;
 
   await req.prisma.separation.update({
     where: { id },
@@ -577,7 +581,7 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
 
   // Salary hold info — which payslip month shows "On Hold"
   const lwdMonthStr = lwd.slice(0, 7); // "YYYY-MM"
-  const salaryReleaseDate = sep.salaryHoldUntil || addDays(lwd, 45);
+  const salaryReleaseDate = sep.salaryHoldUntil || addDays(sep.expectedLWD || lwd, 45);
   const formula = grossMonthly
     ? `Gross ₹${grossMonthly.toFixed(2)} ÷ 30 = ₹${dailyRate.toFixed(2)}/day`
     : null;
