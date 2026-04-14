@@ -605,8 +605,8 @@ export default function SeparationDetail() {
                         <button onClick={handleFnFSave} disabled={acting} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                           {acting ? 'Saving...' : 'Save FnF'}
                         </button>
-                        <button onClick={refetchFnF} disabled={fnfLoading} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
-                          ↺ Recalculate
+                        <button onClick={async () => { try { await refetchFnF(); } catch {} }} disabled={fnfLoading} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+                          {fnfLoading ? 'Loading...' : '↺ Recalculate'}
                         </button>
                       </div>
                     </>
