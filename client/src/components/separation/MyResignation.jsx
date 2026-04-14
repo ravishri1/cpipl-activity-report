@@ -33,7 +33,7 @@ export default function MyResignation() {
   const { execute, loading: submitting, error: submitErr, success } = useApi();
   const [showForm, setShowForm] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState({ reason: '', resignationDate: today, preferredLWD: '' });
+  const [form, setForm] = useState({ reason: '', preferredLWD: '' });
 
   const handleSubmitResignation = async () => {
     if (!form.reason.trim()) return alert('Please provide a reason for resignation.');
@@ -42,7 +42,7 @@ export default function MyResignation() {
       await execute(() => api.post('/separation/resign', form), 'Resignation submitted successfully!');
       refetch();
       setShowForm(false);
-      setForm({ reason: '', resignationDate: today, preferredLWD: '' });
+      setForm({ reason: '', preferredLWD: '' });
     } catch {}
   };
 
@@ -86,19 +86,7 @@ export default function MyResignation() {
               <li>This cannot be undone after HR confirmation</li>
             </ul>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Resignation Date *</label>
-              <input
-                type="date"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
-                value={form.resignationDate}
-                max={today}
-                onChange={e => setForm(f => ({ ...f, resignationDate: e.target.value }))}
-              />
-              <p className="text-xs text-gray-500 mt-1">Date you are formally submitting your resignation.</p>
-            </div>
-            <div>
+          <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Last Working Day (optional)</label>
               <input
                 type="date"
@@ -108,7 +96,6 @@ export default function MyResignation() {
               />
               <p className="text-xs text-gray-500 mt-1">HR will confirm the final date based on notice period.</p>
             </div>
-          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Resignation *</label>
             <textarea

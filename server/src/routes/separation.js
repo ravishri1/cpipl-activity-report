@@ -83,7 +83,7 @@ async function notify(event, data) {
 // POST /api/separation/resign  — employee submits resignation
 router.post('/resign', asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const { reason, preferredLWD, resignationDate } = req.body;
+  const { reason, preferredLWD } = req.body;
 
   // Only active employees
   const user = await req.prisma.user.findUnique({
@@ -102,16 +102,15 @@ router.post('/resign', asyncHandler(async (req, res) => {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const requestDate = resignationDate || today;
   const noticeDays = user.noticePeriodDays || 30;
-  const expectedLWD = addDays(requestDate, noticeDays);
+  const expectedLWD = addDays(today, noticeDays);
   const salaryHoldUntil = addDays(expectedLWD, 45);
 
   const separation = await req.prisma.separation.create({
     data: {
       userId,
       type: 'resignation',
-      requestDate,
+      requestDate: today,
       preferredLWD: preferredLWD || expectedLWD,
       expectedLWD,
       adjustedLWD: expectedLWD,
