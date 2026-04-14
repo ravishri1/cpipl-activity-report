@@ -29,7 +29,7 @@ export default function SeparationDetail() {
   const { execute, loading: acting, error: actErr, success } = useApi();
   const [seedingTemplates, setSeedingTemplates] = useState(false);
 
-  const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '', waiveLeaveExtension: false, salaryHoldDays: 45 });
+  const [hrForm, setHrForm] = useState({ lastWorkingDate: '', type: '', hrNote: '', waiveLeaveExtension: false, salaryHoldDays: 45, salaryHoldUntil: '' });
   const [mgForm, setMgForm] = useState({ action: 'approve', managerNote: '', managerProposedLWD: '' });
   const [fnfOverrides, setFnfOverrides] = useState({});
   const [fnfExcluded, setFnfExcluded] = useState({});
@@ -342,8 +342,19 @@ export default function SeparationDetail() {
               </label>
               <div className="flex items-center gap-3">
                 <label className="text-sm text-orange-800 font-medium whitespace-nowrap">Salary hold days:</label>
-                <input type="number" min="0" max="90" className="w-20 border border-orange-300 rounded px-2 py-1 text-sm" value={hrForm.salaryHoldDays} onChange={e => setHrForm(f => ({ ...f, salaryHoldDays: e.target.value }))} />
-                <span className="text-xs text-orange-600">(default 45 days; set 0 for immediate release)</span>
+                <input type="number" min="0" max="90" className="w-20 border border-orange-300 rounded px-2 py-1 text-sm"
+                  value={hrForm.salaryHoldDays}
+                  onChange={e => { setHrForm(f => ({ ...f, salaryHoldDays: e.target.value, salaryHoldUntil: '' })); }} />
+                <span className="text-xs text-orange-600">(default 45 days from est. LWD; set 0 for immediate)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-orange-800 font-medium whitespace-nowrap">Or set exact settlement date:</label>
+                <input type="date" className="border border-orange-300 rounded px-2 py-1 text-sm"
+                  value={hrForm.salaryHoldUntil}
+                  onChange={e => setHrForm(f => ({ ...f, salaryHoldUntil: e.target.value }))} />
+                {hrForm.salaryHoldUntil && (
+                  <span className="text-xs text-orange-700 font-medium">Overrides hold-days calculation</span>
+                )}
               </div>
             </div>
             <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2} placeholder="HR note (optional)" value={hrForm.hrNote} onChange={e => setHrForm(f => ({ ...f, hrNote: e.target.value }))} />

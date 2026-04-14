@@ -131,7 +131,7 @@ router.post('/resign', asyncHandler(async (req, res) => {
 
 // POST /api/separation  — HR/admin initiates
 router.post('/', requireAdmin, asyncHandler(async (req, res) => {
-  const { userId, type, requestDate, lastWorkingDate, reason, noticePeriodDays } = req.body;
+  const { userId, type, requestDate, lastWorkingDate, reason, noticePeriodDays, salaryHoldUntil: salaryHoldUntilOverride } = req.body;
   requireFields(req.body, 'userId', 'type', 'requestDate');
   requireEnum(type, ['resignation', 'termination', 'absconding', 'retirement'], 'type');
 
@@ -150,6 +150,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const noticeDays = noticePeriodDays || user.noticePeriodDays || 30;
   const expectedLWD = addDays(requestDate, noticeDays);
   const isForced = ['termination', 'absconding'].includes(type);
+  const salaryHoldUntil = salaryHoldUntilOverride || addDays(expectedLWD, 45);
 
   const separation = await req.prisma.separation.create({
     data: {
@@ -164,6 +165,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
       status: isForced ? 'notice_period' : 'pending_manager',
       initiatedBy: 'hr',
       processedBy: req.user.id,
+      salaryHoldUntil,
       // For termination/absconding, mark HR confirm immediately
       hrConfirmedAt: isForced ? new Date().toISOString().slice(0, 10) : null,
       hrConfirmedBy: isForced ? req.user.id : null,
@@ -236,7 +238,7 @@ router.put('/:id/manager-action', asyncHandler(async (req, res) => {
 // PUT /api/separation/:id/hr-confirm
 router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { lastWorkingDate, type, noticePeriodWaiver, hrNote, waiveLeaveExtension, salaryHoldDays } = req.body;
+  const { lastWorkingDate, type, noticePeriodWaiver, hrNote, waiveLeaveExtension, salaryHoldDays, salaryHoldUntil: salaryHoldUntilOverride } = req.body;
   if (!lastWorkingDate) throw badRequest('lastWorkingDate (final LWD) is required.');
 
   const sep = await req.prisma.separation.findUnique({
@@ -248,11 +250,10 @@ router.put('/:id/hr-confirm', requireAdmin, asyncHandler(async (req, res) => {
 
   const today = new Date().toISOString().slice(0, 10);
   const holdDays = (salaryHoldDays !== undefined && salaryHoldDays !== null) ? parseInt(salaryHoldDays) : 45;
-  // Settlement date is always based on the system-estimated LWD (expectedLWD),
-  // not the agreed/override LWD. Even if the employee leaves early by mutual
-  // agreement, the company holds salary until the originally expected last day + holdDays.
+  // HR can directly override the settlement date, or it's calculated from expectedLWD + holdDays.
+  // expectedLWD is always the base (not the agreed/early LWD) so the hold covers the full notice window.
   const holdBase = sep.expectedLWD || lastWorkingDate;
-  const salaryHoldUntil = holdDays > 0 ? addDays(holdBase, holdDays) : holdBase;
+  const salaryHoldUntil = salaryHoldUntilOverride || (holdDays > 0 ? addDays(holdBase, holdDays) : holdBase);
 
   await req.prisma.separation.update({
     where: { id },

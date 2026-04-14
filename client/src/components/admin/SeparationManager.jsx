@@ -90,6 +90,7 @@ export default function SeparationManager() {
   const [showInitiateForm, setShowInitiateForm] = useState(false);
   const [formStep, setFormStep] = useState('basic'); // 'basic' | 'lwd_review'
   const [lwdChoice, setLwdChoice] = useState(null);  // null | 'confirm' | 'override'
+  const [settlementOverride, setSettlementOverride] = useState('');
   const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
 
   const { data: separations, loading, error: fetchErr, refetch } = useFetch('/separation', []);
@@ -104,8 +105,9 @@ export default function SeparationManager() {
   const noticeDays = selectedUser?.noticePeriodDays || 30;
   const autoLWD = form.requestDate ? addDaysStr(form.requestDate, noticeDays) : '';
   const effectiveLWD = lwdChoice === 'override' ? (form.lastWorkingDate || '') : (lwdChoice === 'confirm' ? autoLWD : '');
-  // Settlement/hold date always based on estimated LWD (autoLWD), not override
-  const salaryHoldUntil = autoLWD ? addDaysStr(autoLWD, 45) : '';
+  // Settlement/hold date: HR override if set, else estimated LWD + 45 days
+  const salaryHoldUntilCalc = autoLWD ? addDaysStr(autoLWD, 45) : '';
+  const salaryHoldUntil = settlementOverride || salaryHoldUntilCalc;
   const lastMonthDays = effectiveLWD ? dayOfMonth(effectiveLWD) : null;
 
   const filtered = filter === 'active'
@@ -135,6 +137,7 @@ export default function SeparationManager() {
     setShowInitiateForm(false);
     setFormStep('basic');
     setLwdChoice(null);
+    setSettlementOverride('');
     setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
   };
 
@@ -153,6 +156,7 @@ export default function SeparationManager() {
       reason: form.reason,
       lastWorkingDate: effectiveLWD,
       noticePeriodDays: noticeDays,
+      ...(settlementOverride ? { salaryHoldUntil: settlementOverride } : {}),
     };
     try {
       await execute(() => api.post('/separation', payload), 'Separation initiated.');
@@ -373,8 +377,19 @@ export default function SeparationManager() {
                   <p className="text-sm font-semibold text-green-800">✅ LWD Confirmed: {fmt(autoLWD)}</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
                     <div><p className="text-xs text-gray-400">Last Working Date</p><p className="font-semibold">{fmt(autoLWD)}</p></div>
-                    <div><p className="text-xs text-gray-400">Salary Hold Until</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
+                    <div>
+                      <p className="text-xs text-gray-400">Settlement Date (hold until)</p>
+                      <p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p>
+                      <p className="text-xs text-gray-400">Est. LWD + 45 days</p>
+                    </div>
                     <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
+                  </div>
+                  <div className="flex items-center gap-3 pt-1 border-t border-green-200">
+                    <label className="text-xs text-green-800 font-medium whitespace-nowrap">Override settlement date:</label>
+                    <input type="date" className="border border-green-300 rounded px-2 py-1 text-sm"
+                      value={settlementOverride}
+                      onChange={e => setSettlementOverride(e.target.value)} />
+                    {settlementOverride && <button onClick={() => setSettlementOverride('')} className="text-xs text-gray-400 underline">Reset</button>}
                   </div>
                   <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
                   <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
@@ -402,11 +417,21 @@ export default function SeparationManager() {
                       <p className="text-sm font-semibold text-blue-800">Updated dates based on agreed LWD</p>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
                         <div><p className="text-xs text-gray-400">Agreed LWD (Actual)</p><p className="font-semibold text-blue-800">{fmt(form.lastWorkingDate)}</p></div>
-                        <div><p className="text-xs text-gray-400">Settlement Date (Est. LWD + 45d)</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
+                        <div>
+                          <p className="text-xs text-gray-400">Settlement Date (hold until)</p>
+                          <p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p>
+                          <p className="text-xs text-gray-400">{settlementOverride ? 'HR override' : `Est. LWD (${fmt(autoLWD)}) + 45d`}</p>
+                        </div>
                         <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                       </div>
+                      <div className="flex items-center gap-3 pt-1 border-t border-blue-200">
+                        <label className="text-xs text-blue-800 font-medium whitespace-nowrap">Override settlement date:</label>
+                        <input type="date" className="border border-blue-300 rounded px-2 py-1 text-sm"
+                          value={settlementOverride}
+                          onChange={e => setSettlementOverride(e.target.value)} />
+                        {settlementOverride && <button onClick={() => setSettlementOverride('')} className="text-xs text-gray-400 underline">Reset</button>}
+                      </div>
                       <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
-                      <p className="text-xs text-amber-700">Settlement date = estimated LWD ({fmt(autoLWD)}) + 45 days</p>
                       {autoLWD !== form.lastWorkingDate && (
                         <p className="text-xs text-gray-400">
                           (System had calculated {fmt(autoLWD)} — overridden by HR to {fmt(form.lastWorkingDate)})
