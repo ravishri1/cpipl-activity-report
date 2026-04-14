@@ -561,49 +561,122 @@ router.get('/:id/fnf-preview', requireAdmin, asyncHandler(async (req, res) => {
       });
     }
   } else {
-    // No payslip generated yet — estimate from salary structure (gross ÷ 30 × days)
-    const lastMonthGross = Math.round(dailyRate * lwdDay * 100) / 100;
+    // No payslip yet — calculate from actual attendance records for the last month
+    // Count present/absent/leave days from 1st of month up to LWD
+    let paidDays = 0;
+    let lopDays = 0;
+    let attendanceNote = '';
+    try {
+      // Fetch attendance records for this month up to LWD
+      const attRecords = await req.prisma.attendance.findMany({
+        where: { userId: user.id, date: { gte: `${lastMonthStr}-01`, lte: lwd } },
+      });
+      // Fetch approved paid leave days in this period
+      const paidLeaveTypes = await req.prisma.leaveType.findMany({
+        where: { isActive: true, isPaid: true },
+        select: { id: true },
+      });
+      const paidLeaveTypeIds = paidLeaveTypes.map(l => l.id);
+      const leaveRequests = await req.prisma.leaveRequest.findMany({
+        where: {
+          userId: user.id,
+          status: 'approved',
+          startDate: { lte: lwd },
+          endDate: { gte: `${lastMonthStr}-01` },
+        },
+        select: { startDate: true, endDate: true, leaveTypeId: true, isHalfDay: true },
+      });
+      // Build sets of paid-leave dates and LOP-leave dates
+      const paidLeaveDates = new Set();
+      const lopLeaveDates = new Set();
+      for (const lr of leaveRequests) {
+        const isPaid = paidLeaveTypeIds.includes(lr.leaveTypeId);
+        let d = new Date(lr.startDate);
+        const end = new Date(lr.endDate);
+        while (d <= end) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds >= `${lastMonthStr}-01` && ds <= lwd) {
+            if (isPaid) paidLeaveDates.add(ds);
+            else lopLeaveDates.add(ds);
+          }
+          d.setDate(d.getDate() + 1);
+        }
+      }
+      // Count days
+      const attMap = new Map(attRecords.map(a => [a.date, a.status]));
+      for (let d = 1; d <= lwdDay; d++) {
+        const ds = `${lastMonthStr}-${String(d).padStart(2, '0')}`;
+        const status = attMap.get(ds);
+        if (lopLeaveDates.has(ds)) { lopDays += 1; }
+        else if (paidLeaveDates.has(ds)) { paidDays += 1; }
+        else if (status === 'present') { paidDays += 1; }
+        else if (status === 'half_day') { paidDays += 0.5; lopDays += 0.5; }
+        else if (status === 'absent') { lopDays += 1; }
+        else if (status === 'on_leave') { paidDays += 1; }
+        else if (!status) { paidDays += 1; } // no record = assume present (same as payroll)
+      }
+      attendanceNote = `Calculated from attendance muster: ${paidDays} paid days, ${lopDays} LOP days out of ${lwdDay} days`;
+    } catch {
+      // Attendance fetch failed — fall back to day count
+      paidDays = lwdDay;
+      attendanceNote = `Attendance data unavailable — using ${lwdDay} days as paid days`;
+    }
+
+    const earnedGross = Math.round(grossMonthly * paidDays / 30 * 100) / 100;
     items.push({
       component: 'last_month_salary',
-      label: `Last month salary (${lastMonthStr}: ${lwdDay} days worked — estimated)`,
-      amount: lastMonthGross,
-      days: lwdDay,
-      dailyRate,
+      label: `Last month salary (${lastMonthStr}: ${paidDays} paid days of ${lwdDay})`,
+      amount: earnedGross,
       autoCalculated: true,
-      note: `⚠️ Payslip not yet generated for ${lastMonthStr}. This is an estimate (Gross ÷ 30 × ${lwdDay} days). Actual attendance, LOP, and advances not yet applied. Generate payslip first for accurate FnF.`,
+      note: `${attendanceNote}. Payslip not yet generated — FnF will auto-update once payslip is processed.`,
     });
-    // Estimated statutory deductions
-    if (ss && lastMonthGross > 0) {
-      const earnedBasic = Math.round((ss.basic || 0) * lwdDay / 30 * 100) / 100;
-      const statutory = calcStatutory(lastMonthGross, earnedBasic, ss.ptExempt || false, false, DEFAULT_PAYROLL_RULES, user.gender, lwdMonth, undefined);
+
+    // Statutory deductions on attendance-based earned gross
+    if (ss && earnedGross > 0) {
+      const earnedBasic = Math.round((ss.basic || 0) * paidDays / 30 * 100) / 100;
+      const statutory = calcStatutory(earnedGross, earnedBasic, ss.ptExempt || false, false, DEFAULT_PAYROLL_RULES, user.gender, lwdMonth, undefined);
       if (statutory.employeePf > 0) {
         items.push({
           component: 'pf_deduction',
-          label: `Employee PF deduction (last month — estimated)`,
+          label: `Employee PF deduction (last month)`,
           amount: -statutory.employeePf,
           autoCalculated: true,
-          note: `12% of earned basic ₹${earnedBasic.toFixed(0)}, max ₹1,800. Estimated — generate payslip for exact amount.`,
+          note: `12% of earned basic ₹${earnedBasic.toFixed(0)}, max ₹1,800`,
         });
       }
       if (statutory.employeeEsi > 0) {
         items.push({
           component: 'esi_deduction',
-          label: `Employee ESI deduction (last month — estimated)`,
+          label: `Employee ESI deduction (last month)`,
           amount: -statutory.employeeEsi,
           autoCalculated: true,
-          note: 'Estimated — generate payslip for exact amount.',
         });
       }
       if (statutory.professionalTax > 0) {
         items.push({
           component: 'pt_deduction',
-          label: `Professional Tax (last month — estimated)`,
+          label: `Professional Tax (last month)`,
           amount: -statutory.professionalTax,
           autoCalculated: true,
-          note: 'Estimated — generate payslip for exact amount.',
         });
       }
     }
+
+    // Pending salary advances not yet recovered
+    try {
+      const advances = await req.prisma.salaryAdvance.findMany({
+        where: { userId: user.id, status: 'approved', remainingAmount: { gt: 0 } },
+      });
+      for (const adv of advances) {
+        items.push({
+          component: 'advance_recovery',
+          label: `Salary advance recovery (balance ₹${adv.remainingAmount})`,
+          amount: -(adv.remainingAmount || 0),
+          autoCalculated: true,
+          note: 'Outstanding advance balance to be recovered in FnF',
+        });
+      }
+    } catch {}
   }
 
   // 2. Leave encashment — PL balance × daily rate
