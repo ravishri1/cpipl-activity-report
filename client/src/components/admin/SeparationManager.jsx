@@ -69,11 +69,27 @@ const HISTORICAL_SEPARATIONS = [
   { employeeName: 'Shailesh Naik',                    separationDate: '2026-03-31', settlementDate: null,         resignationDate: '2026-01-10' },
 ];
 
+// ── helper: add calendar days to YYYY-MM-DD ──────────────────────────────────
+function addDaysStr(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function dayOfMonth(dateStr) {
+  return dateStr ? new Date(dateStr).getDate() : null;
+}
+function fmt(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export default function SeparationManager() {
   const navigate = useNavigate();
   const [view, setView] = useState('pipeline');
   const [filter, setFilter] = useState('active');
   const [showInitiateForm, setShowInitiateForm] = useState(false);
+  const [formStep, setFormStep] = useState('basic'); // 'basic' | 'lwd_review'
+  const [lwdChoice, setLwdChoice] = useState(null);  // null | 'confirm' | 'override'
   const [form, setForm] = useState({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
 
   const { data: separations, loading, error: fetchErr, refetch } = useFetch('/separation', []);
@@ -83,6 +99,14 @@ export default function SeparationManager() {
   const [importResult, setImportResult] = useState(null);
   const [importing, setImporting] = useState(false);
 
+  // Derived: selected employee + auto-calculated LWD
+  const selectedUser = users.find(u => String(u.id) === String(form.userId));
+  const noticeDays = selectedUser?.noticePeriodDays || 30;
+  const autoLWD = form.requestDate ? addDaysStr(form.requestDate, noticeDays) : '';
+  const effectiveLWD = lwdChoice === 'override' ? (form.lastWorkingDate || '') : (lwdChoice === 'confirm' ? autoLWD : '');
+  const salaryHoldUntil = effectiveLWD ? addDaysStr(effectiveLWD, 45) : '';
+  const lastMonthDays = effectiveLWD ? dayOfMonth(effectiveLWD) : null;
+
   const filtered = filter === 'active'
     ? separations.filter(s => ACTIVE_STATUSES.includes(s.status))
     : filter === 'completed'
@@ -91,10 +115,12 @@ export default function SeparationManager() {
 
   const openInitiateForm = async () => {
     setShowInitiateForm(true);
+    setFormStep('basic');
+    setLwdChoice(null);
     if (users.length === 0) {
       setUsersLoading(true);
       try {
-        const res = await api.get('/users?fields=id,name,employeeId,department,employmentStatus,isActive');
+        const res = await api.get('/users?fields=id,name,employeeId,department,employmentStatus,isActive,noticePeriodDays');
         setUsers(res.data || []);
       } catch {
         // ignore — dropdown will be empty
@@ -104,13 +130,33 @@ export default function SeparationManager() {
     }
   };
 
+  const closeInitiateForm = () => {
+    setShowInitiateForm(false);
+    setFormStep('basic');
+    setLwdChoice(null);
+    setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
+  };
+
+  const handleNextToLWD = () => {
+    if (!form.userId || !form.requestDate) return;
+    setLwdChoice(null);
+    setFormStep('lwd_review');
+  };
+
   const handleInitiate = async () => {
-    if (!form.userId) return;
+    if (!form.userId || !effectiveLWD) return;
+    const payload = {
+      userId: parseInt(form.userId),
+      type: form.type,
+      requestDate: form.requestDate,
+      reason: form.reason,
+      lastWorkingDate: effectiveLWD,
+      noticePeriodDays: noticeDays,
+    };
     try {
-      await execute(() => api.post('/separation', { ...form, userId: parseInt(form.userId) }), 'Separation initiated.');
+      await execute(() => api.post('/separation', payload), 'Separation initiated.');
       refetch();
-      setShowInitiateForm(false);
-      setForm({ userId: '', type: 'resignation', requestDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
+      closeInitiateForm();
     } catch {}
   };
 
@@ -204,49 +250,190 @@ export default function SeparationManager() {
         ))}
       </div>
 
-      {/* Initiate Form */}
+      {/* Initiate Form — multi-step */}
       {showInitiateForm && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-800">Initiate Separation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} disabled={usersLoading}>
-                <option value="">{usersLoading ? 'Loading employees...' : 'Select employee...'}</option>
-                {users.filter(u => u.employmentStatus === 'active' || u.isActive).map(u => (
-                  <option key={u.id} value={u.id}>{u.name} ({u.employeeId || 'No ID'}) — {u.department}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                <option value="resignation">Resignation</option>
-                <option value="retirement">Retirement</option>
-                <option value="termination">Termination</option>
-                <option value="absconding">Absconding</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Resignation Date *</label>
-              <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.requestDate} onChange={e => setForm(f => ({ ...f, requestDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Last Working Date (if known)</label>
-              <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.lastWorkingDate} onChange={e => setForm(f => ({ ...f, lastWorkingDate: e.target.value }))} />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
-              <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-            </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5">
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2">
+            {['Basic Details', 'Confirm LWD', 'Submit'].map((label, i) => {
+              const stepIdx = formStep === 'basic' ? 0 : 1;
+              const done = i < stepIdx;
+              const active = i === stepIdx;
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
+                    ${done ? 'bg-green-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                    {done ? '✓' : i + 1}
+                  </div>
+                  <span className={`text-sm ${active ? 'font-semibold text-gray-800' : done ? 'text-green-700' : 'text-gray-400'}`}>{label}</span>
+                  {i < 2 && <div className="w-8 h-px bg-gray-200 mx-1" />}
+                </div>
+              );
+            })}
           </div>
-          <div className="flex gap-3">
-            <button onClick={handleInitiate} disabled={saving || !form.userId}
-              className="bg-red-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
-              {saving ? 'Initiating...' : 'Initiate Separation'}
-            </button>
-            <button onClick={() => setShowInitiateForm(false)} className="border border-gray-300 text-gray-700 px-5 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          </div>
+
+          {/* ── STEP 1: Basic Details ─────────────────────────────────────── */}
+          {formStep === 'basic' && (
+            <>
+              <h2 className="text-base font-semibold text-gray-800">Step 1 — Basic Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
+                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.userId}
+                    onChange={e => setForm(f => ({ ...f, userId: e.target.value }))} disabled={usersLoading}>
+                    <option value="">{usersLoading ? 'Loading employees...' : 'Select employee...'}</option>
+                    {users.filter(u => u.employmentStatus === 'active' || u.isActive).map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.employeeId || 'No ID'}) — {u.department}</option>
+                    ))}
+                  </select>
+                  {selectedUser && (
+                    <p className="text-xs text-gray-500 mt-1">Notice period: <strong>{noticeDays} days</strong></p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
+                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.type}
+                    onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                    <option value="resignation">Resignation</option>
+                    <option value="retirement">Retirement</option>
+                    <option value="termination">Termination</option>
+                    <option value="absconding">Absconding</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {form.type === 'resignation' ? 'Resignation Date' : 'Separation Date'} *
+                  </label>
+                  <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={form.requestDate} onChange={e => setForm(f => ({ ...f, requestDate: e.target.value }))} />
+                  {form.requestDate && selectedUser && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Auto LWD = {fmt(autoLWD)} ({noticeDays} days notice)
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+                  <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" rows={2}
+                    value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleNextToLWD} disabled={!form.userId || !form.requestDate}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  Next: Review Last Working Date →
+                </button>
+                <button onClick={closeInitiateForm} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              </div>
+            </>
+          )}
+
+          {/* ── STEP 2: LWD Review & Confirm ─────────────────────────────── */}
+          {formStep === 'lwd_review' && (
+            <>
+              <h2 className="text-base font-semibold text-gray-800">Step 2 — Confirm Last Working Date</h2>
+
+              {/* Employee summary */}
+              <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700 flex flex-wrap gap-5">
+                <span><strong>Employee:</strong> {selectedUser?.name} ({selectedUser?.employeeId})</span>
+                <span><strong>Type:</strong> <span className="capitalize">{form.type}</span></span>
+                <span><strong>{form.type === 'resignation' ? 'Resigned' : 'Separation'} on:</strong> {fmt(form.requestDate)}</span>
+                <span><strong>Notice:</strong> {noticeDays} days</span>
+              </div>
+
+              {/* Auto-calculated LWD box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 space-y-1">
+                <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">System Calculated Last Working Date</p>
+                <p className="text-2xl font-bold text-blue-800">{fmt(autoLWD)}</p>
+                <p className="text-xs text-blue-500">{form.requestDate} + {noticeDays} days notice = {autoLWD}</p>
+              </div>
+
+              {/* LWD Confirmation question */}
+              {lwdChoice === null && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Is <strong>{fmt(autoLWD)}</strong> the final Last Working Date?</p>
+                  <div className="flex gap-3">
+                    <button onClick={() => setLwdChoice('confirm')}
+                      className="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700">
+                      ✅ Yes, {fmt(autoLWD)} is final
+                    </button>
+                    <button onClick={() => { setLwdChoice('override'); setForm(f => ({ ...f, lastWorkingDate: '' })); }}
+                      className="bg-amber-500 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-amber-600">
+                      ✏️ No, set a different date
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirmed with auto LWD */}
+              {lwdChoice === 'confirm' && (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 space-y-3">
+                  <p className="text-sm font-semibold text-green-800">✅ LWD Confirmed: {fmt(autoLWD)}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
+                    <div><p className="text-xs text-gray-400">Last Working Date</p><p className="font-semibold">{fmt(autoLWD)}</p></div>
+                    <div><p className="text-xs text-gray-400">Salary Hold Until</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
+                    <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
+                  </div>
+                  <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
+                  <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
+                </div>
+              )}
+
+              {/* Override with custom LWD */}
+              {lwdChoice === 'override' && (
+                <div className="space-y-3">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 space-y-3">
+                    <p className="text-sm font-semibold text-amber-800">✏️ Enter the agreed Last Working Date</p>
+                    <p className="text-xs text-amber-700">This date was agreed between HR and the employee. The system will treat it as the official LWD — no notice recovery penalty will be applied.</p>
+                    <div className="flex items-center gap-3">
+                      <input type="date" className="border border-amber-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400"
+                        value={form.lastWorkingDate}
+                        onChange={e => setForm(f => ({ ...f, lastWorkingDate: e.target.value }))} />
+                      {form.lastWorkingDate && (
+                        <span className="text-sm font-medium text-gray-700">{fmt(form.lastWorkingDate)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {form.lastWorkingDate && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 space-y-3">
+                      <p className="text-sm font-semibold text-blue-800">Updated dates based on agreed LWD</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
+                        <div><p className="text-xs text-gray-400">Agreed LWD</p><p className="font-semibold text-blue-800">{fmt(form.lastWorkingDate)}</p></div>
+                        <div><p className="text-xs text-gray-400">Salary Hold Until</p><p className="font-semibold text-amber-700">{fmt(salaryHoldUntil)}</p></div>
+                        <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
+                      </div>
+                      <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
+                      {autoLWD !== form.lastWorkingDate && (
+                        <p className="text-xs text-gray-400">
+                          (System had calculated {fmt(autoLWD)} — overridden by HR to {fmt(form.lastWorkingDate)})
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
+                </div>
+              )}
+
+              {/* Submit row */}
+              <div className="flex gap-3 pt-2 border-t border-gray-100">
+                <button onClick={() => { setFormStep('basic'); setLwdChoice(null); }}
+                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+                  ← Back
+                </button>
+                {lwdChoice && (lwdChoice === 'confirm' || (lwdChoice === 'override' && form.lastWorkingDate)) && (
+                  <button onClick={handleInitiate} disabled={saving}
+                    className="bg-red-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                    {saving ? 'Initiating...' : `Submit — ${form.type.charAt(0).toUpperCase() + form.type.slice(1)}`}
+                  </button>
+                )}
+                <button onClick={closeInitiateForm} className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 ml-auto">Cancel</button>
+              </div>
+            </>
+          )}
+
         </div>
       )}
 
