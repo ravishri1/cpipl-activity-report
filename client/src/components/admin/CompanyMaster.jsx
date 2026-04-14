@@ -1851,11 +1851,101 @@ function EntityNode({ entity, totalPortals, totalCreds }) {
   );
 }
 
+function CompanyEmployeesView() {
+  const { data: companies, loading: cLoading } = useFetch('/companies', []);
+  const { data: allEmployees, loading: eLoading } = useFetch('/users', []);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const navigate = useNavigate();
+
+  if (cLoading || eLoading) return <LoadingSpinner />;
+
+  const companyList = Array.isArray(companies) ? companies : [];
+  const employees = Array.isArray(allEmployees) ? allEmployees : [];
+
+  // Group employees by company
+  const byCompany = {};
+  companyList.forEach(c => { byCompany[c.id] = []; });
+  byCompany['none'] = [];
+  employees.forEach(e => {
+    if (e.companyId && byCompany[e.companyId]) byCompany[e.companyId].push(e);
+    else if (!e.companyId) byCompany['none'].push(e);
+  });
+
+  const displayCompanies = [...companyList, { id: 'none', name: 'No Company Assigned' }];
+  const activeCompany = selectedCompanyId ?? (companyList[0]?.id || null);
+  const activeEmployees = byCompany[activeCompany] || [];
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Company list panel */}
+      <div className="w-64 border-r border-gray-200 flex flex-col overflow-hidden bg-gray-50">
+        <div className="border-b border-gray-200 px-4 py-3">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Company</p>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {displayCompanies.map(c => {
+            const count = (byCompany[c.id] || []).length;
+            const isActive = (selectedCompanyId ?? companyList[0]?.id) === c.id;
+            return (
+              <button key={c.id} onClick={() => setSelectedCompanyId(c.id)}
+                className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors ${isActive ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-gray-100'}`}>
+                <p className={`text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-800'}`}>{c.name}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{count} employee{count !== 1 ? 's' : ''}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Employee list panel */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="mb-4">
+          <h3 className="text-base font-semibold text-slate-800">
+            {displayCompanies.find(c => c.id === activeCompany)?.name}
+          </h3>
+          <p className="text-xs text-slate-500">{activeEmployees.length} employee{activeEmployees.length !== 1 ? 's' : ''}</p>
+        </div>
+        {activeEmployees.length === 0 ? (
+          <EmptyState icon="👥" title="No employees" subtitle="No employees assigned to this company" />
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">Employee</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">ID</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">Department</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {activeEmployees.map(emp => (
+                  <tr key={emp.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/employee/${emp.id}`)}>
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{emp.name}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{emp.employeeId || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-500">{emp.department || '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${emp.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {emp.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CompanyMaster() {
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = location.pathname === '/admin/branches' ? 'branches'
     : new URLSearchParams(location.search).get('view') === 'tree' ? 'tree'
+    : new URLSearchParams(location.search).get('view') === 'employees' ? 'employees'
     : 'registrations';
 
   const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
@@ -2006,6 +2096,15 @@ export default function CompanyMaster() {
             }`}>
             <span className="flex items-center gap-1.5"><Network size={14} /> Company Tree</span>
           </button>
+          <button
+            onClick={() => navigate('/admin/company-master?view=employees')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === 'employees'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
+            <span className="flex items-center gap-1.5"><Users size={14} /> Employees</span>
+          </button>
         </div>
       </div>
 
@@ -2014,6 +2113,9 @@ export default function CompanyMaster() {
 
       {/* Tree tab */}
       {activeTab === 'tree' && <CompanyOrgChartView />}
+
+      {/* Employees tab */}
+      {activeTab === 'employees' && <CompanyEmployeesView />}
 
       {/* Registrations tab — 3-panel layout (like cpdesk) */}
       {activeTab === 'registrations' && (
