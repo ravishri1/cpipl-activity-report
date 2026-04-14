@@ -144,6 +144,8 @@ export default function SeparationManager() {
   const handleNextToLWD = () => {
     if (!form.userId || !form.requestDate) return;
     setLwdChoice(null);
+    // Pre-fill settlement date with auto-calculated value so HR sees it and can change
+    setSettlementOverride(autoLWD ? addDaysStr(autoLWD, 45) : '');
     setFormStep('lwd_review');
   };
 
@@ -384,12 +386,14 @@ export default function SeparationManager() {
                     </div>
                     <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                   </div>
-                  <div className="flex items-center gap-3 pt-1 border-t border-green-200">
-                    <label className="text-xs text-green-800 font-medium whitespace-nowrap">Override settlement date:</label>
+                  <div className="flex items-center gap-3 pt-1 border-t border-green-200 flex-wrap">
+                    <label className="text-xs text-green-800 font-medium whitespace-nowrap">Settlement (hold until) date:</label>
                     <input type="date" className="border border-green-300 rounded px-2 py-1 text-sm"
                       value={settlementOverride}
                       onChange={e => setSettlementOverride(e.target.value)} />
-                    {settlementOverride && <button onClick={() => setSettlementOverride('')} className="text-xs text-gray-400 underline">Reset</button>}
+                    <span className="text-xs text-green-600">
+                      {settlementOverride !== salaryHoldUntilCalc ? 'Modified by HR' : 'Auto: Est. LWD + 45 days'}
+                    </span>
                   </div>
                   <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
                   <button onClick={() => setLwdChoice(null)} className="text-xs text-gray-500 underline">Change answer</button>
@@ -424,12 +428,14 @@ export default function SeparationManager() {
                         </div>
                         <div><p className="text-xs text-gray-400">Final Month Days Worked</p><p className="font-semibold">{lastMonthDays} days</p></div>
                       </div>
-                      <div className="flex items-center gap-3 pt-1 border-t border-blue-200">
-                        <label className="text-xs text-blue-800 font-medium whitespace-nowrap">Override settlement date:</label>
+                      <div className="flex items-center gap-3 pt-1 border-t border-blue-200 flex-wrap">
+                        <label className="text-xs text-blue-800 font-medium whitespace-nowrap">Settlement (hold until) date:</label>
                         <input type="date" className="border border-blue-300 rounded px-2 py-1 text-sm"
                           value={settlementOverride}
                           onChange={e => setSettlementOverride(e.target.value)} />
-                        {settlementOverride && <button onClick={() => setSettlementOverride('')} className="text-xs text-gray-400 underline">Reset</button>}
+                        <span className="text-xs text-blue-600">
+                          {settlementOverride !== salaryHoldUntilCalc ? 'Modified by HR' : 'Auto: Est. LWD + 45 days'}
+                        </span>
                       </div>
                       <p className="text-xs text-gray-500">FnF formula: Gross ÷ 30 × {lastMonthDays} days = last month salary</p>
                       {autoLWD !== form.lastWorkingDate && (
