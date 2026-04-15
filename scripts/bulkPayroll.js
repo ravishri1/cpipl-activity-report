@@ -44,7 +44,10 @@ async function generateMonth(companyId, month) {
   const monthStart = `${month}-01`;
   const monthEnd   = `${month}-${String(daysInMonth).padStart(2, '0')}`;
 
-  // Get employees: active + separated whose LWD >= month start
+  // Get employees active during this month:
+  //   a) isActive:true AND (no separation OR separation LWD >= monthStart)
+  //   b) isActive:false AND separation LWD >= monthStart
+  // This excludes employees whose isActive is still true but LWD fell before this month.
   const salaries = await prisma.salaryStructure.findMany({
     where: {
       user: {
@@ -52,7 +55,7 @@ async function generateMonth(companyId, month) {
         dateOfJoining: { lte: monthEnd },
         employeeId: { not: null },
         OR: [
-          { isActive: true },
+          { isActive: true, OR: [{ separation: null }, { separation: { lastWorkingDate: { gte: monthStart } } }] },
           { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
         ],
       },
