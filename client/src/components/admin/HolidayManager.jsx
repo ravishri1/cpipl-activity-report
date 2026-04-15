@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../../utils/api';
 import {
   CalendarDays, Plus, Trash2, X, Upload, Download,
-  FileSpreadsheet, CheckCircle2, AlertTriangle, Pencil, Info,
+  FileSpreadsheet, CheckCircle2, AlertTriangle, Pencil, Info, Lock,
 } from 'lucide-react';
 import SaturdayPolicyManager from './SaturdayPolicyManager';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -557,6 +558,8 @@ export default function HolidayManager() {
     return hash === 'weeklyoff' ? 'weeklyoff' : 'holidays';
   });
   const [fy, setFy] = useState(getCurrentFY());
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { isLocked: currentMonthLocked, lockInfo: currentLockInfo } = usePayrollLock(currentMonth);
   const [allHolidays, setAllHolidays] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
@@ -778,8 +781,27 @@ export default function HolidayManager() {
 
       {/* ── Holiday List content ──────────────────────────────────────────── */}
       {mainTab === 'holidays' && <>
+
+      {/* ── Payroll Lock Banner ─────────────────────────────────────────────── */}
+      {currentMonthLocked && (
+        <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
+          <Lock className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-red-700">
+            <span className="font-semibold">Payroll Locked — {currentMonth}</span>
+            {currentLockInfo?.lockedAt && (
+              <span className="text-xs text-red-500 ml-2">
+                (locked {new Date(currentLockInfo.lockedAt).toLocaleDateString('en-IN')})
+              </span>
+            )}
+            <p className="text-xs text-red-500 mt-0.5">
+              Adding, editing, or deleting holidays for the current payroll month is blocked. Unlock payroll from the Payroll Dashboard to make changes.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Info Banner ────────────────────────────────────────────────────── */}
-      <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2.5">
+      <div className={`mx-6 ${currentMonthLocked ? 'mt-2' : 'mt-4'} bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2.5`}>
         <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-blue-700">
           The <span className="font-semibold">Holiday List</span> page displays all the holidays declared for a particular year.

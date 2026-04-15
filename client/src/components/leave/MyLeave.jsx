@@ -5,6 +5,7 @@ import { useApi } from '../../hooks/useApi';
 import LeaveApplyModal from './LeaveApplyModal';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 import {
   CalendarOff, Plus, Clock, CheckCircle2, XCircle, Ban, Trash2,
   ChevronLeft, ChevronRight, TrendingUp, Calendar, Info, Lock, Shield, AlertTriangle,
@@ -39,6 +40,8 @@ export default function MyLeave() {
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [showModal, setShowModal] = useState(false);
   const [filter, setFilter] = useState('all');
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { isLocked: monthLocked, lockInfo } = usePayrollLock(currentMonth);
 
   const { data: balances, loading: balLoading, error: balErr, refetch: refetchBal } = useFetch(
     `/leave/balance?year=${fyYear}`, [], [fyYear]
@@ -102,10 +105,12 @@ export default function MyLeave() {
             </button>
           </div>
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+            onClick={() => !monthLocked && setShowModal(true)}
+            disabled={monthLocked}
+            title={monthLocked ? `Payroll for ${currentMonth} is locked — leave applications blocked` : undefined}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus className="w-4 h-4" />
+            {monthLocked ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             Apply Leave
           </button>
         </div>
@@ -116,6 +121,20 @@ export default function MyLeave() {
       {reqErr && <AlertMessage type="error" message={reqErr} />}
       {actionErr && <AlertMessage type="error" message={actionErr} />}
       {success && <AlertMessage type="success" message={success} />}
+
+      {/* Payroll Lock Notice */}
+      {monthLocked && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <Lock className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Payroll Locked — {currentMonth}</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              New leave applications for this month are not allowed while payroll is locked.
+              Contact HR/Admin to unlock payroll if you need to apply leave for this period.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Balance Cards — greytHR style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

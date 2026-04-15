@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Wallet, Clock, CheckCircle, XCircle, Banknote, ArrowLeft,
   AlertTriangle, ChevronDown, ChevronUp, Loader2, Send, RefreshCw,
-  CalendarDays, IndianRupee, RotateCcw,
+  CalendarDays, IndianRupee, RotateCcw, Lock,
 } from 'lucide-react';
 import api from '../../utils/api';
 import { useFetch } from '../../hooks/useFetch';
@@ -10,6 +10,7 @@ import { useApi } from '../../hooks/useApi';
 import AlertMessage from '../shared/AlertMessage';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import EmptyState from '../shared/EmptyState';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 
 const formatCurrency = (v) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
@@ -43,6 +44,8 @@ export default function SalaryAdvance() {
   const [form, setForm] = useState({ amount: '', reason: '', repaymentMonths: '3' });
   const { data: advances, loading, error: fetchErr, refetch } = useFetch('/salary-advances/my', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { isLocked: monthLocked, lockInfo } = usePayrollLock(currentMonth);
 
   const activeAdvance = advances.find(a => ['pending', 'approved', 'released', 'repaying'].includes(a.status));
 
@@ -86,10 +89,12 @@ export default function SalaryAdvance() {
         </div>
         {!activeAdvance && !showForm && (
           <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+            onClick={() => !monthLocked && setShowForm(true)}
+            disabled={monthLocked}
+            title={monthLocked ? `Payroll for ${currentMonth} is locked` : undefined}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4" />
+            {monthLocked ? <Lock className="w-4 h-4" /> : <Send className="w-4 h-4" />}
             Request Advance
           </button>
         )}
@@ -105,6 +110,19 @@ export default function SalaryAdvance() {
       )}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
+
+      {/* Payroll Lock Notice */}
+      {monthLocked && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <Lock className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Payroll Locked — {currentMonth}</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              New advance requests are not accepted while payroll is locked for this month. Contact HR/Admin to unlock payroll if needed.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Active Advance Banner */}
       {activeAdvance && (

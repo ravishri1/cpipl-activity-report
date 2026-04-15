@@ -5,6 +5,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { useApi } from '../../hooks/useApi';
 import AlertMessage from '../shared/AlertMessage';
 import EmptyState from '../shared/EmptyState';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 
 const STATUS_META = {
   pending_manager: { label: 'Pending Manager', color: 'bg-yellow-100 text-yellow-800' },
@@ -96,6 +97,10 @@ export default function SeparationManager() {
   const autoSettlement = autoLWD ? addDaysStr(autoLWD, 45) : '';
   const effectiveSettlement = form.settlementDate || autoSettlement;
   const lastMonthDays = effectiveLWD ? dayOfMonth(effectiveLWD) : null;
+
+  // Check if the effective LWD month is payroll-locked
+  const lwdMonth = effectiveLWD ? effectiveLWD.slice(0, 7) : null;
+  const { isLocked: lwdMonthLocked } = usePayrollLock(lwdMonth);
 
   const filtered = filter === 'active'
     ? separations.filter(s => ACTIVE_STATUSES.includes(s.status))
@@ -190,6 +195,19 @@ export default function SeparationManager() {
       {fetchErr && <AlertMessage type="error" message={fetchErr} />}
       {saveErr && <AlertMessage type="error" message={saveErr} />}
       {success && <AlertMessage type="success" message={success} />}
+
+      {/* LWD Month Lock Notice — shown when form is open and LWD falls in a locked month */}
+      {showInitiateForm && lwdMonthLocked && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <span className="text-red-500 mt-0.5 text-base">🔒</span>
+          <div>
+            <p className="text-sm font-semibold text-red-700">Payroll Locked — {lwdMonth}</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              The Last Working Date falls in a payroll-locked month. Initiating or updating this separation will be blocked by the server. Unlock payroll from the Payroll Dashboard first.
+            </p>
+          </div>
+        </div>
+      )}
       {importResult && (
         <div className={`rounded-lg px-4 py-3 text-sm border ${importResult.errors?.length ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
           <strong>{importResult.message}</strong>

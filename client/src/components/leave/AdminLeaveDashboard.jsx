@@ -8,8 +8,9 @@ import { formatDate } from '../../utils/formatters';
 import {
   BarChart3, Users, ChevronLeft, ChevronRight, Search, User, Calendar,
   CheckCircle2, XCircle, Clock, AlertTriangle, TrendingUp, ChevronDown,
-  ChevronUp, CalendarDays, Download, Eye, PieChart, Building2,
+  ChevronUp, CalendarDays, Download, Eye, PieChart, Building2, Lock,
 } from 'lucide-react';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 
 const statusStyles = {
   pending: 'bg-amber-100 text-amber-700',
@@ -536,6 +537,8 @@ function LeaveOverview({ employees, fyYear }) {
 export default function AdminLeaveDashboard() {
   const [fyYear, setFyYear] = useState(getCurrentFY());
   const [mainTab, setMainTab] = useState('overview'); // 'overview' | 'employees'
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const { isLocked: monthLocked, lockInfo } = usePayrollLock(currentMonth);
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('all');
   const [expandedEmp, setExpandedEmp] = useState(null);
@@ -685,6 +688,26 @@ export default function AdminLeaveDashboard() {
       </div>
 
       {fetchErr && <AlertMessage type="error" message={fetchErr} />}
+
+      {/* Payroll Lock Notice */}
+      {monthLocked && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <Lock className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">
+              Payroll Locked — {currentMonth}
+              {lockInfo?.lockedAt && (
+                <span className="text-xs font-normal text-red-400 ml-2">
+                  (since {new Date(lockInfo.lockedAt).toLocaleDateString('en-IN')})
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-red-500 mt-0.5">
+              New leave applications for this month are blocked. You can still view and export leave data. Unlock payroll from Payroll Dashboard to allow modifications.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Tabs: Overview | Employees */}
       <div className="flex items-center gap-1 border-b border-slate-200">
