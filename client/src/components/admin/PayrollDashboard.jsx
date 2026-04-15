@@ -1405,6 +1405,7 @@ export default function PayrollDashboard() {
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [lockSaving, setLockSaving] = useState(null);
+  const [monthLocking, setMonthLocking] = useState(false);
   const [processCheck, setProcessCheck] = useState(null);
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
@@ -1466,6 +1467,32 @@ export default function PayrollDashboard() {
       showToast('Failed to update', 'error');
     } finally {
       setLockSaving(null);
+    }
+  };
+
+  const handleMonthLock = async () => {
+    const isLocked = overview?.locks?.monthLocked;
+    const action = isLocked ? 'unlock' : 'lock';
+    if (!window.confirm(`${isLocked ? 'UNLOCK' : 'LOCK'} payroll for ${selectedMonth}?\n\n${
+      isLocked
+        ? 'Unlocking allows changes to attendance, leave, holidays, separations and payslips for this month.'
+        : 'Locking will BLOCK ALL changes to attendance, leave, holidays, separations, advances and payslips for this month until you unlock it.'
+    }`)) return;
+
+    setMonthLocking(true);
+    try {
+      if (isLocked) {
+        await api.delete(`/payroll/month-locks/${selectedMonth}?companyId=${selectedCompanyId}`);
+        showToast(`Payroll for ${selectedMonth} unlocked`, 'success');
+      } else {
+        await api.post('/payroll/month-locks', { month: selectedMonth, companyId: selectedCompanyId });
+        showToast(`Payroll for ${selectedMonth} is now locked 🔒`, 'success');
+      }
+      fetchOverview();
+    } catch (err) {
+      showToast(err.response?.data?.message || `Failed to ${action} month`, 'error');
+    } finally {
+      setMonthLocking(false);
     }
   };
 
@@ -2049,6 +2076,39 @@ export default function PayrollDashboard() {
                           </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Hard Month Lock — blocks ALL data changes for this month */}
+                  <div className={`rounded-xl border-2 p-5 ${overview.locks.monthLocked ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{overview.locks.monthLocked ? '🔒' : '🔓'}</span>
+                          <p className="text-sm font-bold text-slate-800">
+                            {overview.locks.monthLocked ? `Month Locked` : 'Month Unlocked'}
+                          </p>
+                          {overview.locks.monthLocked && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full uppercase tracking-wider">LOCKED</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 ml-7">
+                          {overview.locks.monthLocked
+                            ? `No changes allowed to attendance, leave, holidays, separations, advances or payslips for ${selectedMonth}. Locked by ${overview.locks.monthLockInfo?.lockedBy || 'Admin'} on ${overview.locks.monthLockInfo?.lockedAt?.slice(0,10) || ''}.`
+                            : 'Lock this month to prevent all data changes once payroll is finalised.'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleMonthLock}
+                        disabled={monthLocking}
+                        className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                          overview.locks.monthLocked
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
+                            : 'bg-slate-800 text-white hover:bg-slate-700'
+                        }`}
+                      >
+                        {monthLocking ? '...' : overview.locks.monthLocked ? '🔓 Unlock Month' : '🔒 Lock Month'}
+                      </button>
                     </div>
                   </div>
 

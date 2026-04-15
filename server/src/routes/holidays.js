@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, conflict, notFound } = require('../utils/httpErrors');
 const { requireFields, parseId, parseIntOr } = require('../utils/validate');
 const { DEFAULT_OFF_DAYS } = require('../services/attendance/weeklyOffHelper');
+const { assertPayrollUnlocked } = require('../utils/payrollLock');
 
 const router = express.Router();
 router.use(authenticate);
@@ -61,6 +62,7 @@ router.post('/', requireAdmin, asyncHandler(async (req, res) => {
   const { name, date, isOptional, location } = req.body;
   requireFields(req.body, 'name', 'date');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest('Date must be in YYYY-MM-DD format.');
+  await assertPayrollUnlocked(req.prisma, date.slice(0, 7));
 
   const loc = location || 'All';
   const year = parseInt(date.substring(0, 4));
@@ -346,6 +348,11 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const { name, date, isOptional, location } = req.body;
 
+  // Check lock on the existing holiday's month (and new date if changing)
+  const existing = await req.prisma.holiday.findUnique({ where: { id }, select: { date: true } });
+  if (existing) await assertPayrollUnlocked(req.prisma, existing.date.slice(0, 7));
+  if (date && date !== existing?.date) await assertPayrollUnlocked(req.prisma, date.slice(0, 7));
+
   const data = {};
   if (name) data.name = name.trim();
   if (date) {
@@ -362,7 +369,10 @@ router.put('/:id', requireAdmin, asyncHandler(async (req, res) => {
 
 // DELETE /api/holidays/:id — Delete a holiday (admin only)
 router.delete('/:id', requireAdmin, asyncHandler(async (req, res) => {
-  await req.prisma.holiday.delete({ where: { id: parseId(req.params.id) } });
+  const id = parseId(req.params.id);
+  const existing = await req.prisma.holiday.findUnique({ where: { id }, select: { date: true } });
+  if (existing) await assertPayrollUnlocked(req.prisma, existing.date.slice(0, 7));
+  await req.prisma.holiday.delete({ where: { id } });
   res.json({ message: 'Holiday deleted.' });
 }));
 

@@ -6,6 +6,7 @@ const { parseId, requireFields } = require('../utils/validate');
 const { getWeeklyOffMap } = require('../services/attendance/weeklyOffHelper');
 const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('../utils/saturdayPolicyHelper');
 const { DEFAULT_PAYROLL_RULES, calcStatutory, calcLWF, getEsicPeriodStartMonth } = require('../utils/payrollRules');
+const { assertPayrollUnlocked, isMonthLocked } = require('../utils/payrollLock');
 
 const router = express.Router();
 router.use(authenticate);
@@ -226,6 +227,12 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
   const lockMap = {};
   for (const s of settings) lockMap[s.key] = s.value === 'true';
 
+  // Hard per-month lock (PayrollMonthLock table — this is the real lock)
+  const monthLock = await req.prisma.payrollMonthLock.findUnique({
+    where: { companyId_month: { companyId: companyId || 1, month } },
+    include: { locker: { select: { name: true, employeeId: true } } },
+  });
+
   res.json({
     month, year, monthNum, daysInMonth, workingDays,
     cutoffFrom: monthStart, cutoffTo: monthEnd,
@@ -237,6 +244,13 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       employeeViewReleased: lockMap.employee_view_released || false,
       itStatementReleased: lockMap.it_statement_released || false,
       payrollLocked: lockMap.payroll_locked || false,
+      // Hard month lock — blocks ALL data changes for this month
+      monthLocked: !!monthLock,
+      monthLockInfo: monthLock ? {
+        lockedAt: monthLock.lockedAt,
+        lockedBy: monthLock.locker?.name || 'Admin',
+        note: monthLock.note || null,
+      } : null,
     },
     cards: {
       negativeSalary: negativeSalaryUsers,
@@ -271,6 +285,8 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
   const { month, companyId, userId: targetUserId } = req.body;
   if (!month) throw badRequest('Month is required (format: YYYY-MM)');
   if (!companyId) throw badRequest('companyId is required — payroll must be processed per company');
+  // Block generation if month is hard-locked
+  await assertPayrollUnlocked(req.prisma, month, parseInt(companyId));
 
   const year = parseInt(month.split('-')[0]);
   const monthNum = parseInt(month.split('-')[1]);
@@ -1136,8 +1152,12 @@ router.get('/payslip/:id', requireActiveEmployee, asyncHandler(async (req, res) 
 // DELETE /payslip/:id — Delete a single payslip (admin, generated status only)
 router.delete('/payslip/:id', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const payslip = await req.prisma.payslip.findUnique({ where: { id }, select: { id: true, status: true } });
+  const payslip = await req.prisma.payslip.findUnique({
+    where: { id },
+    select: { id: true, status: true, month: true, user: { select: { companyId: true } } },
+  });
   if (!payslip) throw notFound('Payslip');
+  await assertPayrollUnlocked(req.prisma, payslip.month, payslip.user?.companyId || 1);
   if (payslip.status === 'published') throw badRequest('Cannot delete a published payslip. Unpublish it first.');
   await req.prisma.payslip.delete({ where: { id } });
   res.json({ message: 'Payslip deleted' });
@@ -1154,24 +1174,42 @@ router.put('/payslip/:id/publish', requireActiveEmployee, requireAdmin, asyncHan
 
 // POST /payslips/publish-all — Publish all payslips + auto-lock month
 router.post('/payslips/publish-all', requireActiveEmployee, requireAdmin, asyncHandler(async (req, res) => {
-  const { month } = req.body;
+  const { month, companyId = 1 } = req.body;
   if (!month) throw badRequest('Month is required');
+  const cid = parseInt(companyId);
   const result = await req.prisma.payslip.updateMany({
     where: { month, status: 'generated' },
     data: { status: 'published', publishedAt: new Date() },
   });
   // Auto-lock the month after publishing all payslips
   await req.prisma.payrollMonthLock.upsert({
-    where: { month },
-    create: { month, lockedBy: req.user.id },
+    where: { companyId_month: { companyId: cid, month } },
+    create: { companyId: cid, month, lockedBy: req.user.id },
     update: { lockedAt: new Date(), lockedBy: req.user.id },
   });
   res.json({ message: `Published ${result.count} payslips for ${month} and month locked.`, count: result.count, locked: true });
 }));
 
+// POST /month-locks — Manually lock a month (admin)
+router.post('/month-locks', requireAdmin, asyncHandler(async (req, res) => {
+  const { month, companyId = 1, note } = req.body;
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) throw badRequest('month is required (YYYY-MM)');
+  const cid = parseInt(companyId);
+  const lock = await req.prisma.payrollMonthLock.upsert({
+    where: { companyId_month: { companyId: cid, month } },
+    create: { companyId: cid, month, lockedBy: req.user.id, note: note || null },
+    update: { lockedAt: new Date(), lockedBy: req.user.id, unlockedAt: null, unlockedBy: null, note: note || null },
+    include: { locker: { select: { name: true } } },
+  });
+  res.status(201).json({ message: `Payroll for ${month} is now locked.`, lock });
+}));
+
 // GET /month-locks — List all locked months (admin)
 router.get('/month-locks', requireAdmin, asyncHandler(async (req, res) => {
+  const where = {};
+  if (req.query.companyId) where.companyId = parseInt(req.query.companyId);
   const locks = await req.prisma.payrollMonthLock.findMany({
+    where,
     orderBy: { month: 'desc' },
     include: { locker: { select: { name: true, employeeId: true } } },
   });
@@ -1180,14 +1218,21 @@ router.get('/month-locks', requireAdmin, asyncHandler(async (req, res) => {
 
 // GET /month-locks/:month — Check if a specific month is locked
 router.get('/month-locks/:month', asyncHandler(async (req, res) => {
-  const lock = await req.prisma.payrollMonthLock.findUnique({ where: { month: req.params.month } });
+  const companyId = parseInt(req.query.companyId || 1);
+  const lock = await req.prisma.payrollMonthLock.findUnique({
+    where: { companyId_month: { companyId, month: req.params.month } },
+    include: { locker: { select: { name: true, employeeId: true } } },
+  });
   res.json({ locked: !!lock, lock: lock || null });
 }));
 
-// DELETE /month-locks/:month — Unlock a month (admin only — emergency use)
+// DELETE /month-locks/:month — Unlock a month (admin only)
 router.delete('/month-locks/:month', requireAdmin, asyncHandler(async (req, res) => {
-  await req.prisma.payrollMonthLock.deleteMany({ where: { month: req.params.month } });
-  res.json({ message: `Month ${req.params.month} unlocked.` });
+  const companyId = parseInt(req.query.companyId || req.body?.companyId || 1);
+  await req.prisma.payrollMonthLock.deleteMany({
+    where: { companyId, month: req.params.month },
+  });
+  res.json({ message: `Payroll for ${req.params.month} has been unlocked.` });
 }));
 
 // GET /process-check?month=&companyId= — Pre-payroll checklist (admin)

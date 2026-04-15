@@ -1,19 +1,47 @@
 /**
  * Payroll Month Lock Utility
- * Once payslips are published for a month, all related data auto-locks.
- * No delete or status changes allowed on attendance, leaves, expenses for locked months.
+ *
+ * Once a month is locked, ALL related data is read-only:
+ * attendance, leave, holidays, separations, salary advances,
+ * payslip generation — nothing affecting that month can change
+ * until admin explicitly unlocks it.
  */
+const { forbidden } = require('./httpErrors');
 
 /**
- * Check if a specific month is locked.
+ * Check if a specific month is locked for a company.
  * @param {PrismaClient} prisma
  * @param {string} month - "YYYY-MM"
+ * @param {number} [companyId=1]
  * @returns {Promise<boolean>}
  */
-async function isMonthLocked(prisma, month) {
+async function isMonthLocked(prisma, month, companyId = 1) {
   if (!month) return false;
-  const lock = await prisma.payrollMonthLock.findUnique({ where: { month } });
+  const lock = await prisma.payrollMonthLock.findUnique({
+    where: { companyId_month: { companyId, month } },
+  });
   return !!lock;
+}
+
+/**
+ * Throw 403 Forbidden if the month is locked. Call this at the top of any
+ * route that writes data affecting payroll for that month.
+ * @param {PrismaClient} prisma
+ * @param {string} month - "YYYY-MM"
+ * @param {number} [companyId=1]
+ */
+async function assertPayrollUnlocked(prisma, month, companyId = 1) {
+  if (!month) return;
+  const lock = await prisma.payrollMonthLock.findUnique({
+    where: { companyId_month: { companyId, month } },
+    select: { lockedAt: true },
+  });
+  if (lock) {
+    throw forbidden(
+      `Payroll for ${month} is locked (since ${lock.lockedAt.toISOString().slice(0, 10)}). ` +
+      `Admin must unlock it before making any changes for this month.`
+    );
+  }
 }
 
 /**
@@ -27,13 +55,15 @@ function toMonth(date) {
 }
 
 /**
- * Check if any month in a date range is locked.
+ * Check if any month in a date range is locked. Returns the first locked month
+ * string, or null if none are locked.
  * @param {PrismaClient} prisma
  * @param {string} startDate - "YYYY-MM-DD"
  * @param {string} endDate   - "YYYY-MM-DD"
+ * @param {number} [companyId=1]
  * @returns {Promise<string|null>} locked month string or null
  */
-async function isDateRangeLocked(prisma, startDate, endDate) {
+async function isDateRangeLocked(prisma, startDate, endDate, companyId = 1) {
   const start = new Date(startDate + 'T00:00:00');
   const end   = new Date(endDate   + 'T00:00:00');
   const months = new Set();
@@ -46,10 +76,12 @@ async function isDateRangeLocked(prisma, startDate, endDate) {
   }
 
   for (const month of months) {
-    const lock = await prisma.payrollMonthLock.findUnique({ where: { month } });
+    const lock = await prisma.payrollMonthLock.findUnique({
+      where: { companyId_month: { companyId, month } },
+    });
     if (lock) return month;
   }
   return null;
 }
 
-module.exports = { isMonthLocked, isDateRangeLocked, toMonth };
+module.exports = { isMonthLocked, assertPayrollUnlocked, isDateRangeLocked, toMonth };

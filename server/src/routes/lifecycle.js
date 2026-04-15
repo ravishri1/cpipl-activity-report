@@ -4,6 +4,7 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { badRequest, notFound, forbidden, conflict } = require('../utils/httpErrors');
 const { requireFields, requireEnum, parseId } = require('../utils/validate');
 const { suspendWorkspaceUser, setupEmailForwarding } = require('../services/google/googleWorkspace');
+const { assertPayrollUnlocked } = require('../utils/payrollLock');
 
 const router = express.Router();
 
@@ -122,8 +123,13 @@ router.post('/separation', requireAdmin, asyncHandler(async (req, res) => {
   requireFields(req.body, 'userId', 'type', 'requestDate');
   requireEnum(type, VALID_SEP_TYPES, 'type');
 
-  const user = await req.prisma.user.findUnique({ where: { id: userId } });
+  const user = await req.prisma.user.findUnique({ where: { id: userId }, select: { id: true, companyId: true } });
   if (!user) throw notFound('User');
+
+  // Block if LWD falls in a locked payroll month
+  if (lastWorkingDate) {
+    await assertPayrollUnlocked(req.prisma, lastWorkingDate.slice(0, 7), user.companyId || 1);
+  }
 
   const existing = await req.prisma.separation.findUnique({ where: { userId } });
   if (existing && existing.status !== 'completed' && existing.status !== 'cancelled') {
@@ -195,10 +201,19 @@ router.get('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
 // 8. PUT /separation/:id — Update separation (admin only)
 router.put('/separation/:id', requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const existing = await req.prisma.separation.findUnique({ where: { id } });
+  const existing = await req.prisma.separation.findUnique({
+    where: { id },
+    include: { user: { select: { companyId: true } } },
+  });
   if (!existing) throw notFound('Separation record');
 
   const { status, lastWorkingDate, exitInterviewDone, exitInterviewNotes, fnfAmount, fnfPaidOn, allAssetsReturned, assetReturnNotes, fnfHoldReason, workspaceBackupEmail } = req.body;
+
+  // Block LWD changes that land in a locked payroll month
+  const lwdToCheck = lastWorkingDate || existing.lastWorkingDate;
+  if (lwdToCheck) {
+    await assertPayrollUnlocked(req.prisma, lwdToCheck.slice(0, 7), existing.user?.companyId || 1);
+  }
 
   if (status) requireEnum(status, VALID_SEP_STATUSES, 'status');
 

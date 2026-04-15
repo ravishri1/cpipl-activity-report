@@ -88,6 +88,11 @@ router.get('/my', asyncHandler(async (req, res) => {
 
 // POST /api/leave/apply — Apply for leave
 router.post('/apply', asyncHandler(async (req, res) => {
+  // Block applying leave in a payroll-locked month
+  if (req.body.startDate && req.body.endDate) {
+    const lockedMonth = await isDateRangeLocked(req.prisma, req.body.startDate, req.body.endDate);
+    if (lockedMonth) throw badRequest(`Cannot apply leave — payroll for ${lockedMonth} is locked and published.`);
+  }
   const request = await applyLeave(req.user.id, req.body, req.prisma);
 
   // Notify admins

@@ -3395,14 +3395,21 @@ model OffDayAllowanceEligibility {
 }
 
 // ── Payroll Month Lock ────────────────────────────────────────────────────────
+// Once locked: attendance, leave, holidays, separation, advances, payslips are
+// ALL read-only for that month. Only admin can unlock.
 
 model PayrollMonthLock {
-  id        Int      @id @default(autoincrement())
-  month     String   @unique                    // "YYYY-MM"
-  lockedAt  DateTime @default(now())
-  lockedBy  Int
+  id          Int       @id @default(autoincrement())
+  companyId   Int       @default(1)             // which company this lock applies to
+  month       String                            // "YYYY-MM"
+  lockedAt    DateTime  @default(now())
+  lockedBy    Int
+  unlockedAt  DateTime?
+  unlockedBy  Int?
+  note        String?                           // optional reason
 
-  locker    User     @relation("PayrollLocker", fields: [lockedBy], references: [id])
+  locker      User      @relation("PayrollLocker", fields: [lockedBy], references: [id])
 
+  @@unique([companyId, month])
   @@index([month])
 }
