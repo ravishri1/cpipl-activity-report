@@ -88,6 +88,7 @@ async function generateMonth(companyId, month) {
     allDailyReports,
     allRepayments,
     saturdayPolicy,
+    allOffDayEligibility,
   ] = await Promise.all([
     prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
     prisma.separation.findMany({
@@ -123,6 +124,14 @@ async function generateMonth(companyId, month) {
       include: { advance: { select: { userId: true } } },
     }),
     getSaturdayPolicyForMonth(companyId, month, prisma),
+    prisma.offDayAllowanceEligibility.findMany({
+      where: {
+        userId: { in: allUserIds },
+        eligibleFrom: { lte: monthEnd },
+        OR: [{ eligibleTo: null }, { eligibleTo: { gte: monthStart } }],
+      },
+      select: { userId: true, eligibleFrom: true, eligibleTo: true },
+    }),
   ]);
 
   const existingPayslipUserIds = new Set(allPayslips.map(p => p.userId));
@@ -147,6 +156,12 @@ async function generateMonth(companyId, month) {
     advanceRepayMap.set(uid, (advanceRepayMap.get(uid) || 0) + rep.amount);
   }
 
+  // Build off-day eligibility map: userId → eligibility record
+  const offDayEligibilityMap = new Map();
+  for (const e of allOffDayEligibility) {
+    offDayEligibilityMap.set(e.userId, e);
+  }
+
   let generated = 0, skipped = 0;
 
   for (const sal of salaries) {
@@ -166,19 +181,86 @@ async function generateMonth(companyId, month) {
     const attRecords = allAttendance.filter(a => a.userId === userId);
     const userLeaves = allLeaveRequests.filter(l => l.userId === userId);
 
-    const paidLeaveDates = new Set();
-    const lopLeaveDates  = new Set();
+    const paidLeaveDates    = new Set();
+    const lopLeaveDates     = new Set(); // LOP dates (including sandwiched Sundays/holidays within LOP ranges)
+    const halfLopLeaveDates = new Set(); // Half-day LOP dates (first_half / second_half session)
+
     for (const lr of userLeaves) {
-      let d = new Date(lr.startDate);
-      const end = new Date(lr.endDate);
-      while (d <= end) {
-        const ds = d.toISOString().slice(0, 10);
+      const isLop     = lr.leaveType?.code === 'LOP';
+      const isHalfDay = lr.session === 'first_half' || lr.session === 'second_half';
+
+      // Collect calendar days in this leave range that fall within the month
+      const rangeDays = [];
+      const cur = new Date(lr.startDate + 'T00:00:00Z');
+      const end = new Date(lr.endDate + 'T00:00:00Z');
+      while (cur <= end) {
+        const ds = cur.toISOString().slice(0, 10);
         if (ds >= monthStart && ds <= monthEnd) {
-          if (lr.leaveType?.code === 'LOP') lopLeaveDates.add(ds);
-          else paidLeaveDates.add(ds);
+          rangeDays.push({ ds, dow: cur.getUTCDay(), isHol: holidayDates.has(ds) });
         }
-        d.setDate(d.getDate() + 1);
+        cur.setDate(cur.getDate() + 1);
       }
+
+      if (!isLop) {
+        for (const { ds } of rangeDays) paidLeaveDates.add(ds);
+        continue;
+      }
+
+      // LOP range: replicate route logic — include off-Saturdays in LOP numerator
+      // (denominator = calendar days so off-Saturdays must be in numerator too).
+      // Sandwich rule: Sundays/holidays between LOP working days also count as LOP.
+      let prevLopSeen = false;
+      for (let i = 0; i < rangeDays.length; i++) {
+        const { ds, dow, isHol } = rangeDays[i];
+        const isSunday = dow === 0;
+        if (!isSunday && !isHol) {
+          // Regular/working day (weekday or off-Saturday) → LOP
+          lopLeaveDates.add(ds);
+          if (isHalfDay) halfLopLeaveDates.add(ds);
+          prevLopSeen = true;
+        } else if (prevLopSeen) {
+          // Sunday or holiday: apply sandwich rule
+          let hasLopAfter = false;
+          for (let j = i + 1; j < rangeDays.length; j++) {
+            if (!rangeDays[j].isHol && rangeDays[j].dow !== 0) { hasLopAfter = true; break; }
+          }
+          if (hasLopAfter) lopLeaveDates.add(ds); // sandwiched → LOP
+        }
+      }
+    }
+
+    // Cross-leave Sunday/holiday sandwich:
+    // If a Sunday (or holiday) sits between full-day LOP-leave working days from two
+    // adjacent but separate leave requests, it counts as LOP — same as within one leave.
+    // Half-day LOP on the preceding working day disqualifies the sandwich: the employee
+    // was partly present that day, so the gap is not a continuous absence.
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${month}-${String(d).padStart(2, '0')}`;
+      if (lopLeaveDates.has(ds)) continue; // already counted
+      const dow = new Date(ds).getDay();
+      const isGap = dow === 0 || holidayDates.has(ds); // Sunday or holiday
+      if (!isGap) continue;
+      let prevLop = false, prevIsHalf = false, nextLop = false;
+      for (let pd = d - 1; pd >= 1; pd--) {
+        const pds = `${month}-${String(pd).padStart(2, '0')}`;
+        const pdow = new Date(pds).getDay();
+        if (pdow === 0 || holidayDates.has(pds)) continue;
+        if (pdow === 6 && offSaturdaySet.has(pds) && !lopLeaveDates.has(pds)) continue;
+        prevLop = lopLeaveDates.has(pds);
+        prevIsHalf = halfLopLeaveDates.has(pds);
+        break;
+      }
+      // Only sandwich if previous working day was a full-day LOP
+      if (!prevLop || prevIsHalf) continue;
+      for (let nd = d + 1; nd <= daysInMonth; nd++) {
+        const nds = `${month}-${String(nd).padStart(2, '0')}`;
+        const ndow = new Date(nds).getDay();
+        if (ndow === 0 || holidayDates.has(nds)) continue;
+        if (ndow === 6 && offSaturdaySet.has(nds) && !lopLeaveDates.has(nds)) continue;
+        nextLop = lopLeaveDates.has(nds);
+        break;
+      }
+      if (nextLop) lopLeaveDates.add(ds);
     }
 
     const attMap = new Map(attRecords.map(a => [a.date, a.status]));
@@ -193,9 +275,65 @@ async function generateMonth(companyId, month) {
     } else {
       for (let d = 1; d <= daysInMonth; d++) {
         const ds = `${month}-${String(d).padStart(2, '0')}`;
-        // Skip weekends (Sunday only) and holidays
         const dayOfWeek = new Date(ds).getDay();
-        if (dayOfWeek === 0) continue; // Sunday
+        // Sundays: skip normally; count as LOP if sandwiched within a LOP leave range
+        // OR sandwiched between absent attendance days (employee was absent all around it)
+        if (dayOfWeek === 0) {
+          if (lopLeaveDates.has(ds)) {
+            lopDays += 1; // within a LOP leave range
+          } else if (sandwichEnabled) {
+            let prevLop = false, nextLop = false;
+            for (let pd = d - 1; pd >= 1; pd--) {
+              const pds = `${month}-${String(pd).padStart(2, '0')}`;
+              const pdow = new Date(pds).getDay();
+              if (pdow === 0 || (pdow === 6 && offSaturdaySet.has(pds) && !lopLeaveDates.has(pds)) || holidayDates.has(pds)) continue;
+              const joinDate2 = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
+              if (joinDate2 && pds < joinDate2) continue;
+              prevLop = attMap.get(pds) === 'absent' || lopLeaveDates.has(pds);
+              break;
+            }
+            if (prevLop) {
+              for (let nd = d + 1; nd <= daysInMonth; nd++) {
+                const nds = `${month}-${String(nd).padStart(2, '0')}`;
+                const ndow = new Date(nds).getDay();
+                if (ndow === 0 || (ndow === 6 && offSaturdaySet.has(nds) && !lopLeaveDates.has(nds)) || holidayDates.has(nds)) continue;
+                if (lwd && nds > lwd) continue;
+                nextLop = attMap.get(nds) === 'absent' || lopLeaveDates.has(nds);
+                break;
+              }
+            }
+            if (prevLop && nextLop) lopDays += 1;
+          }
+          continue;
+        }
+        // Off-Saturdays: skip if not in a LOP leave range (it's their day off);
+        // BUT count as LOP if sandwiched between absent working days
+        if (dayOfWeek === 6 && offSaturdaySet.has(ds) && !lopLeaveDates.has(ds)) {
+          if (sandwichEnabled) {
+            let prevLop = false, nextLop = false;
+            for (let pd = d - 1; pd >= 1; pd--) {
+              const pds = `${month}-${String(pd).padStart(2, '0')}`;
+              const pdow = new Date(pds).getDay();
+              if (pdow === 0 || (pdow === 6 && offSaturdaySet.has(pds) && !lopLeaveDates.has(pds)) || holidayDates.has(pds)) continue;
+              const joinDate2 = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
+              if (joinDate2 && pds < joinDate2) continue;
+              prevLop = attMap.get(pds) === 'absent' || lopLeaveDates.has(pds);
+              break;
+            }
+            if (prevLop) {
+              for (let nd = d + 1; nd <= daysInMonth; nd++) {
+                const nds = `${month}-${String(nd).padStart(2, '0')}`;
+                const ndow = new Date(nds).getDay();
+                if (ndow === 0 || (ndow === 6 && offSaturdaySet.has(nds) && !lopLeaveDates.has(nds)) || holidayDates.has(nds)) continue;
+                if (lwd && nds > lwd) continue;
+                nextLop = attMap.get(nds) === 'absent' || lopLeaveDates.has(nds);
+                break;
+              }
+            }
+            if (prevLop && nextLop) lopDays += 1;
+          }
+          continue;
+        }
 
         // Skip days after LWD (pro-rata for mid-month separations)
         if (lwd && ds > lwd) continue;
@@ -211,14 +349,16 @@ async function generateMonth(companyId, month) {
             let prevLop = false, nextLop = false;
             for (let pd = d - 1; pd >= 1; pd--) {
               const pds = `${month}-${String(pd).padStart(2, '0')}`;
-              if (new Date(pds).getDay() === 0 || holidayDates.has(pds)) continue;
+              const pdow = new Date(pds).getDay();
+              if (pdow === 0 || (pdow === 6 && offSaturdaySet.has(pds)) || holidayDates.has(pds)) continue;
               if (joinDate && pds < joinDate) continue;
               prevLop = attMap.get(pds) === 'absent' || lopLeaveDates.has(pds);
               break;
             }
             for (let nd = d + 1; nd <= daysInMonth; nd++) {
               const nds = `${month}-${String(nd).padStart(2, '0')}`;
-              if (new Date(nds).getDay() === 0 || holidayDates.has(nds)) continue;
+              const ndow = new Date(nds).getDay();
+              if (ndow === 0 || (ndow === 6 && offSaturdaySet.has(nds)) || holidayDates.has(nds)) continue;
               if (lwd && nds > lwd) continue;
               nextLop = attMap.get(nds) === 'absent' || lopLeaveDates.has(nds);
               break;
@@ -236,7 +376,12 @@ async function generateMonth(companyId, month) {
 
         const status = attMap.get(ds);
         if (lopLeaveDates.has(ds)) {
-          lopDays += 1;
+          // Half-day LOP: employee worked the other half — credit 0.5 present, deduct 0.5 LOP
+          if (halfLopLeaveDates.has(ds)) {
+            presentDays += 0.5; lopDays += 0.5;
+          } else {
+            lopDays += 1;
+          }
         } else if (paidLeaveDates.has(ds) || status === 'on_leave') {
           presentDays += 1;
         } else if (status === 'present') {
@@ -257,7 +402,7 @@ async function generateMonth(companyId, month) {
             for (let pd = d - 1; pd >= 1; pd--) {
               const pds = `${month}-${String(pd).padStart(2, '0')}`;
               const pdow = new Date(pds).getDay();
-              if (pdow === 0 || holidayDates.has(pds)) continue;
+              if (pdow === 0 || (pdow === 6 && offSaturdaySet.has(pds)) || holidayDates.has(pds)) continue;
               const ps = attMap.get(pds);
               prevPresent = ps === 'present' || ps === 'on_leave' || paidLeaveDates.has(pds);
               break;
@@ -265,7 +410,7 @@ async function generateMonth(companyId, month) {
             for (let nd = d + 1; nd <= daysInMonth; nd++) {
               const nds = `${month}-${String(nd).padStart(2, '0')}`;
               const ndow = new Date(nds).getDay();
-              if (ndow === 0 || holidayDates.has(nds)) continue;
+              if (ndow === 0 || (ndow === 6 && offSaturdaySet.has(nds)) || holidayDates.has(nds)) continue;
               const ns = attMap.get(nds);
               nextPresent = ns === 'present' || ns === 'on_leave' || paidLeaveDates.has(nds);
               break;
@@ -290,12 +435,62 @@ async function generateMonth(companyId, month) {
       }
     }
 
+    // Pro-rata: mid-month separation (employee left during this month)
+    if (lwd && lwd >= monthStart && lwd <= monthEnd) {
+      const separationDeductDays = Math.max(0, lopDivisor - presentDays - lopDays);
+      lopDays += separationDeductDays;
+    }
+
+    // Pro-rata: mid-month joiner (employee joined during this month)
+    const joinDate = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
+    if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
+      let skippedWorkDays = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${month}-${String(d).padStart(2, '0')}`;
+        if (ds >= joinDate) break;
+        const dow = new Date(ds).getDay();
+        if (dow === 0) continue; // Sunday
+        if (dow === 6 && offSaturdaySet.has(ds) && !lopLeaveDates.has(ds)) continue; // Off-Sat (not LOP)
+        if (holidayDates.has(ds)) continue;
+        skippedWorkDays++;
+      }
+      lopDays += skippedWorkDays;
+    }
+
     // Earnings
     const fieldSum = (sal.basic||0)+(sal.hra||0)+(sal.da||0)+(sal.specialAllowance||0)+(sal.medicalAllowance||0)+(sal.conveyanceAllowance||0)+(sal.otherAllowance||0);
     const earningComps = Array.isArray(sal.components) ? sal.components.filter(c => c.type === 'earning') : [];
     const componentSum = earningComps.reduce((s, c) => s + (c.amount||0), 0);
     const grossBase = sal.grossEarnings || Math.max(fieldSum, componentSum) || 0;
-    const grossEarnings = grossBase;
+
+    // Off-day allowance: if employee is eligible and worked on weekly-off/holiday days
+    let offDayAllowance = 0;
+    let offDaysWorked = 0;
+    const offDayElig = offDayEligibilityMap.get(userId);
+    if (offDayElig) {
+      const attRecForOffDay = allAttendance.filter(a => a.userId === userId);
+      const attMapOffDay = new Map(attRecForOffDay.map(a => [a.date, a.status]));
+      const dailyReportDatesOffDay = dailyReportMap.get(userId) || new Set();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${month}-${String(d).padStart(2, '0')}`;
+        if (ds < offDayElig.eligibleFrom) continue;
+        if (offDayElig.eligibleTo && ds > offDayElig.eligibleTo) continue;
+        const dow = new Date(ds).getDay();
+        const isWeeklyOff = dow === 6 ? offSaturdaySet.has(ds) : dow === 0;
+        const isHoliday = holidayDates.has(ds);
+        if (!isWeeklyOff && !isHoliday) continue;
+        // Count if employee was present on this off-day
+        const status = attMapOffDay.get(ds);
+        if (status === 'present') {
+          offDaysWorked++;
+        } else if (!status && dailyReportDatesOffDay.has(ds)) {
+          offDaysWorked++;
+        }
+      }
+      offDayAllowance = daysInMonth > 0 ? Math.round((grossBase / daysInMonth) * offDaysWorked) : 0;
+    }
+
+    const grossEarnings = grossBase + offDayAllowance;
 
     // LOP deduction
     let lopDeduction = 0;
@@ -353,6 +548,9 @@ async function generateMonth(companyId, month) {
           workingDays: lopDivisor,
           presentDays: Math.round(presentDays * 10) / 10,
           lopDays: Math.round(lopDays * 10) / 10,
+          offDayAllowance,
+          offDaysWorked,
+          salaryAdvanceDeduction: advanceDeduction,
           status: 'published',
           generatedAt: new Date(),
           ...(earningsBreakdown ? { earningsBreakdown } : {}),
