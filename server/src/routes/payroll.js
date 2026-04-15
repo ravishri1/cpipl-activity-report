@@ -166,50 +166,33 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
 
   // Employee counts — filtered by company + joined by monthEnd
   // "Active during this month" = joined before monthEnd AND (still active OR separated with LWD >= monthStart)
+  // "Active during this month" = joined before monthEnd AND one of:
+  //   a) currently active AND (no separation OR separation LWD >= monthStart)
+  //   b) currently inactive AND separation LWD >= monthStart
+  // This correctly excludes isActive:true employees whose LWD fell in a prior month.
+  const wasActiveDuringMonth = [
+    { isActive: true, OR: [{ separation: null }, { separation: { lastWorkingDate: { gte: monthStart } } }] },
+    { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
+  ];
   const monthActiveFilter = {
     dateOfJoining: { lte: monthEnd },
     ...companyFilter,
-    OR: [
-      { isActive: true },
-      { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
-    ],
+    OR: wasActiveDuringMonth,
   };
   const totalActiveEmployees = await req.prisma.user.count({ where: monthActiveFilter });
   const additions = await req.prisma.user.count({
-    where: {
-      dateOfJoining: { gte: monthStart, lte: monthEnd },
-      ...companyFilter,
-      OR: [
-        { isActive: true },
-        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
-      ],
-    },
+    where: { dateOfJoining: { gte: monthStart, lte: monthEnd }, ...companyFilter, OR: wasActiveDuringMonth },
   });
   const separations = await req.prisma.separation.count({
     where: { lastWorkingDate: { gte: monthStart, lte: monthEnd }, ...(companyId ? { user: { companyId } } : {}) },
   });
   const exclusions = await req.prisma.user.count({
-    where: {
-      dateOfJoining: { lte: monthEnd },
-      salaryStructure: null,
-      ...companyFilter,
-      OR: [
-        { isActive: true },
-        { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
-      ],
-    },
+    where: { dateOfJoining: { lte: monthEnd }, salaryStructure: null, ...companyFilter, OR: wasActiveDuringMonth },
   });
   const stoppedSalaryCount = await req.prisma.salaryStructure.count({
     where: {
       stopSalaryProcessing: true,
-      user: {
-        dateOfJoining: { lte: monthEnd },
-        ...companyFilter,
-        OR: [
-          { isActive: true },
-          { isActive: false, separation: { lastWorkingDate: { gte: monthStart } } },
-        ],
-      },
+      user: { dateOfJoining: { lte: monthEnd }, ...companyFilter, OR: wasActiveDuringMonth },
     },
   });
 
