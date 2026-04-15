@@ -50,6 +50,7 @@ const DEFAULT_CREATE_FORM = {
 export default function SalaryAdvanceManager() {
   const [tab, setTab] = useState('pending'); // pending | all
   const [statusFilter, setStatusFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [reviewModal, setReviewModal] = useState(null); // { advance, action: 'approved'|'rejected' }
@@ -62,7 +63,9 @@ export default function SalaryAdvanceManager() {
   const [createForm, setCreateForm] = useState(DEFAULT_CREATE_FORM);
 
   const { data: pending, loading: pendingLoading, error: pendingErr, refetch: refetchPending } = useFetch('/salary-advances/pending', []);
-  const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch('/salary-advances/all', []);
+  const { data: all, loading: allLoading, error: allErr, refetch: refetchAll } = useFetch(
+    `/salary-advances/all${monthFilter ? `?takenIn=${monthFilter}` : ''}`, []
+  );
   const { data: employees } = useFetch('/users', []);
   const { execute, loading: acting, error: actErr, success, clearMessages } = useApi();
 
@@ -197,8 +200,8 @@ export default function SalaryAdvanceManager() {
 
       {/* Filters (All tab) */}
       {tab === 'all' && (
-        <div className="flex gap-3">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee..."
               className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
@@ -210,6 +213,20 @@ export default function SalaryAdvanceManager() {
               <option key={k} value={k}>{v.label}</option>
             ))}
           </select>
+          {/* Month filter — "taken in" month (when advance was created) */}
+          <input
+            type="month"
+            value={monthFilter}
+            onChange={e => setMonthFilter(e.target.value)}
+            title="Filter by month advance was taken"
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          {monthFilter && (
+            <button onClick={() => setMonthFilter('')}
+              className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">
+              Clear Month
+            </button>
+          )}
         </div>
       )}
 

@@ -3,9 +3,10 @@ import api from '../../utils/api';
 import { useApi } from '../../hooks/useApi';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import AlertMessage from '../shared/AlertMessage';
+import { usePayrollLock } from '../../hooks/usePayrollLock';
 import {
   Calendar, Search, X, Download, ChevronLeft, ChevronRight, ChevronDown,
-  Clock, Shield, AlertTriangle, CheckCircle2, Info,
+  Clock, Shield, AlertTriangle, CheckCircle2, Info, Lock,
 } from 'lucide-react';
 
 // ── Color map for cell backgrounds (greytHR-style) ──
@@ -65,6 +66,7 @@ const SUMMARY_COLS = [
 
 export default function AttendanceMuster() {
   const [month, setMonth] = useState(new Date().toISOString().substring(0, 7));
+  const { isLocked: monthLocked, lockInfo } = usePayrollLock(month);
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
   const [searchName, setSearchName] = useState('');
@@ -134,6 +136,7 @@ export default function AttendanceMuster() {
 
   // Open edit popup
   const openEdit = (emp, dateStr) => {
+    if (monthLocked) return; // payroll locked — no edits allowed
     const dayData = emp.days[dateStr];
     if (!dayData) return;
     if (dayData.color === 'off' || dayData.color === 'holiday' || dayData.color === 'future') return;
@@ -323,6 +326,22 @@ export default function AttendanceMuster() {
 
   return (
     <div className="p-4">
+      {/* Payroll Lock Banner */}
+      {monthLocked && (
+        <div className="mb-4 flex items-start gap-3 bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+          <Lock className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Payroll Locked for {month}</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              Attendance editing is disabled. Payroll for this month has been finalised
+              {lockInfo?.lockedBy ? ` by ${lockInfo.lockedBy}` : ''}
+              {lockInfo?.lockedAt ? ` on ${lockInfo.lockedAt.slice(0, 10)}` : ''}.
+              Contact admin to unlock.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>

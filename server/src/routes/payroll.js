@@ -243,9 +243,8 @@ router.get('/overview', requireAdmin, asyncHandler(async (req, res) => {
       payrollInputsLocked: lockMap.payroll_inputs_locked || false,
       employeeViewReleased: lockMap.employee_view_released || false,
       itStatementReleased: lockMap.it_statement_released || false,
-      payrollLocked: lockMap.payroll_locked || false,
-      // Hard month lock — blocks ALL data changes for this month
-      monthLocked: !!monthLock,
+      // payrollLocked now reflects the hard PayrollMonthLock (not just a Settings flag)
+      payrollLocked: !!monthLock,
       monthLockInfo: monthLock ? {
         lockedAt: monthLock.lockedAt,
         lockedBy: monthLock.locker?.name || 'Admin',

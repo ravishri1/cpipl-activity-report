@@ -178,12 +178,19 @@ router.get('/pending', asyncHandler(async (req, res) => {
 }));
 
 // GET /all — All advances with filters (admin)
+// Query params: status, userId, month (repaymentStart), takenIn (YYYY-MM = createdAt month)
 router.get('/all', requireAdmin, asyncHandler(async (req, res) => {
-  const { status, userId, month } = req.query;
+  const { status, userId, month, takenIn } = req.query;
   const where = {};
   if (status) where.status = status;
   if (userId) where.userId = parseInt(userId);
   if (month) where.repaymentStart = { startsWith: month.slice(0, 7) };
+  if (takenIn && /^\d{4}-\d{2}$/.test(takenIn)) {
+    const [yr, mo] = takenIn.split('-').map(Number);
+    const start = new Date(yr, mo - 1, 1);
+    const end   = new Date(yr, mo, 0, 23, 59, 59);
+    where.createdAt = { gte: start, lte: end };
+  }
 
   const advances = await req.prisma.salaryAdvance.findMany({
     where,

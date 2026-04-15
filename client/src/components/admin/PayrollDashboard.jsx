@@ -1405,7 +1405,6 @@ export default function PayrollDashboard() {
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [lockSaving, setLockSaving] = useState(null);
-  const [monthLocking, setMonthLocking] = useState(false);
   const [processCheck, setProcessCheck] = useState(null);
   const [processCheckLoading, setProcessCheckLoading] = useState(false);
   const [neftExporting, setNeftExporting] = useState(false);
@@ -1458,6 +1457,32 @@ export default function PayrollDashboard() {
   }, [selectedMonth]);
 
   const toggleLock = async (key, currentValue) => {
+    // 'payroll_locked' is the HARD month lock — uses PayrollMonthLock table, not Settings
+    if (key === 'payroll_locked') {
+      const locking = !currentValue; // true = we are locking now
+      if (!window.confirm(locking
+        ? `LOCK payroll for ${selectedMonth}?\n\nThis will BLOCK ALL changes to attendance, leave, holidays, separations, advances and payslips for this month until you unlock it.`
+        : `UNLOCK payroll for ${selectedMonth}?\n\nThis will allow changes to attendance, leave, holidays, separations and payslips for this month.`
+      )) return;
+      setLockSaving(key);
+      try {
+        if (locking) {
+          await api.post('/payroll/month-locks', { month: selectedMonth, companyId: selectedCompanyId });
+          showToast(`Payroll for ${selectedMonth} locked 🔒`, 'success');
+        } else {
+          await api.delete(`/payroll/month-locks/${selectedMonth}?companyId=${selectedCompanyId}`);
+          showToast(`Payroll for ${selectedMonth} unlocked`, 'success');
+        }
+        fetchOverview();
+      } catch (err) {
+        showToast(err.response?.data?.message || 'Failed to update lock', 'error');
+      } finally {
+        setLockSaving(key);
+        setTimeout(() => setLockSaving(null), 300);
+      }
+      return;
+    }
+    // All other keys → Settings-based soft lock
     setLockSaving(key);
     try {
       await api.put('/payroll/overview/locks', { [key]: !currentValue });
@@ -1467,32 +1492,6 @@ export default function PayrollDashboard() {
       showToast('Failed to update', 'error');
     } finally {
       setLockSaving(null);
-    }
-  };
-
-  const handleMonthLock = async () => {
-    const isLocked = overview?.locks?.monthLocked;
-    const action = isLocked ? 'unlock' : 'lock';
-    if (!window.confirm(`${isLocked ? 'UNLOCK' : 'LOCK'} payroll for ${selectedMonth}?\n\n${
-      isLocked
-        ? 'Unlocking allows changes to attendance, leave, holidays, separations and payslips for this month.'
-        : 'Locking will BLOCK ALL changes to attendance, leave, holidays, separations, advances and payslips for this month until you unlock it.'
-    }`)) return;
-
-    setMonthLocking(true);
-    try {
-      if (isLocked) {
-        await api.delete(`/payroll/month-locks/${selectedMonth}?companyId=${selectedCompanyId}`);
-        showToast(`Payroll for ${selectedMonth} unlocked`, 'success');
-      } else {
-        await api.post('/payroll/month-locks', { month: selectedMonth, companyId: selectedCompanyId });
-        showToast(`Payroll for ${selectedMonth} is now locked 🔒`, 'success');
-      }
-      fetchOverview();
-    } catch (err) {
-      showToast(err.response?.data?.message || `Failed to ${action} month`, 'error');
-    } finally {
-      setMonthLocking(false);
     }
   };
 
@@ -2079,50 +2078,24 @@ export default function PayrollDashboard() {
                     </div>
                   </div>
 
-                  {/* Hard Month Lock — blocks ALL data changes for this month */}
-                  <div className={`rounded-xl border-2 p-5 ${overview.locks.monthLocked ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white'}`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{overview.locks.monthLocked ? '🔒' : '🔓'}</span>
-                          <p className="text-sm font-bold text-slate-800">
-                            {overview.locks.monthLocked ? `Month Locked` : 'Month Unlocked'}
-                          </p>
-                          {overview.locks.monthLocked && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded-full uppercase tracking-wider">LOCKED</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 ml-7">
-                          {overview.locks.monthLocked
-                            ? `No changes allowed to attendance, leave, holidays, separations, advances or payslips for ${selectedMonth}. Locked by ${overview.locks.monthLockInfo?.lockedBy || 'Admin'} on ${overview.locks.monthLockInfo?.lockedAt?.slice(0,10) || ''}.`
-                            : 'Lock this month to prevent all data changes once payroll is finalised.'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleMonthLock}
-                        disabled={monthLocking}
-                        className={`px-5 py-2 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 ${
-                          overview.locks.monthLocked
-                            ? 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-300'
-                            : 'bg-slate-800 text-white hover:bg-slate-700'
-                        }`}
-                      >
-                        {monthLocking ? '...' : overview.locks.monthLocked ? '🔓 Unlock Month' : '🔒 Lock Month'}
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Lock/Release Controls */}
                   <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
                     {[
                       { key: 'payroll_inputs_locked', label: 'Payroll Inputs', desc: 'Lock salary structure edits', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollInputsLocked },
                       { key: 'employee_view_released', label: 'Employee View Release', desc: 'Let employees see payslips', lockLabel: 'Hold', unlockLabel: 'Release', value: overview.locks.employeeViewReleased, invert: true },
                       { key: 'it_statement_released', label: 'IT Statement Employee View', desc: 'Let employees see IT statements', lockLabel: 'Hold', unlockLabel: 'Release', value: overview.locks.itStatementReleased, invert: true },
-                      { key: 'payroll_locked', label: 'Payroll', desc: 'Lock payroll generation', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollLocked },
+                      { key: 'payroll_locked', label: 'Payroll', desc: overview.locks.payrollLocked
+                          ? `Locked by ${overview.locks.monthLockInfo?.lockedBy || 'Admin'} on ${overview.locks.monthLockInfo?.lockedAt?.slice(0,10) || ''}. All data changes blocked.`
+                          : 'Hard lock — blocks ALL attendance, leave, holiday, separation & payslip changes', lockLabel: 'Lock', unlockLabel: 'Unlock', value: overview.locks.payrollLocked },
                     ].map((ctrl) => (
-                      <div key={ctrl.key} className="flex items-center justify-between px-6 py-4">
+                      <div key={ctrl.key} className={`flex items-center justify-between px-6 py-4 ${ctrl.key === 'payroll_locked' && ctrl.value ? 'bg-red-50' : ''}`}>
                         <div>
-                          <p className="text-sm font-medium text-slate-700">{ctrl.label}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-slate-700">{ctrl.label}</p>
+                            {ctrl.key === 'payroll_locked' && ctrl.value && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-red-600 text-white rounded uppercase tracking-wider">LOCKED</span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-400">{ctrl.desc}</p>
                         </div>
                         <div className="flex items-center gap-2">

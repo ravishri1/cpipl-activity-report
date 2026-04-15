@@ -23,6 +23,7 @@ const TABS = [
   { key: 'education', label: 'Education', icon: GraduationCap },
   { key: 'documents', label: 'Documents', icon: FileText },
   { key: 'driveFiles', label: 'Drive Files', icon: FolderOpen },
+  { key: 'advances', label: 'Salary Advances', icon: IndianRupee },
   { key: 'history', label: 'Change History', icon: History },
 ];
 
@@ -419,6 +420,9 @@ export default function EmployeeProfile() {
           )}
           {activeTab === 'driveFiles' && (
             <DriveFilesTab userId={id} canEdit={canEdit} />
+          )}
+          {activeTab === 'advances' && (
+            <AdvancesTab userId={id} />
           )}
           {activeTab === 'history' && (
             <ChangeHistoryTab userId={id} />
@@ -1262,6 +1266,93 @@ function MiniSelect({ label, value, onChange, options }) {
         <option value="">Select...</option>
         {options.map((o) => <option key={o} value={o} className="capitalize">{o}</option>)}
       </select>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADVANCES TAB — shows salary advance history for this employee
+   ═══════════════════════════════════════════════════════════ */
+function AdvancesTab({ userId }) {
+  const { data: advances, loading, error } = useFetch(`/salary-advances/user/${userId}`, []);
+
+  const fmtCur = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+  const fmtMon = (m) => { try { return new Date(m + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }); } catch { return m || '—'; } };
+
+  const STATUS_COLORS = {
+    pending:  'bg-amber-100 text-amber-700',
+    approved: 'bg-blue-100 text-blue-700',
+    rejected: 'bg-red-100 text-red-700',
+    released: 'bg-violet-100 text-violet-700',
+    repaying: 'bg-indigo-100 text-indigo-700',
+    closed:   'bg-green-100 text-green-700',
+  };
+
+  if (loading) return <div className="p-6 text-center text-sm text-slate-400">Loading advances…</div>;
+  if (error) return <div className="p-4 text-sm text-red-500">{error}</div>;
+  if (!advances?.length) return (
+    <div className="p-8 text-center">
+      <IndianRupee className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+      <p className="text-sm text-slate-400">No salary advances for this employee</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500">{advances.length} advance record{advances.length !== 1 ? 's' : ''}</p>
+      {advances.map(adv => {
+        const repaid = (adv.repayments || []).filter(r => r.status === 'deducted').reduce((s, r) => s + r.amount, 0);
+        const outstanding = (adv.approvedAmount || adv.amount) - repaid;
+        return (
+          <div key={adv.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-slate-800">{fmtCur(adv.approvedAmount || adv.amount)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[adv.status] || 'bg-slate-100 text-slate-600'}`}>
+                    {adv.status.charAt(0).toUpperCase() + adv.status.slice(1)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{adv.reason || 'No reason given'}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs text-slate-400">Taken</p>
+                <p className="text-xs font-medium text-slate-700">{new Date(adv.createdAt).toLocaleDateString('en-IN')}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3 text-center">
+              <div>
+                <p className="text-[10px] text-slate-400">Repayment Start</p>
+                <p className="text-xs font-medium text-slate-700">{fmtMon(adv.repaymentStart)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400">Repaid</p>
+                <p className="text-xs font-medium text-green-600">{fmtCur(repaid)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-400">Outstanding</p>
+                <p className={`text-xs font-medium ${outstanding > 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtCur(Math.max(0, outstanding))}</p>
+              </div>
+            </div>
+
+            {adv.repayments?.length > 0 && (
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wider">Repayment Schedule</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {adv.repayments.map(r => (
+                    <span key={r.id} className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                      r.status === 'deducted' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {fmtMon(r.month)} · {fmtCur(r.amount)} {r.status === 'deducted' ? '✓' : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
