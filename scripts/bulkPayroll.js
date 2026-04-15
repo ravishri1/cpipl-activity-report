@@ -133,7 +133,7 @@ async function generateMonth(companyId, month) {
         eligibleFrom: { lte: monthEnd },
         OR: [{ eligibleTo: null }, { eligibleTo: { gte: monthStart } }],
       },
-      select: { userId: true, eligibleFrom: true, eligibleTo: true },
+      select: { userId: true, eligibleFrom: true, eligibleTo: true, saturdayType: true },
     }),
   ]);
 
@@ -445,19 +445,11 @@ async function generateMonth(companyId, month) {
     }
 
     // Pro-rata: mid-month joiner (employee joined during this month)
+    // Use CALENDAR days before joining (matches Excel: salary = grossBase × calendarDaysInMonth/31)
     const joinDate = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
     if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
-      let skippedWorkDays = 0;
-      for (let d = 1; d <= daysInMonth; d++) {
-        const ds = `${month}-${String(d).padStart(2, '0')}`;
-        if (ds >= joinDate) break;
-        const dow = new Date(ds).getDay();
-        if (dow === 0) continue; // Sunday
-        if (dow === 6 && offSaturdaySet.has(ds) && !lopLeaveDates.has(ds)) continue; // Off-Sat (not LOP)
-        if (holidayDates.has(ds)) continue;
-        skippedWorkDays++;
-      }
-      lopDays += skippedWorkDays;
+      const joinDay = parseInt(joinDate.slice(8, 10));
+      lopDays += joinDay - 1; // Calendar days before joining (day 1 to joinDay-1)
     }
 
     // Earnings
@@ -471,6 +463,9 @@ async function generateMonth(companyId, month) {
     let offDaysWorked = 0;
     const offDayElig = offDayEligibilityMap.get(userId);
     if (offDayElig) {
+      // Per-employee Saturday policy: use eligibility record's saturdayType if set, else company policy
+      const empSatType = offDayElig.saturdayType || saturdayPolicy?.saturdayType || 'none';
+      const empOffSatSet = buildOffSaturdaySet(month, empSatType);
       const attRecForOffDay = allAttendance.filter(a => a.userId === userId);
       const attMapOffDay = new Map(attRecForOffDay.map(a => [a.date, a.status]));
       const dailyReportDatesOffDay = dailyReportMap.get(userId) || new Set();
@@ -479,7 +474,7 @@ async function generateMonth(companyId, month) {
         if (ds < offDayElig.eligibleFrom) continue;
         if (offDayElig.eligibleTo && ds > offDayElig.eligibleTo) continue;
         const dow = new Date(ds).getDay();
-        const isWeeklyOff = dow === 6 ? offSaturdaySet.has(ds) : dow === 0;
+        const isWeeklyOff = dow === 6 ? empOffSatSet.has(ds) : dow === 0;
         const isHoliday = holidayDates.has(ds);
         if (!isWeeklyOff && !isHoliday) continue;
         // Count if employee was present on this off-day

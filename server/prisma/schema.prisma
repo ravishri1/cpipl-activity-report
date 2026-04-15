@@ -3382,6 +3382,7 @@ model OffDayAllowanceEligibility {
   userId        Int
   eligibleFrom  String                                   // "YYYY-MM-DD" — start date of eligibility
   eligibleTo    String?                                  // null = currently active; set to stop
+  saturdayType  String?                                  // per-employee Saturday policy: 'all','none','2nd','2nd_4th','1st_3rd' — overrides company policy
   notes         String?
   createdBy     Int
   createdAt     DateTime @default(now())
