@@ -18,7 +18,7 @@ const { PrismaClient } = require(path.join(__dirname, '../server/node_modules/@p
 // We invoke the payroll engine directly via Prisma rather than HTTP
 // to avoid auth complexity. Same logic as POST /api/payroll/generate.
 
-const { DEFAULT_PAYROLL_RULES, calcStatutory } = require(
+const { DEFAULT_PAYROLL_RULES, calcStatutory, calcLWF } = require(
   path.join(__dirname, '../server/src/utils/payrollRules')
 );
 const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require(
@@ -513,7 +513,20 @@ async function generateMonth(companyId, month) {
     const esicEligible = grossBase > 0 && grossBase <= esiCeiling;
     const statutory = calcStatutory(earnedBase, earnedBasic, ptExempt, isIntern, payrollRules, user.gender, mo, esicEligible);
 
-    const totalDeductions = isIntern ? (sal.tds||0) : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + (sal.tds||0));
+    // LWF (Labour Welfare Fund) — deducted in June (6) and December (12).
+    // Rules are stored in payroll_rules.lwf (employeeAmount, employerAmount, months).
+    // Maharashtra standard: employee ₹25, employer ₹75 per half-year.
+    // Only applies to ESI-covered employees.
+    // Mid-month joiners (joined after month start) and mid-month leavers (left before month end)
+    // are EXEMPT from LWF for that month — they don't complete the contribution period.
+    const isMidMonthJoiner = joinDate && joinDate > monthStart;
+    const isMidMonthLeaver = lwd && lwd < monthEnd;
+    const lwfRules = payrollRules.lwf || DEFAULT_PAYROLL_RULES.lwf;
+    const { lwfEmployee: lwfEmployeeAmt, lwfEmployer: lwfEmployerAmt } = calcLWF(esicEligible, mo, isIntern, lwfRules);
+    const lwfEmployee = (isMidMonthJoiner || isMidMonthLeaver) ? 0 : lwfEmployeeAmt;
+    const lwfEmployer = (isMidMonthJoiner || isMidMonthLeaver) ? 0 : lwfEmployerAmt;
+
+    const totalDeductions = isIntern ? (sal.tds||0) : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + (sal.tds||0) + lwfEmployee);
 
     // Salary advance repayment deduction for this month
     const advanceDeduction = Math.round(advanceRepayMap.get(userId) || 0);
@@ -545,6 +558,8 @@ async function generateMonth(companyId, month) {
           professionalTax: statutory.professionalTax,
           tds: sal.tds||0,
           lopDeduction: Math.round(lopDeduction),
+          lwfEmployee,
+          lwfEmployer,
           totalDeductions: Math.round(totalDeductions + lopDeduction + advanceDeduction),
           netPay: Math.round(netPay),
           workingDays: lopDivisor,
