@@ -455,11 +455,27 @@ async function generateMonth(companyId, month) {
     const componentSum = earningComps.reduce((s, c) => s + (c.amount||0), 0);
     const grossBase = sal.grossEarnings || Math.max(fieldSum, componentSum) || 0;
 
-    // Off-day allowance: if employee is eligible and worked on weekly-off/holiday days
+    // Off-day allowance: dynamically calculated ONLY for employees with an
+    // offDayAllowanceEligibility record AND no fixed SUNDAY_ALLOWANCE salary component.
+    //
+    // Two distinct cases:
+    //   1. Fixed component  — employee has a "SUNDAY_ALLOWANCE" (or "Sunday Allowance") entry
+    //      in their salary structure components. It is already part of grossBase and is paid
+    //      every month regardless of attendance. No additional dynamic calculation is done.
+    //   2. Eligibility record — employee has an offDayAllowanceEligibility row. They receive
+    //      extra pay (grossBase / daysInMonth × offDaysWorked) ONLY for the off-days they
+    //      actually worked. This is a true variable earning on top of their fixed salary.
+    //
+    // If both exist the fixed component takes precedence — dynamic calc is skipped to
+    // avoid double-counting the same allowance.
+    const hasSundayAllowanceComponent = earningComps.some(
+      c => (c.name || '').toUpperCase().replace(/[\s_\-]/g, '') === 'SUNDAYALLOWANCE'
+    );
+
     let offDayAllowance = 0;
     let offDaysWorked = 0;
     const offDayElig = offDayEligibilityMap.get(userId);
-    if (offDayElig) {
+    if (offDayElig && !hasSundayAllowanceComponent) {
       // Per-employee Saturday policy: use eligibility record's saturdayType if set, else company policy
       const empSatType = offDayElig.saturdayType || saturdayPolicy?.saturdayType || 'none';
       const empOffSatSet = buildOffSaturdaySet(month, empSatType);
