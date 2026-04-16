@@ -280,32 +280,19 @@ async function generateMonth(companyId, month) {
         const ds = `${month}-${String(d).padStart(2, '0')}`;
         const dayOfWeek = new Date(ds).getDay();
         // Sundays: skip normally; count as LOP if sandwiched within a LOP leave range
-        // OR sandwiched between absent attendance days (employee was absent all around it)
+        // Sundays are always paid weekly offs — never apply attendance-based sandwich.
+        // Only a LOP leave that explicitly spans the Sunday (via cross-leave sandwich above)
+        // converts it to LOP. Absent days on both sides of a Sunday do NOT make it LOP.
         if (dayOfWeek === 0) {
           if (lopLeaveDates.has(ds)) {
-            lopDays += 1; // within a LOP leave range
-          } else if (sandwichEnabled) {
-            let prevLop = false, nextLop = false;
-            for (let pd = d - 1; pd >= 1; pd--) {
-              const pds = `${month}-${String(pd).padStart(2, '0')}`;
-              const pdow = new Date(pds).getDay();
-              if (pdow === 0 || (pdow === 6 && offSaturdaySet.has(pds) && !lopLeaveDates.has(pds)) || holidayDates.has(pds)) continue;
-              const joinDate2 = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
-              if (joinDate2 && pds < joinDate2) continue;
-              prevLop = attMap.get(pds) === 'absent' || lopLeaveDates.has(pds);
-              break;
-            }
-            if (prevLop) {
-              for (let nd = d + 1; nd <= daysInMonth; nd++) {
-                const nds = `${month}-${String(nd).padStart(2, '0')}`;
-                const ndow = new Date(nds).getDay();
-                if (ndow === 0 || (ndow === 6 && offSaturdaySet.has(nds) && !lopLeaveDates.has(nds)) || holidayDates.has(nds)) continue;
-                if (lwd && nds > lwd) continue;
-                nextLop = attMap.get(nds) === 'absent' || lopLeaveDates.has(nds);
-                break;
-              }
-            }
-            if (prevLop && nextLop) lopDays += 1;
+            lopDays += 1; // Leave-sandwiched Sunday → LOP
+          } else {
+            // Paid weekly off: count as present only within the employment period
+            // (matters for mid-month separation proration — invisible Sundays would
+            // otherwise inflate the separation deduction and under-pay the employee).
+            const joinDate2 = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
+            const withinEmployment = (!joinDate2 || ds >= joinDate2) && (!lwd || ds <= lwd);
+            if (withinEmployment) presentDays += 1;
           }
           continue;
         }
@@ -343,6 +330,16 @@ async function generateMonth(companyId, month) {
         // Skip days before joining date
         const joinDate = user.dateOfJoining ? user.dateOfJoining.slice(0, 10) : null;
         if (joinDate && ds < joinDate) continue;
+
+        // Weekly off days (Sunday, off-Saturday) are always paid — never count as LOP
+        // unless explicitly marked as LOP leave. This matters for mid-month separations
+        // where Sundays within the employment period must be counted as paid days.
+        const dow = new Date(ds).getDay();
+        const isWeeklyOffDay = dow === 0 || (dow === 6 && offSaturdaySet.has(ds));
+        if (isWeeklyOffDay && !lopLeaveDates.has(ds)) {
+          presentDays += 1;
+          continue;
+        }
 
         if (holidayDates.has(ds)) {
           // Holiday clubbing (sandwich): if prev AND next working day are both LOP/absent,
@@ -507,7 +504,14 @@ async function generateMonth(companyId, month) {
     const earnedBasic = lopDivisor > 0 ? (sal.basic||0) * (lopDivisor - lopDays) / lopDivisor : (sal.basic||0);
     const isIntern = user.employeeType === 'intern';
     const ptExempt = sal.ptExempt || false;
-    const statutory = calcStatutory(earnedBase, earnedBasic, ptExempt, isIntern, payrollRules, user.gender, mo, undefined);
+    // ESI eligibility is determined by the employee's FIXED monthly gross (from salary structure),
+    // NOT by the earned amount after LOP. An employee whose gross salary > ₹21,000 is never
+    // ESI-covered — a month with heavy LOP does not make them eligible. This matches ESI Act:
+    // eligibility is fixed at contribution period start based on regular wages, not month-to-month
+    // fluctuations. We apply ESI deduction on earnedBase if eligible.
+    const esiCeiling = (payrollRules.esi || {}).grossCeiling || 21000;
+    const esicEligible = grossBase > 0 && grossBase <= esiCeiling;
+    const statutory = calcStatutory(earnedBase, earnedBasic, ptExempt, isIntern, payrollRules, user.gender, mo, esicEligible);
 
     const totalDeductions = isIntern ? (sal.tds||0) : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + (sal.tds||0));
 
