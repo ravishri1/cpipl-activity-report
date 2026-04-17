@@ -67,7 +67,7 @@ async function generateMonth(companyId, month) {
           id: true, name: true, employeeId: true, isActive: true,
           isAttendanceExempt: true, department: true, designation: true,
           dateOfJoining: true, gender: true, employeeType: true,
-          company: { select: { name: true } },
+          company: { select: { name: true, pfExempt: true, esiExempt: true } },
         },
       },
     },
@@ -92,6 +92,7 @@ async function generateMonth(companyId, month) {
     allRepayments,
     saturdayPolicy,
     allOffDayEligibility,
+    allPayrollAdditions,
   ] = await Promise.all([
     prisma.holiday.findMany({ where: { date: { startsWith: month } } }),
     prisma.separation.findMany({
@@ -135,6 +136,9 @@ async function generateMonth(companyId, month) {
       },
       select: { userId: true, eligibleFrom: true, eligibleTo: true, saturdayType: true },
     }),
+    prisma.payrollAddition.findMany({
+      where: { userId: { in: allUserIds }, month, payslipId: null },
+    }),
   ]);
 
   const existingPayslipUserIds = new Set(allPayslips.map(p => p.userId));
@@ -163,6 +167,13 @@ async function generateMonth(companyId, month) {
   const offDayEligibilityMap = new Map();
   for (const e of allOffDayEligibility) {
     offDayEligibilityMap.set(e.userId, e);
+  }
+
+  // Build payroll additions map: userId → [addition records]
+  const payrollAdditionMap = new Map();
+  for (const a of allPayrollAdditions) {
+    if (!payrollAdditionMap.has(a.userId)) payrollAdditionMap.set(a.userId, []);
+    payrollAdditionMap.get(a.userId).push(a);
   }
 
   let generated = 0, skipped = 0;
@@ -527,7 +538,9 @@ async function generateMonth(companyId, month) {
     // fluctuations. We apply ESI deduction on earnedBase if eligible.
     const esiCeiling = (payrollRules.esi || {}).grossCeiling || 21000;
     const esicEligible = grossBase > 0 && grossBase <= esiCeiling;
-    const statutory = calcStatutory(earnedBase, earnedBasic, ptExempt, isIntern, payrollRules, user.gender, mo, esicEligible);
+    const companyPfExempt  = user.company?.pfExempt  || false;
+    const companyEsiExempt = user.company?.esiExempt || false;
+    const statutory = calcStatutory(earnedBase, earnedBasic, ptExempt, isIntern, payrollRules, user.gender, mo, esicEligible, companyPfExempt, companyEsiExempt);
 
     // LWF (Labour Welfare Fund) — deducted in June (6) and December (12).
     // Rules are stored in payroll_rules.lwf (employeeAmount, employerAmount, months).
@@ -546,7 +559,13 @@ async function generateMonth(companyId, month) {
 
     // Salary advance repayment deduction for this month
     const advanceDeduction = Math.round(advanceRepayMap.get(userId) || 0);
-    const netPay = grossEarnings - totalDeductions - lopDeduction - advanceDeduction;
+
+    // One-time payroll additions for this month
+    const userAdditions = payrollAdditionMap.get(userId) || [];
+    const oneTimeAdditionTotal = userAdditions.reduce((s, a) => s + a.amount, 0);
+    const oneTimeAdditionLabel = userAdditions.map(a => a.label).join(', ') || null;
+
+    const netPay = grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - advanceDeduction;
 
     // Build earningsBreakdown from components
     const earningsBreakdown = earningComps.length > 0
@@ -576,6 +595,8 @@ async function generateMonth(companyId, month) {
           lopDeduction: Math.round(lopDeduction),
           lwfEmployee,
           lwfEmployer,
+          otherAdditions: oneTimeAdditionTotal,
+          otherAdditionsLabel: oneTimeAdditionLabel,
           totalDeductions: Math.round(totalDeductions + lopDeduction + advanceDeduction),
           netPay: Math.round(netPay),
           workingDays: lopDivisor,
@@ -612,6 +633,14 @@ async function generateMonth(companyId, month) {
             }
           }
         }
+      }
+
+      // Link PayrollAddition records to this payslip
+      if (userAdditions.length > 0) {
+        await prisma.payrollAddition.updateMany({
+          where: { id: { in: userAdditions.map(a => a.id) }, payslipId: null },
+          data: { payslipId: payslipId.id },
+        });
       }
 
       generated++;

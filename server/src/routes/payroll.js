@@ -296,7 +296,7 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
 
   const salaries = await req.prisma.salaryStructure.findMany({
     where: { user: userWhere },
-    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true } } } } },
+    include: { user: { select: { id: true, name: true, isActive: true, isAttendanceExempt: true, department: true, designation: true, dateOfJoining: true, branchId: true, employeeType: true, gender: true, company: { select: { name: true, pfExempt: true, esiExempt: true } } } } },
   });
   const activeSalaries = salaries.filter(s => s.user.isActive && !s.stopSalaryProcessing);
   const stoppedSalaries = salaries.filter(s => s.user.isActive && s.stopSalaryProcessing);
@@ -862,7 +862,9 @@ router.post('/generate', requireActiveEmployee, requireAdmin, asyncHandler(async
     const statutoryBasic = lopDivisor > 0
       ? payBasic * (lopDivisor - lopDays) / lopDivisor
       : payBasic;
-    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum, esicEligible);
+    const companyPfExempt  = sal.user.company?.pfExempt  || false;
+    const companyEsiExempt = sal.user.company?.esiExempt || false;
+    const statutory = calcStatutory(statutoryBase, statutoryBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, monthNum, esicEligible, companyPfExempt, companyEsiExempt);
     const totalDeductions = isIntern ? sal.tds : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + sal.tds + lwfEmployee);
     const netPay = grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal;
 
@@ -1021,7 +1023,7 @@ router.get('/salary-register-csv', requireAdmin, asyncHandler(async (req, res) =
     'Sr. No.', 'Employee ID', 'Employee Name', 'Department', 'Designation', 'Location',
     'Date of Joining', 'Work Days', 'LOP Days', 'Off Days Worked',
     ...eKeys,
-    'Off Day Allowance', 'Gross Earnings',
+    'Sunday Allowance', 'Gross Earnings',
     'PF (Employee)', 'ESI (Employee)', 'Professional Tax',
     ...dKeys.filter(k => !['PF', 'ESI', 'PT', 'Professional Tax'].includes(k)),
     'Salary Advance Deduction', 'Total Deductions', 'Net Pay',

@@ -209,7 +209,7 @@ const PayslipDetail = ({ payslip }) => {
       ];
   const earnings = [
     ...earningsBreakdown,
-    ...(payslip.offDayAllowance > 0 ? [{ label: `Off-Day Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
+    ...(payslip.offDayAllowance > 0 ? [{ label: `Sunday Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
     { label: payslip.otherAdditionsLabel || 'Special Addition', value: payslip.otherAdditions },
   ];
   const grossEarned = earnings.filter(e => e.value && e.value > 0).reduce((s, e) => s + e.value, 0);

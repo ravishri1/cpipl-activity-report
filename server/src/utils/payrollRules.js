@@ -128,7 +128,7 @@ function calcLWF(esicEligible, monthNum, isIntern, lwfRules) {
  *                                         once covered at period start, stays covered all period.
  * @returns {{ employeePf, employerPf, employeeEsi, employerEsi, professionalTax }}
  */
-function calcStatutory(grossBase, payBasic, ptExempt, isIntern, rules, gender, monthNum, esicEligibleOverride) {
+function calcStatutory(grossBase, payBasic, ptExempt, isIntern, rules, gender, monthNum, esicEligibleOverride, pfExempt, esiExempt) {
   const r = rules || DEFAULT_PAYROLL_RULES;
   if (isIntern) {
     return { employeePf: 0, employerPf: 0, employeeEsi: 0, employerEsi: 0, professionalTax: 0 };
@@ -137,17 +137,19 @@ function calcStatutory(grossBase, payBasic, ptExempt, isIntern, rules, gender, m
   const esi = r.esi || DEFAULT_PAYROLL_RULES.esi;
   const pt  = r.pt  || DEFAULT_PAYROLL_RULES.pt;
 
-  const pfBase     = Math.min(payBasic || 0, pf.wageCap || 15000);
-  const employeePf = Math.min(pfBase * (pf.employeeRate || 0.12), pf.maxMonthly || 1800);
-  const employerPf = Math.min(pfBase * (pf.employerRate || 0.12), pf.maxMonthly || 1800);
+  // PF — zero if company or employee is PF-exempt
+  const pfBase     = pfExempt ? 0 : Math.min(payBasic || 0, pf.wageCap || 15000);
+  const employeePf = pfExempt ? 0 : Math.min(pfBase * (pf.employeeRate || 0.12), pf.maxMonthly || 1800);
+  const employerPf = pfExempt ? 0 : Math.min(pfBase * (pf.employerRate || 0.12), pf.maxMonthly || 1800);
 
-  // ESIC eligibility:
+  // ESIC — zero if company is ESI-exempt; otherwise use contribution period rule
   // If esicEligibleOverride is explicitly provided (true/false), use it —
   // this handles the contribution period continuation rule (payroll.js resolves it).
   // Otherwise, fall back to simple ceiling check.
-  const esiApplies = (esicEligibleOverride !== undefined && esicEligibleOverride !== null)
-    ? esicEligibleOverride
-    : (grossBase > 0 && grossBase <= (esi.grossCeiling || 21000));
+  const esiApplies = esiExempt ? false
+    : (esicEligibleOverride !== undefined && esicEligibleOverride !== null)
+      ? esicEligibleOverride
+      : (grossBase > 0 && grossBase <= (esi.grossCeiling || 21000));
 
   // Use Math.ceil for ESI — matches statutory rounding (any fraction of rupee rounds up)
   const employeeEsi = esiApplies ? Math.ceil(grossBase * (esi.employeeRate || 0.0075)) : 0;

@@ -337,6 +337,7 @@ export default function PayrollSettings() {
           {saving ? 'Saving...' : 'Save Payroll Rules'}
         </button>
       </div>
+
     </div>
   );
 }

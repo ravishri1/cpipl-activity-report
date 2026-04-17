@@ -702,6 +702,10 @@ model Company {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  // Payroll statutory rules (company-level overrides)
+  pfExempt  Boolean  @default(false)            // No PF for this company's employees
+  esiExempt Boolean  @default(false)            // No ESI for this company's employees
+
   users         User[]
   policies      Policy[]
   announcements Announcement[]

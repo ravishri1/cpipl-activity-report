@@ -12,7 +12,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const companies = await req.prisma.company.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true, shortName: true, gst: true, state: true, city: true, address: true },
+    select: { id: true, name: true, shortName: true, gst: true, state: true, city: true, address: true, isActive: true, pfExempt: true, esiExempt: true, _count: { select: { users: true } } },
   });
   res.json(companies);
 }));
@@ -38,7 +38,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/companies/:id — Update company (admin only)
 router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { name, shortName, gst, state, city, address, isActive } = req.body;
+  const { name, shortName, gst, state, city, address, isActive, pfExempt, esiExempt } = req.body;
 
   const company = await req.prisma.company.update({
     where: { id },
@@ -50,6 +50,8 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
       ...(city !== undefined && { city: city?.trim() || null }),
       ...(address !== undefined && { address: address?.trim() || null }),
       ...(isActive !== undefined && { isActive }),
+      ...(pfExempt !== undefined && { pfExempt: pfExempt === true || pfExempt === 'true' }),
+      ...(esiExempt !== undefined && { esiExempt: esiExempt === true || esiExempt === 'true' }),
     },
   });
   res.json(company);

@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
 const { calcStatutory, DEFAULT_PAYROLL_RULES } = require('./src/utils/payrollRules');
 const { getSaturdayPolicyForMonth, buildOffSaturdaySet } = require('./src/utils/saturdayPolicyHelper');
+const { getWeeklyOffMap } = require('./src/services/attendance/weeklyOffHelper');
 
 const prisma = new PrismaClient();
 const MONTH = '2025-04';
@@ -11,6 +12,11 @@ const DAYS_IN_MONTH = 30;
 const LOP_DIVISOR = 30;
 const COMPANY_ID = 1;
 const today = new Date().toISOString().slice(0, 10);
+
+// Targeted regen: only these employees (empty = all)
+// Targeted regen: set employee IDs to limit regen, or empty array for all
+const TARGET_EMPS = [];
+const FORCE_REGEN = false;
 
 async function main() {
   const rulesRow = await prisma.setting.findUnique({ where: { key: 'payroll_rules' } });
@@ -56,12 +62,18 @@ async function main() {
     return h;
   }
 
+  // Off-day allowance eligibility
+  const offDayEligList = await prisma.offDayAllowanceEligibility.findMany();
+  const offDayEligMap = {};
+  for (const e of offDayEligList) offDayEligMap[e.userId] = e;
+
   const salaries = await prisma.salaryStructure.findMany({
     where: {
       user: {
         companyId: COMPANY_ID, isActive: true,
         employeeId: { not: null },
         dateOfJoining: { lte: MONTH + '-30' },
+        ...(TARGET_EMPS.length > 0 ? { employeeId: { in: TARGET_EMPS } } : {}),
       },
     },
     include: {
@@ -74,6 +86,10 @@ async function main() {
       },
     },
   });
+
+  // Build weeklyOffMap for off-day allowance (uses pattern/assignment, same as payroll.js)
+  const allUserIds = salaries.map(s => s.userId);
+  const weeklyOffMap = await getWeeklyOffMap(allUserIds, prisma, MONTH);
 
   const uniqueBranches = [...new Set(salaries.map(s => s.user.branchId).filter(Boolean))];
   for (const bid of uniqueBranches) {
@@ -97,9 +113,17 @@ async function main() {
 
     const existing = await prisma.payslip.findFirst({ where: { userId: sal.userId, month: MONTH } });
     if (existing) {
-      console.log(empId + ': SKIPPED (exists)');
-      skipped++;
-      continue;
+      if (FORCE_REGEN) {
+        // Reset payslipId on linked additions/deductions so they get re-applied
+        await prisma.payrollAddition.updateMany({ where: { userId: sal.userId, month: MONTH }, data: { payslipId: null } });
+        await prisma.payrollDeduction.updateMany({ where: { userId: sal.userId, month: MONTH }, data: { payslipId: null } });
+        await prisma.payslip.delete({ where: { id: existing.id } });
+        console.log(empId + ': deleted existing payslip for regen');
+      } else {
+        console.log(empId + ': SKIPPED (exists)');
+        skipped++;
+        continue;
+      }
     }
 
     const isIntern = sal.user.employeeType === 'intern';
@@ -146,15 +170,18 @@ async function main() {
         while (c <= e) {
           const ds = c.toISOString().slice(0, 10);
           if (ds.startsWith(MONTH)) {
-            if (isLop) { lopDatesSet.add(ds); daysInMonth_++; }
-            else leaveDatesSet.add(ds);
+            const isHol = getMergedHolidays(sal.user.branchId).has(ds);
+            if (isLop) {
+              lopDatesSet.add(ds);
+              if (!isHol) daysInMonth_++; // count all calendar days except holidays
+            } else {
+              leaveDatesSet.add(ds);
+            }
           }
           c.setDate(c.getDate() + 1);
         }
         if (isLop && daysInMonth_ > 0) {
-          const totalDays = parseFloat(lr.days) || 0;
-          const totalRange = Math.max(1, Math.round((new Date(lr.endDate + 'T00:00:00Z') - new Date(lr.startDate + 'T00:00:00Z')) / 86400000) + 1);
-          lopFromLeave += Math.round((daysInMonth_ / totalRange) * totalDays * 2) / 2;
+          lopFromLeave += daysInMonth_;
         }
       }
 
@@ -246,7 +273,43 @@ async function main() {
     const grossBase = earningComps.length > 0
       ? earningComps.reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
       : (payBasic + payHra + payDa + paySpec + payMed + payConv + payOther);
-    const grossEarnings = grossBase;
+
+    // ── Off-Day Allowance ──────────────────────────────────────────────────
+    let offDayAllowance = 0;
+    let offDaysWorked = 0;
+    const eligibility = offDayEligMap[sal.userId];
+    if (eligibility) {
+      const weeklyOffs = weeklyOffMap.get(sal.userId) || [0, 6];
+      // Find all off dates (weekly offs + holidays) in the month within eligibility range
+      const offDatesInMonth = [];
+      for (let d = 1; d <= DAYS_IN_MONTH; d++) {
+        const dateStr = MONTH + '-' + String(d).padStart(2, '0');
+        const dow = new Date(YEAR, MONTH_NUM - 1, d).getDay();
+        const mergedH = getMergedHolidays(sal.user.branchId);
+        const isWeeklyOff = weeklyOffs.includes(dow) && (dow !== 6 || offSaturdaySet.has(dateStr));
+        const isHoliday = mergedH.has(dateStr);
+        if ((isWeeklyOff || isHoliday) &&
+            dateStr >= eligibility.eligibleFrom &&
+            (!eligibility.eligibleTo || dateStr <= eligibility.eligibleTo)) {
+          offDatesInMonth.push(dateStr);
+        }
+      }
+      // Fetch attendance to check if present on off days
+      const offAtt = await prisma.attendance.findMany({
+        where: { userId: sal.userId, date: { in: offDatesInMonth } },
+        select: { date: true, status: true, checkIn: true },
+      });
+      const offAttMap = {};
+      for (const a of offAtt) offAttMap[a.date] = a;
+      for (const date of offDatesInMonth) {
+        const rec = offAttMap[date];
+        // Require actual biometric punch (checkIn not null) — present without punch is not counted
+        if (rec && rec.status === 'present' && rec.checkIn !== null) offDaysWorked++;
+      }
+      offDayAllowance = DAYS_IN_MONTH > 0 ? Math.round((grossBase / DAYS_IN_MONTH) * offDaysWorked) : 0;
+    }
+
+    const grossEarnings = grossBase + offDayAllowance;
 
     const perDaySalary = LOP_DIVISOR > 0 ? grossBase / LOP_DIVISOR : 0;
     const lopDeduction = Math.round(perDaySalary * lopDays);
@@ -257,22 +320,38 @@ async function main() {
     });
     const salaryAdvanceDeduction = advanceRepayments.reduce((sum, r) => sum + r.amount, 0);
 
+    // One-time additions (rewards, bonuses)
+    const oneTimeAdditions = await prisma.payrollAddition.findMany({
+      where: { userId: sal.userId, month: MONTH, payslipId: null },
+    });
+    const oneTimeAdditionTotal = oneTimeAdditions.reduce((s, a) => s + a.amount, 0);
+    const oneTimeAdditionLabel = oneTimeAdditions.map(a => a.label).join(', ') || null;
+
+    // One-time deductions
+    const oneTimeDeductions = await prisma.payrollDeduction.findMany({
+      where: { userId: sal.userId, month: MONTH, payslipId: null },
+    });
+    const oneTimeDeductionTotal = oneTimeDeductions.reduce((s, d) => s + d.amount, 0);
+    const oneTimeDeductionLabel = oneTimeDeductions.map(d => d.label).join(', ') || null;
+
     const isMidMonthSep = !!(
       separation &&
       separation.lastWorkingDate &&
       separation.lastWorkingDate.startsWith(MONTH)
     );
-    const statBase  = isMidMonthSep ? Math.round(grossBase * presentDays / LOP_DIVISOR) : grossBase;
-    const statBasic = isMidMonthSep ? Math.round(payBasic  * presentDays / LOP_DIVISOR) : payBasic;
+    // Use actual earned amount (after LOP) for all statutory deductions.
+    // grossEarnings includes off-day allowance; PF basic reduced proportionally by LOP.
+    const statBase  = isMidMonthSep ? Math.round(grossBase * presentDays / LOP_DIVISOR) : Math.max(0, grossEarnings - lopDeduction);
+    const statBasic = Math.round(payBasic * (LOP_DIVISOR - lopDays) / LOP_DIVISOR);
     const statutory = calcStatutory(statBase, statBasic, sal.ptExempt || false, isIntern, payrollRules, sal.user.gender, MONTH_NUM);
 
     const tds = sal.tds || 0;
     const totalDeductions = isIntern
       ? tds
       : (statutory.employeePf + statutory.employeeEsi + statutory.professionalTax + tds);
-    const netPay = Math.round(grossEarnings - totalDeductions - lopDeduction - salaryAdvanceDeduction);
+    const netPay = Math.round(grossEarnings + oneTimeAdditionTotal - totalDeductions - lopDeduction - salaryAdvanceDeduction - oneTimeDeductionTotal);
 
-    await prisma.payslip.create({
+    const createdPayslip = await prisma.payslip.create({
       data: {
         userId: sal.userId,
         month: MONTH,
@@ -292,13 +371,17 @@ async function main() {
         employeeEsi: statutory.employeeEsi,
         professionalTax: statutory.professionalTax,
         tds,
-        totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction,
+        otherDeductions: oneTimeDeductionTotal, otherDeductionsLabel: oneTimeDeductionLabel,
+        otherAdditions: oneTimeAdditionTotal, otherAdditionsLabel: oneTimeAdditionLabel,
+        totalDeductions: totalDeductions + lopDeduction + salaryAdvanceDeduction + oneTimeDeductionTotal,
         netPay,
         workingDays: presentDays + lopDays,
         presentDays,
         lopDays,
         lopDeduction,
         salaryAdvanceDeduction,
+        offDayAllowance,
+        offDaysWorked,
         status: 'generated',
       },
     });
@@ -319,6 +402,14 @@ async function main() {
           data: { status: advStatus, ...(remaining === 0 ? { closedAt: new Date() } : {}) },
         });
       }
+    }
+
+    // Link additions to payslip
+    if (oneTimeAdditions.length > 0) {
+      await prisma.payrollAddition.updateMany({
+        where: { id: { in: oneTimeAdditions.map(a => a.id) }, payslipId: null },
+        data: { payslipId: createdPayslip.id },
+      });
     }
 
     generated++;
