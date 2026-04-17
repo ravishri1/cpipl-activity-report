@@ -1851,7 +1851,7 @@ function EntityNode({ entity, totalPortals, totalCreds }) {
   );
 }
 
-function CompanyPayrollRulesView() {
+function _unused_CompanyPayrollRulesView() {
   const { data: companies, loading, error, refetch } = useFetch('/companies', []);
   const { data: savedRules } = useFetch('/settings/payroll-rules', null);
   const { execute: saveRule } = useApi();

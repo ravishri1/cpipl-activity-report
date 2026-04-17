@@ -27,6 +27,24 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   res.json({ message: 'Settings updated.' });
 }));
 
+// GET /api/settings/payroll-rules — returns parsed payroll_rules JSON
+router.get('/payroll-rules', requireAdmin, asyncHandler(async (req, res) => {
+  const row = await req.prisma.setting.findUnique({ where: { key: 'payroll_rules' } });
+  if (!row) return res.json(null);
+  try { res.json(JSON.parse(row.value)); } catch { res.json(null); }
+}));
+
+// PUT /api/settings/payroll-rules — saves payroll_rules JSON
+router.put('/payroll-rules', requireAdmin, asyncHandler(async (req, res) => {
+  const value = JSON.stringify(req.body);
+  await req.prisma.setting.upsert({
+    where: { key: 'payroll_rules' },
+    update: { value },
+    create: { key: 'payroll_rules', value },
+  });
+  res.json({ message: 'Payroll rules saved.' });
+}));
+
 // ── Saturday Policy CRUD ──
 
 // GET /api/settings/saturday-policies?companyId=1
