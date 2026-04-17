@@ -2100,7 +2100,6 @@ export default function CompanyMaster() {
   const activeTab = location.pathname === '/admin/branches' ? 'branches'
     : new URLSearchParams(location.search).get('view') === 'tree' ? 'tree'
     : new URLSearchParams(location.search).get('view') === 'employees' ? 'employees'
-    : new URLSearchParams(location.search).get('view') === 'payroll-rules' ? 'payroll-rules'
     : 'registrations';
 
   const { data: entities, loading: entLoading, error: entError, refetch: refetchEntities } =
@@ -2260,15 +2259,6 @@ export default function CompanyMaster() {
             }`}>
             <span className="flex items-center gap-1.5"><Users size={14} /> Employees</span>
           </button>
-          <button
-            onClick={() => navigate('/admin/company-master?view=payroll-rules')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-              activeTab === 'payroll-rules'
-                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}>
-            <span className="flex items-center gap-1.5"><Settings size={14} /> Payroll Rules</span>
-          </button>
         </div>
       </div>
 
@@ -2280,9 +2270,6 @@ export default function CompanyMaster() {
 
       {/* Employees tab */}
       {activeTab === 'employees' && <CompanyEmployeesView />}
-
-      {/* Payroll Rules tab */}
-      {activeTab === 'payroll-rules' && <CompanyPayrollRulesView />}
 
       {/* Registrations tab — 3-panel layout (like cpdesk) */}
       {activeTab === 'registrations' && (

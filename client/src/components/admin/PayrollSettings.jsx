@@ -72,7 +72,10 @@ function SlabTable({ slabs, onChange, onAdd, onRemove, label }) {
 
 export default function PayrollSettings() {
   const { data: savedRules, loading, error: fetchErr } = useFetch('/settings/payroll-rules', null);
+  const { data: companies, error: compFetchErr, refetch: refetchCompanies } = useFetch('/companies', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
+  const { execute: saveComp } = useApi();
+  const [savingCompId, setSavingCompId] = useState(null);
 
   const [pf, setPf] = useState(DEFAULT_RULES.pf);
   const [esi, setEsi] = useState(DEFAULT_RULES.esi);
@@ -336,6 +339,69 @@ export default function PayrollSettings() {
           <Save className="w-4 h-4" />
           {saving ? 'Saving...' : 'Save Payroll Rules'}
         </button>
+      </div>
+
+      {/* ── Company-wise Rules ─────────────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">Company-wise Statutory Rules</h3>
+        <p className="text-xs text-slate-400 mb-4">
+          Override PF / ESI for specific companies. PT and LOP always apply. Changes affect the next payroll run only.
+        </p>
+        {compFetchErr && <AlertMessage type="error" message={compFetchErr} />}
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">Company</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">Employees</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">PF</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">ESI</th>
+                <th className="text-center px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase">PT</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(Array.isArray(companies) ? companies : []).map(co => (
+                <tr key={co.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-slate-800">{co.name}</td>
+                  <td className="px-4 py-3 text-center text-slate-500 text-xs">{co._count?.users ?? '—'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!co.pfExempt}
+                        disabled={savingCompId === `${co.id}-pf`}
+                        onChange={async e => {
+                          setSavingCompId(`${co.id}-pf`);
+                          try { await saveComp(() => api.put(`/companies/${co.id}`, { pfExempt: e.target.checked })); refetchCompanies(); }
+                          catch { /* handled */ } finally { setSavingCompId(null); }
+                        }}
+                        className="w-4 h-4 rounded accent-red-500" />
+                      <span className={`text-xs font-medium ${co.pfExempt ? 'text-red-600' : 'text-green-700'}`}>
+                        {co.pfExempt ? 'Exempt' : 'Applies'}
+                      </span>
+                    </label>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!co.esiExempt}
+                        disabled={savingCompId === `${co.id}-esi`}
+                        onChange={async e => {
+                          setSavingCompId(`${co.id}-esi`);
+                          try { await saveComp(() => api.put(`/companies/${co.id}`, { esiExempt: e.target.checked })); refetchCompanies(); }
+                          catch { /* handled */ } finally { setSavingCompId(null); }
+                        }}
+                        className="w-4 h-4 rounded accent-red-500" />
+                      <span className={`text-xs font-medium ${co.esiExempt ? 'text-red-600' : 'text-green-700'}`}>
+                        {co.esiExempt ? 'Exempt' : 'Applies'}
+                      </span>
+                    </label>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="text-xs font-medium text-green-700">Always</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </div>
