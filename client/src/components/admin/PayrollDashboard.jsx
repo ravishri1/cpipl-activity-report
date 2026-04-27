@@ -1872,14 +1872,20 @@ export default function PayrollDashboard() {
                           key={val}
                           onClick={() => setSelectedMonth(val)}
                           className={`flex-shrink-0 flex flex-col items-center px-4 py-2 rounded-xl text-xs font-medium transition-all ${
-                            isSelected
+                            isSelected && overview.locks.payrollLocked
+                              ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300'
+                              : isSelected
                               ? 'bg-blue-600 text-white shadow-md'
                               : isPast
                               ? 'bg-slate-50 text-slate-500 hover:bg-slate-100'
                               : 'bg-white text-slate-400 hover:bg-slate-50'
                           }`}
                         >
-                          {isPast && !isSelected && <Lock className="w-3 h-3 mb-0.5 opacity-50" />}
+                          {isSelected && overview.locks.payrollLocked
+                            ? <Lock className="w-3 h-3 mb-0.5" />
+                            : isPast && !isSelected
+                            ? <Lock className="w-3 h-3 mb-0.5 opacity-50" />
+                            : null}
                           <span className="font-semibold">{label}</span>
                           <span className="text-[10px] opacity-75">{yr}</span>
                         </button>
@@ -2201,6 +2207,17 @@ export default function PayrollDashboard() {
       {/* Payslips Tab */}
       {activeTab === 'payslips' && (
         <div className="space-y-4">
+          {/* Lock Banner */}
+          {overview?.locks?.payrollLocked && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm">
+              <Lock className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="font-semibold text-red-700">Payroll Locked</span>
+              <span className="text-red-600 flex-1">
+                Locked{overview.locks.monthLockInfo?.lockedBy ? ` by ${overview.locks.monthLockInfo.lockedBy}` : ''}{overview.locks.monthLockInfo?.lockedAt ? ` on ${overview.locks.monthLockInfo.lockedAt.slice(0, 10)}` : ''}.
+                {' '}Go to the <strong>Overview</strong> tab and unlock to make changes.
+              </span>
+            </div>
+          )}
           {/* Action Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3 flex-1">
@@ -2250,8 +2267,9 @@ export default function PayrollDashboard() {
               {hasUnpublished && (
                 <button
                   onClick={handlePublishAll}
-                  disabled={publishing}
-                  className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                  disabled={publishing || overview?.locks?.payrollLocked}
+                  title={overview?.locks?.payrollLocked ? 'Payroll is locked — unlock first' : undefined}
+                  className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
                   {publishing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2286,23 +2304,28 @@ export default function PayrollDashboard() {
                 Salary Register
               </button>
               <button
-                onClick={() => setShowAdditions(true)}
-                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                onClick={() => !overview?.locks?.payrollLocked && setShowAdditions(true)}
+                disabled={overview?.locks?.payrollLocked}
+                title={overview?.locks?.payrollLocked ? 'Payroll is locked — unlock first' : undefined}
+                className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:text-slate-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Additions
               </button>
               <button
-                onClick={() => setShowDeductions(true)}
-                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                onClick={() => !overview?.locks?.payrollLocked && setShowDeductions(true)}
+                disabled={overview?.locks?.payrollLocked}
+                title={overview?.locks?.payrollLocked ? 'Payroll is locked — unlock first' : undefined}
+                className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:text-slate-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 <Banknote className="w-4 h-4" />
                 Deductions
               </button>
               <button
                 onClick={handleGenerate}
-                disabled={generating}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                disabled={generating || overview?.locks?.payrollLocked}
+                title={overview?.locks?.payrollLocked ? 'Payroll is locked — unlock first' : undefined}
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:text-slate-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
               >
                 {generating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
