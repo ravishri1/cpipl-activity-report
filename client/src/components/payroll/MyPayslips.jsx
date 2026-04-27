@@ -443,6 +443,24 @@ function PayslipDetail({ payslip, onBack }) {
   const cellPad    = { padding: '5px 10px' };
   const hdrCell    = { padding: '6px 10px', fontWeight: 'bold', background: '#e4e4e4' };
 
+  const docId = `payslip-doc-${payslip.id}`;
+
+  const handleDownload = () => {
+    const el = document.getElementById(docId);
+    if (!el) return;
+    const title = `Payslip - ${empName} - ${formatMonth(payslip.month)}`;
+    const win = window.open('', '_blank', 'width=900,height=750');
+    win.document.write(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>` +
+      `<style>body{margin:20px;font-family:Arial,sans-serif;font-size:12px;}` +
+      `@media print{body{margin:0;}table{border-collapse:collapse;}}</style>` +
+      `</head><body>${el.outerHTML}</body></html>`
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
+
   return (
     <div className="space-y-4">
       {/* Controls — hidden on print */}
@@ -455,28 +473,21 @@ function PayslipDetail({ payslip, onBack }) {
           Back to Payslips
         </button>
         <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors"
+          onClick={handleDownload}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 border border-emerald-700 rounded-lg hover:bg-emerald-700 shadow-sm transition-colors"
         >
           <Printer className="w-4 h-4" />
-          Print / Save PDF
+          Download / Print PDF
         </button>
       </div>
 
       {/* ── Payslip Document ── */}
       <div
-        id="payslip-doc"
+        id={docId}
         style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', background: '#fff',
                  border: '1px solid #aaa', maxWidth: '820px', margin: '0 auto' }}
       >
-        {/* inject print CSS */}
-        <style>{`
-          @media print {
-            .print\\:hidden { display: none !important; }
-            body { margin: 0; }
-            #payslip-doc { border: none; }
-          }
-        `}</style>
+        <style>{``}</style>
 
         {/* ── Company Header ── */}
         <div style={{ textAlign: 'center', padding: '14px 20px 10px', borderBottom: '2px solid #555' }}>

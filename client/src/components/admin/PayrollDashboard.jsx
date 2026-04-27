@@ -285,8 +285,40 @@ const PayslipDetail = ({ payslip }) => {
   const cp   = { padding: '5px 10px' };
   const hdr  = { padding: '6px 10px', fontWeight: 'bold', background: '#e4e4e4' };
 
+  const docId = `payslip-doc-admin-${payslip.id}`;
+
+  const handleDownload = () => {
+    const el = document.getElementById(docId);
+    if (!el) return;
+    const monthLabel = new Date(payslip.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    const title = `Payslip - ${empName} - ${monthLabel}`;
+    const win = window.open('', '_blank', 'width=900,height=750');
+    win.document.write(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>` +
+      `<style>body{margin:20px;font-family:Arial,sans-serif;font-size:12px;}` +
+      `@media print{body{margin:0;}table{border-collapse:collapse;}}</style>` +
+      `</head><body>${el.outerHTML}</body></html>`
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
+
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', background: '#fff', padding: '12px 16px', borderTop: '2px solid #555' }}>
+    <div>
+      {/* Download button — outside printable area */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0', background: '#f8f9fa', borderTop: '2px solid #555' }}>
+        <button
+          onClick={handleDownload}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '12px',
+                   fontWeight: '600', color: '#fff', background: '#16a34a', border: 'none',
+                   borderRadius: '6px', cursor: 'pointer' }}
+        >
+          ⬇ Download / Print PDF
+        </button>
+      </div>
+
+    <div id={docId} style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', background: '#fff', padding: '12px 16px' }}>
 
       {/* Company Header */}
       <div style={{ textAlign: 'center', paddingBottom: '10px', borderBottom: '2px solid #555', marginBottom: '0' }}>
@@ -388,6 +420,7 @@ const PayslipDetail = ({ payslip }) => {
       <div style={{ borderTop: '1px solid #ccc', padding: '8px 10px', textAlign: 'center', fontSize: '11px', color: '#777' }}>
         This is a system generated payslip and does not require a signature
       </div>
+    </div>
     </div>
   );
 };
