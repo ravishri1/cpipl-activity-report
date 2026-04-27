@@ -9,11 +9,6 @@ import {
   TrendingDown,
   Eye,
   Loader2,
-  Receipt,
-  Briefcase,
-  Building2,
-  User,
-  Hash,
   BarChart3,
   ArrowUpDown,
   Printer,
@@ -321,58 +316,115 @@ function PayslipCard({ payslip, onView }) {
   );
 }
 
-/* ---------- Payslip Detail View ---------- */
-function PayslipDetail({ payslip, onBack }) {
-  // greytHR-style: show each component as earned amount (prorated for paid days)
-  // e.g., Basic = 15,000 × 24.8/30 = 12,400 — LOP is baked in, not a separate line
-  const totalDays = payslip.workingDays || 30;
-  const paidDays = payslip.presentDays ?? payslip.paidDays ?? totalDays;
-  const earnFrac = totalDays > 0 ? paidDays / totalDays : 1;
-  const hasLop = (payslip.lopDays || 0) > 0;
+/* ---------- Rupees in Words ---------- */
+function rupeeWords(amount) {
+  let n = Math.round(amount || 0);
+  if (n === 0) return 'Zero Only';
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
+    'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const w = (num) => {
+    if (num === 0) return '';
+    if (num < 20) return ones[num];
+    if (num < 100) return tens[Math.floor(num/10)] + (num%10 ? ' '+ones[num%10] : '');
+    return ones[Math.floor(num/100)] + ' Hundred' + (num%100 ? ' '+w(num%100) : '');
+  };
+  const parts = [];
+  if (n >= 10000000) { parts.push(w(Math.floor(n/10000000))+' Crore'); n %= 10000000; }
+  if (n >= 100000)   { parts.push(w(Math.floor(n/100000))+' Lakh');   n %= 100000;   }
+  if (n >= 1000)     { parts.push(w(Math.floor(n/1000))+' Thousand'); n %= 1000;     }
+  if (n > 0)         parts.push(w(n));
+  return 'Rupees ' + parts.join(' ') + ' Only';
+}
 
-  const prorate = (amount) => {
-    if (!amount || !hasLop) return amount || 0;
+/* ---------- Payslip Detail View (greythr style) ---------- */
+function PayslipDetail({ payslip, onBack }) {
+  const totalDays = payslip.workingDays || 30;
+  const presentDays = payslip.presentDays ?? payslip.paidDays ?? totalDays;
+  const lopDays = payslip.lopDays || 0;
+  const hasLop = lopDays > 0;
+  const earnFrac = totalDays > 0 ? presentDays / totalDays : 1;
+
+  const isVariable = (name) => {
+    const l = (name || '').toLowerCase();
+    return l.includes('sunday') || l.includes('off day') || l.includes('offday') || l.includes('holiday allow') || l.includes('reimburs');
+  };
+
+  const prorate = (amount, variable = false) => {
+    if (!amount) return 0;
+    if (!hasLop || variable) return amount;
     return Math.round(amount * earnFrac);
   };
 
-  // Build component list with prorated amounts
-  const rawComponents = Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0
-    ? payslip.earningsBreakdown.map(c => ({ label: c.name, value: prorate(c.amount) }))
-    : [
-        { label: 'Basic Salary', value: prorate(payslip.basic) },
-        { label: 'House Rent Allowance', value: prorate(payslip.hra) },
-        { label: 'Dearness Allowance', value: prorate(payslip.da) },
-        { label: 'Special Allowance', value: prorate(payslip.specialAllowance) },
-        { label: 'Medical Allowance', value: prorate(payslip.medicalAllowance) },
-        { label: 'Conveyance Allowance', value: prorate(payslip.conveyanceAllowance) },
-        { label: payslip.otherAllowanceLabel || 'Other Allowances', value: prorate(payslip.otherAllowance) },
-      ];
+  // Build earnings rows: { label, master, actual }
+  const earningsRows = (() => {
+    let rows;
+    if (Array.isArray(payslip.earningsBreakdown) && payslip.earningsBreakdown.length > 0) {
+      rows = payslip.earningsBreakdown
+        .filter(c => (c.amount || 0) > 0)
+        .map(c => {
+          const vari = isVariable(c.name);
+          return { label: (c.name || '').toUpperCase(), master: c.amount, actual: prorate(c.amount, vari) };
+        });
+    } else {
+      rows = [
+        payslip.basic > 0          && { label: 'BASIC',                                                  master: payslip.basic,           actual: prorate(payslip.basic) },
+        payslip.hra > 0            && { label: 'HRA',                                                    master: payslip.hra,             actual: prorate(payslip.hra) },
+        payslip.da > 0             && { label: 'DEARNESS ALLOWANCE',                                     master: payslip.da,              actual: prorate(payslip.da) },
+        payslip.specialAllowance>0 && { label: 'SPECIAL ALLOWANCE',                                      master: payslip.specialAllowance, actual: prorate(payslip.specialAllowance) },
+        payslip.otherAllowance > 0 && { label: (payslip.otherAllowanceLabel||'OTHER ALLOWANCE').toUpperCase(), master: payslip.otherAllowance, actual: prorate(payslip.otherAllowance) },
+      ].filter(Boolean);
+      if (payslip.offDayAllowance > 0) {
+        rows.push({ label: 'SUNDAY ALLOWANCE', master: payslip.offDayAllowance, actual: payslip.offDayAllowance });
+      }
+    }
+    if (payslip.reimbursements > 0) {
+      rows.push({ label: 'REIMBURSEMENTS', master: payslip.reimbursements, actual: payslip.reimbursements });
+    }
+    return rows;
+  })();
 
-  const earnings = [
-    ...rawComponents,
-    ...(payslip.reimbursements > 0 ? [{ label: 'Reimbursements', value: payslip.reimbursements }] : []),
-    ...(payslip.offDayAllowance > 0 ? [{ label: `Sunday Allowance${payslip.offDaysWorked > 0 ? ` (${payslip.offDaysWorked} days)` : ''}`, value: payslip.offDayAllowance }] : []),
-  ].filter((item) => item.value && item.value > 0);
+  const deductionsRows = [
+    payslip.employeePf > 0             && { label: 'PF',                                                            actual: payslip.employeePf },
+    payslip.employeeEsi > 0            && { label: 'ESI',                                                           actual: payslip.employeeEsi },
+    payslip.professionalTax > 0        && { label: 'PROF TAX',                                                      actual: payslip.professionalTax },
+    payslip.tds > 0                    && { label: 'INCOME TAX (TDS)',                                              actual: payslip.tds },
+    payslip.salaryAdvanceDeduction > 0 && { label: 'SALARY ADVANCE',                                               actual: payslip.salaryAdvanceDeduction },
+    payslip.otherDeductions > 0        && { label: (payslip.otherDeductionsLabel||'OTHER DEDUCTIONS').toUpperCase(), actual: payslip.otherDeductions },
+  ].filter(Boolean);
 
-  // Gross earned = sum of prorated components (same as grossEarnings - lopDeduction)
-  const grossEarned = earnings.reduce((s, e) => s + (e.value || 0), 0);
+  const totalMaster = earningsRows.reduce((s, r) => s + r.master, 0);
+  const totalActual = earningsRows.reduce((s, r) => s + r.actual, 0);
+  const totalDed    = deductionsRows.reduce((s, r) => s + r.actual, 0);
+  const maxRows     = Math.max(earningsRows.length, deductionsRows.length);
 
-  // Deductions: NO LOP line (it's already reflected in earned amounts above)
-  const deductions = [
-    { label: 'Employee PF', value: payslip.employeePf },
-    { label: 'ESI', value: payslip.employeeEsi },
-    { label: 'Professional Tax', value: payslip.professionalTax },
-    { label: 'TDS / Income Tax', value: payslip.tds },
-    { label: 'Salary Advance Recovery', value: payslip.salaryAdvanceDeduction },
-    { label: payslip.otherDeductionsLabel || 'Other Deductions', value: payslip.otherDeductions },
-  ].filter((item) => item.value && item.value > 0);
+  const fmtINR = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const printDate = new Date().toLocaleString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
+  });
 
-  const maxRows = Math.max(earnings.length, deductions.length);
+  const companyName  = payslip.companyName  || 'COLOR PAPERS INDIA PRIVATE LIMITED';
+  const empName      = payslip.employeeName || payslip.user?.name              || '-';
+  const empId        = payslip.employeeCode || payslip.user?.employeeId        || '-';
+  const designation  = payslip.user?.designation  || payslip.designation       || '-';
+  const department   = payslip.user?.department                                || '-';
+  const doj          = payslip.user?.dateOfJoining || payslip.dateOfJoining    || '-';
+  const pfUan        = payslip.user?.pfUan  || payslip.pfUan                   || '-';
+  const bankName     = payslip.user?.bankName                                  || '-';
+  const bankAccount  = payslip.user?.bankAccountNumber || payslip.user?.bankAccount || '-';
+  const panNumber    = payslip.user?.panNumber || payslip.user?.pan            || '-';
+  const location     = payslip.user?.branch?.name || payslip.user?.location   || '-';
+
+  // border/cell style helpers
+  const tdBorderR  = { borderRight: '1px solid #bbb' };
+  const tdBorderR2 = { borderRight: '2px solid #888' };
+  const cellPad    = { padding: '5px 10px' };
+  const hdrCell    = { padding: '6px 10px', fontWeight: 'bold', background: '#e4e4e4' };
 
   return (
-    <div className="space-y-6">
-      {/* Back + Print */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      {/* Controls — hidden on print */}
+      <div className="flex items-center justify-between print:hidden">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors group"
@@ -389,257 +441,126 @@ function PayslipDetail({ payslip, onBack }) {
         </button>
       </div>
 
-      {/* Payslip Document */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Document Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-6 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Building2 className="w-5 h-5 opacity-80" />
-                <h2 className="text-lg font-bold tracking-wide">
-                  {payslip.companyName || 'CPIPL'}
-                </h2>
-              </div>
-              <p className="text-emerald-100 text-sm">
-                Payslip for {formatMonth(payslip.month)}
-              </p>
-            </div>
-            <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-              <Receipt className="w-7 h-7" />
-            </div>
+      {/* ── Payslip Document ── */}
+      <div
+        id="payslip-doc"
+        style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', background: '#fff',
+                 border: '1px solid #aaa', maxWidth: '820px', margin: '0 auto' }}
+      >
+        {/* inject print CSS */}
+        <style>{`
+          @media print {
+            .print\\:hidden { display: none !important; }
+            body { margin: 0; }
+            #payslip-doc { border: none; }
+          }
+        `}</style>
+
+        {/* ── Company Header ── */}
+        <div style={{ textAlign: 'center', padding: '14px 20px 10px', borderBottom: '2px solid #555' }}>
+          <div style={{ fontSize: '17px', fontWeight: 'bold', letterSpacing: '0.5px' }}>{companyName}</div>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '8px' }}>
+            Payslip for the month of {formatMonth(payslip.month)}
           </div>
         </div>
 
-        {/* Employee Info */}
-        <div className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <InfoItem
-              icon={User}
-              label="Employee Name"
-              value={payslip.employeeName || payslip.user?.name || '-'}
-            />
-            <InfoItem
-              icon={Hash}
-              label="Employee ID"
-              value={payslip.employeeCode || payslip.user?.employeeId || '-'}
-            />
-            <InfoItem
-              icon={Briefcase}
-              label="Department"
-              value={payslip.user?.department || '-'}
-            />
-            <InfoItem
-              icon={Briefcase}
-              label="Designation"
-              value={payslip.user?.designation || payslip.designation || '-'}
-            />
-            <InfoItem
-              icon={Calendar}
-              label="Date of Joining"
-              value={payslip.user?.dateOfJoining || payslip.dateOfJoining || '-'}
-            />
-            <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Shift</p>
-              {payslip.user?.shiftAssignments?.[0]?.shift ? (
-                <div className="text-sm font-medium text-slate-700">
-                  <p>{payslip.user.shiftAssignments[0].shift.name}</p>
-                  <p className="text-xs text-slate-500">{payslip.user.shiftAssignments[0].shift.startTime} - {payslip.user.shiftAssignments[0].shift.endTime}</p>
-                </div>
-              ) : (
-                <p className="text-sm font-medium text-slate-500">—</p>
-              )}
-            </div>
-          </div>
+        {/* ── Employee Info ── */}
+        <div style={{ borderBottom: '1px solid #999' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <tbody>
+              {[
+                ['Name',            empName,     'Employee No',  empId       ],
+                ['Designation',     designation, 'Bank Name',    bankName    ],
+                ['Department',      department,  'Bank Acc No',  bankAccount ],
+                ['Date of Joining', doj,         'PAN Number',   panNumber   ],
+                ['PF UAN',          pfUan,       'Location',     location    ],
+              ].map(([l1, v1, l2, v2], i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ ...cellPad, fontWeight: '600', color: '#444', width: '18%' }}>{l1}</td>
+                  <td style={{ ...cellPad, width: '32%', ...tdBorderR }}>{v1}</td>
+                  <td style={{ ...cellPad, fontWeight: '600', color: '#444', width: '18%' }}>{l2}</td>
+                  <td style={{ ...cellPad, width: '32%' }}>{v2}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        {/* Attendance Info — greytHR style: Paid / Total Days */}
-        <div className="px-8 py-4 border-b border-slate-100">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-500 font-medium mb-0.5">Total Days</p>
-              <p className="text-lg font-bold text-blue-700">{payslip.workingDays ?? '-'}</p>
-            </div>
-            <div className="text-center p-3 bg-emerald-50 rounded-lg">
-              <p className="text-xs text-emerald-500 font-medium mb-0.5">Paid Days</p>
-              <p className="text-lg font-bold text-emerald-700">
-                {paidDays !== totalDays
-                  ? Number(paidDays).toFixed(1)
-                  : (payslip.presentDays ?? payslip.paidDays ?? totalDays)}
-              </p>
-            </div>
-            <div className="text-center p-3 bg-amber-50 rounded-lg">
-              <p className="text-xs text-amber-500 font-medium mb-0.5">LOP Days</p>
-              <p className="text-lg font-bold text-amber-700">
-                {(payslip.lopDays || 0) % 1 === 0
-                  ? (payslip.lopDays || 0)
-                  : Number(payslip.lopDays || 0).toFixed(1)}
-              </p>
-            </div>
-          </div>
+        {/* ── Attendance ── */}
+        <div style={{ borderBottom: '1px solid #999' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <tbody>
+              <tr>
+                {[
+                  ['Days Present', presentDays],
+                  ['Days Paid',    totalDays],
+                  ['PL Availed',   payslip.plAvailed ?? 0],
+                  ['PL Pending',   payslip.plPending ?? 0],
+                  ['LOP',          lopDays],
+                ].map(([label, val], i) => (
+                  <td key={i} style={{ ...cellPad, borderRight: i < 4 ? '1px solid #ddd' : 'none' }}>
+                    <strong>{label}</strong>: {val}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        {/* Earnings & Deductions Table */}
-        <div className="px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Earnings Column */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="w-4 h-4 text-emerald-500" />
-                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                  Earnings
-                </h3>
-              </div>
-              <div className="bg-slate-50 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <tbody>
-                    {earnings.map((item, index) => (
-                      <tr
-                        key={item.label}
-                        className={
-                          index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                        }
-                      >
-                        <td className="px-4 py-2.5 text-sm text-slate-600">
-                          {item.label}
-                        </td>
-                        <td className="px-4 py-2.5 text-sm font-medium text-slate-800 text-right">
-                          {formatCurrency(item.value)}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* Pad empty rows to align columns */}
-                    {Array.from({
-                      length: Math.max(0, maxRows - earnings.length),
-                    }).map((_, i) => (
-                      <tr
-                        key={`pad-e-${i}`}
-                        className={
-                          (earnings.length + i) % 2 === 0
-                            ? 'bg-white'
-                            : 'bg-slate-50'
-                        }
-                      >
-                        <td className="px-4 py-2.5 text-sm">&nbsp;</td>
-                        <td className="px-4 py-2.5 text-sm">&nbsp;</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-emerald-200 bg-emerald-50">
-                      <td className="px-4 py-3 text-sm font-bold text-emerald-800">
-                        Gross Earned
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-emerald-800 text-right">
-                        {formatCurrency(grossEarned)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+        {/* ── Earnings + Deductions Table ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', borderBottom: '1px solid #999' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #888' }}>
+              <td style={{ ...hdrCell, width: '28%', ...tdBorderR }}>Earnings</td>
+              <td style={{ ...hdrCell, width: '12%', textAlign: 'right', ...tdBorderR }}>Master</td>
+              <td style={{ ...hdrCell, width: '12%', textAlign: 'right', ...tdBorderR2 }}>Actual</td>
+              <td style={{ ...hdrCell, width: '28%', ...tdBorderR }}>Deductions</td>
+              <td style={{ ...hdrCell, width: '12%', textAlign: 'right' }}>Actual</td>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: maxRows }).map((_, i) => {
+              const earn = earningsRows[i];
+              const ded  = deductionsRows[i];
+              return (
+                <tr key={i} style={{ borderBottom: '1px solid #eee', background: i % 2 === 1 ? '#fafafa' : '#fff' }}>
+                  <td style={{ ...cellPad, ...tdBorderR }}>{earn?.label || ''}</td>
+                  <td style={{ ...cellPad, textAlign: 'right', ...tdBorderR }}>{earn ? fmtINR(earn.master) : ''}</td>
+                  <td style={{ ...cellPad, textAlign: 'right', ...tdBorderR2 }}>{earn ? fmtINR(earn.actual) : ''}</td>
+                  <td style={{ ...cellPad, ...tdBorderR }}>{ded?.label || ''}</td>
+                  <td style={{ ...cellPad, textAlign: 'right' }}>{ded ? fmtINR(ded.actual) : ''}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid #888', fontWeight: 'bold', background: '#ececec' }}>
+              <td style={{ ...cellPad, ...tdBorderR }}>Total Earnings:INR.</td>
+              <td style={{ ...cellPad, textAlign: 'right', ...tdBorderR }}>{fmtINR(totalMaster)}</td>
+              <td style={{ ...cellPad, textAlign: 'right', ...tdBorderR2 }}>{fmtINR(totalActual)}</td>
+              <td style={{ ...cellPad, ...tdBorderR }}>Total Deductions:INR.</td>
+              <td style={{ ...cellPad, textAlign: 'right' }}>{fmtINR(totalDed)}</td>
+            </tr>
+          </tfoot>
+        </table>
 
-            {/* Deductions Column */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingDown className="w-4 h-4 text-red-500" />
-                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
-                  Deductions
-                </h3>
-              </div>
-              <div className="bg-slate-50 rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <tbody>
-                    {deductions.map((item, index) => (
-                      <tr
-                        key={item.label}
-                        className={
-                          index % 2 === 0 ? 'bg-white' : 'bg-slate-50'
-                        }
-                      >
-                        <td className="px-4 py-2.5 text-sm text-slate-600">
-                          {item.label}
-                        </td>
-                        <td className="px-4 py-2.5 text-sm font-medium text-red-600 text-right">
-                          {formatCurrency(item.value)}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* Pad empty rows */}
-                    {Array.from({
-                      length: Math.max(0, maxRows - deductions.length),
-                    }).map((_, i) => (
-                      <tr
-                        key={`pad-d-${i}`}
-                        className={
-                          (deductions.length + i) % 2 === 0
-                            ? 'bg-white'
-                            : 'bg-slate-50'
-                        }
-                      >
-                        <td className="px-4 py-2.5 text-sm">&nbsp;</td>
-                        <td className="px-4 py-2.5 text-sm">&nbsp;</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-red-200 bg-red-50">
-                      <td className="px-4 py-3 text-sm font-bold text-red-800">
-                        Total Deductions
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-red-800 text-right">
-                        {formatCurrency(deductions.reduce((s, d) => s + (d.value || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
+        {/* ── Net Pay ── */}
+        <div style={{ padding: '10px 12px 2px', textAlign: 'right' }}>
+          <strong style={{ fontSize: '13px' }}>
+            Net Pay for the month: {fmtINR(payslip.netPay)}
+          </strong>
+        </div>
+        <div style={{ padding: '2px 12px 10px', textAlign: 'right', fontStyle: 'italic', fontSize: '12px' }}>
+          ({rupeeWords(payslip.netPay)})
         </div>
 
-        {/* Net Pay Footer */}
-        <div className="mx-8 mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-emerald-600 mb-0.5">
-                Net Pay
-              </p>
-              <p className="text-xs text-slate-500">
-                (Gross Earned - Total Deductions)
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold text-emerald-700">
-                {formatCurrency(payslip.netPay)}
-              </p>
-            </div>
-          </div>
+        {/* ── Footer ── */}
+        <div style={{ borderTop: '1px solid #ccc', padding: '10px 12px 4px', textAlign: 'center', fontSize: '11px', color: '#666' }}>
+          This is a system generated payslip and does not require a signature
         </div>
-
-        {/* Document Footer */}
-        <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 text-center">
-          <p className="text-xs text-slate-400">
-            This is a system-generated payslip and does not require a signature.
-          </p>
+        <div style={{ padding: '2px 12px 10px', fontSize: '11px', color: '#666' }}>
+          Print Date:{printDate}
         </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Info Item ---------- */
-function InfoItem({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-start gap-2">
-      <div className="p-1 bg-white rounded-md border border-slate-200 mt-0.5">
-        <Icon className="w-3.5 h-3.5 text-slate-400" />
-      </div>
-      <div>
-        <p className="text-[11px] text-slate-400 uppercase tracking-wider">
-          {label}
-        </p>
-        <p className="text-sm font-medium text-slate-700">{value}</p>
       </div>
     </div>
   );
