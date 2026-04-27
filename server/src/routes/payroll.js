@@ -960,6 +960,7 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
           bankName: true, bankAccountNumber: true, bankIfscCode: true,
           panNumber: true, uanNumber: true, location: true,
           branch: { select: { id: true, name: true } },
+          company: { select: { id: true, name: true, address: true, city: true, state: true, logoUrl: true } },
           shiftAssignments: {
             where: {
               status: 'active',
@@ -1088,6 +1089,7 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
           bankName: true, bankAccountNumber: true, bankIfscCode: true,
           panNumber: true, uanNumber: true, location: true,
           branch: { select: { id: true, name: true } },
+          company: { select: { id: true, name: true, address: true, city: true, state: true, logoUrl: true } },
           shiftAssignments: {
             where: {
               status: 'active',

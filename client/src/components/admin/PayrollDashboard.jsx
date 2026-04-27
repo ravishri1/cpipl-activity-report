@@ -268,7 +268,9 @@ const PayslipDetail = ({ payslip }) => {
   const maxRows     = Math.max(earningsRows.length, deductionsRows.length);
 
   const fmtINR  = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const companyName = payslip.companyName || 'COLOR PAPERS INDIA PRIVATE LIMITED';
+  const companyName    = payslip.user?.company?.name    || payslip.companyName || 'COLOR PAPERS INDIA PRIVATE LIMITED';
+  const companyAddress = payslip.user?.company?.address || '';
+  const companyLogoUrl = payslip.user?.company?.logoUrl || null;
   const empName     = payslip.user?.name || '-';
   const empId       = payslip.user?.employeeId || '-';
   const designation = payslip.user?.designation || payslip.designation || '-';
@@ -321,10 +323,18 @@ const PayslipDetail = ({ payslip }) => {
     <div id={docId} style={{ fontFamily: 'Arial, sans-serif', fontSize: '12px', background: '#fff', padding: '12px 16px' }}>
 
       {/* Company Header */}
-      <div style={{ textAlign: 'center', paddingBottom: '10px', borderBottom: '2px solid #555', marginBottom: '0' }}>
-        <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{companyName}</div>
-        <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '6px' }}>
-          Payslip for the month of {new Date(payslip.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingBottom: '10px', borderBottom: '2px solid #555', marginBottom: '0' }}>
+        {companyLogoUrl && (
+          <img src={companyLogoUrl} alt="Company Logo" style={{ height: '56px', width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+        )}
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{companyName}</div>
+          {companyAddress && (
+            <div style={{ fontSize: '11px', color: '#555', marginTop: '3px' }}>{companyAddress}</div>
+          )}
+          <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '6px' }}>
+            Payslip for the month of {new Date(payslip.month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+          </div>
         </div>
       </div>
 

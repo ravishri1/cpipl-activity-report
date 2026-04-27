@@ -424,8 +424,12 @@ function PayslipDetail({ payslip, onBack }) {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
   });
 
+  // Company info — sourced from user.company relation
+  const companyName    = payslip.user?.company?.name    || payslip.companyName || 'COLOR PAPERS INDIA PRIVATE LIMITED';
+  const companyAddress = payslip.user?.company?.address || '';
+  const companyLogoUrl = payslip.user?.company?.logoUrl || null;
+
   // Employee info — sourced from the enriched user include on the payslip
-  const companyName  = payslip.companyName                                     || 'COLOR PAPERS INDIA PRIVATE LIMITED';
   const empName      = payslip.employeeName || payslip.user?.name              || '-';
   const empId        = payslip.employeeCode || payslip.user?.employeeId        || '-';
   const designation  = payslip.user?.designation  || payslip.designation       || '-';
@@ -490,10 +494,18 @@ function PayslipDetail({ payslip, onBack }) {
         <style>{``}</style>
 
         {/* ── Company Header ── */}
-        <div style={{ textAlign: 'center', padding: '14px 20px 10px', borderBottom: '2px solid #555' }}>
-          <div style={{ fontSize: '17px', fontWeight: 'bold', letterSpacing: '0.5px' }}>{companyName}</div>
-          <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '8px' }}>
-            Payslip for the month of {formatMonth(payslip.month)}
+        <div style={{ padding: '14px 20px 10px', borderBottom: '2px solid #555', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {companyLogoUrl && (
+            <img src={companyLogoUrl} alt="Company Logo" style={{ height: '56px', width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+          )}
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: '17px', fontWeight: 'bold', letterSpacing: '0.5px' }}>{companyName}</div>
+            {companyAddress && (
+              <div style={{ fontSize: '11px', color: '#555', marginTop: '3px' }}>{companyAddress}</div>
+            )}
+            <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '6px' }}>
+              Payslip for the month of {formatMonth(payslip.month)}
+            </div>
           </div>
         </div>
 

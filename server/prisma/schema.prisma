@@ -699,6 +699,7 @@ model Company {
   state     String?
   city      String?
   address   String?
+  logoUrl   String?                              // URL to company logo image
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
