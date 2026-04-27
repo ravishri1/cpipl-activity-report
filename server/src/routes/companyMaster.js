@@ -93,7 +93,7 @@ router.get('/registrations', asyncHandler(async (req, res) => {
         },
         orderBy: { abbr: 'asc' },
       },
-      _count: { select: { users: true, assets: true, certificates: true } },
+      _count: { select: { users: { where: { isActive: true } }, assets: true, certificates: true } },
       locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
     },
     orderBy: [{ legalEntityId: 'asc' }, { isPrimary: 'desc' }, { abbr: 'asc' }],
@@ -110,7 +110,7 @@ router.get('/registrations/:id', asyncHandler(async (req, res) => {
       legalEntity: true,
       certificates: { orderBy: { certificateType: 'asc' } },
       locations: { orderBy: [{ locationType: 'asc' }, { city: 'asc' }] },
-      _count: { select: { users: true, assets: true } },
+      _count: { select: { users: { where: { isActive: true } }, assets: true } },
     },
   });
   if (!reg) throw notFound('Company registration');

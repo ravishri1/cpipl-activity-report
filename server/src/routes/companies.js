@@ -12,7 +12,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const companies = await req.prisma.company.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true, shortName: true, gst: true, state: true, city: true, address: true, isActive: true, pfExempt: true, esiExempt: true, _count: { select: { users: true } } },
+    select: { id: true, name: true, shortName: true, gst: true, state: true, city: true, address: true, logoUrl: true, isActive: true, pfExempt: true, esiExempt: true, _count: { select: { users: { where: { isActive: true } } } } },
   });
   res.json(companies);
 }));
