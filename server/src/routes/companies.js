@@ -38,7 +38,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 // PUT /api/companies/:id — Update company (admin only)
 router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const { name, shortName, gst, state, city, address, isActive, pfExempt, esiExempt } = req.body;
+  const { name, shortName, gst, state, city, address, logoUrl, isActive, pfExempt, esiExempt } = req.body;
 
   const company = await req.prisma.company.update({
     where: { id },
@@ -49,6 +49,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
       ...(state !== undefined && { state: state?.trim() || null }),
       ...(city !== undefined && { city: city?.trim() || null }),
       ...(address !== undefined && { address: address?.trim() || null }),
+      ...(logoUrl !== undefined && { logoUrl: logoUrl?.trim() || null }),
       ...(isActive !== undefined && { isActive }),
       ...(pfExempt !== undefined && { pfExempt: pfExempt === true || pfExempt === 'true' }),
       ...(esiExempt !== undefined && { esiExempt: esiExempt === true || esiExempt === 'true' }),

@@ -75,7 +75,10 @@ export default function PayrollSettings() {
   const { data: companies, error: compFetchErr, refetch: refetchCompanies } = useFetch('/companies', []);
   const { execute, loading: saving, error: saveErr, success } = useApi();
   const { execute: saveComp } = useApi();
+  const { execute: saveCompInfo } = useApi();
   const [savingCompId, setSavingCompId] = useState(null);
+  const [editingCompInfo, setEditingCompInfo] = useState(null); // { id, logoUrl, address }
+  const [savingCompInfo, setSavingCompInfo] = useState(false);
 
   const [pf, setPf] = useState(DEFAULT_RULES.pf);
   const [esi, setEsi] = useState(DEFAULT_RULES.esi);
@@ -401,6 +404,95 @@ export default function PayrollSettings() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* ── Company Branding (Logo + Address) ────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">Company Branding for Payslips</h3>
+        <p className="text-xs text-slate-400 mb-4">
+          Logo and address shown on every payslip header. Paste a direct image URL for the logo.
+        </p>
+        <div className="space-y-4">
+          {(Array.isArray(companies) ? companies : []).map(co => (
+            <div key={co.id} className="border border-slate-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  {co.logoUrl
+                    ? <img src={co.logoUrl} alt="logo" className="h-8 w-8 object-contain rounded" />
+                    : <div className="h-8 w-8 rounded bg-slate-100 flex items-center justify-center text-slate-300 text-[10px]">No logo</div>
+                  }
+                  <span className="text-sm font-semibold text-slate-800">{co.name}</span>
+                </div>
+                {editingCompInfo?.id !== co.id && (
+                  <button
+                    onClick={() => setEditingCompInfo({ id: co.id, logoUrl: co.logoUrl || '', address: co.address || '' })}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium px-3 py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+
+              {editingCompInfo?.id === co.id ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Logo URL</label>
+                    <input
+                      type="url"
+                      value={editingCompInfo.logoUrl}
+                      onChange={e => setEditingCompInfo(p => ({ ...p, logoUrl: e.target.value }))}
+                      placeholder="https://drive.google.com/uc?id=..."
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {editingCompInfo.logoUrl && (
+                      <img src={editingCompInfo.logoUrl} alt="preview" className="h-10 mt-2 object-contain rounded border border-slate-200"
+                        onError={e => { e.target.style.display='none'; }} />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Registered Office Address</label>
+                    <textarea
+                      value={editingCompInfo.address}
+                      onChange={e => setEditingCompInfo(p => ({ ...p, address: e.target.value }))}
+                      rows={2}
+                      placeholder="3rd Floor, Vrindavan Building, Mira Road East, Thane, Maharashtra 401107"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={savingCompInfo}
+                      onClick={async () => {
+                        setSavingCompInfo(true);
+                        try {
+                          await saveCompInfo(() => api.put(`/companies/${co.id}`, {
+                            logoUrl: editingCompInfo.logoUrl || null,
+                            address: editingCompInfo.address || null,
+                          }), 'Saved!');
+                          refetchCompanies();
+                          setEditingCompInfo(null);
+                        } catch { /* handled */ } finally { setSavingCompInfo(false); }
+                      }}
+                      className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {savingCompInfo ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setEditingCompInfo(null)}
+                      className="px-4 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {co.address || <span className="italic">No address set</span>}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
