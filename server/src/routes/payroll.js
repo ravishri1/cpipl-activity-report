@@ -1081,6 +1081,10 @@ router.get('/my-payslips', asyncHandler(async (req, res) => {
       user: {
         select: {
           id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true,
+          // Bank & identity details for payslip
+          bankName: true, bankAccountNumber: true, bankIfscCode: true,
+          panNumber: true, uanNumber: true, location: true,
+          branch: { select: { id: true, name: true } },
           shiftAssignments: {
             where: {
               status: 'active',

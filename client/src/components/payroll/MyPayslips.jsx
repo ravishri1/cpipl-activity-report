@@ -339,6 +339,27 @@ function rupeeWords(amount) {
 
 /* ---------- Payslip Detail View (greythr style) ---------- */
 function PayslipDetail({ payslip, onBack }) {
+  // Fetch PL leave balance for the payslip's financial year
+  const [plAvailed, setPlAvailed] = useState(null);
+  const [plPending, setPlPending] = useState(null);
+
+  useEffect(() => {
+    const month = payslip.month; // 'YYYY-MM'
+    if (!month) return;
+    const [y, m] = month.split('-').map(Number);
+    // FY: Apr–Mar; if month < April, FY start = y-1, else y
+    const fyStart = m < 4 ? y - 1 : y;
+    api.get(`/leave/balance?year=${fyStart}`)
+      .then(res => {
+        const pl = (res.data || []).find(b => b.leaveType?.code === 'PL');
+        if (pl) {
+          setPlAvailed(pl.used ?? 0);
+          setPlPending(pl.available ?? 0);
+        }
+      })
+      .catch(() => {}); // silently ignore — payslip still renders
+  }, [payslip.month]);
+
   const totalDays = payslip.workingDays || 30;
   const presentDays = payslip.presentDays ?? payslip.paidDays ?? totalDays;
   const lopDays = payslip.lopDays || 0;
@@ -403,17 +424,18 @@ function PayslipDetail({ payslip, onBack }) {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
   });
 
-  const companyName  = payslip.companyName  || 'COLOR PAPERS INDIA PRIVATE LIMITED';
+  // Employee info — sourced from the enriched user include on the payslip
+  const companyName  = payslip.companyName                                     || 'COLOR PAPERS INDIA PRIVATE LIMITED';
   const empName      = payslip.employeeName || payslip.user?.name              || '-';
   const empId        = payslip.employeeCode || payslip.user?.employeeId        || '-';
   const designation  = payslip.user?.designation  || payslip.designation       || '-';
   const department   = payslip.user?.department                                || '-';
   const doj          = payslip.user?.dateOfJoining || payslip.dateOfJoining    || '-';
-  const pfUan        = payslip.user?.pfUan  || payslip.pfUan                   || '-';
-  const bankName     = payslip.user?.bankName                                  || '-';
-  const bankAccount  = payslip.user?.bankAccountNumber || payslip.user?.bankAccount || '-';
-  const panNumber    = payslip.user?.panNumber || payslip.user?.pan            || '-';
-  const location     = payslip.user?.branch?.name || payslip.user?.location   || '-';
+  const pfUan        = payslip.user?.uanNumber                                 || '-';   // from User.uanNumber
+  const bankName     = payslip.user?.bankName                                  || '-';   // from User.bankName
+  const bankAccount  = payslip.user?.bankAccountNumber                         || '-';   // from User.bankAccountNumber
+  const panNumber    = payslip.user?.panNumber                                 || '-';   // from User.panNumber
+  const location     = payslip.user?.branch?.name || payslip.user?.location   || '-';   // from User.branch.name or User.location
 
   // border/cell style helpers
   const tdBorderR  = { borderRight: '1px solid #bbb' };
@@ -494,8 +516,8 @@ function PayslipDetail({ payslip, onBack }) {
                 {[
                   ['Days Present', presentDays],
                   ['Days Paid',    totalDays],
-                  ['PL Availed',   payslip.plAvailed ?? 0],
-                  ['PL Pending',   payslip.plPending ?? 0],
+                  ['PL Availed',   plAvailed ?? '-'],   // from /api/leave/balance
+                  ['PL Pending',   plPending ?? '-'],   // from /api/leave/balance
                   ['LOP',          lopDays],
                 ].map(([label, val], i) => (
                   <td key={i} style={{ ...cellPad, borderRight: i < 4 ? '1px solid #ddd' : 'none' }}>
