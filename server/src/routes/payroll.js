@@ -953,10 +953,13 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
   const where = month ? { month } : {};
   const payslips = await req.prisma.payslip.findMany({
     where,
-    include: { 
-      user: { 
-        select: { 
+    include: {
+      user: {
+        select: {
           id: true, name: true, email: true, employeeId: true, designation: true, department: true, dateOfJoining: true, companyId: true,
+          bankName: true, bankAccountNumber: true, bankIfscCode: true,
+          panNumber: true, uanNumber: true, location: true,
+          branch: { select: { id: true, name: true } },
           shiftAssignments: {
             where: {
               status: 'active',
@@ -978,8 +981,8 @@ router.get('/payslips', requireActiveEmployee, requireAdmin, asyncHandler(async 
               }
             }
           }
-        } 
-      } 
+        }
+      }
     },
     orderBy: { user: { name: 'asc' } },
   });
